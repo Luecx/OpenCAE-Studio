@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
+from opencae.model.core import EntityRef
 from opencae.model.entities.jobs import Job, ResultSet
 from opencae.ui.dialogs.deck_preview import DeckPreviewDialog
 from opencae.ui.dialogs.solver_run import SolverRunDialog
@@ -25,7 +26,7 @@ class SolverController:
         if analysis is None: raise ValueError("Define an analysis first")
         if not any(not item.suppressed for item in self.store.project.assembly.instances):
             raise ValueError("Create at least one assembly instance before exporting or running an analysis")
-        return adapter.write_deck_text(self.store.project, None)
+        return adapter.write_deck_text(self.store.project, analysis)
     def validate(self):
         try:
             text = self.deck_text()
@@ -58,7 +59,7 @@ class SolverController:
         directory = root / job_name; directory.mkdir(parents=True, exist_ok=True)
         deck_path = directory / f"{job_name}.inp"; deck_path.write_text(deck, encoding="utf-8")
         output_base = directory / job_name
-        job = Job(name=job_name, analysis_name="All Steps", solver=adapter.name, status="Running", input_deck=str(deck_path), settings=dict(run_options))
+        job = Job(name=job_name, analysis_ref=EntityRef.of(analysis, "Analysis"), solver=adapter.name, status="Running", input_deck=str(deck_path), settings=dict(run_options))
         self.store.mutate(f"Started {job_name}", lambda project: project.jobs.append(job))
         extra = run_options["extra_arguments"]
         if adapter.name == "FEMaster": extra = f"--ncpus {run_options['threads']} {extra}".strip()
@@ -67,17 +68,41 @@ class SolverController:
         dialog.completed.connect(lambda code, d=dialog: self._finished(job, adapter, output_base, code, d))
         self._runs[job.name] = dialog; dialog.show()
     def _finished(self, job, adapter, output_base, code, dialog):
-        job.status = "Completed" if code == 0 else f"Failed ({code})"
+        status = "Completed" if code == 0 else f"Failed ({code})"
         source = next((path for path in adapter.result_candidates(output_base) if path.exists()), None)
+        fields = []
         if source and source.suffix.lower() == ".frd":
-            try: fields = self._results.fields(source)
+            try:
+                fields = self._results.fields(source)
             except Exception as exc:
-                fields = []; dialog.output.appendPlainText(f"Result metadata could not be read: {exc}")
-            step_names=[step.name for analysis in self.store.project.analyses for step in analysis.steps]
-            result = ResultSet(name=job.name, job_name=job.name, source_file=str(source), status="Available", fields=fields, metadata={"step_names":step_names})
-            self.store.project.results.append(result)
-        self.store.changed.emit(f"Finished {job.name}")
-        self.store.message.emit(job.status)
+                dialog.output.appendPlainText(f"Result metadata could not be read: {exc}")
+
+        def apply(project):
+            stored_job = project.try_resolve(job.id)
+            if stored_job is None:
+                return
+            stored_job.status = status
+            if source and source.suffix.lower() == ".frd":
+                analysis = project.try_resolve(stored_job.analysis_ref)
+                step_names = [step.name for step in analysis.steps] if analysis else []
+                previous = next((item for item in project.results if item.job_ref and item.job_ref.entity_id == stored_job.id), None)
+                kwargs = dict(
+                    name=stored_job.name,
+                    job_ref=EntityRef.of(stored_job, "Job"),
+                    source_file=str(source),
+                    status="Available",
+                    fields=fields,
+                    metadata={"step_names": step_names},
+                )
+                result = ResultSet(id=previous.id, **kwargs) if previous else ResultSet(**kwargs)
+                if previous is None:
+                    project.results.append(result)
+                else:
+                    project.results[project.results.index(previous)] = result
+
+        self.store.mutate(f"Finished {job.name}", apply)
+        self.store.message.emit(status)
+
     def show_job(self, job_name):
         dialog = self._runs.get(job_name)
         if dialog is not None: dialog.reopen()

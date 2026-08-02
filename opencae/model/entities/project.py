@@ -1,7 +1,8 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from ..core import DeckWriter, Entity, ExportContext, SolverName, register_model_type
+from opencae.core.ids import new_id
+from ..core import DeckWriter, Entity, ExportContext, ProjectIndex, SolverName, register_model_type
 from .analysis.analysis import Analysis
 from .assembly.assembly import Assembly
 from .jobs.job import Job
@@ -18,6 +19,7 @@ from .supports.base import Support
 @register_model_type("project")
 @dataclass
 class Project(Entity):
+    schema_version: int = 13
     name: str = "Untitled"
     unit_system: str = "mm-N-s-°C"
     path: Path | None = None
@@ -32,6 +34,8 @@ class Project(Entity):
     analyses: list[Analysis] = field(default_factory=list)
     jobs: list[Job] = field(default_factory=list)
     results: list[ResultSet] = field(default_factory=list)
+    _index: ProjectIndex | None = field(init=False, default=None, repr=False, compare=False)
+    reference_errors: list[str] = field(init=False, default_factory=list, repr=False, compare=False)
 
     def __post_init__(self):
         known = {item.name for item in self.fields}
@@ -40,18 +44,46 @@ class Project(Entity):
                 if item.name not in known:
                     self.fields.append(item); known.add(item.name)
             if hasattr(material, "fields"): material.fields.clear()
-        self._flatten_steps()
+        self._flatten_steps(); self.rebuild_index()
 
     def _flatten_steps(self):
-        flattened=[]
+        flattened = []
         for analysis in self.analyses:
-            if len(analysis.steps)<=1:
-                flattened.append(analysis); continue
-            for step in analysis.steps:
-                clone=deepcopy(analysis); clone.name=step.name; clone.steps=[step]; flattened.append(clone)
-        self.analyses=flattened
+            if len(analysis.steps) <= 1:
+                flattened.append(analysis)
+                continue
+            for index, step in enumerate(analysis.steps):
+                clone = deepcopy(analysis)
+                if index:
+                    object.__setattr__(clone, "id", new_id("entity"))
+                clone.name = step.name
+                clone.steps = [deepcopy(step)]
+                flattened.append(clone)
+        self.analyses = flattened
+
+
+    @property
+    def index(self) -> ProjectIndex:
+        if self._index is None: self.rebuild_index()
+        return self._index
+
+    def rebuild_index(self, strict: bool = False) -> ProjectIndex:
+        from ..core.reference_binding import bind_project_references
+        initial = ProjectIndex(self)
+        self.reference_errors = bind_project_references(self, initial, strict)
+        self._index = ProjectIndex(self)
+        return self._index
+
+    def ensure_references(self, strict: bool = False) -> list[str]:
+        self.rebuild_index(strict); return list(self.reference_errors)
+
+    def resolve(self, ref, expected_type=None): return self.index.resolve(ref, expected_type)
+    def try_resolve(self, ref, expected_type=None): return self.index.try_resolve(ref, expected_type)
+    def references_to(self, entity_or_id):
+        entity_id = getattr(entity_or_id, "id", entity_or_id); return self.index.references_to(str(entity_id))
 
     def render_deck(self, solver: SolverName | str, analysis: Analysis | None = None) -> str:
+        self.ensure_references(strict=True)
         writer = DeckWriter()
         context = ExportContext(self, analysis)
         self.write_solver(solver, writer, context)

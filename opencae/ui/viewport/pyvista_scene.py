@@ -22,7 +22,7 @@ class PyVistaScene(SceneDisplayMixin):
         self.mesh_actors = []; self.mesh_grids = {}; self.assembly_mesh_snapshots = {}
         self.seed_overlay = SeedOverlay(); self.coordinate_overlay = CoordinateSystemOverlay(); self.reference_overlay = ReferencePointOverlay(); self.datum_overlay = DatumOverlay(); self.coupling_overlay = CouplingOverlay(); self.region_overlay = RegionOverlay()
         self.boundary_overlay = BoundaryOverlay(owner); self.field_actor = None
-        self.result_actor = None; self.result_grid = None; self.result_boundary_actor = None; self.result_undeformed_actor = None
+        self.result_actor = None; self.result_grid = None; self.result_mesh_actor = None; self.result_boundary_actor = None; self.result_undeformed_actor = None
     def refresh(self, part, fit=False):
         camera = camera_position(self.owner.plotter); previous = self._context_key()
         self.clear(render=False); self.part_id = getattr(part, "id", None)
@@ -39,7 +39,7 @@ class PyVistaScene(SceneDisplayMixin):
         self.face_actors.clear(); self.edge_actors.clear(); self.vertex_actors.clear(); self.reference_actors.clear(); self.datum_actors.clear()
         self.assembly_snapshots.clear(); self.assembly_instances.clear(); self.mesh_actors.clear(); self.mesh_grids.clear(); self.assembly_mesh_snapshots.clear()
         self.mesh_actor = self.mesh_grid = self.mesh_snapshot = self.snapshot = None
-        self.field_actor = self.result_actor = self.result_grid = self.result_boundary_actor = self.result_undeformed_actor = None; self.owner.picker.reset()
+        self.field_actor = self.result_actor = self.result_grid = self.result_mesh_actor = self.result_boundary_actor = self.result_undeformed_actor = None; self.owner.picker.reset()
         if render: self.owner.plotter.render()
     def _show_part(self, part):
         if part is None: return
@@ -53,7 +53,7 @@ class PyVistaScene(SceneDisplayMixin):
     def _show_assembly(self):
         project = self.owner.store.project; instances = [item for item in project.assembly.instances if not item.suppressed]
         for instance in instances:
-            part = next((item for item in project.parts if item.name == instance.part_name), None)
+            part = project.try_resolve(instance.part_ref)
             if part is None: continue
             snapshot = None
             if part.geometry:

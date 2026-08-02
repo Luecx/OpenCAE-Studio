@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QFileDialog
 from opencae.model.geometry import ImportedStepFeature
 from opencae.model.part import Part
 from opencae.model.naming import next_name
+from opencae.model.core import clone_entity_graph
 from opencae.ui.dialogs.import_geometry import ImportGeometryDialog
 from opencae.ui.dialogs.new_part import NewPartDialog
 from opencae.geometry.mesh_import import read_mesh
@@ -29,6 +30,20 @@ class PartLifecycle:
         self.ctx.store.mutate(f"Created part {part.name}", lambda project: project.parts.append(part))
         self.ctx.store.set_active_part(part.id)
 
+
+    def duplicate_part(self):
+        source = self.ctx.store.selection
+        if not isinstance(source, Part):
+            source = self.ctx.active_part()
+        if source is None:
+            self.ctx.store.message.emit("Select or activate a part first")
+            return
+        clone = clone_entity_graph(source)
+        clone.name = next_name(source.name, self.ctx.store.project.parts)
+        self.ctx.store.mutate(f"Duplicated part {source.name} as {clone.name}", lambda project: project.parts.append(clone))
+        self.ctx.store.set_active_part(clone.id)
+        self.ctx.store.select(clone)
+        self.ctx.store.invalidate_scene("Part duplicated")
 
     def edit_part(self, part):
         values = get_values(NewPartDialog([item.name for item in self.ctx.store.project.parts], part, self.ctx.parent))

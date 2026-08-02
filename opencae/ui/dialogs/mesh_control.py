@@ -9,7 +9,7 @@ class MeshControlDialog(FormDialog):
             (
                 FieldSpec("name", "Name", "text", control.name if control else "Mesh Control-1"),
                 FieldSpec("scope", "Scope", "choice", control.scope if control else "Cell", ("Edge", "Face", "Cell")),
-                FieldSpec("targets", "Targets", "text", ", ".join(selected_entities or tuple(control.targets if control else ()))),
+                FieldSpec("targets", "Targets", "text", ", ".join(selected_entities or tuple(map(str, control.targets)) if control else ())),
                 FieldSpec("topology", "Preferred topology", "choice", control.topology if control else "Tetrahedral", ("Line", "Triangular", "Quadrilateral", "Tetrahedral", "Pyramidal", "Pentahedral", "Hexahedral")),
                 FieldSpec("technique", "Technique", "choice", control.technique if control else "Free", ("Free", "Structured", "Transfinite", "Recombine")),
             ),

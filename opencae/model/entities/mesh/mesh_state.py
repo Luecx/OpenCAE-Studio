@@ -4,6 +4,7 @@ from ...core import register_model_type
 from ..elements.base import ElementDefinition
 from .control import MeshControl
 from .element_block import ElementBlock
+from .element_control import ElementControl
 from .mesh_settings import MeshSettings
 from .node_table import NodeTable
 from .seed import Seed
@@ -15,6 +16,7 @@ class MeshState:
     settings: MeshSettings = field(default_factory=MeshSettings)
     seeds: list[Seed] = field(default_factory=list)
     controls: list[MeshControl] = field(default_factory=list)
+    element_controls: list[ElementControl] = field(default_factory=list)
     elements: list[ElementDefinition] = field(default_factory=list)
     nodes: NodeTable = field(default_factory=NodeTable)
     element_blocks: list[ElementBlock] = field(default_factory=list)

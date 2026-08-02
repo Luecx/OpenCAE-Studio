@@ -34,7 +34,7 @@ class ProjectController:
         except Exception as exc:
             self.store.message.emit(f"Could not open results: {exc}"); return
         name = next_name(Path(path).stem or "Solution", self.store.project.results)
-        result = ResultSet(name=name, job_name="External", source_file=str(Path(path)), status="Available", fields=fields, metadata={"external": True})
+        result = ResultSet(name=name, job_ref=None, source_file=str(Path(path)), status="Available", fields=fields, metadata={"external": True})
         self.store.mutate(f"Opened results {Path(path).name}", lambda project: project.results.append(result))
         self.parent.show_solution(result)
 

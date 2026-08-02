@@ -3,6 +3,7 @@ from copy import deepcopy
 from opencae.geometry.errors import GeometryError
 from opencae.model.mesh import create_element_definition
 from .mesh_persistence import apply_mesh_snapshot
+from opencae.geometry.element_controls_apply import apply_all_controls
 from opencae.ui.dialogs.edit_elements import EditElementsDialog
 
 from ..busy import busy_cursor
@@ -28,6 +29,8 @@ class PartMeshGeneration:
             self.ctx.error("Mesh generation failed", exc)
             return
         apply_mesh_snapshot(candidate, snapshot, definitions)
+        apply_all_controls(candidate)
+        self.ctx.service.invalidate(candidate.id, mesh_only=True)
         self.ctx.replace_part(candidate, f"Generated mesh for {part.name}")
         if snapshot.seed_mismatches:
             details = ", ".join(f"{name}: expected {values[0]}, got {values[1]}" for name, values in snapshot.seed_mismatches.items())

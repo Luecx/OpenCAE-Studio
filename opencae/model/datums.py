@@ -6,14 +6,17 @@ from .datum_math import coordinate_point, edge_parameter, plane_axis, polyline_p
 from .entities.datums import DatumPlane, DatumPoint, DatumVector
 
 
-def create_datum(kind, name, method, parameters):
+def create_datum(kind, name, method, parameters, entity_id=None):
+    common = {"name": name, "method": method, "parameters": parameters}
+    if entity_id is not None:
+        common["id"] = entity_id
     if kind == "Point":
-        return DatumPoint(name=name, method=method, parameters=parameters, position=tuple(_point(method, parameters)))
+        return DatumPoint(position=tuple(_point(method, parameters)), **common)
     if kind == "Vector":
         origin, direction = _vector(method, parameters)
-        return DatumVector(name=name, method=method, parameters=parameters, origin=tuple(origin), direction=tuple(direction))
+        return DatumVector(origin=tuple(origin), direction=tuple(direction), **common)
     origin, normal, axis = _plane(method, parameters)
-    return DatumPlane(name=name, method=method, parameters=parameters, origin=tuple(origin), normal=tuple(normal), axis=tuple(axis))
+    return DatumPlane(origin=tuple(origin), normal=tuple(normal), axis=tuple(axis), **common)
 
 
 def _point(method, p):

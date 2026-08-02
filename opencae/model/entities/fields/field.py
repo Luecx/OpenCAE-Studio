@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from ...core import Entity, register_model_type
+from ...core import Entity, EntityRef, register_model_type
 
 
 @register_model_type("field_definition")
@@ -9,7 +9,7 @@ class FieldDefinition(Entity):
     location: str = "Nodal"
     components: int = 1
     component_names: list[str] = field(default_factory=lambda: ["Value"])
-    region_name: str = ""
+    region_ref: EntityRef | None = None
     source_type: str = "Formula"
     expression: str = "0.0"
     table: list[list[str]] = field(default_factory=list)

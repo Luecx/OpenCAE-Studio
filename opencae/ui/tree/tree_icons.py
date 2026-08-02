@@ -2,7 +2,7 @@ from opencae.ui.core.icon_factory import IconKind, make_icon
 
 _KIND_ICONS={
     "parts":IconKind.PART,"part":IconKind.PART,"geometry":IconKind.PARTITION,"geometry_feature":IconKind.PARTITION,
-    "mesh":IconKind.MESH,"seed":IconKind.SEED,"mesh_control":IconKind.MESH,"nodes":IconKind.NODE_SET,
+    "mesh":IconKind.MESH,"seed":IconKind.SEED,"mesh_control":IconKind.MESH,"element_control":IconKind.ELEMENT_CONTROLS,"nodes":IconKind.NODE_SET,
     "elements":IconKind.ELEMENT,"element_category":IconKind.ELEMENT,"element_definition":IconKind.ELEMENT,
     "node_sets":IconKind.NODE_SET,"node_set":IconKind.NODE_SET,"element_sets":IconKind.ELEMENT_SET,"element_set":IconKind.ELEMENT_SET,
     "surfaces":IconKind.SURFACE,"surface":IconKind.SURFACE,"coordinate_systems":IconKind.CSYS,"coordinate_system":IconKind.CSYS,

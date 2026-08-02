@@ -25,10 +25,10 @@ class BoundaryOverlay:
         self._project, self._scene = project, scene; self.clear(plotter)
         support_meshes, load_meshes, thermal_meshes = [], [], []
         for support in project.supports:
-            for point, normal in region_samples(project, support.region_name, scene):
+            for point, normal in region_samples(project, support.target, scene):
                 support_meshes.extend(_support_glyphs(plotter, point, support))
         for load in project.loads:
-            for point, normal in region_samples(project, load.region_name, scene):
+            for point, normal in region_samples(project, load.target, scene):
                 target = thermal_meshes if getattr(load, "load_type", "") == "Temperature" else load_meshes
                 target.extend(_load_glyphs(plotter, point, normal, load))
         self._add_group(plotter, support_meshes, "supports", "#4aa3e8")

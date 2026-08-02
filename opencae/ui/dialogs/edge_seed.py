@@ -4,7 +4,7 @@ from opencae.ui.core.fields import FieldSpec
 
 class EdgeSeedDialog(ApplyFormDialog):
     def __init__(self, selected_edges=(), seed=None, parent=None):
-        targets = selected_edges or tuple(seed.targets if seed else ())
+        targets = selected_edges or tuple(map(str, seed.targets)) if seed else ()
         super().__init__(
             "Seed Edges",
             (

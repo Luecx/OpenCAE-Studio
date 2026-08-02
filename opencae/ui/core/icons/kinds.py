@@ -3,7 +3,7 @@ from enum import Enum, auto
 
 class IconKind(Enum):
     FILE = auto(); SAVE = auto(); IMPORT = auto(); PART = auto(); PARTITION = auto()
-    MESH = auto(); SEED = auto(); ELEMENT = auto(); NODE_SET = auto(); ELEMENT_SET = auto()
+    MESH = auto(); SEED = auto(); ELEMENT = auto(); ELEMENT_CONTROLS = auto(); NODE_SET = auto(); ELEMENT_SET = auto()
     SURFACE = auto(); CSYS = auto(); RP = auto(); MATERIAL = auto(); PROFILE = auto(); SECTION = auto()
     ASSIGN = auto(); INSTANCE = auto(); MOVE = auto(); ROTATE = auto(); PATTERN = auto(); CONSTRAINT = auto()
     CONSTRAINT_KINEMATIC = auto(); CONSTRAINT_DISTRIBUTING = auto(); CONSTRAINT_TIE = auto()

@@ -1,0 +1,79 @@
+from collections import defaultdict
+import re
+
+from opencae.model.core import RegionMemberKind, RegionMemberRef
+
+from opencae.model.element_catalog import CATALOG, resulting_type
+from opencae.model.mesh import ElementBlock, ElementOrder, create_element_definition
+from .element_records import records
+
+
+def convert(part, selected_ids, affected_ids, order, formulation):
+    mesh = part.mesh; order = ElementOrder(order); elements = records(mesh); coordinates = dict(zip(mesh.nodes.ids, mesh.nodes.coordinates))
+    midpoints = _existing_midpoints(elements); next_id = max(coordinates, default=0) + 1; groups = defaultdict(list)
+    for element in elements.values():
+        info = CATALOG[element.topology]; target_order = order if element.element_id in affected_ids else element.order
+        target_form = formulation if element.element_id in selected_ids and formulation != "Keep Existing" else element.formulation
+        primary = element.connectivity[:info.primary_nodes]; connectivity = tuple(primary)
+        if target_order == ElementOrder.SECOND:
+            extra = []
+            for left, right in info.edges:
+                edge = tuple(sorted((primary[left], primary[right])))
+                if edge not in midpoints:
+                    midpoints[edge] = next_id; coordinates[next_id] = _middle(coordinates[edge[0]], coordinates[edge[1]]); next_id += 1
+                extra.append(midpoints[edge])
+            connectivity += tuple(extra)
+        groups[(element.topology, target_order, target_form)].append((element.element_id, connectivity))
+    mesh.element_blocks = [_block(key, values) for key, values in groups.items()]
+    used = {node for block in mesh.element_blocks for row in block.connectivity for node in row}
+    kept = used | _protected_nodes(part); mesh.nodes.ids = sorted(node for node in kept if node in coordinates)
+    mesh.nodes.coordinates = [tuple(coordinates[node]) for node in mesh.nodes.ids]
+    mesh.entity_nodes = _entity_nodes(mesh.entity_nodes, midpoints, used)
+    mesh.elements = [block.definition for block in mesh.element_blocks]; mesh.node_count = len(mesh.nodes.ids)
+    mesh.element_count = sum(len(block.ids) for block in mesh.element_blocks); mesh.status = "Current"
+
+
+def _existing_midpoints(elements):
+    result = {}
+    for element in elements.values():
+        info = CATALOG[element.topology]
+        if element.order != ElementOrder.SECOND: continue
+        extra = element.connectivity[info.primary_nodes:info.primary_nodes + len(info.edges)]
+        primary = element.connectivity[:info.primary_nodes]
+        for edge, node in zip(info.edges, extra): result[tuple(sorted((primary[edge[0]], primary[edge[1]])))] = node
+    return result
+
+
+def _block(key, values):
+    topology, order, formulation = key; info = CATALOG[topology]
+    category, topo = info.category, info.topology
+    if topology.value == "line": topo = "Beam Elements" if formulation == "Beam" else "Truss Elements"
+    definition = create_element_definition(category, topo, name=resulting_type(topology, order, formulation),
+        order="Quadratic" if order == ElementOrder.SECOND else "Linear", formulation=formulation,
+        gmsh_type=info.gmsh_second if order == ElementOrder.SECOND else info.gmsh_first, count=len(values))
+    return ElementBlock(definition, [value[0] for value in values], [value[1] for value in values])
+
+
+def _middle(first, second): return tuple((float(a) + float(b)) * .5 for a, b in zip(first, second))
+
+
+_NODE = re.compile(r"(?:^|\.)Node-(\d+)$", re.I)
+
+def _protected_nodes(part):
+    result = set()
+    for region in part.node_sets:
+        for member in region.members:
+            if isinstance(member, RegionMemberRef) and member.kind == RegionMemberKind.NODE:
+                result.add(int(member.tag)); continue
+            match = _NODE.search(str(member))
+            if match: result.add(int(match.group(1)))
+    return result
+
+def _entity_nodes(entity_nodes, midpoints, used):
+    result = {}
+    for name, values in entity_nodes.items():
+        nodes = set(map(int, values))
+        for edge, midpoint in midpoints.items():
+            if midpoint in used and edge[0] in nodes and edge[1] in nodes: nodes.add(midpoint)
+        result[name] = sorted(nodes & used)
+    return result

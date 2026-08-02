@@ -7,7 +7,7 @@ from .tree_items import append_collection, ensure_expandable, folder
 
 def build_model(project):
     model = QStandardItemModel(); model.setHorizontalHeaderLabels([project.name]); root = model.invisibleRootItem()
-    append_materials(root, project.materials); append_sections(root, project.sections); append_profiles(root, project.profiles); append_fields(root, project.fields)
+    append_materials(root, project.materials); append_sections(root, project.sections, project); append_profiles(root, project.profiles); append_fields(root, project.fields)
     parts = folder("Parts", "parts"); root.appendRow(parts)
     for part in project.parts: append_part(parts, part)
     ensure_expandable(parts, project.parts, "No parts")

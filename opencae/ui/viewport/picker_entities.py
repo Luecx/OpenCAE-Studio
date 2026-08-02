@@ -21,7 +21,7 @@ def actor_entity(scene, actor, mode=None):
         if isinstance(reference,dict): return dict(reference)
         kind = actor_kind(scene,actor); dim = {"vertex":0,"edge":1,"face":2}.get(kind,-1)
         if not isinstance(reference,ActorReference): reference = ActorReference(None,dim,int(reference))
-        result = {"name":reference.label,"kind":kind,"dimension":reference.dimension,"tag":reference.tag,"instance":reference.instance_name}
+        result = {"name":reference.label,"kind":kind,"dimension":reference.dimension,"tag":reference.tag,"instance":reference.instance_name,"instance_id":reference.instance_id}
         _add_geometry_data(scene,result); return result
     return None
 

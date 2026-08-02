@@ -8,4 +8,3 @@ from .base import Load
 class DistributedLoad(Load):
     load_type: str = field(init=False, default="Surface Traction")
     components: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
-    coordinate_system: str = "Global"

@@ -20,13 +20,15 @@ def append_profiles(root, profiles):
     return ensure_expandable(group, profiles, "No profiles")
 
 
-def append_sections(root, sections):
+def append_sections(root, sections, project=None):
     group = folder("Sections", "sections"); root.appendRow(group)
     for section in sections:
         node = item(section.name, section, "section"); group.appendRow(node)
         node.appendRow(item(section.section_type, None, "info"))
-        if getattr(section, "material_name", ""): node.appendRow(item(f"Material: {section.material_name}", None, "info"))
-        if getattr(section, "profile_name", ""): node.appendRow(item(f"Profile: {section.profile_name}", None, "info"))
+        material = project.try_resolve(section.material_ref) if project and section.material_ref else None
+        profile = project.try_resolve(section.profile_ref) if project and section.profile_ref else None
+        if material: node.appendRow(item(f"Material: {material.name}", None, "info"))
+        if profile: node.appendRow(item(f"Profile: {profile.name}", None, "info"))
     return ensure_expandable(group, sections, "No sections")
 
 

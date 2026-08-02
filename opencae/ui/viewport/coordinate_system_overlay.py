@@ -18,7 +18,7 @@ class CoordinateSystemOverlay:
         self.clear(plotter)
         for i,system in enumerate(project.assembly.coordinate_systems):self._draw(plotter,system,f"assembly-{i}")
         for instance_name,instance in scene.assembly_instances.items():
-            part=next((x for x in project.parts if x.name==instance.part_name),None)
+            part=project.try_resolve(instance.part_ref)
             if part:
                 for i,system in enumerate(part.coordinate_systems):self._draw(plotter,system,f"{instance_name}-{i}",instance)
     def _draw(self,plotter,system,key,instance=None):

@@ -4,6 +4,7 @@ import shlex
 from pathlib import Path
 
 from opencae.model.core import SolverName
+from opencae.model.validation import validate_project
 from opencae.solvers.femaster_dsl import require_valid
 from .base import SolverAdapter
 
@@ -12,6 +13,9 @@ class FEMasterAdapter(SolverAdapter):
     name = "FEMaster"
 
     def write_deck_text(self, project, analysis):
+        errors = validate_project(project)
+        if errors:
+            raise ValueError("Invalid project:\n- " + "\n- ".join(errors))
         text = project.render_deck(SolverName.FEMASTER, analysis)
         require_valid(text)
         return text

@@ -24,14 +24,15 @@ class PartDatums:
     def _commit(self, part_id, dialog, state, values):
         part = next((item for item in self.ctx.store.project.parts if item.id == part_id), None)
         if part is None: return
-        datum = create_datum(values["kind"], values["name"], values["method"], values["parameters"]); target_id = state["target_id"]
+        target_id = state["target_id"]; datum = create_datum(values["kind"], values["name"], values["method"], values["parameters"], target_id)
         def apply(_project):
             if target_id is None: part.datums.append(datum)
             else:
-                index = next(i for i, item in enumerate(part.datums) if item.id == target_id); datum.id = target_id; part.datums[index] = datum
+                index = next(i for i, item in enumerate(part.datums) if item.id == target_id); part.datums[index] = datum
         self.ctx.store.mutate(f"{'Created' if target_id is None else 'Updated'} {datum.name}", apply)
         if target_id is None: state["target_id"] = datum.id
         dialog.existing_names = tuple(item.name for item in part.datums if item.id != state["target_id"])
+        self.ctx.store.select(datum)
         self.ctx.store.invalidate_scene("Datum updated")
 
     def _closed(self, dialog):

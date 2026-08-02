@@ -11,6 +11,7 @@ from .mesh_controls import apply_mesh_controls
 from .mesh_options import apply_default_seed, apply_general_options
 from .seeding import apply_edge_seeds
 from .seed_validation import edge_seed_mismatches
+from .element_controls_apply import requires_second_order
 
 
 class GeometryService:
@@ -36,11 +37,11 @@ class GeometryService:
             apply_edge_seeds(gmsh, part)
             dimension = self._mesh_dimension(gmsh)
             gmsh.model.mesh.generate(dimension)
-            if part.mesh.settings.element_order > 1:
-                gmsh.model.mesh.setOrder(part.mesh.settings.element_order)
+            if requires_second_order(part):
+                gmsh.model.mesh.setOrder(2)
             if part.mesh.settings.optimize:
                 gmsh.model.mesh.optimize("Netgen")
-            if part.mesh.settings.high_order_optimize and part.mesh.settings.element_order > 1:
+            if part.mesh.settings.high_order_optimize and requires_second_order(part):
                 gmsh.model.mesh.optimize("HighOrder")
             snapshot = extract_mesh(gmsh, part.id, dimension, fingerprint)
             snapshot.seed_mismatches = edge_seed_mismatches(gmsh, part)

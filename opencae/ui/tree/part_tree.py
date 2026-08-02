@@ -47,6 +47,9 @@ def _append_mesh(part_node, part):
         mesh.appendRow(item(seed.name, seed, "seed", part_id=part.id))
     for control in part.mesh.controls:
         mesh.appendRow(item(control.name, control, "mesh_control", part_id=part.id))
+    for control in part.mesh.element_controls:
+        target = "Entire Part" if not control.targets else ", ".join(map(str, control.targets))
+        mesh.appendRow(item(control.name, control, "element_control", f"[{control.order.value} | {target}]", part_id=part.id))
     mesh.appendRow(item("Nodes", {"count": part.mesh.node_count, "status": part.mesh.status}, "nodes", f"({part.mesh.node_count:,})", part_id=part.id))
     elements = folder("Elements", "elements", part.id)
     mesh.appendRow(elements)

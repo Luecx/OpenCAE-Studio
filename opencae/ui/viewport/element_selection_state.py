@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from .picker_entities import additive_selection
+from .vtk_cell_data import cell_array
 
 
 class ElementSelectionState:
@@ -16,16 +17,17 @@ class ElementSelectionState:
     def picked(self, point):
         candidate = self._nearest(point)
         if candidate is None: return
-        instance, grid, cell_id = candidate; ids = np.asarray(grid.cell_data.get("element_id", ()))
+        instance, grid, cell_id = candidate; ids = cell_array(grid, "element_id")
         if not len(ids): return
         tag = int(ids[cell_id]); key = (instance, tag)
         if not additive_selection(): self.selected.clear()
         if key in self.selected: self.selected.pop(key)
         else:
             name = f"Element-{tag}"; name = f"{instance}.{name}" if instance else name
+            owner = self.owner.scene.instance_for(instance) if instance else None
             self.selected[key] = {"name": name, "kind": "element", "dimension": grid.get_cell(cell_id).dimension,
-                                  "tag": tag, "instance": instance, "mesh_entity": "element",
-                                  "point": tuple(grid.get_cell(cell_id).center)}
+                                  "tag": tag, "instance": instance, "instance_id": getattr(owner, "id", None),
+                                  "mesh_entity": "element", "point": tuple(grid.get_cell(cell_id).center)}
         self._draw(); self._emit(list(self.selected.values()))
 
     def _nearest(self, point):
@@ -42,7 +44,7 @@ class ElementSelectionState:
         meshes = []
         for (instance, tag) in self.selected:
             grid = self.owner.scene.mesh_grids.get(instance) if instance else self.owner.scene.mesh_grid
-            ids = np.asarray(grid.cell_data.get("element_id", ())) if grid is not None else np.asarray([])
+            ids = cell_array(grid, "element_id")
             hits = np.where(ids == tag)[0]
             if len(hits): meshes.append(grid.extract_cells([int(hits[0])]))
         if meshes:

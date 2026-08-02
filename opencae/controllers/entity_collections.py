@@ -12,8 +12,8 @@ def project_collections(project):
         if isinstance(steps, list): values.append(steps)
     for part in project.parts:
         values.extend([
-            part.geometry, part.mesh.seeds, part.mesh.controls, part.mesh.elements,
+            part.geometry, part.mesh.seeds, part.mesh.controls, part.mesh.element_controls, part.mesh.elements,
             part.node_sets, part.element_sets, part.surfaces, part.coordinate_systems,
-            part.reference_points, part.datums, part.section_assignments,
+            part.reference_points, part.datums, part.orientations, part.section_assignments,
         ])
     return [value for value in values if isinstance(value, list)]

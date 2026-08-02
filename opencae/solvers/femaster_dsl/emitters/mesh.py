@@ -7,6 +7,7 @@ import numpy as np
 from ..command import command
 from ..element_types import element_type
 from .region_resolution import resolve_members, surface_entries
+from opencae.model.core import region_member_local_label
 
 
 def write_part_mesh(part, writer, context, instance=None, node_offset=0, element_offset=0):
@@ -14,7 +15,7 @@ def write_part_mesh(part, writer, context, instance=None, node_offset=0, element
     if not nodes.ids or not part.mesh.element_blocks:
         writer.comment(f"Part {part.name} has no persistent generated mesh")
         return {}, {}, node_offset, element_offset
-    prefix = _safe(instance.name if instance else part.name)
+    prefix = context.names.register(("instance", instance.id if instance else part.id), instance.name if instance else part.name)
     transform = _transform(instance)
     node_map = {int(old): node_offset + i + 1 for i, old in enumerate(nodes.ids)}
     command(writer, "NODE", [(node_map[int(old)], *_apply(transform, point)) for old, point in zip(nodes.ids, nodes.coordinates)], NSET=f"{prefix}_NALL")
@@ -25,10 +26,17 @@ def write_part_mesh(part, writer, context, instance=None, node_offset=0, element
         rp_rows.append((next_node, *_apply(transform, point.position))); rp_records.append((point, next_node))
     if rp_rows: command(writer, "NODE", rp_rows, NSET=f"{prefix}_REFERENCE_POINTS")
     aliases = context.options.setdefault("region_aliases", {})
+    part_aliases = context.options.setdefault("part_region_aliases", {})
+    part_data = context.options.setdefault("part_region_data", {})
     for point, node_id in rp_records:
-        set_name = f"{prefix}_RP_{_safe(point.name)}"; command(writer, "NSET", [(node_id,)], NSET=set_name)
+        set_name = context.names.register(((instance.id if instance else part.id), point.id), f"{prefix}_RP_{_safe(point.name)}")
+        command(writer, "NSET", [(node_id,)], NSET=set_name)
         aliases[f"{part.name}.{point.name}"] = set_name; aliases[f"{prefix}.{point.name}"] = set_name; aliases.setdefault(point.name, set_name)
-    context.options.setdefault("instance_reference_nodes", {})[prefix] = reference_nodes
+        part_aliases.setdefault(point.id, []).append(set_name)
+        record = part_data.setdefault(point.id, {"command": "NSET", "values": []}); record["values"].append(node_id)
+    reference_maps = context.options.setdefault("instance_reference_nodes", {})
+    reference_maps[prefix] = reference_nodes
+    reference_maps[instance.id if instance else part.id] = reference_nodes
     element_map = {}; next_id = element_offset + 1
     for index, block in enumerate(part.mesh.element_blocks, 1):
         type_name = element_type(block.definition, len(block.connectivity[0]) if block.connectivity else None)
@@ -43,23 +51,31 @@ def write_part_mesh(part, writer, context, instance=None, node_offset=0, element
         command(writer, "ELEMENT", rows, TYPE=type_name, ELSET=f"{prefix}_E{index}")
     if next_id > element_offset + 1:
         command(writer, "ELSET", [(value,) for value in range(element_offset + 1, next_id)], ELSET=f"{prefix}_EALL")
-    write_part_regions(part, writer, context, prefix, node_map, element_map, reference_nodes)
+    context.options.setdefault("instance_node_maps", {})[instance.id if instance else part.id] = node_map
+    context.options.setdefault("instance_element_maps", {})[instance.id if instance else part.id] = element_map
+    write_part_regions(part, writer, context, prefix, node_map, element_map, reference_nodes, instance)
     return node_map, element_map, next_node, next_id - 1
 
 
-def write_part_regions(part, writer, context, prefix, node_map, element_map, reference_nodes=None):
+def write_part_regions(part, writer, context, prefix, node_map, element_map, reference_nodes=None, instance=None):
+    instance_aliases = context.options.setdefault("instance_region_aliases", {}); part_aliases = context.options.setdefault("part_region_aliases", {}); part_data = context.options.setdefault("part_region_data", {})
+    owner_id = instance.id if instance else part.id
     for region in part.node_sets:
-        _write_set(writer, "NSET", f"{prefix}_{_safe(region.name)}", region.members, node_map, part.mesh.entity_nodes, reference_nodes)
+        name = context.names.register((owner_id, region.id), f"{prefix}_{_safe(region.name)}"); members = [region_member_local_label(context.project, item) for item in region.members]; values = _write_set(writer, "NSET", name, members, node_map, part.mesh.entity_nodes, reference_nodes)
+        instance_aliases[(owner_id, region.id)] = name; part_aliases.setdefault(region.id, []).append(name); part_data.setdefault(region.id, {"command": "NSET", "values": []})["values"].extend(values)
     for region in part.element_sets:
-        _write_set(writer, "ELSET", f"{prefix}_{_safe(region.name)}", region.members, element_map, part.mesh.entity_elements)
+        name = context.names.register((owner_id, region.id), f"{prefix}_{_safe(region.name)}"); members = [region_member_local_label(context.project, item) for item in region.members]; values = _write_set(writer, "ELSET", name, members, element_map, part.mesh.entity_elements)
+        instance_aliases[(owner_id, region.id)] = name; part_aliases.setdefault(region.id, []).append(name); part_data.setdefault(region.id, {"command": "ELSET", "values": []})["values"].extend(values)
     surface_id = int(context.options.get("next_surface_id", 1))
     for surface in part.surfaces:
-        name = f"{prefix}_{_safe(surface.name)}"
-        entries, unresolved = surface_entries(part, surface.members, node_map, element_map)
+        name = context.names.register((owner_id, surface.id), f"{prefix}_{_safe(surface.name)}"); instance_aliases[(owner_id, surface.id)] = name; part_aliases.setdefault(surface.id, []).append(name)
+        members = [region_member_local_label(context.project, item) for item in surface.members]
+        entries, unresolved = surface_entries(part, members, node_map, element_map)
         rows = [(surface_id + index, element_id, side) for index, (element_id, side) in enumerate(entries)]
         if rows:
             command(writer, "SURFACE", rows, NAME=name)
             surface_id += len(rows)
+            part_data.setdefault(surface.id, {"command": "SURFACE", "values": []})["values"].extend(entries)
         if unresolved:
             writer.comment(f"{name}: unresolved geometry reference(s): {', '.join(unresolved)}")
     context.options["next_surface_id"] = surface_id
@@ -71,6 +87,7 @@ def _write_set(writer, command_name, name, members, mapping, entity_members, dir
         command(writer, command_name, [(value,) for value in values], **{command_name: name})
     if unresolved:
         writer.comment(f"{name}: unresolved reference(s): {', '.join(unresolved)}")
+    return values
 
 
 def _safe(value): return re.sub(r"[^A-Za-z0-9_]", "_", str(value)).upper()

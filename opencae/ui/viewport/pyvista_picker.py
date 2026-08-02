@@ -51,7 +51,9 @@ class PyVistaPicker:
             value = {"name": entities[0]["name"], "entities": entities} if entities else None; self.owner.selection_changed.emit(value)
         self.owner.plotter.render()
     def show_labels(self, labels, render=True):
-        self.clear(False, False); wanted = {str(value) for value in labels}
+        from opencae.model.core import region_member_label
+        project = self.owner.store.project
+        self.clear(False, False); wanted = {region_member_label(project, value) for value in labels}
         actors = (*self.owner.scene.face_actors, *self.owner.scene.edge_actors, *self.owner.scene.vertex_actors, *self.owner.scene.reference_actors, *self.owner.scene.datum_actors)
         for actor in actors:
             entity = actor_entity(self.owner.scene, actor)

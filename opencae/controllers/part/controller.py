@@ -2,6 +2,7 @@ from opencae.model.geometry import GeometryFeature
 
 from .context import PartContext
 from .geometry_settings import PartGeometrySettings
+from .element_controls import PartElementControls
 from .datums import PartDatums
 from .lifecycle import PartLifecycle
 from .mesh_controls import PartMeshControls
@@ -20,12 +21,13 @@ class PartController:
         self.settings = PartGeometrySettings(self.context)
         self.seeds = PartMeshSeeds(self.context)
         self.controls = PartMeshControls(self.context)
+        self.element_control_manager = PartElementControls(self.context)
         self.generation = PartMeshGeneration(self.context)
         self.regions = PartRegions(self.context)
         self.datums = PartDatums(self.context)
         self._delegates = (
             self.lifecycle, self.partitions, self.settings, self.seeds,
-            self.controls, self.generation, self.regions, self.datums,
+            self.controls, self.element_control_manager, self.generation, self.regions, self.datums,
         )
 
     def active_part(self):

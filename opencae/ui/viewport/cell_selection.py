@@ -29,5 +29,6 @@ def pick_cell(picker, actor):
     entities = []
     for instance, tag in sorted(picker.selected_cells, key=lambda value: (value[0] or "", value[1])):
         label = f"Cell-{tag}"; label = f"{instance}.{label}" if instance else label
-        entities.append({"name": label, "dimension": 3, "tag": tag, "instance": instance})
+        owner = scene.instance_for(instance) if instance else None
+        entities.append({"name": label, "kind": "cell", "dimension": 3, "tag": tag, "instance": instance, "instance_id": getattr(owner, "id", None)})
     picker.emit_entities(entities)

@@ -20,5 +20,5 @@ class OutputTabs(QTabWidget):
         self.addTab(self.deck, "Input Deck")
         self.addTab(self.console, "Python Console")
         store.message.connect(self.log.append_message)
-        store.changed.connect(lambda *_: self.jobs.refresh(store.project.jobs))
-        self.jobs.refresh(store.project.jobs)
+        store.changed.connect(lambda *_: self.jobs.refresh(store.project))
+        self.jobs.refresh(store.project)

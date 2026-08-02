@@ -6,6 +6,7 @@ class ActorReference:
     instance_name: str | None
     dimension: int
     tag: int
+    instance_id: str | None = None
 
     @property
     def label(self):

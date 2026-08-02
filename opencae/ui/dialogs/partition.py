@@ -4,13 +4,13 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QDialog,QDoubleSpinBox,QFormLayout,QLabel,QLineEdit,QMessageBox,QStackedWidget,QVBoxLayout,QWidget
 
 from opencae.ui.core.controls import dialog_buttons
-from opencae.ui.core.widgets import ChevronComboBox,PointSelectionWidget,SelectionMembersWidget
+from opencae.ui.core.widgets import ChevronComboBox,PointSelectionWidget,ReferenceSelector,SelectionMembersWidget
 
 PARTITION_TYPES=('Cell by plane','Face by two points','Edge at parameter','Edge at vertex')
 
 class PartitionDialog(QDialog):
-    def __init__(self,selection_provider,point_provider,feature=None,parent=None):
-        super().__init__(parent); self.selection_provider=selection_provider; self.point_provider=point_provider; self.feature=feature; self.setWindowTitle('Edit Partition' if feature else 'Create Partition'); self.setMinimumWidth(660); self.setWindowModality(Qt.WindowModality.NonModal)
+    def __init__(self,selection_provider,point_provider,feature=None,parent=None,datum_planes=(),create_datum_plane=None):
+        super().__init__(parent); self.selection_provider=selection_provider; self.point_provider=point_provider; self.feature=feature; self.datum_planes=list(datum_planes); self.create_datum_plane=create_datum_plane; self.setWindowTitle('Edit Partition' if feature else 'Create Partition'); self.setMinimumWidth(660); self.setWindowModality(Qt.WindowModality.NonModal)
         root=QVBoxLayout(self); root.setContentsMargins(18,16,18,14); root.setSpacing(12); title=QLabel(self.windowTitle()); title.setObjectName('PanelTitle'); root.addWidget(title)
         form=QFormLayout(); self.name=QLineEdit(getattr(feature,'name','Partition-1')); self.kind=ChevronComboBox(); self.kind.addItems(PARTITION_TYPES); self.kind.setCurrentText(self._kind_from_feature(feature)); form.addRow('History feature',self.name); form.addRow('Partition method',self.kind); root.addLayout(form)
         self.stack=QStackedWidget(); root.addWidget(self.stack); self._build_pages(); self.kind.currentIndexChanged.connect(self.stack.setCurrentIndex); self.stack.setCurrentIndex(PARTITION_TYPES.index(self.kind.currentText())); self._load(feature)
@@ -20,7 +20,7 @@ class PartitionDialog(QDialog):
         return [item for item in self.selection_provider(dimension)]
     def _selector(self,dimension):return SelectionMembersWidget(selection_provider=lambda:self._members(dimension))
     def _build_pages(self):
-        plane=QWidget(); layout=QVBoxLayout(plane); layout.addWidget(QLabel('Target cells')); self.plane_targets=self._selector(3); layout.addWidget(self.plane_targets); form=QFormLayout(); self.origin=[self._number(0.0) for _ in range(3)]; self.normal=[self._number(v) for v in (1.0,0.0,0.0)]; form.addRow('Plane origin X',self.origin[0]); form.addRow('Plane origin Y',self.origin[1]); form.addRow('Plane origin Z',self.origin[2]); form.addRow('Plane normal X',self.normal[0]); form.addRow('Plane normal Y',self.normal[1]); form.addRow('Plane normal Z',self.normal[2]); layout.addLayout(form); self.stack.addWidget(plane)
+        plane=QWidget(); layout=QVBoxLayout(plane); layout.addWidget(QLabel('Target cells')); self.plane_targets=self._selector(3); layout.addWidget(self.plane_targets); form=QFormLayout(); self.datum_plane=ReferenceSelector((("Manual origin / normal",""),*self.datum_planes),"",self._create_datum_plane if self.create_datum_plane else None); self.origin=[self._number(0.0) for _ in range(3)]; self.normal=[self._number(v) for v in (1.0,0.0,0.0)]; form.addRow('Datum plane',self.datum_plane); form.addRow('Plane origin X',self.origin[0]); form.addRow('Plane origin Y',self.origin[1]); form.addRow('Plane origin Z',self.origin[2]); form.addRow('Plane normal X',self.normal[0]); form.addRow('Plane normal Y',self.normal[1]); form.addRow('Plane normal Z',self.normal[2]); layout.addLayout(form); self.stack.addWidget(plane)
         face=QWidget(); layout=QVBoxLayout(face); layout.addWidget(QLabel('Target face')); self.face_targets=self._selector(2); layout.addWidget(self.face_targets); layout.addWidget(QLabel('Two picked points defining the partition line')); self.face_points=PointSelectionWidget(selection_provider=self.point_provider); layout.addWidget(self.face_points); self.stack.addWidget(face)
         edge_parameter=QWidget(); layout=QVBoxLayout(edge_parameter); layout.addWidget(QLabel('Target edge')); self.edge_parameter_targets=self._selector(1); layout.addWidget(self.edge_parameter_targets); form=QFormLayout(); self.fraction=self._number(0.5); self.fraction.setRange(0.000001,0.999999); form.addRow('Normalized parameter',self.fraction); layout.addLayout(form); self.stack.addWidget(edge_parameter)
         edge_vertex=QWidget(); layout=QVBoxLayout(edge_vertex); layout.addWidget(QLabel('Target edge')); self.edge_vertex_targets=self._selector(1); layout.addWidget(self.edge_vertex_targets); layout.addWidget(QLabel('Splitting vertex')); self.edge_vertex=self._selector(0); layout.addWidget(self.edge_vertex); self.stack.addWidget(edge_vertex)
@@ -36,7 +36,7 @@ class PartitionDialog(QDialog):
         if feature is None:return
         kind=self._kind_from_feature(feature)
         if kind==PARTITION_TYPES[0]:
-            self.plane_targets.set_members(feature.references); origin=feature.parameters.get('origin',(0,0,0)); normal=feature.parameters.get('normal',(1,0,0)); [self.origin[i].setValue(origin[i]) for i in range(3)]; [self.normal[i].setValue(normal[i]) for i in range(3)]
+            self.plane_targets.set_members(feature.references); self.datum_plane.setCurrentValue(feature.parameters.get('datum_plane_id','')); origin=feature.parameters.get('origin',(0,0,0)); normal=feature.parameters.get('normal',(1,0,0)); [self.origin[i].setValue(origin[i]) for i in range(3)]; [self.normal[i].setValue(normal[i]) for i in range(3)]
         elif kind==PARTITION_TYPES[1]:self.face_targets.set_members(feature.references); self.face_points.set_points(feature.parameters.get('points',()))
         elif kind==PARTITION_TYPES[2]:self.edge_parameter_targets.set_members(feature.references); self.fraction.setValue(feature.parameters.get('fraction',0.5))
         else:self.edge_vertex_targets.set_members(feature.references); self.edge_vertex.set_members(feature.parameters.get('vertices',()))
@@ -50,8 +50,29 @@ class PartitionDialog(QDialog):
         self.accept()
     def values(self):
         kind=self.kind.currentText(); base={'name':self.name.text().strip(),'partition_type':kind}
-        if kind==PARTITION_TYPES[0]:base.update(references=self.plane_targets.members(),parameters={'origin':tuple(e.value() for e in self.origin),'normal':tuple(e.value() for e in self.normal)})
+        if kind==PARTITION_TYPES[0]:
+            datum_id=self.datum_plane.currentValue(); datum=next((item for item in self.datum_planes if getattr(item,'id',None)==datum_id),None)
+            if datum is not None: parameters={'origin':tuple(datum.origin),'normal':tuple(datum.normal),'datum_plane_id':datum_id}
+            else: parameters={'origin':tuple(e.value() for e in self.origin),'normal':tuple(e.value() for e in self.normal)}
+            base.update(references=self.plane_targets.members(),parameters=parameters)
         elif kind==PARTITION_TYPES[1]:base.update(references=self.face_targets.members(),parameters={'points':self.face_points.points()})
         elif kind==PARTITION_TYPES[2]:base.update(references=self.edge_parameter_targets.members(),parameters={'method':'Parameter','fraction':self.fraction.value()})
         else:base.update(references=self.edge_vertex_targets.members(),parameters={'method':'Vertex','vertices':self.edge_vertex.members()})
         return base
+
+    def update_selection(self):
+        widget = {
+            PARTITION_TYPES[0]: self.plane_targets,
+            PARTITION_TYPES[1]: self.face_targets,
+            PARTITION_TYPES[2]: self.edge_parameter_targets,
+            PARTITION_TYPES[3]: self.edge_vertex_targets,
+        }.get(self.kind.currentText())
+        if widget is not None:
+            widget.capture()
+
+    def _create_datum_plane(self, owner, done):
+        def created(value):
+            if value is not None and value not in self.datum_planes:
+                self.datum_planes.append(value)
+            done(value)
+        self.create_datum_plane(owner, created)

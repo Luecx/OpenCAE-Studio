@@ -24,7 +24,7 @@ class DatumOverlay:
     def show_assembly(self, plotter, project, scene):
         self.clear(plotter)
         for instance_name, instance in scene.assembly_instances.items():
-            part = next((item for item in project.parts if item.name == instance.part_name), None)
+            part = project.try_resolve(instance.part_ref)
             if part:
                 for index, datum in enumerate(getattr(part, "datums", ())):
                     self._draw(plotter, scene, datum, f"{instance_name}-{index}", instance, instance_name)
@@ -40,7 +40,7 @@ class DatumOverlay:
                                  render_points_as_spheres=True, lighting=False, pickable=True, name=name, render=False)
         label = f"{instance_name}.{datum.name}" if instance_name else datum.name
         scene.datum_actors[actor] = {"name": label, "kind": "datum_point", "dimension": 0,
-                                    "tag": datum.id, "instance": instance_name, "point": tuple(position)}
+                                    "tag": datum.id, "instance": instance_name, "instance_id": getattr(instance, "id", None), "point": tuple(position)}
         self._label(plotter, position, datum.name, name)
 
     def _vector(self, plotter, scene, datum, key, instance, instance_name):
@@ -50,7 +50,7 @@ class DatumOverlay:
                                  lighting=False, pickable=True, name=name, render=False)
         label = f"{instance_name}.{datum.name}" if instance_name else datum.name
         scene.datum_actors[actor] = {"name": label, "kind": "datum_vector", "dimension": -1, "tag": datum.id,
-                                    "instance": instance_name, "point": tuple(origin), "direction": tuple(direction)}
+                                    "instance": instance_name, "instance_id": getattr(instance, "id", None), "point": tuple(origin), "direction": tuple(direction)}
         self._label(plotter, origin + direction * scale, datum.name, name)
 
     def _plane(self, plotter, scene, datum, key, instance):

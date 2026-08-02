@@ -8,5 +8,4 @@ from .base import Section
 @dataclass
 class BeamSection(Section):
     section_type: str = field(init=False, default="Beam")
-    profile_name: str = ""
     direction: tuple[float, float, float] = (0.0, 1.0, 0.0)

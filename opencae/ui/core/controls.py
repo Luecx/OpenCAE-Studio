@@ -13,11 +13,11 @@ def primary_button(text: str) -> QPushButton:
     return button
 
 
-def dialog_buttons() -> QDialogButtonBox:
-    buttons = QDialogButtonBox(
-        QDialogButtonBox.StandardButton.Ok
-        | QDialogButtonBox.StandardButton.Cancel
-    )
+def dialog_buttons(include_apply: bool = False) -> QDialogButtonBox:
+    flags = QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+    if include_apply:
+        flags |= QDialogButtonBox.StandardButton.Apply
+    buttons = QDialogButtonBox(flags)
     ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
     if ok_button is not None:
         ok_button.setObjectName("PrimaryButton")

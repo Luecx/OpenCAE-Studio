@@ -29,8 +29,9 @@ class PointSelectionState:
             if grid is None or not grid.n_points: continue
             index = int(grid.find_closest_point(point)); ids = np.asarray(grid.point_data.get("node_id", np.arange(grid.n_points)))
             tag = int(ids[index]); name = f"Node-{tag}"; name = f"{instance}.{name}" if instance else name
+            owner = self.owner.scene.instance_for(instance) if instance else None
             entity = {"name":name,"kind":"node","dimension":0,"tag":tag,"instance":instance,
-                      "mesh_entity":"node","point":tuple(grid.points[index])}
+                      "instance_id":getattr(owner,"id",None),"mesh_entity":"node","point":tuple(grid.points[index])}
             result.append((float(np.linalg.norm(grid.points[index] - point)), entity))
         return result
     def _actor_candidates(self, point):

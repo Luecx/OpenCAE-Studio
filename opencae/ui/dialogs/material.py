@@ -1,5 +1,6 @@
 from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QMessageBox, QVBoxLayout
 
+from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.controls import dialog_buttons
 from .material_behavior_row import MaterialBehaviorRow
 from .material_property import MaterialPropertyDialog
@@ -7,7 +8,7 @@ from .material_property import MaterialPropertyDialog
 _CATEGORIES = ("Elasticity", "Density", "Plasticity", "Thermal expansion")
 
 
-class MaterialDialog(QDialog):
+class MaterialDialog(ApplyDialog):
     def __init__(self, material=None, existing_names=(), parent=None, default_name="Material-1"):
         super().__init__(parent); self.material = material; self.existing_names = {name.casefold() for name in existing_names}
         self.behaviors = list(getattr(material, "behaviors", [])); self.rows = {}
@@ -20,7 +21,7 @@ class MaterialDialog(QDialog):
             row = MaterialBehaviorRow(category); row.add_requested.connect(self._edit_category); row.remove_requested.connect(self._remove_category)
             root.addWidget(row); self.rows[category] = row
         root.addStretch(1)
-        buttons = dialog_buttons(); buttons.accepted.connect(self._accept); buttons.rejected.connect(self.reject); root.addWidget(buttons)
+        buttons = dialog_buttons(include_apply=True); self.bind_buttons(buttons,True); root.addWidget(buttons)
         self._refresh()
 
     def _behavior(self, category): return next((item for item in self.behaviors if item.category == category), None)
@@ -37,14 +38,21 @@ class MaterialDialog(QDialog):
     def _remove_category(self, category):
         self.behaviors = [item for item in self.behaviors if item.category != category]; self._refresh()
 
-    def _accept(self):
+    def validate(self):
         name = self.name.text().strip()
-        if not name: QMessageBox.warning(self, "Invalid material", "Enter a material name."); return
+        if not name: QMessageBox.warning(self, "Invalid material", "Enter a material name."); return False
         if name.casefold() in self.existing_names and (self.material is None or name.casefold() != self.material.name.casefold()):
-            QMessageBox.warning(self, "Duplicate name", f"A material named '{name}' already exists."); return
-        self.accept()
+            QMessageBox.warning(self, "Duplicate name", f"A material named '{name}' already exists."); return False
+        return True
 
     def values(self):
         return {"name": self.name.text().strip(), "behaviors": self.behaviors, "fields": [],
                 "properties": dict(getattr(self.material, "properties", {})), "density": 0.0,
                 "youngs_modulus": 0.0, "poisson_ratio": 0.0}
+
+    def prepare_new(self, default_name, existing_names):
+        self.material = None
+        self.existing_names = {name.casefold() for name in existing_names}
+        self.behaviors = []
+        self.name.setText(default_name)
+        self._refresh()

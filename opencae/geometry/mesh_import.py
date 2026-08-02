@@ -43,7 +43,7 @@ def _read_inp(path, part_id):
     for name, rows in groups.items():
         if name not in _TYPE: raise ValueError(f"Unsupported element type: {name}")
         gmsh, topology, order, primary, dimension = _TYPE[name]
-        blocks.append(MeshBlock(gmsh, topology, dimension, order, primary,
+        blocks.append(MeshBlock(gmsh, name, dimension, order, primary,
                                 np.asarray([[lookup[tag] for tag in row] for _, row in rows], np.int64),
                                 np.asarray([eid for eid, _ in rows], np.int64)))
     return MeshSnapshot(part_id, tags, np.asarray([nodes[int(tag)] for tag in tags]), blocks, max((b.dimension for b in blocks), default=0), fingerprint=str(path))

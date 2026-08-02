@@ -52,6 +52,7 @@ class MainWindow(QMainWindow):
             self.actions.get(action_id).setEnabled(has_part)
         for action_id in (A.PARTITION, A.REBUILD_GEOMETRY, A.SUPPRESS_FEATURE, A.DEFAULT_SEED, A.EDGE_SEED, A.MESH_CONTROL, A.MESH_SETTINGS):
             self.actions.get(action_id).setEnabled(has_cad)
+        self.actions.get(A.ELEMENT_CONTROLS).setEnabled(bool(part and part.mesh.element_blocks))
         project = self.context.store.project
         has_assembly = any(not instance.suppressed for instance in project.assembly.instances)
         solver_ready = bool(self.context.settings.selected_solver in self.context.settings.enabled_solvers())

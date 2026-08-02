@@ -15,6 +15,12 @@ def css(p):
         font-weight: 600;
     }}
     QPushButton#PrimaryButton:hover {{ background: {p['accent_hover']}; }}
+    QPushButton#InlinePickButton:checked, QPushButton#ContextPickButton:checked {{
+        background: {p['accent_dim']};
+        border-color: {p['accent']};
+        color: {p['text']};
+        font-weight: 600;
+    }}
     QToolButton {{
         background: transparent;
         border: 1px solid transparent;

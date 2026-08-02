@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QDialog, QFormLayout, QLabel, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFormLayout, QLabel, QVBoxLayout, QWidget
 
+from .apply_dialog import ApplyDialog
 from .controls import dialog_buttons
 from .fields import FieldSpec, create_editor, editor_value
 
 
-class FormDialog(QDialog):
-    def __init__(self, title: str, fields: tuple[FieldSpec, ...], parent: QWidget | None = None, width: int = 520):
+class FormDialog(ApplyDialog):
+    def __init__(self, title: str, fields: tuple[FieldSpec, ...], parent: QWidget | None = None, width: int = 520, allow_apply: bool = False):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setModal(True)
@@ -29,7 +30,7 @@ class FormDialog(QDialog):
             self._editors[spec.key] = editor
             form.addRow(spec.label, editor)
         layout.addLayout(form)
-        buttons = dialog_buttons(); buttons.accepted.connect(self.accept); buttons.rejected.connect(self.reject)
+        buttons = dialog_buttons(include_apply=allow_apply); self.bind_buttons(buttons, allow_apply)
         layout.addWidget(buttons)
 
     def values(self) -> dict:

@@ -39,4 +39,10 @@ def highlight_members(viewport, members):
 
 
 def _contains_mesh_members(members):
-    return any(str(value).split(".")[-1].startswith(("Node-", "Element-")) for value in members)
+    from opencae.model.core import RegionMemberKind, RegionMemberRef
+    for value in members:
+        if isinstance(value, RegionMemberRef) and value.kind in {RegionMemberKind.NODE, RegionMemberKind.ELEMENT}:
+            return True
+        if str(value).split(".")[-1].startswith(("Node-", "Element-")):
+            return True
+    return False

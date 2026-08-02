@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import fields, is_dataclass
 from pathlib import Path
+from enum import Enum
 from typing import Any
 
 from .model_registry import model_class
@@ -10,8 +11,10 @@ from .model_registry import model_class
 def encode_model(value: Any) -> Any:
     if is_dataclass(value):
         type_name = getattr(type(value), "model_type", None)
-        data = {field.name: encode_model(getattr(value, field.name)) for field in fields(value) if field.init}
+        data = {field.name: encode_model(getattr(value, field.name)) for field in fields(value) if field.init and field.metadata.get("serialize", True)}
         return {"__type__": type_name, **data} if type_name else data
+    if isinstance(value, Enum):
+        return value.value
     if isinstance(value, Path):
         return {"__path__": str(value)}
     if isinstance(value, tuple):

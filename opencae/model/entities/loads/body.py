@@ -10,4 +10,3 @@ class BodyLoad(Load):
     load_type: str = field(init=False, default="Body load")
     magnitude: float = 0.0
     direction: str = "Global Z"
-    coordinate_system: str = "Global"

@@ -2,13 +2,18 @@ from __future__ import annotations
 
 from opencae.model.mesh import ElementDefinition, create_element_definition
 
+_KNOWN = {"B33","T3","S3","S4","S6","S8","MITC3FRT","MITC4","MITC4FRT","MITC6FRT","MITC8","MITC8FRT","QSPT","C3D4","C3D5","C3D6","C3D8","C3D8R","C3D10","C3D13","C3D15","C3D20","C3D20R"}
+
 
 def definition_from_block(block) -> ElementDefinition:
     category, topology = neutral_type(block.name, block.dimension, block.primary_nodes)
+    formulation = _formulation(block.name, topology)
+    if block.name.upper() == "B33": topology = "Beam Elements"
+    elif block.name.upper() == "T3": topology = "Truss Elements"
     return create_element_definition(
-        category, topology, name=topology,
+        category, topology, name=block.name if block.name.upper() in _KNOWN else topology,
         order="Quadratic" if block.order > 1 else "Linear",
-        formulation="Standard", gmsh_type=block.gmsh_type,
+        formulation=formulation, gmsh_type=block.gmsh_type,
         count=len(block.connectivity),
     )
 
@@ -36,3 +41,13 @@ def _merge(definitions):
         if key in merged: merged[key].count += definition.count
         else: merged[key] = definition
     return list(merged.values())
+
+
+def _formulation(name, topology):
+    upper = str(name).upper()
+    if upper == "B33": return "Beam"
+    if upper == "T3": return "Truss"
+    if "FRT" in upper: return "Finite Rotation MITC"
+    if "MITC" in upper: return "MITC"
+    if upper.endswith("R") and topology == "Hexahedra": return "Reduced Integration"
+    return "Standard"

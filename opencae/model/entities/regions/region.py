@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from ...core import Entity, register_model_type
+from ...core import Entity, RegionMemberRef, register_model_type
 
 
 @register_model_type("region")
@@ -8,7 +8,7 @@ from ...core import Entity, register_model_type
 class Region(Entity):
     region_type: str = "Region"
     scope: str = "Part"
-    members: list[str] = field(default_factory=list)
+    members: list[RegionMemberRef | str] = field(default_factory=list)
     geometry_backed: bool = True
 
     def write_abaqus(self, writer, context) -> None:

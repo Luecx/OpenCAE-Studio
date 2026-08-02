@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QFileDialog, QButtonGroup, QHBoxLayout, QMessageBox,
 from opencae.results import FrdLoader
 from opencae.ui.actions.ids import A
 from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.viewport.result_visualization import auto_deformation_scale
 from .result_deformation import ResultDeformationButton
 from .result_field_menu import ResultFieldButton
 from .result_range import ResultRangeButton
@@ -36,7 +37,7 @@ class ResultsPage(QWidget):
         self.query_elements = ribbon_button("Query Elements", IconKind.QUERY_ELEMENT, False, 88)
         layout.addWidget(ResultRibbonGroup("QUERY", (self.query_nodes, self.query_elements))); layout.addStretch(1)
         for button in (self.mesh_lines, self.boundary_lines, self.undeformed): button.toggled.connect(self._emit)
-        self.deform.settings_changed.connect(self._emit); self.range.range_changed.connect(self._emit)
+        self.deform.settings_changed.connect(self._emit); self.deform.auto_requested.connect(self._auto_deformation_scale); self.range.range_changed.connect(self._emit)
         self.choose.selection_changed.connect(self._field_changed); self._wire_queries()
 
     def _save_button(self):
@@ -70,6 +71,13 @@ class ResultsPage(QWidget):
         try:
             if source.resolve() != destination.resolve(): copy2(source, destination)
         except Exception as exc: QMessageBox.warning(self, "Save Results", str(exc))
+
+    def _auto_deformation_scale(self):
+        value = auto_deformation_scale(self.result, self.choose.current_field())
+        if value is None:
+            QMessageBox.information(self, "Deformation scale", "No displacement field is available for automatic scaling.")
+            return
+        self.deform.set_scale(value)
 
     def _emit(self, *_):
         field = self.choose.current_field(); deform, scale = self.deform.values()

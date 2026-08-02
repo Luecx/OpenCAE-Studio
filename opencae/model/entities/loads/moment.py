@@ -10,4 +10,3 @@ class MomentLoad(Load):
     load_type: str = field(init=False, default="Moment")
     magnitude: float = 0.0
     direction: str = "Global X"
-    coordinate_system: str = "Global"

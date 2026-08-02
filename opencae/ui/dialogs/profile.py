@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QAbstractItemView, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox,  QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
 from opencae.model.entities.profiles.calculations import profile_parameters, profile_properties
+from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.controls import dialog_buttons
 from opencae.ui.core.widgets import ChevronComboBox
 from .profile_graph_editor import GraphProfileEditor
@@ -11,7 +12,7 @@ from .profile_graph_editor import GraphProfileEditor
 PROFILE_TYPES = ("Rectangle", "Box", "Pipe", "Circle", "I-profile", "H-profile", "C-profile", "U-profile", "General", "Graph profile")
 
 
-class ProfileDialog(QDialog):
+class ProfileDialog(ApplyDialog):
     def __init__(self, profile=None, existing_names=(), parent=None, initial_type=None, default_name="Profile-1"):
         super().__init__(parent)
         self.profile = profile; self.existing_names = {name.casefold() for name in existing_names}; self._editors = {}
@@ -23,7 +24,7 @@ class ProfileDialog(QDialog):
         body=QHBoxLayout(); self.form_host=QWidget(); self.form=QFormLayout(self.form_host); self.form.setVerticalSpacing(9); body.addWidget(self.form_host,1)
         self.properties=QTableWidget(0,3); self.properties.setHorizontalHeaderLabels(("Property","Value","Unit")); self.properties.horizontalHeader().setStretchLastSection(True); self.properties.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers); body.addWidget(self.properties,1)
         root.addLayout(body,1)
-        buttons=dialog_buttons(); buttons.accepted.connect(self._accept); buttons.rejected.connect(self.reject); root.addWidget(buttons)
+        buttons=dialog_buttons(include_apply=True); self.bind_buttons(buttons,True); root.addWidget(buttons)
         self.kind.currentTextChanged.connect(self._rebuild); self._rebuild()
 
     def _rebuild(self):
@@ -48,10 +49,15 @@ class ProfileDialog(QDialog):
         for row,(name,value) in enumerate(data.items()):
             self.properties.setItem(row,0,QTableWidgetItem(name)); self.properties.setItem(row,1,QTableWidgetItem(f"{value:.8g}")); self.properties.setItem(row,2,QTableWidgetItem(units.get(name,"")))
 
-    def _accept(self):
+    def validate(self):
         name=self.name.text().strip()
-        if not name: QMessageBox.warning(self,"Invalid profile","Enter a profile name."); return
-        if name.casefold() in self.existing_names and (self.profile is None or name.casefold()!=self.profile.name.casefold()): QMessageBox.warning(self,"Duplicate name",f"A profile named '{name}' already exists."); return
-        self.accept()
+        if not name: QMessageBox.warning(self,"Invalid profile","Enter a profile name."); return False
+        if name.casefold() in self.existing_names and (self.profile is None or name.casefold()!=self.profile.name.casefold()): QMessageBox.warning(self,"Duplicate name",f"A profile named '{name}' already exists."); return False
+        return True
 
     def values(self): return {"name":self.name.text().strip(),"profile_type":self.kind.currentText(),"dimensions":self._dimensions()}
+
+    def prepare_new(self, default_name, existing_names):
+        self.profile = None
+        self.existing_names = {name.casefold() for name in existing_names}
+        self.name.setText(default_name)

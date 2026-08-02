@@ -18,12 +18,13 @@ class FieldSpec:
     label: str
     kind: str = "text"
     default: Any = ""
-    choices: tuple[str, ...] = ()
+    choices: tuple[Any, ...] = ()
     minimum: float = -1e12
     maximum: float = 1e12
     decimals: int = 4
     file_filter: str = "All files (*.*)"
     create_callback: Callable[[], str | None] | None = None
+    pick_callback: Callable | None = None
     read_only: bool = False
 
 
@@ -31,7 +32,7 @@ def create_editor(spec: FieldSpec) -> QWidget:
     if spec.kind == "choice":
         widget = ChevronComboBox(); widget.addItems(spec.choices); widget.setCurrentText(str(spec.default))
     elif spec.kind == "reference":
-        widget = ReferenceSelector(spec.choices, str(spec.default), spec.create_callback)
+        widget = ReferenceSelector(spec.choices, spec.default, spec.create_callback, spec.pick_callback)
     elif spec.kind == "int":
         widget = QSpinBox()
         lower = max(-2_147_483_648, int(spec.minimum))
@@ -53,7 +54,7 @@ def create_editor(spec: FieldSpec) -> QWidget:
 
 def editor_value(widget: QWidget):
     if isinstance(widget, ChevronComboBox): return widget.currentText()
-    if isinstance(widget, ReferenceSelector): return widget.currentText()
+    if isinstance(widget, ReferenceSelector): return widget.currentValue()
     if isinstance(widget, QSpinBox): return widget.value()
     if isinstance(widget, QDoubleSpinBox): return widget.value()
     if isinstance(widget, QCheckBox): return widget.isChecked()

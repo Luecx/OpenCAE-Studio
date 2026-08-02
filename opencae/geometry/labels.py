@@ -8,8 +8,18 @@ def entity_label(dim: int, tag: int) -> str:
     return f"{_DIM_PREFIX.get(dim, 'Entity')}-{tag}"
 
 
-def parse_entity_label(value: str) -> tuple[int, int] | None:
-    text = value.strip()
+def parse_entity_label(value) -> tuple[int, int] | None:
+    from opencae.model.core import RegionMemberKind, RegionMemberRef
+    if isinstance(value, RegionMemberRef):
+        dimensions = {
+            RegionMemberKind.VERTEX: 0,
+            RegionMemberKind.EDGE: 1,
+            RegionMemberKind.FACE: 2,
+            RegionMemberKind.CELL: 3,
+        }
+        dimension = dimensions.get(value.kind)
+        return (dimension, int(value.tag)) if dimension is not None else None
+    text = str(value).strip().split(".")[-1]
     if "-" not in text:
         return None
     prefix, number = text.rsplit("-", 1)
@@ -19,7 +29,7 @@ def parse_entity_label(value: str) -> tuple[int, int] | None:
     return dim, int(number)
 
 
-def parse_labels(values: list[str], expected_dim: int | None = None) -> list[tuple[int, int]]:
+def parse_labels(values, expected_dim: int | None = None) -> list[tuple[int, int]]:
     result = []
     for value in values:
         parsed = parse_entity_label(value)

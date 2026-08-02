@@ -15,8 +15,9 @@ class RegionDialogSession:
             if viewport:
                 viewport.set_selection_mode(dialog.mode())
 
-        dialog.selection_mode.currentTextChanged.connect(mode_changed)
-        mode_changed()
+        if getattr(dialog, "selection_mode", None) is not None:
+            dialog.selection_mode.currentTextChanged.connect(mode_changed)
+            mode_changed()
         if viewport:
             viewport.highlight_members(dialog.members_widget.members())
         dialog._selection_slot = lambda _value, d=dialog: d.update_selection()

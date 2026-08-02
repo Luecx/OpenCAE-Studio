@@ -5,8 +5,10 @@ from .result_query_model import QueryResult
 
 def node_values(grid, point, field=None):
     index = int(grid.find_closest_point(point)); node_id = int(grid.point_data.get("node_id", np.arange(grid.n_points))[index])
-    rows = [("Node", node_id), ("Coordinates", _vector(grid.points[index]))]
-    rows.extend(_node_field_rows(grid, index, field)); return index, QueryResult(summary=rows)
+    summary = [("Node", node_id), ("Coordinates", _vector(grid.points[index]))]
+    values = _node_field_rows(grid, index, field)
+    matrix = [[name, value] for name, value in values]
+    return index, QueryResult(summary=summary, columns=["Component", "Value"], matrix=matrix)
 
 
 def element_values(grid, point, field=None):

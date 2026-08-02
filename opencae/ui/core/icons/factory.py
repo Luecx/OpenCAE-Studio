@@ -6,7 +6,7 @@ from .legacy import make_icon as make_legacy_icon
 _ICON_MAP = {
     IconKind.FILE:LegacyKind.OUTPUT, IconKind.SAVE:LegacyKind.EXPORT, IconKind.IMPORT:LegacyKind.IMPORT,
     IconKind.PART:LegacyKind.CREATE, IconKind.PARTITION:LegacyKind.SPLIT, IconKind.MESH:LegacyKind.GENERATE,
-    IconKind.SEED:LegacyKind.SIZE, IconKind.ELEMENT:LegacyKind.ELEMENT, IconKind.NODE_SET:LegacyKind.NODE_SET,
+    IconKind.SEED:LegacyKind.SIZE, IconKind.ELEMENT:LegacyKind.ELEMENT, IconKind.ELEMENT_CONTROLS:LegacyKind.FORMULATION, IconKind.NODE_SET:LegacyKind.NODE_SET,
     IconKind.ELEMENT_SET:LegacyKind.ELEMENT_SET, IconKind.SURFACE:LegacyKind.SURFACE, IconKind.CSYS:LegacyKind.CSYS,
     IconKind.RP:LegacyKind.REFERENCE, IconKind.MATERIAL:LegacyKind.MATERIAL, IconKind.PROFILE:LegacyKind.PROFILE,
     IconKind.SECTION:LegacyKind.SECTION, IconKind.ASSIGN:LegacyKind.ASSIGN_SECTION, IconKind.INSTANCE:LegacyKind.INSTANCE,

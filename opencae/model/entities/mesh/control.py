@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from ...core import Entity, register_model_type
+from ...core import Entity, RegionMemberRef, register_model_type
 
 
 @register_model_type("mesh_control")
@@ -9,7 +9,7 @@ class MeshControl(Entity):
     scope: str = "Cell"
     topology: str = "Tetrahedral"
     technique: str = "Free"
-    targets: list[str] = field(default_factory=list)
+    targets: list[RegionMemberRef | str] = field(default_factory=list)
 
     def write_abaqus(self, writer, context) -> None:
         return None
