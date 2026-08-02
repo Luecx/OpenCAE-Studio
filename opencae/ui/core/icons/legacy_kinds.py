@@ -1,0 +1,26 @@
+from enum import Enum
+
+
+class IconKind(str, Enum):
+    IMPORT="import"; SKETCH="sketch"; CREATE="create"; BOOLEAN="boolean"; SPLIT="split"; REPAIR="repair"
+    ELEMENT="element"; SIZE="size"; LOCAL="local"; GENERATE="generate"; QUALITY="quality"
+    NODE_SET="node_set"; ELEMENT_SET="element_set"; SURFACE="surface"; REFERENCE="reference"; CSYS="csys"
+    MATERIAL="material"; SECTION="section"; PROFILE="profile"; ASSIGN_SECTION="assign_section"; ORIENTATION="orientation"; THICKNESS="thickness"
+    FORMULATION="formulation"; INSTANCE="instance"; TRANSLATE="translate"; ROTATE="rotate"; ALIGN="align"
+    PATTERN="pattern"; INTERFERENCE="interference"; FIXED="fixed"; DISPLACEMENT="displacement"
+    FORCE="force"; PRESSURE="pressure"; MOMENT="moment"; GRAVITY="gravity"; TRACTION="traction"
+    VOLUME="volume"; INERTIA="inertia"; TEMPERATURE="temperature"; SYMMETRY="symmetry"; REMOTE="remote"
+    ANALYSIS="analysis"; STEP="step"; CONTROLS="controls"; OUTPUT="output"; VALIDATE="validate"; RUN="run"
+    CONTOUR="contour"; DEFORM="deform"; PROBE="probe"; ANIMATE="animate"; EXPORT="export"
+    ELASTICITY="elasticity"; DENSITY="density"; PLASTICITY="plasticity"; THERMAL="thermal"; FIELD="field"
+    SECTION_SOLID="section_solid"; SECTION_SHELL="section_shell"; SECTION_BEAM="section_beam"; SECTION_TRUSS="section_truss"
+    PROFILE_RECTANGLE="profile_rectangle"; PROFILE_BOX="profile_box"; PROFILE_PIPE="profile_pipe"
+    PROFILE_I="profile_i"; PROFILE_CHANNEL="profile_channel"; PROFILE_GENERAL="profile_general"; PROFILE_GRAPH="profile_graph"
+    STEP_LINEAR="step_linear"; STEP_NONLINEAR="step_nonlinear"; STEP_MODAL="step_modal"
+    STEP_BUCKLING="step_buckling"; STEP_TRANSIENT="step_transient"; REORDER="reorder"; MATRIX="matrix"
+    CONSTRAINT_KINEMATIC="constraint_kinematic"; CONSTRAINT_DISTRIBUTING="constraint_distributing"
+    CONSTRAINT_TIE="constraint_tie"; CONSTRAINT_RIGID="constraint_rigid"
+    CONSTRAINT_EQUATION="constraint_equation"; CONSTRAINT_MPC="constraint_mpc"
+    PROFILE_U="profile_u"; PROFILE_H="profile_h"; PROFILE_CIRCLE="profile_circle"
+    RESULT_STEP="result_step"; RESULT_FRAME="result_frame"; MESH_LINES="mesh_lines"
+    BOUNDARY_LINES="boundary_lines"; DEFORMATION="deformation"

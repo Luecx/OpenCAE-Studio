@@ -1,0 +1,6 @@
+*.ocae
+*.inp
+*.frd
+Job-*/**
+*.pyc
+.idea/

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opencae-studio"
+version = "0.10.2"
+description = "Modular PyQt6 CAE desktop prototype"
+requires-python = ">=3.11"
+dependencies = ["PyQt6>=6.6", "numpy>=1.26", "pyvista>=0.44", "pyvistaqt>=0.11", "gmsh>=4.13"]
+
+[project.scripts]
+opencae = "opencae.app.application:run"
+
+[tool.setuptools.packages.find]
+include = ["opencae*"]
