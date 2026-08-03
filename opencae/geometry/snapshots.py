@@ -33,6 +33,7 @@ class GeometrySnapshot:
     vertices: list[VertexPatch] = field(default_factory=list)
     entities: dict[int, list[int]] = field(default_factory=dict)
     surface_to_cells: dict[int, list[int]] = field(default_factory=dict)
+    cell_meshability: dict[int, str] = field(default_factory=dict)
     bounds: tuple[float, float, float, float, float, float] | None = None
     fingerprint: str = ""
 

@@ -24,7 +24,6 @@ def project_collections(project):
         values.extend([
             part.geometry,
             part.mesh.seeds,
-            part.mesh.controls,
             part.mesh.element_controls,
             part.mesh.elements,
             part.regions,

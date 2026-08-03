@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pyvista as pv
 
+from opencae.geometry.meshability import oriented_faces, surface_classification
 from .assembly_context import ActorReference
 from .instance_transform import transform_points
 from .surface_shading import face_color
@@ -14,29 +15,40 @@ SELECTED_COLOR = "#3296e6"
 _BASE_COLORS = {}
 
 
-def add_geometry(plotter, snapshot, instance=None):
+def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True):
     faces, edges, vertices = {}, {}, {}
     prefix = f"{instance.name}-" if instance else ""
     for patch in snapshot.surfaces:
         points = transform_points(patch.points, instance) if instance else patch.points
-        mesh = pv.PolyData(points, patch.faces)
-        color = face_color(mesh, patch.tag)
+        mesh = pv.PolyData(points, oriented_faces(snapshot, patch))
+        try:
+            mesh = mesh.compute_normals(
+                cell_normals=True, point_normals=True, consistent_normals=True,
+                auto_orient_normals=False, split_vertices=False, inplace=False,
+            )
+        except (TypeError, ValueError, RuntimeError):
+            pass
+        classification = surface_classification(snapshot, patch.tag) if color_by_meshability else None
+        color = face_color(classification)
         actor = plotter.add_mesh(
             mesh, color=color, show_edges=False, lighting=True,
-            smooth_shading=True, ambient=0.20, diffuse=0.78,
-            specular=0.06, specular_power=10.0, pickable=True,
+            smooth_shading=True, ambient=0.24, diffuse=0.74,
+            specular=0.05, specular_power=10.0, pickable=True,
             name=f"{prefix}face-{patch.tag}", render=False,
         )
+        actor.GetProperty().BackfaceCullingOff()
+        actor.GetProperty().FrontfaceCullingOff()
         _BASE_COLORS[actor] = color
         faces[actor] = ActorReference(instance.id if instance else None, 2, patch.tag, instance.name if instance else "")
     for patch in snapshot.edges:
         points = transform_points(patch.points, instance) if instance else patch.points
         mesh = pv.PolyData(points); mesh.lines = patch.lines
         actor = plotter.add_mesh(
-            mesh, color=EDGE_COLOR, line_width=2.0, lighting=False,
-            render_lines_as_tubes=False, pickable=True,
+            mesh, color=EDGE_COLOR, line_width=3.6, lighting=False,
+            render_lines_as_tubes=True, pickable=True,
             name=f"{prefix}edge-{patch.tag}", render=False,
         )
+        _configure_edge_mapper(actor)
         edges[actor] = ActorReference(instance.id if instance else None, 1, patch.tag, instance.name if instance else "")
     for patch in snapshot.vertices:
         point = transform_points(np.asarray([patch.point]), instance)[0] if instance else patch.point
@@ -56,6 +68,24 @@ def set_actor_selected(actor, selected: bool, kind: str = "face"):
     color = SELECTED_COLOR if selected else base
     rgb = color if isinstance(color, tuple) else pv.Color(color).float_rgb
     actor.GetProperty().SetColor(rgb)
-    if kind == "edge": actor.GetProperty().SetLineWidth(4.0 if selected else 2.0)
+    if kind == "edge": actor.GetProperty().SetLineWidth(5.5 if selected else 3.6)
     if kind == "vertex": actor.GetProperty().SetPointSize(13.0 if selected else 8.0)
     if kind == "rp": actor.GetProperty().SetPointSize(20.0 if selected else 15.0)
+
+
+def _configure_edge_mapper(actor) -> None:
+    """Use tube-rendered CAD polylines with normal depth testing.
+
+    A connected tube line avoids the square join/raster artefacts of wide
+    OpenGL line segments while normal depth testing keeps hidden edges behind
+    shaded faces. No artificial coincident-topology lift is applied.
+    """
+    try:
+        mapper = actor.GetMapper()
+        mapper.SetResolveCoincidentTopologyToOff()
+    except (AttributeError, RuntimeError, TypeError):
+        pass
+    try:
+        actor.GetProperty().SetRenderLinesAsTubes(True)
+    except (AttributeError, RuntimeError):
+        pass

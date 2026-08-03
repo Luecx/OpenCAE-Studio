@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QTimer
 
+from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
+
 
 class ElementControlSession:
     """Own the preview lifecycle; picking is managed by CompactRegionSelector."""
@@ -23,9 +25,7 @@ class ElementControlSession:
             lambda _code: self._close(dialog, viewport, previous_display)
         )
         self.dialogs.append(dialog)
-        dialog.show()
-        dialog.raise_()
-        dialog.activateWindow()
+        show_modeless_dialog(dialog)
 
     @staticmethod
     def _preview(viewport, value):

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import QSize, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
 from .chevron_combo import ChevronComboBox
+from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.core.theme import PALETTE
 from opencae.ui.core.dialog_lifecycle import activate_dialog
 
 
@@ -19,7 +21,7 @@ class ReferenceSelector(QWidget):
         self.combo.currentIndexChanged.connect(lambda _index: self.value_changed.emit(self.currentValue()))
         self.add_button = QPushButton("+"); self.add_button.setObjectName("InlineAddButton"); self.add_button.setToolTip("Create a new referenced object"); self.add_button.setFixedSize(30, 30)
         self._create_callback = create_callback; self.add_button.setVisible(create_callback is not None); self.add_button.clicked.connect(self._create)
-        self.pick_button = QPushButton("⌖"); self.pick_button.setObjectName("InlinePickButton"); self.pick_button.setCheckable(True); self.pick_button.setToolTip("Pick the referenced object in the viewport"); self.pick_button.setFixedSize(30,30)
+        self.pick_button = QPushButton(); self.pick_button.setIcon(make_icon(IconKind.PICK, 18, PALETTE["text"])); self.pick_button.setIconSize(QSize(18, 18)); self.pick_button.setObjectName("InlinePickButton"); self.pick_button.setCheckable(True); self.pick_button.setAccessibleName("Pick in viewport"); self.pick_button.setToolTip("Pick the referenced object in the viewport"); self.pick_button.setFixedSize(30,30)
         self._pick_callback = pick_callback; self.pick_button.setVisible(pick_callback is not None); self.pick_button.clicked.connect(self._pick)
         layout = QHBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(6); layout.addWidget(self.combo, 1); layout.addWidget(self.pick_button); layout.addWidget(self.add_button)
         self.setMinimumWidth(316)

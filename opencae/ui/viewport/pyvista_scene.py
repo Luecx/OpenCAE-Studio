@@ -37,6 +37,7 @@ class PyVistaScene(SceneDisplayMixin):
         self.seed_overlay.clear(self.owner.plotter, render=False)
         self.coordinate_overlay.clear(self.owner.plotter); self.reference_overlay.clear(self.owner.plotter); self.datum_overlay.clear(self.owner.plotter); self.coupling_overlay.clear(self.owner.plotter); self.boundary_overlay.clear(self.owner.plotter); self.region_overlay.clear(self.owner.plotter); self.selection_preview_overlay.clear(self.owner.plotter)
         self.owner.plotter.clear(); self.owner.plotter.set_background(PALETTE["viewport"])
+        self.owner.canvas.meshability.hide()
         self.face_actors.clear(); self.edge_actors.clear(); self.vertex_actors.clear(); self.reference_actors.clear(); self.datum_actors.clear()
         self.assembly_snapshots.clear(); self.assembly_instances.clear(); self.mesh_actors.clear(); self.mesh_grids.clear(); self.assembly_mesh_snapshots.clear()
         self.mesh_actor = self.mesh_grid = self.mesh_snapshot = self.snapshot = None
@@ -48,7 +49,9 @@ class PyVistaScene(SceneDisplayMixin):
             try: self.snapshot = self.owner.service.build_geometry(part)
             except GeometryError as exc: self.owner.message.emit(str(exc)); return
         if self.owner.display_mode == "mesh" or not part.geometry: self._show_part_mesh(part)
-        elif self.snapshot is not None: self._merge_actors(add_geometry(self.owner.plotter, self.snapshot))
+        elif self.snapshot is not None:
+            self._merge_actors(add_geometry(self.owner.plotter, self.snapshot, color_by_meshability=True))
+            self._show_meshability_legend()
         self.coordinate_overlay.show_part(self.owner.plotter, part); self.reference_overlay.show_part(self.owner.plotter, part, self); self.datum_overlay.show_part(self.owner.plotter, part, self)
         self.owner.plotter.add_axes(color="#dce3e8"); self.owner.picker.configure()
     def _show_assembly(self):
@@ -63,26 +66,36 @@ class PyVistaScene(SceneDisplayMixin):
             if snapshot is not None: self.assembly_snapshots[instance.id] = snapshot
             self.assembly_instances[instance.id] = instance
             if self.owner.display_mode == "mesh" or not part.geometry: self._show_instance_mesh(part, instance)
-            elif snapshot is not None: self._merge_actors(add_geometry(self.owner.plotter, snapshot, instance))
+            elif snapshot is not None: self._merge_actors(add_geometry(self.owner.plotter, snapshot, instance, color_by_meshability=False))
         self.coordinate_overlay.show_assembly(self.owner.plotter, project, self)
         self.reference_overlay.show_assembly(self.owner.plotter, project, self); self.datum_overlay.show_assembly(self.owner.plotter, project, self)
         if self.owner.stage == "BOUNDARY CONDITIONS": self.boundary_overlay.show(self.owner.plotter, project, self)
         if self.owner.stage in {"CONSTRAINTS", "BOUNDARY CONDITIONS"}: self.coupling_overlay.show(self.owner.plotter, project, self)
         self.owner.plotter.add_axes(color="#dce3e8"); self.owner.picker.configure()
+
+    def _show_meshability_legend(self):
+        visible = (
+            self.owner.stage == "PART"
+            and self.owner.display_mode == "geometry"
+            and self.snapshot is not None
+        )
+        self.owner.canvas.meshability.setVisible(visible)
+        self.owner.canvas._position_overlays()
+
     def _show_part_mesh(self, part):
         snapshot = CACHE.mesh(part.id) or snapshot_from_part(part)
         if snapshot is None and part.mesh.status == "Current":
             try: snapshot, _ = self.owner.service.generate_mesh(part)
             except GeometryError as exc: self.owner.message.emit(str(exc))
         if snapshot is None:
-            if self.snapshot is not None: self._merge_actors(add_geometry(self.owner.plotter, self.snapshot))
+            if self.snapshot is not None: self._merge_actors(add_geometry(self.owner.plotter, self.snapshot, color_by_meshability=True))
             self.owner.message.emit("No generated mesh"); return
         self.mesh_snapshot = snapshot; self.mesh_actor, self.mesh_grid = add_mesh(self.owner.plotter, snapshot)
     def _show_instance_mesh(self, part, instance):
         snapshot = CACHE.mesh(part.id) or snapshot_from_part(part)
         if snapshot is None:
             geometry = self.assembly_snapshots.get(instance.id)
-            if geometry is not None: self._merge_actors(add_geometry(self.owner.plotter, geometry, instance))
+            if geometry is not None: self._merge_actors(add_geometry(self.owner.plotter, geometry, instance, color_by_meshability=False))
             return
         actor, grid = add_mesh(self.owner.plotter, snapshot, instance)
         if actor is not None:

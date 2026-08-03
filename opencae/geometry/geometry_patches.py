@@ -23,12 +23,80 @@ def edge_patch(gmsh, tag: int) -> EdgePatch | None:
     node_tags, coords, _ = gmsh.model.mesh.getNodes(1, tag, True, False)
     if len(node_tags) == 0:
         return None
-    points = np.asarray(coords, dtype=float).reshape(-1, 3)
+    mesh_points = np.asarray(coords, dtype=float).reshape(-1, 3)
+
+    # Sample the CAD parametrisation so concave/curved edges do not collapse to
+    # coarse chords inside the shaded body.  Excessively dense wide-line joins
+    # are visually noisy on some Intel OpenGL drivers, hence the conservative
+    # upper bound and the cleanup/splitting step below.
+    sample_count = max(24, min(128, len(mesh_points) * 3))
+    sampled = _sample_curve(gmsh, tag, sample_count)
+    if sampled is not None:
+        points, lines = _clean_polyline(sampled)
+        if len(points) >= 2 and len(lines) >= 3:
+            return EdgePatch(tag=tag, points=points, lines=lines)
+
     lookup = {int(node): index for index, node in enumerate(node_tags)}
     lines = _edge_lines(gmsh, tag, lookup)
     if not lines:
         return None
-    return EdgePatch(tag=tag, points=points, lines=np.asarray(lines, dtype=np.int64))
+    return EdgePatch(tag=tag, points=mesh_points, lines=np.asarray(lines, dtype=np.int64))
+
+
+def _sample_curve(gmsh, tag: int, count: int) -> np.ndarray | None:
+    try:
+        lower, upper = gmsh.model.getParametrizationBounds(1, tag)
+        start, stop = float(lower[0]), float(upper[0])
+        if not np.isfinite(start) or not np.isfinite(stop) or start == stop:
+            return None
+        parameters = np.linspace(start, stop, max(2, int(count)), endpoint=True)
+        points = np.asarray(
+            gmsh.model.getValue(1, tag, parameters.tolist()), dtype=float
+        ).reshape(-1, 3)
+        if len(points) < 2 or not np.all(np.isfinite(points)):
+            return None
+        return points
+    except Exception as exc:
+        _LOG.debug("Could not sample CAD curve %s parametrically: %s", tag, exc)
+        return None
+
+
+def _clean_polyline(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return compact points and one or more connected VTK polyline cells.
+
+    Periodic or trimmed CAD curves can occasionally contain a parametrisation
+    jump.  Connecting across such a jump draws stray black fragments over a
+    face.  We remove coincident samples and split only statistically obvious
+    jumps instead of creating a chord through the model.
+    """
+    values = np.asarray(points, dtype=float).reshape(-1, 3)
+    if len(values) < 2:
+        return values, np.empty(0, dtype=np.int64)
+
+    scale = float(np.linalg.norm(np.ptp(values, axis=0)))
+    duplicate_tolerance = max(scale * 1.0e-10, 1.0e-12)
+    keep = np.ones(len(values), dtype=bool)
+    keep[1:] = np.linalg.norm(np.diff(values, axis=0), axis=1) > duplicate_tolerance
+    values = values[keep]
+    if len(values) < 2:
+        return values, np.empty(0, dtype=np.int64)
+
+    steps = np.linalg.norm(np.diff(values, axis=0), axis=1)
+    positive = steps[steps > duplicate_tolerance]
+    typical = float(np.median(positive)) if len(positive) else 0.0
+    # The absolute term prevents valid long straight edges with few samples
+    # from being split; the relative term catches periodic seam jumps.
+    jump_limit = max(typical * 8.0, scale * 0.20, duplicate_tolerance * 10.0)
+    breaks = {int(index + 1) for index, value in enumerate(steps) if value > jump_limit}
+
+    cells: list[int] = []
+    start = 0
+    for stop in (*sorted(breaks), len(values)):
+        count = stop - start
+        if count >= 2:
+            cells.extend((count, *range(start, stop)))
+        start = stop
+    return values, np.asarray(cells, dtype=np.int64)
 
 
 def _surface_faces(gmsh, tag, lookup):

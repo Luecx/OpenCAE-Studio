@@ -11,7 +11,14 @@ def number(value=0.0, minimum=-1e15, maximum=1e15):
     control = QDoubleSpinBox(); control.setRange(minimum,maximum); control.setDecimals(8); control.setValue(value); return control
 
 def xyz(prefix="", values=(0.0,0.0,0.0)): return {f"{prefix}{axis}":number(value) for axis,value in zip("xyz",values)}
-def references(*allowed): return PickReference(allowed)
+def references(*allowed):
+    expanded = []
+    for value in allowed:
+        group = ("geometry_vertex", "datum_point", "reference_point") if value == "point" else (value,)
+        for kind in group:
+            if kind not in expanded:
+                expanded.append(kind)
+    return PickReference(tuple(expanded))
 def choice(values):
     control = QComboBox(); control.addItems(values); return control
 def check(text="", checked=False):

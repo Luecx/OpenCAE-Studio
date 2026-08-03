@@ -48,7 +48,7 @@ class ContextPickManager:
             sorted(value.value.replace("_", " ") for value in policy.accepted_kinds)
         )
         suffix = (
-            " (Shift adds, Ctrl removes, Finish Picking ends)"
+            " (Shift adds, Ctrl removes)"
             if policy.multiplicity == SelectionMultiplicity.MULTIPLE
             else ""
         )
@@ -119,10 +119,16 @@ class ContextPickManager:
         kinds = self.policy.accepted_kinds if self.policy else frozenset()
         modes = []
         if self.owner.display_mode == "mesh":
-            if kinds & {SelectableKind.MESH_NODE, SelectableKind.REFERENCE_POINT}:
+            if kinds & {
+                SelectableKind.MESH_NODE,
+                SelectableKind.REFERENCE_POINT,
+                SelectableKind.DATUM_POINT,
+            }:
                 modes.append("point")
             if kinds & {SelectableKind.MESH_ELEMENT, SelectableKind.MESH_FACET}:
                 modes.append("element")
+            if kinds & {SelectableKind.DATUM_VECTOR, SelectableKind.DATUM_PLANE}:
+                return ("auto",)
         else:
             if kinds & {
                 SelectableKind.GEOMETRY_VERTEX,
@@ -136,6 +142,12 @@ class ContextPickManager:
                 modes.append("face")
             if SelectableKind.GEOMETRY_CELL in kinds:
                 modes.append("cell")
+
+            # Datum vectors and planes are standalone actors rather than one of
+            # the geometry entity modes.  Auto uses the hardware actor picker
+            # and can therefore discriminate them together with edges/faces.
+            if kinds & {SelectableKind.DATUM_VECTOR, SelectableKind.DATUM_PLANE}:
+                return ("auto",)
         if len(modes) > 1:
             modes.insert(0, "auto")
         return tuple(modes)

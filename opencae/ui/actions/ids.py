@@ -22,7 +22,7 @@ class A:
     IMPORT_MESH = "part.import_mesh"; PARTITION = "part.partition"
     SUPPRESS_FEATURE = "part.suppress_feature"; REBUILD_GEOMETRY = "part.rebuild_geometry"
     DEFAULT_SEED = "mesh.default_seed"; EDGE_SEED = "mesh.edge_seed"
-    MESH_CONTROL = "mesh.control"; ELEMENT_CONTROLS = "mesh.element_controls"; MESH_SETTINGS = "mesh.settings"
+    ELEMENT_CONTROLS = "mesh.element_controls"; MESH_SETTINGS = "mesh.settings"
     GENERATE_MESH = "mesh.generate"; CLEAR_MESH = "mesh.clear"
     NODE_SET = "part.node_set"
     ELEMENT_SET = "part.element_set"; SURFACE = "part.surface"

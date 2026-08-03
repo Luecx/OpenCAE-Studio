@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from opencae.model.selection import (
-    RegionDefinition, SelectionMultiplicity, SelectionOperation, SelectionPolicy, ViewportHit, definition_from_hit,
+    RegionDefinition, RegionProjection, SelectionMultiplicity, SelectionOperation, SelectionPolicy, ViewportHit, definition_from_hit,
     named_region_definition, reference_point_definition,
 )
 
@@ -9,20 +9,28 @@ from opencae.model.selection import (
 def region_options(project, *, owner=None, include_reference_points=True, projections=None):
     """Return reusable region occurrences as ``(label, RegionDefinition)``."""
     result = []
-    allowed = set(projections or ())
+    allowed = {
+        projection
+        for value in (projections or ())
+        if (projection := RegionProjection.coerce(value)) is not None
+    }
+    allow_reference_points = bool(
+        include_reference_points
+        and (not allowed or RegionProjection.NODES in allowed)
+    )
 
     def accepts(region): return not allowed or region.preferred_projection in allowed
 
     if owner is not None and hasattr(owner, "regions"):
         for region in owner.regions:
             if accepts(region): result.append((region.name, named_region_definition(region)))
-        if include_reference_points:
+        if allow_reference_points:
             for point in getattr(owner, "reference_points", ()): result.append((point.name, reference_point_definition(point)))
         return result
 
     for region in project.assembly.regions:
         if accepts(region): result.append((f"Assembly.{region.name}", named_region_definition(region)))
-    if include_reference_points:
+    if allow_reference_points:
         for point in project.assembly.reference_points: result.append((f"Assembly.{point.name}", reference_point_definition(point)))
     for instance in project.assembly.instances:
         if instance.suppressed: continue
@@ -30,7 +38,7 @@ def region_options(project, *, owner=None, include_reference_points=True, projec
         if part is None: continue
         for region in part.regions:
             if accepts(region): result.append((f"{instance.name}.{region.name}", named_region_definition(region, instance)))
-        if include_reference_points:
+        if allow_reference_points:
             for point in part.reference_points: result.append((f"{instance.name}.{point.name}", reference_point_definition(point, instance)))
     return result
 

@@ -46,7 +46,7 @@ def build_docks(window):
     window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, window.output_dock)
     window.project_dock.tree.stage_requested.connect(window.ribbon.set_stage)
     window.project_dock.solution_tree.solution_requested.connect(window.show_solution)
-    window.project_dock.panel.browser_requested.connect(lambda name: window.ribbon.set_stage("RESULTS") if name=="solution" else None)
+    window.project_dock.panel.browser_requested.connect(window.ribbon.set_browser)
     window.ribbon.result_requested.connect(window.viewport.show_solution)
     window.ribbon.stage_changed.connect(lambda stage: window.project_dock.panel.set_browser("solution" if stage == "RESULTS" else "project"))
     window.ribbon.stage_changed.connect(window.project_dock.tree.set_stage_focus)

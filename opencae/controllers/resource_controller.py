@@ -130,7 +130,7 @@ class ResourceController:
     def _field_dialog(self, field=None, parent=None):
         project = self.store.project
         regions = []
-        allowed = {RegionProjection.NODES, RegionProjection.ELEMENTS, None}
+        allowed = {RegionProjection.NODES, RegionProjection.ELEMENTS}
         for part in project.parts:
             regions.extend(
                 (f"{part.name}.{item.name}", item.id)

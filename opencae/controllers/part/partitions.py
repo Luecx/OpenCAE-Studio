@@ -7,7 +7,9 @@ from opencae.model.entities.datums import DatumPlane
 from opencae.model.geometry import GeometryFeature, ImportedStepFeature, PartitionEdgeFeature, PartitionFaceFeature, PartitionPlaneFeature
 from opencae.model.core import EntityRef
 from opencae.model.naming import next_name
-from opencae.model.selection import SelectableKind, SelectionPolicy
+from opencae.model.selection import (
+    RegionProjection, RegionRequirement, SelectableKind, SelectionPolicy,
+)
 from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
 from opencae.ui.dialogs.datum_plane import DatumPlaneDialog
 from opencae.ui.dialogs.partition import PartitionDialog
@@ -41,7 +43,30 @@ class PartPartitions:
         datum_planes = [item for item in part.datums if isinstance(item, DatumPlane)]
 
         def pick(dimension, _owner, done, finished):
-            policy = SelectionPolicy.create({_DIMENSION_KIND[int(dimension)]}, multiple=False)
+            if dimension == "datum_plane":
+                policy = SelectionPolicy.create({SelectableKind.DATUM_PLANE}, multiple=False)
+
+                def selected(hit):
+                    plane = self.ctx.store.project.try_resolve(hit.entity_id) if hit.entity_id else None
+                    if isinstance(plane, DatumPlane):
+                        done(plane)
+                    else:
+                        self.ctx.parent.viewport.message.emit("The selected datum plane no longer exists")
+
+                return self.ctx.parent.viewport.begin_selection_session(policy, selected, finished=finished)
+
+            dimension = int(dimension)
+            projection = {
+                0: RegionProjection.NODES,
+                1: RegionProjection.ELEMENTS,
+                2: RegionProjection.FACETS,
+                3: RegionProjection.ELEMENTS,
+            }[dimension]
+            policy = SelectionPolicy.create(
+                {_DIMENSION_KIND[dimension]},
+                multiple=False,
+                requirement=RegionRequirement(projection, (dimension,), 1),
+            )
             return begin_region_pick(project, self.ctx.parent.viewport, policy, done, default_owner=part, finished=finished)
 
         dialog = PartitionDialog(
@@ -57,12 +82,45 @@ class PartPartitions:
         )
         self._dialogs.append(dialog)
         state = {"feature_id": getattr(feature, "id", None)}
-        dialog.committed.connect(lambda values, pid=part.id, s=state: s.update(feature_id=self._apply(values, pid, s["feature_id"])))
-        dialog.finished.connect(lambda _code, d=dialog: self._finish_dialog(d))
-        show_modeless_dialog(dialog)
+        preview_prefix = f"partition-dialog-{id(dialog)}"
 
-    def _finish_dialog(self, dialog):
-        if hasattr(self.ctx.parent, "viewport"): self.ctx.parent.viewport.cancel_context_pick()
+        def active_selectors():
+            index = dialog.stack.currentIndex()
+            if index == 0:
+                return (dialog.plane_targets,)
+            if index == 1:
+                return (dialog.face_targets,)
+            if index == 2:
+                return (dialog.edge_parameter_targets,)
+            return (dialog.edge_vertex_targets, dialog.edge_vertex)
+
+        def preview(*_):
+            viewport = self.ctx.parent.viewport
+            viewport.clear_region_previews(preview_prefix)
+            for index, selector in enumerate(active_selectors()):
+                viewport.show_region_preview(
+                    f"{preview_prefix}-{index}", selector.definition(),
+                    color="#3296e6", opacity=.62, point_size=17,
+                    show_point_labels=True,
+                )
+
+        for selector in (
+            dialog.plane_targets, dialog.face_targets,
+            dialog.edge_parameter_targets, dialog.edge_vertex_targets,
+            dialog.edge_vertex,
+        ):
+            selector.value_changed.connect(preview)
+        dialog.stack.currentChanged.connect(preview)
+        dialog.committed.connect(lambda values, pid=part.id, s=state: s.update(feature_id=self._apply(values, pid, s["feature_id"])))
+        dialog.finished.connect(lambda _code, d=dialog, prefix=preview_prefix: self._finish_dialog(d, prefix))
+        show_modeless_dialog(dialog)
+        preview()
+
+    def _finish_dialog(self, dialog, preview_prefix=None):
+        if hasattr(self.ctx.parent, "viewport"):
+            self.ctx.parent.viewport.cancel_context_pick()
+            if preview_prefix:
+                self.ctx.parent.viewport.clear_region_previews(preview_prefix)
         if dialog in self._dialogs: self._dialogs.remove(dialog)
 
     def _apply(self, values, part_id, feature_id):
@@ -80,9 +138,14 @@ class PartPartitions:
         kwargs = {"name": values["name"], "target": values["target"]}
         feature_values = values["values"]
         if cls is PartitionPlaneFeature:
+            datum_id = str(feature_values.get("datum_plane_id") or "")
+            datum = next((item for item in part.datums if isinstance(item, DatumPlane) and item.id == datum_id), None)
+            if datum is None:
+                self.ctx.store.message.emit("Select an existing datum plane for the partition")
+                return feature_id
             kwargs.update(
-                origin=feature_values["origin"], normal=feature_values["normal"],
-                datum_plane_ref=EntityRef(feature_values.get("datum_plane_id", ""), "DatumPlane") if feature_values.get("datum_plane_id") else None,
+                origin=tuple(datum.origin), normal=tuple(datum.normal),
+                datum_plane_ref=EntityRef(datum.id, "DatumPlane"),
             )
         elif cls is PartitionFaceFeature:
             kwargs["points"] = tuple(feature_values["points"])
@@ -108,7 +171,8 @@ class PartPartitions:
         part = self.ctx.store.project.try_resolve(part_id)
         if part is None: return
         dialog = DatumPlaneDialog(next_name("Datum Plane", part.datums), [item.name for item in part.datums], part.coordinate_systems, owner or self.ctx.parent)
-        dialog.pick_requested.connect(lambda allowed, callback: self.ctx.parent.viewport.begin_context_pick(allowed, callback))
+        dialog.pick_requested.connect(lambda allowed, callback, finished: self.ctx.parent.viewport.begin_datum_reference_pick(allowed, callback, finished))
+        dialog.cancel_pick_requested.connect(self.ctx.parent.viewport.cancel_context_pick)
         dialog.preview_requested.connect(self.ctx.parent.viewport.show_datum_preview)
 
         def apply(values):
@@ -123,7 +187,7 @@ class PartPartitions:
             dialog.close()
 
         dialog.apply_requested.connect(apply)
-        dialog.finished.connect(lambda _code: self.ctx.parent.viewport.hide_datum_preview())
+        dialog.finished.connect(lambda _code: (self.ctx.parent.viewport.cancel_context_pick(), self.ctx.parent.viewport.hide_datum_preview()))
         show_modeless_dialog(dialog)
 
     def rebuild_geometry(self):

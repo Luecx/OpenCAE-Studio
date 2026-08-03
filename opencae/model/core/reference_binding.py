@@ -126,12 +126,6 @@ def _validate_region_consumers(project):
             if getattr(seed, "seed_type", "") != "Edge": continue
             if not local_geometry_tags(part, seed.target, 1):
                 errors.append(f"{type(seed).__name__} {seed.name}: target contains no edges")
-        for control in part.mesh.controls:
-            dimension = {"Edge": 1, "Face": 2, "Cell": 3}.get(str(getattr(control, "scope", "")))
-            if dimension is None: continue
-            definition = getattr(control, "target", None)
-            if definition is not None and not definition.empty and not local_geometry_tags(part, definition, dimension):
-                errors.append(f"{type(control).__name__} {control.name}: target contains no {str(control.scope).lower()} entities")
         for control in part.mesh.element_controls:
             if not control.target.empty and not local_element_ids(part, control.target):
                 errors.append(f"{type(control).__name__} {control.name}: target contains no elements")

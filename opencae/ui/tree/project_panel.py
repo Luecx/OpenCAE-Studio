@@ -26,7 +26,7 @@ class ProjectPanel(QWidget):
     def set_browser(self, name): self.tabs.setCurrentIndex(1 if name == "solution" else 0)
     def _tab_changed(self, index):
         self.stack.setCurrentIndex(index); self._filter(self.filter.text())
-        if index==1:self.browser_requested.emit("solution")
+        self.browser_requested.emit("solution" if index == 1 else "project")
     def _filter(self, text):
         if self.stack.currentWidget() is self.tree: self.tree.set_filter_text(text)
     def _expand(self): self.stack.currentWidget().expandAll()

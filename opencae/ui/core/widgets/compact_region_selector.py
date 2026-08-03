@@ -178,6 +178,7 @@ class CompactRegionSelector(QWidget):
         self._extended_dialog = dialog
         dialog.finished.connect(lambda _code: self._extended_closed(dialog))
         show_modeless_dialog(dialog)
+        dialog.begin_selection()
 
     def _toggle_pick(self, active):
         if not active:
@@ -206,6 +207,8 @@ class CompactRegionSelector(QWidget):
 
     def _session_finished(self):
         self._cancel_pick = None
+        if self._extended_dialog is not None:
+            self._extended_dialog.close()
         if self.pick_button.isChecked():
             blocker = QSignalBlocker(self.pick_button)
             self.pick_button.setChecked(False)
@@ -272,6 +275,8 @@ class CompactRegionSelector(QWidget):
     def _extended_closed(self, dialog):
         if self._extended_dialog is dialog:
             self._extended_dialog = None
+        self.pick_button.setEnabled(True)
+        self.finish_pick()
 
     def _dispose(self):
         self.finish_pick()
@@ -294,14 +299,6 @@ class ExtendedRegionDialog(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 14, 16, 12)
         root.setSpacing(9)
-        description = QLabel(
-            "Inspect, combine or remove direct picks and named regions. "
-            "Projection to solver nodes, elements or facets is deferred until deck generation."
-        )
-        description.setWordWrap(True)
-        description.setObjectName("MutedText")
-        root.addWidget(description)
-
         self.editor = RegionSelectionWidget(
             selector.project,
             selector.definition(),
@@ -312,29 +309,28 @@ class ExtendedRegionDialog(QDialog):
             requirement=selector.requirement,
             allow_part_local=selector.allow_part_local,
             show_named_regions=True,
-            show_pick_controls=False,
         )
         self.editor.value_changed.connect(selector._extended_value_changed)
         root.addWidget(self.editor, 1)
 
         row = QHBoxLayout()
-        self.pick_button = QPushButton("Select in View")
-        self.pick_button.setCheckable(True)
-        self.pick_button.setStyleSheet(_PICK_STYLE)
-        self.pick_button.clicked.connect(lambda _checked=False: selector.pick_button.click())
-        row.addWidget(self.pick_button)
         row.addStretch(1)
         close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         close.rejected.connect(self.close)
         row.addWidget(close)
         root.addLayout(row)
-        self.set_picking(selector.pick_button.isChecked())
+
+    def begin_selection(self):
+        """Keep viewport selection active for the complete dialog lifetime."""
+        if self.selector.pick_callback and not self.selector.pick_button.isChecked():
+            self.selector.pick_button.setChecked(True)
+        if self.selector.pick_callback:
+            self.selector.pick_button.setEnabled(False)
 
     def set_picking(self, active: bool):
-        blocker = QSignalBlocker(self.pick_button)
-        self.pick_button.setChecked(bool(active))
-        del blocker
-        self.pick_button.setText("Finish Picking" if active else "Select in View")
+        # The extended editor intentionally has no start/finish control.  Its
+        # lifetime is the selection session; closing it ends the session.
+        return None
 
 
 def _safe_label(project, item):

@@ -124,34 +124,77 @@ class AssemblyController:
     def edit_region(self, region): return self.regions.edit(region)
 
     def coordinate_system(self):
-        values = get_values(CoordinateSystemDialog(
-            next_name("CSYS", self.store.project.assembly.coordinate_systems),
-            [item.name for item in self.store.project.assembly.coordinate_systems],
+        assembly = self.store.project.assembly
+        dialog = CoordinateSystemDialog(
+            next_name("CSYS", assembly.coordinate_systems),
+            [item.name for item in assembly.coordinate_systems],
             self.parent,
-        ))
-        if not values:
-            return
-        system = CoordinateSystem(
-            name=values["name"], system_type=values["system_type"],
-            origin=values["origin"], axis_1=values["axis_1"], axis_2=values["axis_2"],
-            scope="Assembly",
         )
-        self.store.add_entity(f"Created assembly {system.name}", self.store.project.assembly.id, "coordinate_systems", system)
-        self.store.invalidate_scene("Assembly coordinate system created")
+        state = {"id": None}
+        self._dialogs.append(dialog)
+        dialog.pick_requested.connect(
+            lambda allowed, callback, finished: self.parent.viewport.begin_datum_reference_pick(
+                allowed, callback, finished
+            )
+        )
+        dialog.cancel_pick_requested.connect(self.parent.viewport.cancel_context_pick)
+
+        def commit(values):
+            system = CoordinateSystem(
+                id=state["id"] or None, name=values["name"],
+                system_type=values["system_type"], origin=values["origin"],
+                axis_1=values["axis_1"], axis_2=values["axis_2"], scope="Assembly",
+            ) if state["id"] else CoordinateSystem(
+                name=values["name"], system_type=values["system_type"],
+                origin=values["origin"], axis_1=values["axis_1"],
+                axis_2=values["axis_2"], scope="Assembly",
+            )
+            if state["id"]:
+                self.store.replace_entity(f"Updated assembly {system.name}", assembly.id, "coordinate_systems", system)
+            else:
+                self.store.add_entity(f"Created assembly {system.name}", assembly.id, "coordinate_systems", system)
+                state["id"] = system.id
+            self.store.select(system)
+            self.store.invalidate_scene("Assembly coordinate system changed")
+
+        dialog.apply_requested.connect(commit)
+        dialog.finished.connect(lambda _code: self._finish_dialog(dialog))
+        show_modeless_dialog(dialog)
 
     def reference_point(self):
-        values = get_values(ReferencePointDialog(
-            next_name("RP", self.store.project.assembly.reference_points),
-            [item.name for item in self.store.project.assembly.reference_points],
+        assembly = self.store.project.assembly
+        dialog = ReferencePointDialog(
+            next_name("RP", assembly.reference_points),
+            [item.name for item in assembly.reference_points],
             self.parent,
-        ))
-        if not values:
-            return
-        point = ReferencePoint(
-            name=values["name"], position=(values["x"], values["y"], values["z"]),
-            scope="Assembly",
         )
-        self.store.add_entity(f"Created assembly {point.name}", self.store.project.assembly.id, "reference_points", point)
+        state = {"id": None}
+        self._dialogs.append(dialog)
+        dialog.pick_requested.connect(
+            lambda allowed, callback, finished: self.parent.viewport.begin_datum_reference_pick(
+                allowed, callback, finished
+            )
+        )
+        dialog.cancel_pick_requested.connect(self.parent.viewport.cancel_context_pick)
+
+        def commit(values):
+            point = ReferencePoint(
+                id=state["id"] or None, name=values["name"],
+                position=values["position"], scope="Assembly",
+            ) if state["id"] else ReferencePoint(
+                name=values["name"], position=values["position"], scope="Assembly",
+            )
+            if state["id"]:
+                self.store.replace_entity(f"Updated assembly {point.name}", assembly.id, "reference_points", point)
+            else:
+                self.store.add_entity(f"Created assembly {point.name}", assembly.id, "reference_points", point)
+                state["id"] = point.id
+            self.store.select(point)
+            self.store.invalidate_scene("Assembly reference point changed")
+
+        dialog.apply_requested.connect(commit)
+        dialog.finished.connect(lambda _code: self._finish_dialog(dialog))
+        show_modeless_dialog(dialog)
 
     def constraint(self, constraint_type="Kinematic Coupling"):
         self._constraint_dialog(constraint_type)
@@ -235,6 +278,7 @@ class AssemblyController:
 
         def preview(master, slave):
             viewport = self.parent.viewport
+            viewport.suspend_model_selection_preview()
             viewport.show_region_preview(
                 f"{preview_prefix}-master", master, color="#ffd166",
                 opacity=.86, point_size=22, show_point_labels=True,
@@ -274,6 +318,7 @@ class AssemblyController:
 
         def finish(_code):
             self.parent.viewport.clear_region_previews(preview_prefix)
+            self.parent.viewport.restore_model_selection_preview()
             self._finish_dialog(dialog)
 
         dialog.applied.connect(applied)

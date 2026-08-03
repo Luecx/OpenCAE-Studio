@@ -14,7 +14,6 @@ def specs(c):
         ActionSpec(A.SUPPRESS_FEATURE, "Suppress / Resume", I.DELETE, c.part.suppress_feature),
         ActionSpec(A.DEFAULT_SEED, "Seed Part", I.SEED, c.part.default_seed),
         ActionSpec(A.EDGE_SEED, "Seed Edges", I.SEED, c.part.edge_seed),
-        ActionSpec(A.MESH_CONTROL, "Mesh Controls", I.MESH, c.part.mesh_control),
         ActionSpec(A.ELEMENT_CONTROLS, "Element Controls", I.ELEMENT_CONTROLS, c.part.element_controls),
         ActionSpec(A.MESH_SETTINGS, "Mesh Settings", I.SETTINGS, c.part.mesh_settings),
         ActionSpec(A.GENERATE_MESH, "Generate Mesh", I.MESH, c.part.generate_mesh),

@@ -18,6 +18,19 @@ def pick_cell(picker, actor):
     occurrence = reference.instance_id
     targets = {(occurrence, int(cell)) for cell in cells}
     operation = selection_operation()
+    if picker.owner.context_pick.active:
+        changed = [_cell_hit(scene, instance_key, tag) for instance_key, tag in sorted(
+            targets, key=lambda value: (value[0] or "", value[1])
+        )]
+        if operation == SelectionOperation.REPLACE:
+            event_hits = [
+                hit.with_operation(SelectionOperation.REPLACE if index == 0 else SelectionOperation.ADD)
+                for index, hit in enumerate(changed)
+            ]
+        else:
+            event_hits = [hit.with_operation(operation) for hit in changed]
+        picker.emit_entities((), event_hits)
+        return
     if operation == SelectionOperation.REPLACE:
         picker.clear(False, False)
         picker.selected_cells.update(targets)

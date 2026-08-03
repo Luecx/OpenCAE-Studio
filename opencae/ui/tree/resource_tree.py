@@ -2,7 +2,7 @@ from .tree_items import ensure_expandable, folder, item
 
 
 def append_materials(root, materials):
-    group = folder("Materials", "materials"); root.appendRow(group)
+    group = folder("Materials", "materials", count=len(materials)); root.appendRow(group)
     categories = ("Elasticity", "Density", "Plasticity", "Thermal expansion")
     for material in materials:
         node = item(material.name, material, "material"); group.appendRow(node)
@@ -12,7 +12,7 @@ def append_materials(root, materials):
 
 
 def append_profiles(root, profiles):
-    group = folder("Profiles", "profiles"); root.appendRow(group)
+    group = folder("Profiles", "profiles", count=len(profiles)); root.appendRow(group)
     for profile in profiles:
         node = item(profile.name, profile, "profile"); group.appendRow(node)
         node.appendRow(item(profile.profile_type, None, "info"))
@@ -21,7 +21,7 @@ def append_profiles(root, profiles):
 
 
 def append_sections(root, sections, project=None):
-    group = folder("Sections", "sections"); root.appendRow(group)
+    group = folder("Sections", "sections", count=len(sections)); root.appendRow(group)
     for section in sections:
         node = item(section.name, section, "section"); group.appendRow(node)
         node.appendRow(item(section.section_type, None, "info"))
@@ -33,7 +33,7 @@ def append_sections(root, sections, project=None):
 
 
 def append_fields(root, fields):
-    group = folder("Fields", "fields"); root.appendRow(group)
+    group = folder("Fields", "fields", count=len(fields)); root.appendRow(group)
     for value in fields:
         label = f"{value.name}  [{value.location}, {value.components} column(s)]"
         group.appendRow(item(label, value, "field_definition"))

@@ -78,7 +78,7 @@ class CouplingOverlay:
         self._names.append(marker)
         plotter.add_mesh(
             pv.Sphere(radius=radius, center=master),
-            color=color,
+            color="#ffd166" if selected else color,
             opacity=1.0 if selected else .82,
             lighting=False,
             pickable=False,

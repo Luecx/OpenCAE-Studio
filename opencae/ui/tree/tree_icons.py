@@ -2,12 +2,12 @@ from opencae.ui.core.icon_factory import IconKind, make_icon
 
 _KIND_ICONS={
     "parts":IconKind.PART,"part":IconKind.PART,"geometry":IconKind.PARTITION,"geometry_feature":IconKind.PARTITION,
-    "mesh":IconKind.MESH,"seed":IconKind.SEED,"mesh_control":IconKind.MESH,"element_control":IconKind.ELEMENT_CONTROLS,"nodes":IconKind.NODE_SET,
+    "mesh":IconKind.MESH,"seed":IconKind.SEED,"element_control":IconKind.ELEMENT_CONTROLS,"nodes":IconKind.NODE_SET,
     "elements":IconKind.ELEMENT,"element_category":IconKind.ELEMENT,"element_definition":IconKind.ELEMENT,
-    "regions":IconKind.NODE_SET,"regions_mixed":IconKind.NODE_SET,"region":IconKind.NODE_SET,"node_sets":IconKind.NODE_SET,"node_set":IconKind.NODE_SET,"element_sets":IconKind.ELEMENT_SET,"element_set":IconKind.ELEMENT_SET,
+    "regions":IconKind.NODE_SET,"region":IconKind.NODE_SET,"node_sets":IconKind.NODE_SET,"node_set":IconKind.NODE_SET,"element_sets":IconKind.ELEMENT_SET,"element_set":IconKind.ELEMENT_SET,
     "surfaces":IconKind.SURFACE,"surface":IconKind.SURFACE,"coordinate_systems":IconKind.CSYS,"coordinate_system":IconKind.CSYS,
     "reference_points":IconKind.RP,"reference_point":IconKind.RP,"datums":IconKind.CSYS,"datum_point":IconKind.RP,"datum_vector":IconKind.CSYS,"datum_plane":IconKind.SURFACE,"section_assignments":IconKind.ASSIGN,"section_assignment":IconKind.ASSIGN,
-    "assembly":IconKind.INSTANCE,"asm_regions":IconKind.NODE_SET,"asm_regions_mixed":IconKind.NODE_SET,"asm_region":IconKind.NODE_SET,"instances":IconKind.INSTANCE,"instance":IconKind.INSTANCE,"asm_node_sets":IconKind.NODE_SET,
+    "assembly":IconKind.INSTANCE,"asm_regions":IconKind.NODE_SET,"asm_region":IconKind.NODE_SET,"instances":IconKind.INSTANCE,"instance":IconKind.INSTANCE,"asm_node_sets":IconKind.NODE_SET,
     "asm_node_set":IconKind.NODE_SET,"asm_element_sets":IconKind.ELEMENT_SET,"asm_element_set":IconKind.ELEMENT_SET,
     "asm_surfaces":IconKind.SURFACE,"asm_surface":IconKind.SURFACE,"asm_coordinate_systems":IconKind.CSYS,
     "asm_coordinate_system":IconKind.CSYS,"asm_reference_points":IconKind.RP,"asm_reference_point":IconKind.RP,

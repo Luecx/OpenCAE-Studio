@@ -5,7 +5,7 @@ from copy import deepcopy
 from PyQt6.QtWidgets import QDialog, QInputDialog, QMessageBox
 
 from opencae.model.geometry import GeometryFeature
-from opencae.model.mesh import ElementControl, MeshControl, Seed
+from opencae.model.mesh import ElementControl, Seed
 from opencae.model.part import Part
 from opencae.model.regions import Region
 from opencae.model.selection import ViewportSelection
@@ -29,12 +29,21 @@ class SelectionController:
             return self.part_controller.edit_part(entity)
         if self.part_controller and isinstance(entity, Seed):
             return self.part_controller.edit_seed(entity)
-        if self.part_controller and isinstance(entity, MeshControl):
-            return self.part_controller.edit_mesh_control(entity)
         if self.part_controller and isinstance(entity, ElementControl):
             return self.part_controller.edit_element_control(entity)
         if self.part_controller and isinstance(entity, GeometryFeature):
             return self.part_controller.edit_geometry_feature(entity)
+
+        # Datum planes currently contain structured geometric references.
+        # Sending them through the generic dataclass editor exposes those
+        # references as meaningless string fields.  Until a dedicated datum
+        # editing workflow exists, datum planes are intentionally immutable.
+        from opencae.model.entities.datums import DatumPlane
+        if isinstance(entity, DatumPlane):
+            self.store.message.emit(
+                "Datum planes cannot be edited yet. Delete and recreate the plane instead."
+            )
+            return
 
         from opencae.model.entities.regions import SectionAssignment
         if self.part_controller and isinstance(entity, SectionAssignment):

@@ -96,6 +96,7 @@ class PointSelectionState:
                 render_points_as_spheres=True,
                 name=self._name,
                 pickable=False,
+                reset_camera=False,
                 render=False,
             )
 

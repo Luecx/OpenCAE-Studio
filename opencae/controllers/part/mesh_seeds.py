@@ -6,7 +6,7 @@ from copy import deepcopy
 from opencae.model.mesh import DefaultSeed, EdgeSeed
 from opencae.model.selection import (
     RegionProjection, RegionRequirement, SelectableKind, SelectionPolicy,
-    definition_from_local_labels, local_geometry_tags,
+    definition_from_local_labels, local_geometry_tags, region_definition_error,
 )
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand, make_add_command, make_replace_command
 from opencae.ui.dialogs.default_seed import DefaultSeedDialog
@@ -58,14 +58,32 @@ class PartMeshSeeds:
         def pick(_owner, done, finished):
             return begin_region_pick(self.ctx.store.project, self._viewport(), policy, done, default_owner=part, finished=finished)
 
-        return EdgeSeedDialog(
+        dialog = EdgeSeedDialog(
             self.ctx.store.project,
-            options=region_options(self.ctx.store.project, owner=part, include_reference_points=False),
+            options=region_options(
+                self.ctx.store.project, owner=part, include_reference_points=False,
+                projections=(RegionProjection.ELEMENTS,),
+            ),
             definition=initial or getattr(seed, "target", None),
             pick_callback=pick,
             seed=seed,
             parent=self.ctx.parent,
         )
+        dialog.target.set_requirement(policy.requirement, allow_part_local=True)
+        preview_channel = f"edge-seed-dialog-{id(dialog)}"
+        dialog._target_preview_channel = preview_channel
+        dialog.target.value_changed.connect(
+            lambda value: self._viewport().show_region_preview(
+                preview_channel, value, color="#3296e6",
+                opacity=.62, point_size=16, show_point_labels=False,
+            ) if self._viewport() else None
+        )
+        if self._viewport():
+            self._viewport().show_region_preview(
+                preview_channel, dialog.target.definition(), color="#3296e6",
+                opacity=.62, point_size=16, show_point_labels=False,
+            )
+        return dialog
 
     def _open(self, dialog, part, preview=False):
         self._dialogs.append(dialog)
@@ -80,6 +98,9 @@ class PartMeshSeeds:
         viewport = self._viewport()
         if viewport:
             viewport.cancel_context_pick()
+            channel = getattr(dialog, "_target_preview_channel", None)
+            if channel:
+                viewport.clear_region_preview(channel)
             viewport.hide_seed_preview()
             slot = getattr(dialog, "_adjust_slot", None)
             if slot is not None:
@@ -110,6 +131,13 @@ class PartMeshSeeds:
         if part is None:
             return
         target = values["target"]
+        requirement = RegionRequirement(RegionProjection.ELEMENTS, (1,), 1)
+        error = region_definition_error(
+            self.ctx.store.project, target, requirement, allow_part_local=True
+        )
+        if error:
+            self.ctx.store.message.emit(error)
+            return
         if not local_geometry_tags(part, target, 1):
             self.ctx.store.message.emit("Select at least one edge")
             return

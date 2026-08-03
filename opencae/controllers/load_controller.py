@@ -28,7 +28,7 @@ class LoadController:
         if any(not item.suppressed for item in self.store.project.assembly.instances): return True
         self.store.message.emit("Create at least one assembly instance before defining loads or supports"); return False
 
-    def _options(self): return region_options(self.store.project)
+    def _options(self, projection): return region_options(self.store.project, projections=(projection,))
 
     def _pick(self, policy):
         return lambda _owner, done, finished: begin_region_pick(self.store.project, self.parent.viewport, policy, done, finished=finished)
@@ -50,7 +50,7 @@ class LoadController:
         if not self._require_assembly(): return
         requirement = SUPPORT_REGION_REQUIREMENT
         dialog = SupportDialog(
-            support_type=support_type, project=self.store.project, regions=self._options(), coordinate_systems=self._coordinate_systems(),
+            support_type=support_type, project=self.store.project, regions=self._options(RegionProjection.NODES), coordinate_systems=self._coordinate_systems(),
             create_region=self._save_region(RegionProjection.NODES),
             pick_region=self._pick(support_selection_policy()),
             parent=self.parent, default_name=next_name(support_type, self.store.project.supports),
@@ -76,7 +76,7 @@ class LoadController:
         requirement = load_region_requirement(load_type)
         projection = requirement.projection if requirement else RegionProjection.NODES
         dialog = LoadDialog(
-            load_type=load_type, project=self.store.project, regions=self._options(), coordinate_systems=self._coordinate_systems(), fields=self._temperature_fields(),
+            load_type=load_type, project=self.store.project, regions=self._options(projection), coordinate_systems=self._coordinate_systems(), fields=self._temperature_fields(),
             create_region=self._save_region(projection), pick_region=self._pick(policy) if policy else None,
             parent=self.parent, default_name=next_name(load_type, self.store.project.loads),
             existing_names=[item.name for item in self.store.project.loads], load=load,

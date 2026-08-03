@@ -10,5 +10,11 @@ def create_region(region_type: str = "Region", **kwargs) -> Region:
     runtime classes.
     """
 
-    kwargs.setdefault("preferred_projection", RegionProjection.coerce(region_type))
+    if "preferred_projection" not in kwargs:
+        projection = RegionProjection.coerce(region_type)
+        if projection is None:
+            raise ValueError(
+                "Region creation requires an explicit node, element, or surface projection"
+            )
+        kwargs["preferred_projection"] = projection
     return Region(**kwargs)

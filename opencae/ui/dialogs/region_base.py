@@ -55,6 +55,7 @@ class RegionDialog(QDialog):
             allow_part_local=allow_part_local,
         )
         root.addWidget(self.region)
+        self.finished.connect(lambda _code: self.region.finish_selection())
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Apply | QDialogButtonBox.StandardButton.Close)
         buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName("PrimaryButton")
@@ -62,6 +63,10 @@ class RegionDialog(QDialog):
         buttons.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(lambda: self._commit(False))
         buttons.rejected.connect(self.close)
         root.addWidget(buttons)
+
+
+    def begin_selection(self):
+        self.region.begin_selection()
 
     def values(self):
         return {"name": self.name.text().strip(), "definition": self.region.definition()}

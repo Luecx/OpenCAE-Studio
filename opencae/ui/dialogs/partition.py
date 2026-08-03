@@ -74,12 +74,6 @@ class PartitionDialog(QDialog):
         self.stack.setCurrentIndex(PARTITION_TYPES.index(self.kind.currentText()))
         self._load(feature)
 
-        help_text = QLabel(
-            "Pick geometry directly in the viewport. A normal click replaces the target, "
-            "Shift adds and Ctrl removes. Named part regions can be added from the list."
-        )
-        help_text.setWordWrap(True); help_text.setObjectName("MutedText"); root.addWidget(help_text)
-
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
             | QDialogButtonBox.StandardButton.Apply
@@ -105,35 +99,50 @@ class PartitionDialog(QDialog):
         )
 
     def _build_pages(self):
-        plane = QWidget(); layout = QVBoxLayout(plane)
-        layout.addWidget(QLabel("Target cell")); self.plane_targets = self._target(3); layout.addWidget(self.plane_targets)
-        form = QFormLayout()
+        plane = QWidget()
+        form = QFormLayout(plane)
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(9)
+        self.plane_targets = self._target(3)
         self.datum_plane = ReferenceSelector(
-            (("Manual origin / normal", ""), *self.datum_planes),
-            "",
+            (("Select a datum plane", ""), *self.datum_planes),
+            None,
             self._create_datum_plane if self.create_datum_plane else None,
+            self._pick_datum_plane if self.pick_callback else None,
         )
-        self.origin = [self._number(0.0) for _ in range(3)]
-        self.normal = [self._number(value) for value in (1.0, 0.0, 0.0)]
-        form.addRow("Datum plane", self.datum_plane)
-        for axis, editor in zip("XYZ", self.origin): form.addRow(f"Plane origin {axis}", editor)
-        for axis, editor in zip("XYZ", self.normal): form.addRow(f"Plane normal {axis}", editor)
-        layout.addLayout(form); self.stack.addWidget(plane)
+        form.addRow("Target cell", self.plane_targets)
+        form.addRow("Partition plane", self.datum_plane)
+        self.stack.addWidget(plane)
 
-        face = QWidget(); layout = QVBoxLayout(face)
-        layout.addWidget(QLabel("Target face")); self.face_targets = self._target(2); layout.addWidget(self.face_targets)
-        layout.addWidget(QLabel("Two picked positions defining the partition line"))
+        face = QWidget()
+        form = QFormLayout(face)
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(9)
+        self.face_targets = self._target(2)
         self.face_points = PointSelectionWidget(selection_provider=self.point_provider)
-        layout.addWidget(self.face_points); self.stack.addWidget(face)
+        form.addRow("Target face", self.face_targets)
+        form.addRow("Partition points", self.face_points)
+        self.stack.addWidget(face)
 
-        edge_parameter = QWidget(); layout = QVBoxLayout(edge_parameter)
-        layout.addWidget(QLabel("Target edge")); self.edge_parameter_targets = self._target(1); layout.addWidget(self.edge_parameter_targets)
-        form = QFormLayout(); self.fraction = self._number(0.5); self.fraction.setRange(0.000001, 0.999999)
-        form.addRow("Normalized parameter", self.fraction); layout.addLayout(form); self.stack.addWidget(edge_parameter)
+        edge_parameter = QWidget()
+        form = QFormLayout(edge_parameter)
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(9)
+        self.edge_parameter_targets = self._target(1)
+        self.fraction = self._number(0.5)
+        self.fraction.setRange(0.000001, 0.999999)
+        form.addRow("Target edge", self.edge_parameter_targets)
+        form.addRow("Normalized parameter", self.fraction)
+        self.stack.addWidget(edge_parameter)
 
-        edge_vertex = QWidget(); layout = QVBoxLayout(edge_vertex)
-        layout.addWidget(QLabel("Target edge")); self.edge_vertex_targets = self._target(1); layout.addWidget(self.edge_vertex_targets)
-        layout.addWidget(QLabel("Splitting vertex")); self.edge_vertex = self._target(0); layout.addWidget(self.edge_vertex)
+        edge_vertex = QWidget()
+        form = QFormLayout(edge_vertex)
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(9)
+        self.edge_vertex_targets = self._target(1)
+        self.edge_vertex = self._target(0)
+        form.addRow("Target edge", self.edge_vertex_targets)
+        form.addRow("Splitting vertex", self.edge_vertex)
         self.stack.addWidget(edge_vertex)
 
     @staticmethod
@@ -155,8 +164,6 @@ class PartitionDialog(QDialog):
         if kind == PARTITION_TYPES[0]:
             self.plane_targets.set_definition(feature.target)
             self.datum_plane.setCurrentValue(getattr(getattr(feature, "datum_plane_ref", None), "entity_id", ""))
-            origin = feature.origin; normal = feature.normal
-            for index in range(3): self.origin[index].setValue(origin[index]); self.normal[index].setValue(normal[index])
         elif kind == PARTITION_TYPES[1]:
             self.face_targets.set_definition(feature.target)
             self.face_points.set_points(feature.points)
@@ -172,14 +179,7 @@ class PartitionDialog(QDialog):
         base = {"name": self.name.text().strip(), "partition_type": kind}
         if kind == PARTITION_TYPES[0]:
             datum_id = self.datum_plane.currentValue()
-            datum = next((item for item in self.datum_planes if getattr(item, "id", None) == datum_id), None)
-            if datum is not None:
-                parameters = {"origin": tuple(datum.origin), "normal": tuple(datum.normal), "datum_plane_id": datum_id}
-            else:
-                parameters = {
-                    "origin": tuple(editor.value() for editor in self.origin),
-                    "normal": tuple(editor.value() for editor in self.normal),
-                }
+            parameters = {"datum_plane_id": datum_id or ""}
             base.update(target=self.plane_targets.definition(), split_target=RegionDefinition(), values=parameters)
         elif kind == PARTITION_TYPES[1]:
             base.update(target=self.face_targets.definition(), split_target=RegionDefinition(), values={"points": self.face_points.points()})
@@ -208,12 +208,19 @@ class PartitionDialog(QDialog):
         tags = local_geometry_tags(part, values["target"], dimension)
         if len(tags) != 1:
             QMessageBox.warning(self, "Invalid target", f"Select exactly one geometry {('vertex','edge','face','cell')[dimension]}."); return
+        if values["partition_type"] == PARTITION_TYPES[0] and not values["values"].get("datum_plane_id"):
+            QMessageBox.warning(self, "Missing plane", "Select or create a datum plane for the partition."); return
         if values["partition_type"] == PARTITION_TYPES[1] and len(values["values"]["points"]) != 2:
             QMessageBox.warning(self, "Missing points", "Pick exactly two positions on the target face."); return
         if values["partition_type"] == PARTITION_TYPES[3] and len(local_geometry_tags(part, values["split_target"], 0)) != 1:
             QMessageBox.warning(self, "Missing vertex", "Select exactly one splitting vertex."); return
         self.committed.emit(values)
         if close_after: self.accept()
+
+    def _pick_datum_plane(self, owner, done):
+        if not self.pick_callback:
+            return
+        self.pick_callback("datum_plane", owner, done, lambda: self.datum_plane.pick_button.setChecked(False))
 
     def _create_datum_plane(self, owner, done):
         def created(value):

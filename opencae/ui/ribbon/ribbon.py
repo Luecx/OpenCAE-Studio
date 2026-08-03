@@ -21,7 +21,7 @@ class Ribbon(QWidget):
     def __init__(self, actions, store, settings, solvers, state_callback, parent=None):
         super().__init__(parent)
         self.store = store; self.settings = settings; self.solvers = solvers
-        self.state_callback = state_callback; self.solve_page = None; self.part_page = None; self.results_page = None; self.current_stage = ""
+        self.state_callback = state_callback; self.solve_page = None; self.part_page = None; self.results_page = None; self.current_stage = ""; self.last_project_stage = "PART"
         self.setObjectName("Ribbon")
         self.setStyleSheet(f"QWidget#Ribbon {{ background:{PALETTE['panel']}; border-bottom:1px solid {PALETTE['border']}; }}")
         layout = QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(0)
@@ -48,8 +48,16 @@ class Ribbon(QWidget):
 
     def set_stage(self, stage):
         if stage not in STAGES or stage == self.current_stage: return
+        if stage != "RESULTS":
+            self.last_project_stage = stage
         self.current_stage = stage; self.stage_bar.set_stage(stage); self.stack.setCurrentIndex(STAGES.index(stage))
         self.refresh_context(); self.stage_changed.emit(stage)
+
+    def set_browser(self, name):
+        if str(name).casefold() == "solution":
+            self.set_stage("RESULTS")
+        elif self.current_stage == "RESULTS":
+            self.set_stage(self.last_project_stage or "PART")
 
     def refresh_context(self, *_):
         project = self.store.project; part = self.store.active_part(); stage = self.current_stage

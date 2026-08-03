@@ -5,6 +5,7 @@ from opencae.model.naming import next_name
 from opencae.ui.dialogs.datum_plane import DatumPlaneDialog
 from opencae.ui.dialogs.datum_point import DatumPointDialog
 from opencae.ui.dialogs.datum_vector import DatumVectorDialog
+from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
 
 
 class PartDatums:
@@ -29,13 +30,12 @@ class PartDatums:
         )
         state = {"target_id": None}
         self._dialogs.append(dialog)
-        dialog.pick_requested.connect(lambda allowed, callback: self.ctx.parent.viewport.begin_context_pick(allowed, callback))
+        dialog.pick_requested.connect(lambda allowed, callback, finished: self.ctx.parent.viewport.begin_datum_reference_pick(allowed, callback, finished))
+        dialog.cancel_pick_requested.connect(self.ctx.parent.viewport.cancel_context_pick)
         dialog.preview_requested.connect(self.ctx.parent.viewport.show_datum_preview)
         dialog.apply_requested.connect(lambda values: self._commit(part.id, dialog, state, values))
         dialog.finished.connect(lambda _code: self._closed(dialog))
-        dialog.show()
-        dialog.raise_()
-        dialog.activateWindow()
+        show_modeless_dialog(dialog)
 
     def _commit(self, part_id, dialog, state, values):
         part = self.ctx.store.project.try_resolve(part_id)

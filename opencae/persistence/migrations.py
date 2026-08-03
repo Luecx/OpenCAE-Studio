@@ -9,7 +9,7 @@ from opencae.core.ids import new_id
 from opencae.model.core.entity import Entity
 from opencae.model.core.model_registry import MODEL_TYPES
 
-CURRENT_SCHEMA_VERSION = 18
+CURRENT_SCHEMA_VERSION = 19
 POLYMORPHIC_NAME_REFERENCE_VERSION = 11
 
 
@@ -352,6 +352,36 @@ def _migrate_17_to_18(data: dict[str, Any], report: MigrationReport) -> dict[str
     return data
 
 
+def _migrate_18_to_19(data: dict[str, Any], report: MigrationReport) -> dict[str, Any]:
+    """Eliminate untyped/mixed named regions from persisted projects."""
+    converted = 0
+
+    def walk(value):
+        nonlocal converted
+        if isinstance(value, list):
+            for item in value:
+                walk(item)
+            return
+        if not isinstance(value, dict):
+            return
+        for item in list(value.values()):
+            walk(item)
+        if value.get("__type__") == "region" and value.get("preferred_projection") in (None, "", "single_control_node"):
+            # Older generic regions had no declared semantic type.  A control
+            # point is an inline constraint target, never a named-region type.
+            # Keep either legacy form loadable as a strict node region.
+            value["preferred_projection"] = "nodes"
+            converted += 1
+
+    walk(data)
+    report.changes.append(
+        f"Converted {converted} untyped region(s) to node regions"
+        if converted else
+        "Enforced node, element, or surface typing for every region"
+    )
+    return data
+
+
 def _ensure_entity_ids(value: Any, report: MigrationReport) -> None:
     if isinstance(value, list):
         for item in value:
@@ -554,4 +584,5 @@ _MIGRATIONS: dict[int, Migration] = {
     15: _migrate_15_to_16,
     16: _migrate_16_to_17,
     17: _migrate_17_to_18,
+    18: _migrate_18_to_19,
 }

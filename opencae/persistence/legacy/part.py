@@ -72,7 +72,10 @@ def legacy_region(data, owner=None, projection=None):
             for member in members
         ))
     region_type = data.pop("region_type", "Region")
-    data.setdefault("preferred_projection", projection or RegionProjection.coerce(region_type))
+    data.setdefault(
+        "preferred_projection",
+        projection or RegionProjection.coerce(region_type) or RegionProjection.NODES,
+    )
     return create_region("Region", **data)
 
 

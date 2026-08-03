@@ -7,7 +7,8 @@ from opencae.model.naming import is_unique
 class DatumDialogBase(QDialog):
     apply_requested = pyqtSignal(object)
     preview_requested = pyqtSignal(object)
-    pick_requested = pyqtSignal(object, object)
+    pick_requested = pyqtSignal(object, object, object)
+    cancel_pick_requested = pyqtSignal()
 
     def __init__(self, title, methods, default_name, existing_names, parent=None):
         super().__init__(parent); self.existing_names = tuple(existing_names); self.setWindowTitle(title); self.setModal(False)
@@ -21,7 +22,9 @@ class DatumDialogBase(QDialog):
         buttons.button(QDialogButtonBox.StandardButton.Apply).setObjectName("PrimaryButton")
         buttons.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self._apply)
         buttons.button(QDialogButtonBox.StandardButton.Close).clicked.connect(self.close); layout.addWidget(buttons)
-        self.method.currentIndexChanged.connect(self.stack.setCurrentIndex); self.method.currentIndexChanged.connect(self.emit_preview)
+        self.method.currentIndexChanged.connect(self.stack.setCurrentIndex)
+        self.method.currentIndexChanged.connect(self._cancel_reference_picks)
+        self.method.currentIndexChanged.connect(self.emit_preview)
         self.name.textChanged.connect(self.emit_preview)
 
     def add_page(self, page):
@@ -30,7 +33,15 @@ class DatumDialogBase(QDialog):
         for child in page.findChildren(QLineEdit): child.textChanged.connect(self.emit_preview)
         for child in page.findChildren(__import__("PyQt6.QtWidgets", fromlist=["QAbstractSpinBox"]).QAbstractSpinBox): child.editingFinished.connect(self.emit_preview)
         for child in page.findChildren(__import__("opencae.ui.core.widgets.pick_reference", fromlist=["PickReference"]).PickReference):
-            child.pick_requested.connect(self.pick_requested); child.changed.connect(self.emit_preview)
+            child.pick_requested.connect(self.pick_requested)
+            child.cancel_requested.connect(self.cancel_pick_requested)
+            child.changed.connect(self.emit_preview)
+
+    def _cancel_reference_picks(self, *_):
+        reference_type = __import__("opencae.ui.core.widgets.pick_reference", fromlist=["PickReference"]).PickReference
+        for child in self.findChildren(reference_type):
+            child._pick_finished()
+        self.cancel_pick_requested.emit()
 
     def values(self): raise NotImplementedError
 

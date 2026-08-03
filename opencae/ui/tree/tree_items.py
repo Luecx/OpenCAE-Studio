@@ -7,7 +7,7 @@ from .tree_roles import ENTITY_ROLE, KIND_ROLE, PART_ROLE
 _CHILD_KIND = {
     "instances": "instance", "asm_node_sets": "asm_node_set", "asm_element_sets": "asm_element_set",
     "asm_surfaces": "asm_surface", "asm_coordinate_systems": "asm_coordinate_system",
-    "asm_reference_points": "asm_reference_point", "regions_mixed": "region", "asm_regions_mixed": "asm_region", "constraints": "constraint",
+    "asm_reference_points": "asm_reference_point", "constraints": "constraint",
     "supports": "support", "loads": "load",
 }
 
@@ -20,8 +20,9 @@ def item(text, entity=None, kind="item", count=None, is_folder=False, part_id=No
     return node
 
 
-def folder(text, kind="folder", part_id=None):
-    return item(text, None, kind, is_folder=True, part_id=part_id)
+def folder(text, kind="folder", part_id=None, count=None):
+    label = f"{text} ({int(count):,})" if count is not None else text
+    return item(label, None, kind, is_folder=True, part_id=part_id)
 
 
 def ensure_expandable(node, collection, label="Empty"):
@@ -31,7 +32,8 @@ def ensure_expandable(node, collection, label="Empty"):
 
 
 def append_collection(parent, title, collection, kind, part_id=None):
-    node = folder(title, kind, part_id=part_id); parent.appendRow(node)
+    values = tuple(collection or ())
+    node = folder(title, kind, part_id=part_id, count=len(values)); parent.appendRow(node)
     child_kind = _CHILD_KIND.get(kind, kind[:-1] if kind.endswith("s") else kind)
-    for entity in collection: node.appendRow(item(entity.name, entity, child_kind, part_id=part_id))
-    return ensure_expandable(node, collection)
+    for entity in values: node.appendRow(item(entity.name, entity, child_kind, part_id=part_id))
+    return ensure_expandable(node, values)

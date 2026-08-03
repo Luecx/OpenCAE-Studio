@@ -1,4 +1,6 @@
-from PyQt6.QtCore import QSortFilterProxyModel, QSize, Qt, pyqtSignal
+import re
+
+from PyQt6.QtCore import QModelIndex, QSignalBlocker, QSortFilterProxyModel, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QFont
 from PyQt6.QtWidgets import QTreeView
 
@@ -10,10 +12,11 @@ from .tree_builder import build_model
 from .tree_roles import ENTITY_ROLE, KIND_ROLE, PART_ROLE
 
 _FOCUS = {
-    "MATERIALS": {"Materials"}, "SECTIONS": {"Sections"}, "PROFILES": {"Profiles"}, "FIELDS": {"Fields"},
-    "PART": {"Parts"}, "ASSEMBLY": {"Assembly"}, "CONSTRAINTS": {"Constraints"},
-    "BOUNDARY CONDITIONS": {"Boundary Conditions"}, "ANALYSIS": {"Steps"},
+    "MATERIALS": {"materials"}, "SECTIONS": {"sections"}, "PROFILES": {"profiles"}, "FIELDS": {"fields"},
+    "PART": {"parts"}, "ASSEMBLY": {"assembly"}, "CONSTRAINTS": {"constraints"},
+    "BOUNDARY CONDITIONS": {"boundary_conditions"}, "ANALYSIS": {"steps"},
 }
+
 
 
 class ProjectTree(QTreeView):
@@ -22,6 +25,7 @@ class ProjectTree(QTreeView):
     def __init__(self, store, actions, parent=None):
         super().__init__(parent); self.store = store; self.actions = actions; self.current_stage = "PART"
         self.proxy = QSortFilterProxyModel(self); self.proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive); self.proxy.setRecursiveFilteringEnabled(True); self.setModel(self.proxy)
+        self.selectionModel().selectionChanged.connect(self._selection)
         self._branch_style = TreeBranchStyle(self.style()); self.setStyle(self._branch_style); self.setHeaderHidden(True)
         self.setAlternatingRowColors(False); self.setUniformRowHeights(True); self.setAnimated(False); self.setIndentation(18); self.setIconSize(QSize(18, 18))
         self.setRootIsDecorated(True); self.setItemsExpandable(True); self.setExpandsOnDoubleClick(False); self.setAllColumnsShowFocus(True)
@@ -29,8 +33,92 @@ class ProjectTree(QTreeView):
         store.changed.connect(self.rebuild); store.active_part_changed.connect(lambda *_: self.set_stage_focus(self.current_stage, collapse=False)); self.rebuild()
 
     def rebuild(self, *_):
-        self.proxy.setSourceModel(build_model(self.store.project)); self.selectionModel().selectionChanged.connect(self._selection)
-        self.set_stage_focus(self.current_stage, collapse=False)
+        expanded = self._expanded_paths()
+        current = self._index_path(self.currentIndex())
+        # A proxy source-model reset otherwise emits a transient empty tree
+        # selection.  That used to clear the selected model entity and, with it,
+        # persistent coupling/region highlighting while the tree was rebuilding.
+        blocker = QSignalBlocker(self.selectionModel())
+        try:
+            self.proxy.setSourceModel(build_model(self.store.project))
+            self.set_stage_focus(self.current_stage, collapse=False)
+            self._restore_expanded(expanded)
+            restored = self._find_path(current) if current else QModelIndex()
+            if restored.isValid():
+                self.setCurrentIndex(restored)
+                self._expand_path(restored)
+        finally:
+            del blocker
+
+    def _expanded_paths(self):
+        return {
+            self._index_path(index)
+            for index in self._walk_indexes()
+            if self.isExpanded(index)
+        }
+
+    def _restore_expanded(self, paths):
+        for index in self._walk_indexes():
+            if self._index_path(index) in paths:
+                self.setExpanded(index, True)
+
+    def _walk_indexes(self, parent=QModelIndex()):
+        model = self.model()
+        if model is None:
+            return
+        for row in range(model.rowCount(parent)):
+            index = model.index(row, 0, parent)
+            yield index
+            yield from self._walk_indexes(index)
+
+    def _index_path(self, index):
+        if not index.isValid():
+            return ()
+        values = []
+        current = index
+        while current.isValid():
+            entity = current.data(ENTITY_ROLE)
+            entity_id = str(getattr(entity, "id", "") or "")
+            kind = str(current.data(KIND_ROLE) or "")
+            part_id = str(current.data(PART_ROLE) or "")
+            if entity_id:
+                token = (kind, entity_id)
+            else:
+                token = (kind, part_id, _stable_label(current.data(Qt.ItemDataRole.DisplayRole)))
+            values.append(token)
+            current = current.parent()
+        return tuple(reversed(values))
+
+    def _find_path(self, path):
+        if not path:
+            return QModelIndex()
+        parent = QModelIndex()
+        for token in path:
+            match = QModelIndex()
+            for row in range(self.model().rowCount(parent)):
+                candidate = self.model().index(row, 0, parent)
+                entity = candidate.data(ENTITY_ROLE)
+                entity_id = str(getattr(entity, "id", "") or "")
+                kind = str(candidate.data(KIND_ROLE) or "")
+                part_id = str(candidate.data(PART_ROLE) or "")
+                candidate_token = (
+                    (kind, entity_id)
+                    if entity_id else
+                    (kind, part_id, _stable_label(candidate.data(Qt.ItemDataRole.DisplayRole)))
+                )
+                if candidate_token == token:
+                    match = candidate
+                    break
+            if not match.isValid():
+                return QModelIndex()
+            parent = match
+        return parent
+
+    def _expand_path(self, index):
+        current = index.parent()
+        while current.isValid():
+            self.setExpanded(current, True)
+            current = current.parent()
 
     def set_filter_text(self, text):
         self.proxy.setFilterFixedString(text)
@@ -43,12 +131,12 @@ class ProjectTree(QTreeView):
         try:
             active = _FOCUS.get(stage, set())
             for row in range(source.rowCount()):
-                node = source.item(row); selected = node.text() in active
+                node = source.item(row); kind = node.data(KIND_ROLE); selected = kind in active
                 self._style(node, selected)
                 proxy_index = self.proxy.mapFromSource(node.index())
                 if collapse: self.setExpanded(proxy_index, selected)
                 elif selected: self.setExpanded(proxy_index, True)
-                if node.text() == "Parts": self._style_parts(node, stage == "PART")
+                if kind == "parts": self._style_parts(node, stage == "PART")
             self._expand_current_path()
         finally: self.setUpdatesEnabled(True)
 
@@ -82,3 +170,7 @@ class ProjectTree(QTreeView):
         index = self.indexAt(pos)
         if index.isValid(): self.setCurrentIndex(index)
         show_context_menu(self, pos, index.data(KIND_ROLE) if index.isValid() else None, self.actions, self.store)
+
+
+def _stable_label(value):
+    return re.sub(r"\s+\([0-9,]+\)$", "", str(value or ""))

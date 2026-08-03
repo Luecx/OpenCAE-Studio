@@ -1,43 +1,104 @@
-from PyQt6.QtWidgets import QDialog, QDoubleSpinBox, QFormLayout, QLabel, QLineEdit, QMessageBox, QStackedWidget, QVBoxLayout, QWidget
+from __future__ import annotations
+
+import numpy as np
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QMessageBox, QVBoxLayout
 
 from opencae.model.naming import is_unique
-from opencae.ui.core.controls import dialog_buttons
-from opencae.ui.core.widgets import ChevronComboBox
+from opencae.ui.core.widgets import ChevronComboBox, XYZPicker
 
-
-def _vector_form(labels, defaults):
-    page = QWidget(); form = QFormLayout(page); editors = []
-    for label, value in zip(labels, defaults):
-        editor = QDoubleSpinBox(); editor.setRange(-1e12, 1e12); editor.setDecimals(6); editor.setValue(value)
-        form.addRow(label, editor); editors.append(editor)
-    return page, editors
+_POINT_KINDS = ("geometry_vertex", "datum_point", "reference_point")
+_DIRECTION_KINDS = ("geometry_edge", "geometry_face", "datum_vector", "datum_plane")
 
 
 class CoordinateSystemDialog(QDialog):
+    apply_requested = pyqtSignal(object)
+    pick_requested = pyqtSignal(object, object, object)
+    cancel_pick_requested = pyqtSignal()
+
     def __init__(self, default_name="CSYS-1", existing_names=(), parent=None):
-        super().__init__(parent); self.existing_names = tuple(existing_names); self.setWindowTitle("Create Coordinate System"); self.setMinimumWidth(560)
-        root = QVBoxLayout(self); root.setContentsMargins(18, 16, 18, 14)
-        title = QLabel(self.windowTitle()); title.setObjectName("PanelTitle"); root.addWidget(title)
-        form = QFormLayout(); self.name = QLineEdit(default_name); self.kind = ChevronComboBox(); self.kind.addItems(("Rectangular", "Cylindrical"))
-        form.addRow("Name", self.name); form.addRow("Type", self.kind); root.addLayout(form)
-        self.stack = QStackedWidget(); root.addWidget(self.stack)
-        rectangular = (("X direction X", "X direction Y", "X direction Z", "Y direction X", "Y direction Y", "Y direction Z"), (1, 0, 0, 0, 1, 0))
-        cylindrical = (("Base X", "Base Y", "Base Z", "Point on Z axis X", "Point on Z axis Y", "Point on Z axis Z", "Point on R axis X", "Point on R axis Y", "Point on R axis Z"), (0, 0, 0, 0, 0, 1, 1, 0, 0))
-        page, self.rect = _vector_form(*rectangular); self.stack.addWidget(page)
-        page, self.cyl = _vector_form(*cylindrical); self.stack.addWidget(page)
-        self.kind.currentIndexChanged.connect(self.stack.setCurrentIndex)
-        buttons = dialog_buttons(); buttons.accepted.connect(self._accept); buttons.rejected.connect(self.reject); root.addWidget(buttons)
+        super().__init__(parent)
+        self.existing_names = tuple(existing_names)
+        self.setWindowTitle("Create Coordinate System")
+        self.setModal(False)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self.setMinimumWidth(700)
 
+        root = QVBoxLayout(self)
+        root.setContentsMargins(18, 16, 18, 14)
+        root.setSpacing(12)
+        title = QLabel(self.windowTitle())
+        title.setObjectName("PanelTitle")
+        root.addWidget(title)
+        self.form = QFormLayout()
+        self.form.setHorizontalSpacing(16)
+        self.form.setVerticalSpacing(9)
+        self.name = QLineEdit(default_name)
+        self.kind = ChevronComboBox()
+        self.kind.addItems(("Rectangular", "Cylindrical"))
+        self.origin = XYZPicker(allowed=_POINT_KINDS, value_kind="point")
+        self.axis_1 = XYZPicker((1.0, 0.0, 0.0), allowed=_DIRECTION_KINDS, value_kind="direction")
+        self.axis_2 = XYZPicker((0.0, 1.0, 0.0), allowed=_DIRECTION_KINDS, value_kind="direction")
+        for widget in (self.origin, self.axis_1, self.axis_2):
+            widget.pick_requested.connect(self.pick_requested)
+            widget.cancel_requested.connect(self.cancel_pick_requested)
+        self.form.addRow("Name", self.name)
+        self.form.addRow("Type", self.kind)
+        self.form.addRow("Origin", self.origin)
+        self.axis_1_label = QLabel("X direction")
+        self.axis_2_label = QLabel("Y direction")
+        self.form.addRow(self.axis_1_label, self.axis_1)
+        self.form.addRow(self.axis_2_label, self.axis_2)
+        root.addLayout(self.form)
+        self.kind.currentTextChanged.connect(self._update_labels)
 
-    def _accept(self):
-        name = self.name.text().strip()
-        if not is_unique(name, self.existing_names): QMessageBox.warning(self, "Duplicate name", f"A coordinate system named '{name}' already exists."); return
-        self.accept()
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Apply
+            | QDialogButtonBox.StandardButton.Close
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName("PrimaryButton")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(lambda: self._commit(True))
+        buttons.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(lambda: self._commit(False))
+        buttons.rejected.connect(self.close)
+        root.addWidget(buttons)
+
+    def _update_labels(self, kind):
+        cylindrical = str(kind).lower().startswith("cyl")
+        self.axis_1_label.setText("Z direction" if cylindrical else "X direction")
+        self.axis_2_label.setText("R direction" if cylindrical else "Y direction")
 
     def values(self):
-        if self.kind.currentText() == "Rectangular":
-            v = [item.value() for item in self.rect]
-            return {"name": self.name.text().strip(), "system_type": "Rectangular", "origin": (0.0, 0.0, 0.0), "axis_1": tuple(v[:3]), "axis_2": tuple(v[3:])}
-        v = [item.value() for item in self.cyl]; base = tuple(v[:3]); z_point = tuple(v[3:6]); r_point = tuple(v[6:9])
-        return {"name": self.name.text().strip(), "system_type": "Cylindrical", "origin": base,
-                "axis_1": tuple(z_point[i] - base[i] for i in range(3)), "axis_2": tuple(r_point[i] - base[i] for i in range(3))}
+        return {
+            "name": self.name.text().strip(),
+            "system_type": self.kind.currentText(),
+            "origin": self.origin.value(),
+            "axis_1": self.axis_1.value(),
+            "axis_2": self.axis_2.value(),
+        }
+
+    def _commit(self, close_after):
+        values = self.values()
+        if not values["name"]:
+            QMessageBox.warning(self, "Missing name", "Enter a coordinate system name.")
+            return
+        if not is_unique(values["name"], self.existing_names):
+            QMessageBox.warning(self, "Duplicate name", f"A coordinate system named '{values['name']}' already exists.")
+            return
+        first = np.asarray(values["axis_1"], dtype=float)
+        second = np.asarray(values["axis_2"], dtype=float)
+        if np.linalg.norm(first) <= 1.0e-12 or np.linalg.norm(second) <= 1.0e-12:
+            QMessageBox.warning(self, "Invalid axes", "Axis directions must be non-zero.")
+            return
+        if np.linalg.norm(np.cross(first, second)) <= 1.0e-10 * np.linalg.norm(first) * np.linalg.norm(second):
+            QMessageBox.warning(self, "Invalid axes", "The two axis directions must not be parallel.")
+            return
+        self.apply_requested.emit(values)
+        if close_after:
+            self.accept()
+
+    def closeEvent(self, event):
+        for widget in (self.origin, self.axis_1, self.axis_2):
+            widget.finish_pick()
+        self.cancel_pick_requested.emit()
+        super().closeEvent(event)

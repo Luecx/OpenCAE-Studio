@@ -22,7 +22,7 @@ class AssemblyRegions:
     def surface(self): self._open(RegionProjection.FACETS)
 
     def edit(self, region):
-        self._open(region.preferred_projection or RegionProjection.NODES, region)
+        self._open(region.preferred_projection, region)
         return True
 
     def _open(self, projection, region=None):
@@ -34,7 +34,7 @@ class AssemblyRegions:
             RegionProjection.FACETS: (SurfaceDialog, "SURFACE_REGION"),
         }[projection]
         policy = policy_for_projection(projection)
-        options = [(label, value) for label, value in region_options(project) if not region or not any(item.operand.region_ref.entity_id == region.id for item in value.items if hasattr(item.operand, "region_ref"))]
+        options = [(label, value) for label, value in region_options(project, projections=(projection,)) if not region or not any(item.operand.region_ref.entity_id == region.id for item in value.items if hasattr(item.operand, "region_ref"))]
 
         def pick(_owner, done, finished):
             return begin_region_pick(project, self.parent.viewport, policy, done, finished=finished)
@@ -66,9 +66,26 @@ class AssemblyRegions:
                 self.store.add_entity(description, project.assembly.id, "regions", replacement)
             self.store.select(replacement)
 
+        preview_channel = f"assembly-region-dialog-{id(dialog)}"
+
+        def preview(definition):
+            self.parent.viewport.suspend_model_selection_preview()
+            self.parent.viewport.show_region_preview(
+                preview_channel, definition, color="#3296e6",
+                opacity=.62, point_size=17, show_point_labels=True,
+            )
+
+        def finish(_code):
+            self.parent.viewport.clear_region_preview(preview_channel)
+            self.parent.viewport.restore_model_selection_preview()
+            self._close(dialog)
+
+        dialog.region.value_changed.connect(preview)
         dialog.committed.connect(commit)
-        dialog.finished.connect(lambda _code: self._close(dialog))
+        dialog.finished.connect(finish)
         show_modeless_dialog(dialog)
+        dialog.begin_selection()
+        preview(dialog.region.definition())
 
     def _close(self, dialog):
         if hasattr(self.parent, "viewport"):

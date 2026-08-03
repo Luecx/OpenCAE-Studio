@@ -131,6 +131,7 @@ class ElementSelectionState:
                 show_edges=True,
                 name=self._name,
                 pickable=False,
+                reset_camera=False,
                 render=False,
             )
 

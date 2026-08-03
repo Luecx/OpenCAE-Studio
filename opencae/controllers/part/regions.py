@@ -14,7 +14,6 @@ from opencae.ui.dialogs.node_set import NodeSetDialog
 from opencae.ui.dialogs.reference_point import ReferencePointDialog
 from opencae.ui.dialogs.section_assignment import SectionAssignmentDialog
 from opencae.ui.dialogs.surface import SurfaceDialog
-from ..dialog_runner import get_values
 from ..region_selection import begin_region_pick, policy_for_projection, region_options
 
 
@@ -28,7 +27,7 @@ class PartRegions:
     def surface(self): self._region(RegionProjection.FACETS)
 
     def edit_region(self, region):
-        self._region(region.preferred_projection or RegionProjection.NODES, region)
+        self._region(region.preferred_projection, region)
 
     def _region(self, projection, region=None):
         part = self.ctx.active_part()
@@ -41,7 +40,7 @@ class PartRegions:
             RegionProjection.FACETS: (SurfaceDialog, "SURFACE_REGION"),
         }[projection]
         policy = policy_for_projection(projection)
-        options = _without_region(region_options(project, owner=part), getattr(region, "id", None))
+        options = _without_region(region_options(project, owner=part, projections=(projection,)), getattr(region, "id", None))
 
         def pick(_owner, done, finished):
             return begin_region_pick(project, self.ctx.parent.viewport, policy, done, default_owner=part, finished=finished)
@@ -77,26 +76,104 @@ class PartRegions:
                 self.ctx.store.add_entity(description, part.id, "regions", replacement)
             self.ctx.store.select(replacement)
 
+        preview_channel = f"part-region-dialog-{id(dialog)}"
+
+        def preview(definition):
+            self.ctx.parent.viewport.suspend_model_selection_preview()
+            self.ctx.parent.viewport.show_region_preview(
+                preview_channel, definition, color="#3296e6",
+                opacity=.62, point_size=17, show_point_labels=True,
+            )
+
+        def finish(_code):
+            self.ctx.parent.viewport.clear_region_preview(preview_channel)
+            self.ctx.parent.viewport.restore_model_selection_preview()
+            self._finish_dialog(dialog)
+
+        dialog.region.value_changed.connect(preview)
         dialog.committed.connect(commit)
-        dialog.finished.connect(lambda _code: self._finish_dialog(dialog))
+        dialog.finished.connect(finish)
         show_modeless_dialog(dialog)
+        dialog.begin_selection()
+        preview(dialog.region.definition())
 
     def coordinate_system(self):
         part = self.ctx.active_part()
-        if part is None: return
-        values = get_values(CoordinateSystemDialog(next_name("CSYS", part.coordinate_systems), [item.name for item in part.coordinate_systems], self.ctx.parent))
-        if not values: return
-        system = CoordinateSystem(name=values["name"], system_type=values["system_type"], origin=values["origin"], axis_1=values["axis_1"], axis_2=values["axis_2"], scope="Part")
-        self.ctx.store.add_entity(f"Created {system.name}", part.id, "coordinate_systems", system)
-        self.ctx.store.invalidate_scene("Coordinate system created")
+        if part is None:
+            return
+        dialog = CoordinateSystemDialog(
+            next_name("CSYS", part.coordinate_systems),
+            [item.name for item in part.coordinate_systems],
+            self.ctx.parent,
+        )
+        state = {"id": None}
+        self._dialogs.append(dialog)
+        dialog.pick_requested.connect(
+            lambda allowed, callback, finished: self.ctx.parent.viewport.begin_datum_reference_pick(
+                allowed, callback, finished
+            )
+        )
+        dialog.cancel_pick_requested.connect(self.ctx.parent.viewport.cancel_context_pick)
+
+        def commit(values):
+            system = CoordinateSystem(
+                id=state["id"] or None,
+                name=values["name"], system_type=values["system_type"],
+                origin=values["origin"], axis_1=values["axis_1"], axis_2=values["axis_2"],
+                scope="Part",
+            ) if state["id"] else CoordinateSystem(
+                name=values["name"], system_type=values["system_type"],
+                origin=values["origin"], axis_1=values["axis_1"], axis_2=values["axis_2"],
+                scope="Part",
+            )
+            if state["id"]:
+                self.ctx.store.replace_entity(f"Updated {system.name}", part.id, "coordinate_systems", system)
+            else:
+                self.ctx.store.add_entity(f"Created {system.name}", part.id, "coordinate_systems", system)
+                state["id"] = system.id
+            self.ctx.store.select(system)
+            self.ctx.store.invalidate_scene("Coordinate system changed")
+
+        dialog.apply_requested.connect(commit)
+        dialog.finished.connect(lambda _code: self._finish_dialog(dialog))
+        show_modeless_dialog(dialog)
 
     def reference_point(self):
         part = self.ctx.active_part()
-        if part is None: return
-        values = get_values(ReferencePointDialog(next_name("RP", part.reference_points), [item.name for item in part.reference_points], parent=self.ctx.parent))
-        if not values: return
-        point = ReferencePoint(name=values["name"], position=(values["x"], values["y"], values["z"]))
-        self.ctx.store.add_entity(f"Created {point.name}", part.id, "reference_points", point)
+        if part is None:
+            return
+        dialog = ReferencePointDialog(
+            next_name("RP", part.reference_points),
+            [item.name for item in part.reference_points],
+            parent=self.ctx.parent,
+        )
+        state = {"id": None}
+        self._dialogs.append(dialog)
+        dialog.pick_requested.connect(
+            lambda allowed, callback, finished: self.ctx.parent.viewport.begin_datum_reference_pick(
+                allowed, callback, finished
+            )
+        )
+        dialog.cancel_pick_requested.connect(self.ctx.parent.viewport.cancel_context_pick)
+
+        def commit(values):
+            point = ReferencePoint(
+                id=state["id"] or None, name=values["name"],
+                position=values["position"], scope="Part",
+            ) if state["id"] else ReferencePoint(
+                name=values["name"], position=values["position"], scope="Part",
+            )
+            if state["id"]:
+                self.ctx.store.replace_entity(f"Updated {point.name}", part.id, "reference_points", point)
+            else:
+                self.ctx.store.add_entity(f"Created {point.name}", part.id, "reference_points", point)
+                state["id"] = point.id
+            self.ctx.store.select(point)
+            self.ctx.store.invalidate_scene("Reference point changed")
+
+        dialog.apply_requested.connect(commit)
+        dialog.finished.connect(lambda _code: self._finish_dialog(dialog))
+        show_modeless_dialog(dialog)
 
     def section_assignment(self, assignment=None):
         part = self.ctx.active_part()
@@ -124,7 +201,7 @@ class PartRegions:
         dialog = SectionAssignmentDialog(
             project=project,
             sections=project.sections,
-            regions=region_options(project, owner=part, include_reference_points=False),
+            regions=region_options(project, owner=part, include_reference_points=False, projections=(RegionProjection.ELEMENTS,)),
             orientations=part.orientations,
             create_section=create_section,
             create_region=save,

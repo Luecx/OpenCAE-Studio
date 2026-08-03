@@ -5,7 +5,7 @@ from copy import deepcopy
 from opencae.model.mesh import create_mesh_control
 from opencae.model.selection import (
     RegionProjection, RegionRequirement, SelectableKind, SelectionPolicy,
-    definition_from_local_labels, local_geometry_tags,
+    definition_from_local_labels, local_geometry_tags, region_definition_error,
 )
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand, make_add_command, make_replace_command
 from opencae.ui.dialogs.mesh_control import MeshControlDialog
@@ -41,26 +41,53 @@ class PartMeshControls:
             )
             return begin_region_pick(self.ctx.store.project, self.ctx.parent.viewport, policy, done, default_owner=part, finished=finished)
 
-        return MeshControlDialog(
+        dialog = MeshControlDialog(
             self.ctx.store.project,
-            options=region_options(self.ctx.store.project, owner=part, include_reference_points=False),
+            options=region_options(
+                self.ctx.store.project, owner=part, include_reference_points=False,
+                projections=(RegionProjection.ELEMENTS,),
+            ),
             definition=definition or getattr(control, "target", None),
             pick_callback=pick,
             control=control,
             parent=self.ctx.parent,
         )
+        preview_channel = f"mesh-control-dialog-{id(dialog)}"
+
+        def requirement(scope):
+            dimension = {"Edge": 1, "Face": 2, "Cell": 3}[scope]
+            return RegionRequirement(RegionProjection.ELEMENTS, (dimension,), 0)
+
+        def preview(value):
+            self.ctx.parent.viewport.show_region_preview(
+                preview_channel, value, color="#3296e6",
+                opacity=.62, point_size=16, show_point_labels=False,
+            )
+
+        dialog.target.set_requirement(requirement(dialog.scope.currentText()), allow_part_local=True)
+        dialog.scope.currentTextChanged.connect(
+            lambda value: dialog.target.set_requirement(requirement(value), allow_part_local=True)
+        )
+        dialog.target.value_changed.connect(preview)
+        def finish(_code):
+            self.ctx.parent.viewport.cancel_context_pick()
+            self.ctx.parent.viewport.clear_region_preview(preview_channel)
+
+        dialog.finished.connect(finish)
+        preview(dialog.target.definition())
+        return dialog
 
     def _commit(self, part_id, values, control_id=None):
         part = self.ctx.store.project.try_resolve(part_id)
         if part is None: return
         dimension = {"Edge": 1, "Face": 2, "Cell": 3}[values["scope"]]
         target = values["target"]
-        invalid = [
-            item for item in target.items
-            if getattr(item.operand, "dimension", dimension) != dimension
-        ]
-        if invalid:
-            self.ctx.store.message.emit(f"Mesh-control scope {values['scope']} only accepts matching geometry entities")
+        requirement = RegionRequirement(RegionProjection.ELEMENTS, (dimension,), 0)
+        error = region_definition_error(
+            self.ctx.store.project, target, requirement, allow_part_local=True
+        )
+        if error:
+            self.ctx.store.message.emit(error)
             return
         current = self.ctx.store.project.try_resolve(control_id) if control_id else None
         replacement = create_mesh_control(

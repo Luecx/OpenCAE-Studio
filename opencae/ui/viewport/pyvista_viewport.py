@@ -4,6 +4,7 @@ from opencae.geometry import GeometryService
 from opencae.ui.core.theme import PALETTE
 from .context_pick import ContextPickManager
 from .datum_preview import DatumPreview
+from .datum_reference import reference_from_hit
 from .element_control_overlay import ElementControlOverlay
 from .model_selection_display import highlight_members, show_model_selection, show_pending_members
 from .pyvista_picker import PyVistaPicker
@@ -11,6 +12,7 @@ from .pyvista_scene import PyVistaScene
 from .result_query_state import ResultQueryState
 from .seed_label_events import handle_seed_label_event
 from .safe_qt_interactor import SafeQtInteractor
+from .scene_camera import camera_position, restore_camera
 from .selection_toolbar import SelectionToolbar
 from .viewport_canvas import ViewportCanvas
 
@@ -62,17 +64,34 @@ class PyVistaViewport(QWidget):
             self.display_mode = mode
             self.toolbar.set_display(mode)
             self.context_pick.refresh_for_display()
+            self._sync_meshability_legend()
             self.request_refresh()
     def set_stage(self, stage):
         self.toolbar.setVisible(True); self.toolbar.set_results_mode(stage == "RESULTS")
         if stage == self.stage: return
         previous = self.stage; self.stage = stage; self.picker.clear(False, False); self.picker.configure()
+        self._sync_meshability_legend()
         if stage != "RESULTS": self.result_query.configure(""); self.result_selection_panel.clear_selection()
         elif self._active_result is not None: self.result_selection_panel.show()
         if self.scene.same_display_context(previous,stage): self.scene.update_stage_overlays(stage)
         else: self.request_refresh()
+    def _sync_meshability_legend(self):
+        visible = (
+            self.stage == "PART"
+            and self.display_mode == "geometry"
+            and self.scene.snapshot is not None
+        )
+        self.canvas.meshability.setVisible(visible)
+        self.canvas._position_overlays()
     def handle_entities(self, entities): return self.context_pick.consume(entities)
     def begin_context_pick(self, allowed, callback): self.context_pick.begin(allowed,callback)
+    def begin_datum_reference_pick(self, allowed, callback, finished=None):
+        def selected(hit):
+            try:
+                callback(reference_from_hit(self, hit))
+            except (TypeError, ValueError) as exc:
+                self.message.emit(str(exc))
+        self.context_pick.begin(allowed, selected, finished=finished)
     def begin_selection_session(self, policy, callback, finished=None): self.context_pick.begin(policy, callback, finished=finished)
     def cancel_context_pick(self): self.context_pick.cancel()
     def show_datum_preview(self, values): self.datum_preview.show(self.plotter,self.scene,values)
@@ -88,27 +107,51 @@ class PyVistaViewport(QWidget):
         self._region_previews[str(channel)] = (definition, dict(style))
         if self._refresh_pending:
             return
+        camera = camera_position(self.plotter)
         self.scene.selection_preview_overlay.show_channel(
             self.plotter, self.scene, str(channel), definition, **style
         )
+        restore_camera(self.plotter, camera)
         self.plotter.render()
     def clear_region_preview(self, channel):
+        camera = camera_position(self.plotter)
         self._region_previews.pop(str(channel), None)
         self.scene.selection_preview_overlay.clear_channel(self.plotter, str(channel))
+        restore_camera(self.plotter, camera)
         self.plotter.render()
     def clear_region_previews(self, prefix=None):
+        camera = camera_position(self.plotter)
         channels = tuple(self._region_previews)
         if prefix is not None:
             channels = tuple(value for value in channels if value.startswith(str(prefix)))
         for channel in channels:
             self._region_previews.pop(channel, None)
             self.scene.selection_preview_overlay.clear_channel(self.plotter, channel)
+        restore_camera(self.plotter, camera)
         self.plotter.render()
+    def suspend_model_selection_preview(self):
+        """Temporarily hide tree-owned selection while a dialog edits it."""
+        camera = camera_position(self.plotter)
+        for channel in tuple(self._region_previews):
+            if channel.startswith("model-selection"):
+                self._region_previews.pop(channel, None)
+                self.scene.selection_preview_overlay.clear_channel(
+                    self.plotter, channel
+                )
+        self.scene.region_overlay.clear(self.plotter)
+        self.picker.clear(False, False)
+        restore_camera(self.plotter, camera)
+        self.plotter.render()
+    def restore_model_selection_preview(self):
+        entity = self.store.selection if self.store is not None else None
+        self.show_model_selection(entity)
     def _restore_region_previews(self, render=True):
+        camera = camera_position(self.plotter)
         for channel, (definition, style) in self._region_previews.items():
             self.scene.selection_preview_overlay.show_channel(
                 self.plotter, self.scene, channel, definition, **style
             )
+        restore_camera(self.plotter, camera)
         if render:
             self.plotter.render()
     def show_element_control_preview(self, selected, propagated):

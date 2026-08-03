@@ -119,6 +119,22 @@ def _walk(state, definition, diagnostics, *, stack, inherited_instance):
                     index,
                 ))
                 continue
+            expected_projection = state.requirement.projection
+            if (
+                expected_projection in {
+                    RegionProjection.NODES,
+                    RegionProjection.ELEMENTS,
+                    RegionProjection.FACETS,
+                }
+                and region.preferred_projection != expected_projection
+            ):
+                diagnostics.append(RegionDiagnostic(
+                    "incompatible_region_type",
+                    f"{region.name} is typed as {_projection_label(region.preferred_projection)}; "
+                    f"this target requires {_projection_label(expected_projection)}",
+                    index,
+                ))
+                continue
             nested_instance = _id(operand.instance_ref) or inherited_instance
             occurrence_error = _occurrence_error(state.project, nested_instance)
             if occurrence_error:
@@ -304,6 +320,16 @@ def _stale_geometry(part, operand):
 def _element_exists(part, element_id):
     target = int(element_id)
     return any(target in {int(value) for value in block.ids} for block in part.mesh.element_blocks)
+
+
+def _projection_label(value):
+    labels = {
+        RegionProjection.NODES: "Node Region",
+        RegionProjection.ELEMENTS: "Element Region",
+        RegionProjection.FACETS: "Surface Region",
+        RegionProjection.SINGLE_CONTROL_NODE: "Control Point",
+    }
+    return labels.get(RegionProjection(value), "region")
 
 
 def _geometry_label(dimension, tag):

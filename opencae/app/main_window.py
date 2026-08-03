@@ -50,7 +50,7 @@ class MainWindow(QMainWindow):
         self.actions.get(A.GENERATE_MESH).setEnabled(can_mesh)
         for action_id in (A.DATUM_POINT, A.DATUM_VECTOR, A.DATUM_PLANE, A.PART_RP, A.PART_CSYS, A.NODE_SET, A.ELEMENT_SET, A.SURFACE, A.SECTION_ASSIGNMENT):
             self.actions.get(action_id).setEnabled(has_part)
-        for action_id in (A.PARTITION, A.REBUILD_GEOMETRY, A.SUPPRESS_FEATURE, A.DEFAULT_SEED, A.EDGE_SEED, A.MESH_CONTROL, A.MESH_SETTINGS):
+        for action_id in (A.PARTITION, A.REBUILD_GEOMETRY, A.SUPPRESS_FEATURE, A.DEFAULT_SEED, A.EDGE_SEED, A.MESH_SETTINGS):
             self.actions.get(action_id).setEnabled(has_cad)
         self.actions.get(A.ELEMENT_CONTROLS).setEnabled(bool(part and part.mesh.element_blocks))
         project = self.context.store.project

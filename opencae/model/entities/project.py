@@ -19,7 +19,7 @@ from .supports.base import Support
 @register_model_type("project")
 @dataclass
 class Project(Entity):
-    schema_version: int = 18
+    schema_version: int = 20
     name: str = "Untitled"
     unit_system: str = "mm-N-s-°C"
     path: Path | None = None

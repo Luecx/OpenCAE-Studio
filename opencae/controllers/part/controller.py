@@ -8,8 +8,8 @@ from .geometry_settings import PartGeometrySettings
 from .element_controls import PartElementControls
 from .datums import PartDatums
 from .lifecycle import PartLifecycle
-from .mesh_controls import PartMeshControls
 from .mesh_generation import PartMeshGeneration
+from .mesh_settings import PartMeshSettings
 from .mesh_seeds import PartMeshSeeds
 from .partitions import PartPartitions
 from .regions import PartRegions
@@ -23,14 +23,15 @@ class PartController:
         self.partitions = PartPartitions(self.context)
         self.settings = PartGeometrySettings(self.context)
         self.seeds = PartMeshSeeds(self.context)
-        self.controls = PartMeshControls(self.context)
+        self.mesh_settings_manager = PartMeshSettings(self.context)
         self.element_control_manager = PartElementControls(self.context)
         self.generation = PartMeshGeneration(self.context)
         self.regions = PartRegions(self.context)
         self.datums = PartDatums(self.context)
         self._delegates = (
             self.lifecycle, self.partitions, self.settings, self.seeds,
-            self.controls, self.element_control_manager, self.generation, self.regions, self.datums,
+            self.mesh_settings_manager, self.element_control_manager, self.generation,
+            self.regions, self.datums,
         )
 
     def active_part(self):

@@ -5,6 +5,7 @@ from .entity_names import name_entities
 from .geometry_bounds import geometry_bounds
 from .geometry_patches import edge_patch, surface_patch, vertex_patch
 from .snapshots import GeometrySnapshot
+from .meshability import classify_cells
 
 
 def extract_geometry(gmsh, part_id: str, fingerprint: str, size_factor: float = 0.025) -> GeometrySnapshot:
@@ -16,7 +17,7 @@ def extract_geometry(gmsh, part_id: str, fingerprint: str, size_factor: float = 
     vertices = [vertex_patch(gmsh, tag) for tag in entities[0]]
     name_entities(gmsh, entities)
     adjacency = {tag: list(map(int, gmsh.model.getAdjacencies(2, tag)[0])) for tag in entities[2]}
-    return GeometrySnapshot(
+    snapshot = GeometrySnapshot(
         part_id=part_id,
         surfaces=[patch for patch in surfaces if patch is not None],
         edges=[patch for patch in edges if patch is not None],
@@ -26,3 +27,5 @@ def extract_geometry(gmsh, part_id: str, fingerprint: str, size_factor: float = 
         bounds=bounds,
         fingerprint=fingerprint,
     )
+    snapshot.cell_meshability = classify_cells(snapshot)
+    return snapshot

@@ -7,7 +7,6 @@ from .extract_mesh import extract_mesh
 from .fingerprint import part_fingerprint
 from .gmsh_session import gmsh_model
 from .history import rebuild_occ
-from .mesh_controls import apply_mesh_controls
 from .mesh_options import apply_default_seed, apply_general_options
 from .seeding import apply_edge_seeds
 from .seed_validation import edge_seed_mismatches
@@ -33,7 +32,6 @@ class GeometryService:
             rebuild_occ(gmsh, part)
             apply_general_options(gmsh, part)
             apply_default_seed(gmsh, part)
-            apply_mesh_controls(gmsh, part)
             apply_edge_seeds(gmsh, part)
             dimension = self._mesh_dimension(gmsh)
             gmsh.model.mesh.generate(dimension)
