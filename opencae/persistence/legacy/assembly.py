@@ -1,5 +1,6 @@
 from opencae.model.assembly import Assembly, Instance, create_constraint
 from opencae.model.core import EntityRef
+from opencae.model.selection import RegionProjection
 
 from .part import legacy_csys, legacy_reference_point, legacy_region
 
@@ -12,9 +13,11 @@ def legacy_assembly(data):
     )}
     assembly = Assembly(**data)
     assembly.instances = [legacy_instance(item) for item in collections["instances"]]
-    assembly.node_sets = [legacy_region(item) for item in collections["node_sets"]]
-    assembly.element_sets = [legacy_region(item) for item in collections["element_sets"]]
-    assembly.surfaces = [legacy_region(item) for item in collections["surfaces"]]
+    assembly.regions = [
+        *(legacy_region(item, projection=RegionProjection.NODES) for item in collections["node_sets"]),
+        *(legacy_region(item, projection=RegionProjection.ELEMENTS) for item in collections["element_sets"]),
+        *(legacy_region(item, projection=RegionProjection.FACETS) for item in collections["surfaces"]),
+    ]
     assembly.coordinate_systems = [legacy_csys(item) for item in collections["coordinate_systems"]]
     assembly.reference_points = [legacy_reference_point(item) for item in collections["reference_points"]]
     assembly.constraints = [legacy_constraint(item) for item in collections["constraints"]]

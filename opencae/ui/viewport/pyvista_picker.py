@@ -1,8 +1,9 @@
 from .cell_selection import pick_cell
 from .element_selection_state import ElementSelectionState
-from .picker_entities import actor_entity, actor_kind, additive_selection
+from .picker_entities import actor_entity, actor_kind, selection_operation
 from .point_selection_state import PointSelectionState
 from .pyvista_geometry import set_actor_selected
+from opencae.model.selection import SelectableKind, SelectionOperation, ViewportSelection
 
 
 class PyVistaPicker:
@@ -12,7 +13,7 @@ class PyVistaPicker:
     def enable(self): self.configure()
     def configure(self):
         try: self.owner.plotter.disable_picking()
-        except Exception: pass
+        except Exception as exc: self.owner.message.emit(f"Could not reset viewport picker: {exc}")
         mode = self.owner.selection_mode
         if self.owner.stage == "RESULTS":
             self.update_pickability(); return
@@ -23,11 +24,15 @@ class PyVistaPicker:
                 self.owner.plotter.enable_surface_point_picking(callback=self.elements.picked, left_clicking=True, show_message=False, show_point=False, picker="cell", pickable_window=False)
             else:
                 self.owner.plotter.enable_mesh_picking(callback=self.picked_actor, use_actor=True, show=False, show_message=False, picker="hardware", left_clicking=True)
-        except Exception: pass
+        except Exception as exc:
+            self.owner.message.emit(f"Could not configure {mode} picking: {exc}")
         self.update_pickability()
     def clear(self, emit=True, render=True):
         for actor in tuple(self.selected_actors): set_actor_selected(actor, False, actor_kind(self.owner.scene, actor))
         self.selected_actors.clear(); self.selected_cells.clear(); self.points.clear(); self.elements.clear()
+        preview = getattr(self.owner.scene, "selection_preview_overlay", None)
+        if preview is not None:
+            preview.reapply_actor_styles()
         if emit: self.owner.selection_changed.emit(None)
         if render: self.owner.plotter.render()
     def reset(self):
@@ -39,43 +44,58 @@ class PyVistaPicker:
         if self.owner.selection_mode == "cell": pick_cell(self, actor); return
         allowed = self.owner.selection_mode in {"auto", kind} or (self.owner.selection_mode == "point" and kind in {"vertex","rp","datum_point"})
         if not allowed: return
-        if not additive_selection(): self.clear(False, False)
-        if actor in self.selected_actors:
-            self.selected_actors.remove(actor); set_actor_selected(actor, False, kind)
+        operation = selection_operation()
+        hit = actor_entity(scene, actor)
+        if hit is None: return
+        if operation == SelectionOperation.REPLACE:
+            self.clear(False, False)
+            self.selected_actors.add(actor); set_actor_selected(actor, True, kind)
+        elif operation == SelectionOperation.REMOVE:
+            self.selected_actors.discard(actor); set_actor_selected(actor, False, kind)
         else:
             self.selected_actors.add(actor); set_actor_selected(actor, True, kind)
-        self.emit_entities([item for item in (actor_entity(scene, current) for current in self.selected_actors) if item])
-    def emit_entities(self, entities):
-        if self.owner.handle_entities(entities): self.clear(False, False)
+        self.emit_entities(
+            [item for item in (actor_entity(scene, current) for current in self.selected_actors) if item],
+            [hit.with_operation(operation)],
+        )
+    def emit_entities(self, entities, event_entities=None):
+        if self.owner.handle_entities(event_entities or entities): self.clear(False, False)
         else:
-            value = {"name": entities[0]["name"], "entities": entities} if entities else None; self.owner.selection_changed.emit(value)
+            self.owner.selection_changed.emit(ViewportSelection.from_hits(entities) if entities else None)
         self.owner.plotter.render()
-    def show_labels(self, labels, render=True):
-        from opencae.model.core import region_member_label
+    def show_labels(self, values, render=True):
+        from opencae.model.selection import RegionDefinition, selection_item_label
         project = self.owner.store.project
-        self.clear(False, False); wanted = {region_member_label(project, value) for value in labels}
+        definition = RegionDefinition.from_values(values)
+        self.clear(False, False)
+        wanted = {selection_item_label(project, item) for item in definition.items}
         actors = (*self.owner.scene.face_actors, *self.owner.scene.edge_actors, *self.owner.scene.vertex_actors, *self.owner.scene.reference_actors, *self.owner.scene.datum_actors)
         for actor in actors:
             entity = actor_entity(self.owner.scene, actor)
-            if entity and entity["name"] in wanted:
+            if entity and entity.label in wanted:
                 self.selected_actors.add(actor); set_actor_selected(actor, True, actor_kind(self.owner.scene, actor))
-        for label in (value for value in wanted if ".Cell-" in value or value.startswith("Cell-")):
-            prefix, raw = label.rsplit(".", 1) if "." in label else (None, label)
-            try: self.selected_cells.add((prefix, int(raw.split("-", 1)[1])))
-            except Exception: continue
-        for actor, reference in self.owner.scene.face_actors.items():
-            instance = getattr(reference, "instance_name", None); tag = getattr(reference, "tag", reference)
-            snapshot = self.owner.scene.snapshot_for(instance)
-            active = snapshot and any(inst == instance and cell in snapshot.surface_to_cells.get(tag, ()) for inst, cell in self.selected_cells)
-            if active: self.selected_actors.add(actor); set_actor_selected(actor, True, "face")
         if render: self.owner.plotter.render()
     def update_pickability(self):
         mode = self.owner.selection_mode; scene = self.owner.scene
         if self.owner.stage == "RESULTS": mode = "none"
+        context = self.owner.context_pick
+        if context.active:
+            kinds = context.policy.accepted_kinds
+            for actor in scene.face_actors: actor.SetPickable(SelectableKind.GEOMETRY_FACE in kinds or SelectableKind.GEOMETRY_CELL in kinds)
+            for actor in scene.edge_actors: actor.SetPickable(SelectableKind.GEOMETRY_EDGE in kinds)
+            for actor in scene.vertex_actors:
+                actor.SetPickable(SelectableKind.GEOMETRY_VERTEX in kinds); actor.SetVisibility(self.owner.display_mode == "geometry")
+            for actor in scene.reference_actors: actor.SetPickable(SelectableKind.REFERENCE_POINT in kinds)
+            for actor in scene.datum_actors: actor.SetPickable(False)
+            mesh_pickable = self.owner.display_mode == "mesh" and bool(kinds & {SelectableKind.MESH_NODE, SelectableKind.MESH_ELEMENT, SelectableKind.MESH_FACET})
+            if scene.mesh_actor is not None: scene.mesh_actor.SetPickable(mesh_pickable)
+            for actor in scene.mesh_actors: actor.SetPickable(mesh_pickable)
+            return
         for actor in scene.face_actors: actor.SetPickable(mode in {"auto","face","cell"})
         for actor in scene.edge_actors: actor.SetPickable(mode in {"auto","edge"})
         for actor in scene.vertex_actors: actor.SetPickable(mode in {"auto","point"}); actor.SetVisibility(mode in {"auto","point"})
         for actor in scene.reference_actors: actor.SetPickable(mode in {"auto","point"})
-        for actor, ref in scene.datum_actors.items(): actor.SetPickable(mode == "auto" or (mode == "point" and ref.get("kind") == "datum_point"))
+        for actor, ref in scene.datum_actors.items():
+            actor.SetPickable(mode == "auto" or (mode == "point" and getattr(ref, "kind", None) == SelectableKind.DATUM_POINT))
         if scene.mesh_actor is not None: scene.mesh_actor.SetPickable(mode in {"point","element"})
         for actor in scene.mesh_actors: actor.SetPickable(mode in {"point","element"})

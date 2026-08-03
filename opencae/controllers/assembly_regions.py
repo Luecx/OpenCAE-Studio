@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from opencae.model.regions import create_region
-from opencae.model.core import region_member_label
+from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
 from opencae.model.naming import next_name
+from opencae.model.regions import create_region
+from opencae.model.selection import RegionProjection, region_definition_error
 from opencae.ui.dialogs.element_set import ElementSetDialog
 from opencae.ui.dialogs.node_set import NodeSetDialog
 from opencae.ui.dialogs.surface import SurfaceDialog
-
-from .region_dialog_session import RegionDialogSession
+from .region_selection import begin_region_pick, policy_for_projection, region_options
 
 
 class AssemblyRegions:
@@ -16,55 +16,62 @@ class AssemblyRegions:
         self.store = controller.store
         self.parent = controller.parent
         self.dialogs = []
-        self.session = RegionDialogSession(self.store, self.parent, self.dialogs)
 
-    def node_set(self):
-        self._open(NodeSetDialog, "node_sets", "Node Set")
-
-    def element_set(self):
-        self._open(ElementSetDialog, "element_sets", "Element Set")
-
-    def surface(self):
-        self._open(SurfaceDialog, "surfaces", "Surface")
+    def node_set(self): self._open(RegionProjection.NODES)
+    def element_set(self): self._open(RegionProjection.ELEMENTS)
+    def surface(self): self._open(RegionProjection.FACETS)
 
     def edit(self, region):
-        specifications = (
-            ("node_sets", "Node Set", NodeSetDialog),
-            ("element_sets", "Element Set", ElementSetDialog),
-            ("surfaces", "Surface", SurfaceDialog),
-        )
-        for target, kind, dialog_cls in specifications:
-            if region in getattr(self.store.project.assembly, target):
-                self._open(dialog_cls, target, kind, region)
-                return True
-        return False
+        self._open(region.preferred_projection or RegionProjection.NODES, region)
+        return True
 
-    def _open(self, dialog_cls, target, kind, region=None):
-        collection = getattr(self.store.project.assembly, target)
-        prefix = {"node_sets": "NODE_SET", "element_sets": "ELEMENT_SET", "surfaces": "SURFACE"}[target]
+    def _open(self, projection, region=None):
+        project = self.store.project
+        projection = RegionProjection(projection)
+        dialog_cls, prefix = {
+            RegionProjection.NODES: (NodeSetDialog, "NODE_REGION"),
+            RegionProjection.ELEMENTS: (ElementSetDialog, "ELEMENT_REGION"),
+            RegionProjection.FACETS: (SurfaceDialog, "SURFACE_REGION"),
+        }[projection]
+        policy = policy_for_projection(projection)
+        options = [(label, value) for label, value in region_options(project) if not region or not any(item.operand.region_ref.entity_id == region.id for item in value.items if hasattr(item.operand, "region_ref"))]
+
+        def pick(_owner, done, finished):
+            return begin_region_pick(project, self.parent.viewport, policy, done, finished=finished)
+
+        def validate(definition):
+            return region_definition_error(project, definition, policy.requirement)
+
         dialog = dialog_cls(
             region=region,
-            selection_provider=self.controller._selection_labels,
-            default_name=next_name(prefix, collection),
-            existing_names=[item.name for item in collection],
+            project=project,
+            options=options,
+            pick_callback=pick,
+            validator=validate,
+            default_name=next_name(prefix, project.assembly.regions),
+            existing_names=[item.name for item in project.assembly.regions],
             parent=self.parent,
-            member_formatter=lambda member: region_member_label(self.store.project, member),
         )
-        self.session.open(dialog, lambda values: self._commit(target, kind, region, values))
+        self.dialogs.append(dialog)
+        existing_id = getattr(region, "id", None)
 
-    def _commit(self, target, kind, existing, values):
-        if existing is not None:
-            values["id"] = existing.id
-        region = create_region(kind, scope="Assembly", **values)
-
-        def apply(project):
-            collection = getattr(project.assembly, target)
-            if existing is None:
-                collection.append(region)
+        def commit(values):
+            payload = dict(values)
+            if existing_id: payload["id"] = existing_id
+            replacement = create_region("Region", scope="Assembly", preferred_projection=projection, **payload)
+            description = f"{'Edited' if existing_id else 'Created'} assembly region {replacement.name}"
+            if existing_id:
+                self.store.replace_entity(description, project.assembly.id, "regions", replacement)
             else:
-                index = next(i for i, item in enumerate(collection) if item.id == existing.id)
-                collection[index] = region
+                self.store.add_entity(description, project.assembly.id, "regions", replacement)
+            self.store.select(replacement)
 
-        action = "Edited" if existing else "Created"
-        self.store.mutate(f"{action} assembly {region.name}", apply)
-        self.store.select(region)
+        dialog.committed.connect(commit)
+        dialog.finished.connect(lambda _code: self._close(dialog))
+        show_modeless_dialog(dialog)
+
+    def _close(self, dialog):
+        if hasattr(self.parent, "viewport"):
+            self.parent.viewport.cancel_context_pick()
+        if dialog in self.dialogs:
+            self.dialogs.remove(dialog)

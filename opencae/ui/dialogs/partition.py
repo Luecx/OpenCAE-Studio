@@ -1,78 +1,222 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QDialog,QDoubleSpinBox,QFormLayout,QLabel,QLineEdit,QMessageBox,QStackedWidget,QVBoxLayout,QWidget
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
-from opencae.ui.core.controls import dialog_buttons
-from opencae.ui.core.widgets import ChevronComboBox,PointSelectionWidget,ReferenceSelector,SelectionMembersWidget
+from opencae.model.selection import RegionDefinition, local_geometry_tags
+from opencae.model.entities.geometry import PartitionEdgeFeature, PartitionFaceFeature
+from opencae.ui.core.widgets import ChevronComboBox, PointSelectionWidget, ReferenceSelector, CompactRegionSelector
 
-PARTITION_TYPES=('Cell by plane','Face by two points','Edge at parameter','Edge at vertex')
+PARTITION_TYPES = (
+    "Cell by plane",
+    "Face by two points",
+    "Edge at parameter",
+    "Edge at vertex",
+)
+
 
 class PartitionDialog(QDialog):
-    def __init__(self,selection_provider,point_provider,feature=None,parent=None,datum_planes=(),create_datum_plane=None):
-        super().__init__(parent); self.selection_provider=selection_provider; self.point_provider=point_provider; self.feature=feature; self.datum_planes=list(datum_planes); self.create_datum_plane=create_datum_plane; self.setWindowTitle('Edit Partition' if feature else 'Create Partition'); self.setMinimumWidth(660); self.setWindowModality(Qt.WindowModality.NonModal)
-        root=QVBoxLayout(self); root.setContentsMargins(18,16,18,14); root.setSpacing(12); title=QLabel(self.windowTitle()); title.setObjectName('PanelTitle'); root.addWidget(title)
-        form=QFormLayout(); self.name=QLineEdit(getattr(feature,'name','Partition-1')); self.kind=ChevronComboBox(); self.kind.addItems(PARTITION_TYPES); self.kind.setCurrentText(self._kind_from_feature(feature)); form.addRow('History feature',self.name); form.addRow('Partition method',self.kind); root.addLayout(form)
-        self.stack=QStackedWidget(); root.addWidget(self.stack); self._build_pages(); self.kind.currentIndexChanged.connect(self.stack.setCurrentIndex); self.stack.setCurrentIndex(PARTITION_TYPES.index(self.kind.currentText())); self._load(feature)
-        help_text=QLabel('The dialog is modeless: select entities in the viewport with left click, use Shift for multiple selection, then press “Use current selection”.'); help_text.setWordWrap(True); help_text.setObjectName('MutedText'); root.addWidget(help_text)
-        buttons=dialog_buttons(); buttons.accepted.connect(self._accept); buttons.rejected.connect(self.reject); root.addWidget(buttons)
-    def _members(self,dimension):
-        return [item for item in self.selection_provider(dimension)]
-    def _selector(self,dimension):return SelectionMembersWidget(selection_provider=lambda:self._members(dimension))
+    committed = pyqtSignal(object)
+
+    def __init__(
+        self,
+        project,
+        part,
+        point_provider,
+        feature=None,
+        parent=None,
+        *,
+        region_options=(),
+        pick_callback=None,
+        datum_planes=(),
+        create_datum_plane=None,
+    ):
+        super().__init__(parent)
+        self.project = project
+        self.part_id = part.id
+        self.point_provider = point_provider
+        self.feature = feature
+        self.region_options = tuple(region_options)
+        self.pick_callback = pick_callback
+        self.datum_planes = list(datum_planes)
+        self.create_datum_plane = create_datum_plane
+        self.setWindowTitle("Edit Partition" if feature else "Create Partition")
+        self.setMinimumWidth(780)
+        self.setWindowModality(Qt.WindowModality.NonModal)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(18, 16, 18, 14)
+        root.setSpacing(12)
+        title = QLabel(self.windowTitle()); title.setObjectName("PanelTitle"); root.addWidget(title)
+        form = QFormLayout()
+        self.name = QLineEdit(getattr(feature, "name", "Partition-1"))
+        self.kind = ChevronComboBox(); self.kind.addItems(PARTITION_TYPES)
+        self.kind.setCurrentText(self._kind_from_feature(feature))
+        form.addRow("History feature", self.name)
+        form.addRow("Partition method", self.kind)
+        root.addLayout(form)
+
+        self.stack = QStackedWidget(); root.addWidget(self.stack)
+        self._build_pages()
+        self.kind.currentIndexChanged.connect(self.stack.setCurrentIndex)
+        self.stack.setCurrentIndex(PARTITION_TYPES.index(self.kind.currentText()))
+        self._load(feature)
+
+        help_text = QLabel(
+            "Pick geometry directly in the viewport. A normal click replaces the target, "
+            "Shift adds and Ctrl removes. Named part regions can be added from the list."
+        )
+        help_text.setWordWrap(True); help_text.setObjectName("MutedText"); root.addWidget(help_text)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Apply
+            | QDialogButtonBox.StandardButton.Close
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName("PrimaryButton")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(lambda: self._commit(True))
+        buttons.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(lambda: self._commit(False))
+        buttons.rejected.connect(self.close)
+        root.addWidget(buttons)
+
+    def _target(self, dimension):
+        callback = None
+        if self.pick_callback:
+            callback = lambda owner, done, finished, dim=dimension: self.pick_callback(dim, owner, done, finished)
+        return CompactRegionSelector(
+            self.project,
+            RegionDefinition(),
+            self.region_options,
+            callback,
+            parent=self,
+            allow_part_local=True,
+        )
+
     def _build_pages(self):
-        plane=QWidget(); layout=QVBoxLayout(plane); layout.addWidget(QLabel('Target cells')); self.plane_targets=self._selector(3); layout.addWidget(self.plane_targets); form=QFormLayout(); self.datum_plane=ReferenceSelector((("Manual origin / normal",""),*self.datum_planes),"",self._create_datum_plane if self.create_datum_plane else None); self.origin=[self._number(0.0) for _ in range(3)]; self.normal=[self._number(v) for v in (1.0,0.0,0.0)]; form.addRow('Datum plane',self.datum_plane); form.addRow('Plane origin X',self.origin[0]); form.addRow('Plane origin Y',self.origin[1]); form.addRow('Plane origin Z',self.origin[2]); form.addRow('Plane normal X',self.normal[0]); form.addRow('Plane normal Y',self.normal[1]); form.addRow('Plane normal Z',self.normal[2]); layout.addLayout(form); self.stack.addWidget(plane)
-        face=QWidget(); layout=QVBoxLayout(face); layout.addWidget(QLabel('Target face')); self.face_targets=self._selector(2); layout.addWidget(self.face_targets); layout.addWidget(QLabel('Two picked points defining the partition line')); self.face_points=PointSelectionWidget(selection_provider=self.point_provider); layout.addWidget(self.face_points); self.stack.addWidget(face)
-        edge_parameter=QWidget(); layout=QVBoxLayout(edge_parameter); layout.addWidget(QLabel('Target edge')); self.edge_parameter_targets=self._selector(1); layout.addWidget(self.edge_parameter_targets); form=QFormLayout(); self.fraction=self._number(0.5); self.fraction.setRange(0.000001,0.999999); form.addRow('Normalized parameter',self.fraction); layout.addLayout(form); self.stack.addWidget(edge_parameter)
-        edge_vertex=QWidget(); layout=QVBoxLayout(edge_vertex); layout.addWidget(QLabel('Target edge')); self.edge_vertex_targets=self._selector(1); layout.addWidget(self.edge_vertex_targets); layout.addWidget(QLabel('Splitting vertex')); self.edge_vertex=self._selector(0); layout.addWidget(self.edge_vertex); self.stack.addWidget(edge_vertex)
+        plane = QWidget(); layout = QVBoxLayout(plane)
+        layout.addWidget(QLabel("Target cell")); self.plane_targets = self._target(3); layout.addWidget(self.plane_targets)
+        form = QFormLayout()
+        self.datum_plane = ReferenceSelector(
+            (("Manual origin / normal", ""), *self.datum_planes),
+            "",
+            self._create_datum_plane if self.create_datum_plane else None,
+        )
+        self.origin = [self._number(0.0) for _ in range(3)]
+        self.normal = [self._number(value) for value in (1.0, 0.0, 0.0)]
+        form.addRow("Datum plane", self.datum_plane)
+        for axis, editor in zip("XYZ", self.origin): form.addRow(f"Plane origin {axis}", editor)
+        for axis, editor in zip("XYZ", self.normal): form.addRow(f"Plane normal {axis}", editor)
+        layout.addLayout(form); self.stack.addWidget(plane)
+
+        face = QWidget(); layout = QVBoxLayout(face)
+        layout.addWidget(QLabel("Target face")); self.face_targets = self._target(2); layout.addWidget(self.face_targets)
+        layout.addWidget(QLabel("Two picked positions defining the partition line"))
+        self.face_points = PointSelectionWidget(selection_provider=self.point_provider)
+        layout.addWidget(self.face_points); self.stack.addWidget(face)
+
+        edge_parameter = QWidget(); layout = QVBoxLayout(edge_parameter)
+        layout.addWidget(QLabel("Target edge")); self.edge_parameter_targets = self._target(1); layout.addWidget(self.edge_parameter_targets)
+        form = QFormLayout(); self.fraction = self._number(0.5); self.fraction.setRange(0.000001, 0.999999)
+        form.addRow("Normalized parameter", self.fraction); layout.addLayout(form); self.stack.addWidget(edge_parameter)
+
+        edge_vertex = QWidget(); layout = QVBoxLayout(edge_vertex)
+        layout.addWidget(QLabel("Target edge")); self.edge_vertex_targets = self._target(1); layout.addWidget(self.edge_vertex_targets)
+        layout.addWidget(QLabel("Splitting vertex")); self.edge_vertex = self._target(0); layout.addWidget(self.edge_vertex)
+        self.stack.addWidget(edge_vertex)
+
     @staticmethod
-    def _number(value):editor=QDoubleSpinBox(); editor.setRange(-1e30,1e30); editor.setDecimals(8); editor.setValue(value); return editor
+    def _number(value):
+        editor = QDoubleSpinBox(); editor.setRange(-1e30, 1e30); editor.setDecimals(8); editor.setValue(value)
+        return editor
+
     @staticmethod
     def _kind_from_feature(feature):
-        if feature is None:return PARTITION_TYPES[0]
-        if feature.feature_type=='Partition Face':return PARTITION_TYPES[1]
-        if feature.feature_type=='Partition Edge':return PARTITION_TYPES[3] if feature.parameters.get('method')=='Vertex' else PARTITION_TYPES[2]
+        if feature is None: return PARTITION_TYPES[0]
+        if isinstance(feature, PartitionFaceFeature): return PARTITION_TYPES[1]
+        if isinstance(feature, PartitionEdgeFeature):
+            return PARTITION_TYPES[3] if feature.method == "Vertex" else PARTITION_TYPES[2]
         return PARTITION_TYPES[0]
-    def _load(self,feature):
-        if feature is None:return
-        kind=self._kind_from_feature(feature)
-        if kind==PARTITION_TYPES[0]:
-            self.plane_targets.set_members(feature.references); self.datum_plane.setCurrentValue(feature.parameters.get('datum_plane_id','')); origin=feature.parameters.get('origin',(0,0,0)); normal=feature.parameters.get('normal',(1,0,0)); [self.origin[i].setValue(origin[i]) for i in range(3)]; [self.normal[i].setValue(normal[i]) for i in range(3)]
-        elif kind==PARTITION_TYPES[1]:self.face_targets.set_members(feature.references); self.face_points.set_points(feature.parameters.get('points',()))
-        elif kind==PARTITION_TYPES[2]:self.edge_parameter_targets.set_members(feature.references); self.fraction.setValue(feature.parameters.get('fraction',0.5))
-        else:self.edge_vertex_targets.set_members(feature.references); self.edge_vertex.set_members(feature.parameters.get('vertices',()))
-    def _accept(self):
-        values=self.values()
-        if not values['name']:QMessageBox.warning(self,'Invalid partition','Enter a feature name.'); return
-        required=(1 if values['partition_type']!='Cell by plane' else 1)
-        if len(values['references'])<required:QMessageBox.warning(self,'Missing target','Capture the target geometry first.'); return
-        if values['partition_type']=='Face by two points' and len(values['parameters']['points'])!=2:QMessageBox.warning(self,'Missing points','Pick exactly two points on the target face.'); return
-        if values['partition_type']=='Edge at vertex' and len(values['parameters']['vertices'])!=1:QMessageBox.warning(self,'Missing vertex','Select exactly one vertex.'); return
-        self.accept()
+
+    def _load(self, feature):
+        if feature is None: return
+        kind = self._kind_from_feature(feature)
+        if kind == PARTITION_TYPES[0]:
+            self.plane_targets.set_definition(feature.target)
+            self.datum_plane.setCurrentValue(getattr(getattr(feature, "datum_plane_ref", None), "entity_id", ""))
+            origin = feature.origin; normal = feature.normal
+            for index in range(3): self.origin[index].setValue(origin[index]); self.normal[index].setValue(normal[index])
+        elif kind == PARTITION_TYPES[1]:
+            self.face_targets.set_definition(feature.target)
+            self.face_points.set_points(feature.points)
+        elif kind == PARTITION_TYPES[2]:
+            self.edge_parameter_targets.set_definition(feature.target)
+            self.fraction.setValue(feature.fraction)
+        else:
+            self.edge_vertex_targets.set_definition(feature.target)
+            self.edge_vertex.set_definition(getattr(feature, "split_target", RegionDefinition()))
+
     def values(self):
-        kind=self.kind.currentText(); base={'name':self.name.text().strip(),'partition_type':kind}
-        if kind==PARTITION_TYPES[0]:
-            datum_id=self.datum_plane.currentValue(); datum=next((item for item in self.datum_planes if getattr(item,'id',None)==datum_id),None)
-            if datum is not None: parameters={'origin':tuple(datum.origin),'normal':tuple(datum.normal),'datum_plane_id':datum_id}
-            else: parameters={'origin':tuple(e.value() for e in self.origin),'normal':tuple(e.value() for e in self.normal)}
-            base.update(references=self.plane_targets.members(),parameters=parameters)
-        elif kind==PARTITION_TYPES[1]:base.update(references=self.face_targets.members(),parameters={'points':self.face_points.points()})
-        elif kind==PARTITION_TYPES[2]:base.update(references=self.edge_parameter_targets.members(),parameters={'method':'Parameter','fraction':self.fraction.value()})
-        else:base.update(references=self.edge_vertex_targets.members(),parameters={'method':'Vertex','vertices':self.edge_vertex.members()})
+        kind = self.kind.currentText()
+        base = {"name": self.name.text().strip(), "partition_type": kind}
+        if kind == PARTITION_TYPES[0]:
+            datum_id = self.datum_plane.currentValue()
+            datum = next((item for item in self.datum_planes if getattr(item, "id", None) == datum_id), None)
+            if datum is not None:
+                parameters = {"origin": tuple(datum.origin), "normal": tuple(datum.normal), "datum_plane_id": datum_id}
+            else:
+                parameters = {
+                    "origin": tuple(editor.value() for editor in self.origin),
+                    "normal": tuple(editor.value() for editor in self.normal),
+                }
+            base.update(target=self.plane_targets.definition(), split_target=RegionDefinition(), values=parameters)
+        elif kind == PARTITION_TYPES[1]:
+            base.update(target=self.face_targets.definition(), split_target=RegionDefinition(), values={"points": self.face_points.points()})
+        elif kind == PARTITION_TYPES[2]:
+            base.update(
+                target=self.edge_parameter_targets.definition(),
+                split_target=RegionDefinition(),
+                values={"method": "Parameter", "fraction": self.fraction.value()},
+            )
+        else:
+            base.update(
+                target=self.edge_vertex_targets.definition(),
+                split_target=self.edge_vertex.definition(),
+                values={"method": "Vertex"},
+            )
         return base
 
-    def update_selection(self):
-        widget = {
-            PARTITION_TYPES[0]: self.plane_targets,
-            PARTITION_TYPES[1]: self.face_targets,
-            PARTITION_TYPES[2]: self.edge_parameter_targets,
-            PARTITION_TYPES[3]: self.edge_vertex_targets,
-        }.get(self.kind.currentText())
-        if widget is not None:
-            widget.capture()
+    def _commit(self, close_after):
+        values = self.values()
+        if not values["name"]:
+            QMessageBox.warning(self, "Invalid partition", "Enter a feature name."); return
+        dimension = {PARTITION_TYPES[0]: 3, PARTITION_TYPES[1]: 2, PARTITION_TYPES[2]: 1, PARTITION_TYPES[3]: 1}[values["partition_type"]]
+        part = self.project.try_resolve(self.part_id)
+        if part is None:
+            QMessageBox.warning(self, "Missing part", "The edited part no longer exists."); return
+        tags = local_geometry_tags(part, values["target"], dimension)
+        if len(tags) != 1:
+            QMessageBox.warning(self, "Invalid target", f"Select exactly one geometry {('vertex','edge','face','cell')[dimension]}."); return
+        if values["partition_type"] == PARTITION_TYPES[1] and len(values["values"]["points"]) != 2:
+            QMessageBox.warning(self, "Missing points", "Pick exactly two positions on the target face."); return
+        if values["partition_type"] == PARTITION_TYPES[3] and len(local_geometry_tags(part, values["split_target"], 0)) != 1:
+            QMessageBox.warning(self, "Missing vertex", "Select exactly one splitting vertex."); return
+        self.committed.emit(values)
+        if close_after: self.accept()
 
     def _create_datum_plane(self, owner, done):
         def created(value):
-            if value is not None and value not in self.datum_planes:
-                self.datum_planes.append(value)
+            if value is not None and value not in self.datum_planes: self.datum_planes.append(value)
             done(value)
         self.create_datum_plane(owner, created)

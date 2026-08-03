@@ -36,7 +36,7 @@ class DatumDialogBase(QDialog):
 
     def emit_preview(self, *_):
         try: self.preview_requested.emit(self.values())
-        except Exception: pass
+        except (KeyError, TypeError, ValueError): return
 
     def _apply(self):
         name = self.name.text().strip()

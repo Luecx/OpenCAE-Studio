@@ -10,6 +10,7 @@ from opencae.model.naming import next_name
 from opencae.persistence.project_io import load_project, save_project
 from opencae.ui.dialogs.preferences import PreferencesDialog
 from opencae.ui.dialogs.project_settings import ProjectSettingsDialog
+from opencae.store.commands import CompositeCommand, UpdateFieldCommand
 from .dialog_runner import get_values
 
 
@@ -35,7 +36,7 @@ class ProjectController:
             self.store.message.emit(f"Could not open results: {exc}"); return
         name = next_name(Path(path).stem or "Solution", self.store.project.results)
         result = ResultSet(name=name, job_ref=None, source_file=str(Path(path)), status="Available", fields=fields, metadata={"external": True})
-        self.store.mutate(f"Opened results {Path(path).name}", lambda project: project.results.append(result))
+        self.store.add_entity(f"Opened results {Path(path).name}", self.store.project.id, "results", result)
         self.parent.show_solution(result)
 
     def save(self, save_as=False):
@@ -52,7 +53,11 @@ class ProjectController:
         values = get_values(dialog)
         if values:
             self.settings.selected_unit_system = values["unit_system"]
-            self.store.mutate("Updated project settings", lambda project: self._apply_project_settings(project, values))
+            command = CompositeCommand((
+                UpdateFieldCommand(self.store.project.id, "name", self.store.project.name, values["name"]),
+                UpdateFieldCommand(self.store.project.id, "unit_system", self.store.project.unit_system, values["unit_system"]),
+            ))
+            self.store.execute("Updated project settings", command)
 
     def preferences(self, page="General"):
         values = get_values(PreferencesDialog(self.settings, self.parent, page))
@@ -70,7 +75,7 @@ class ProjectController:
     def set_unit_system(self, name):
         if name not in {item.name for item in self.settings.unit_systems}: return
         self.settings.selected_unit_system = name
-        self.store.mutate(f"Changed unit system to {name}", lambda project: setattr(project, "unit_system", name))
+        self.store.execute(f"Changed unit system to {name}", UpdateFieldCommand(self.store.project.id, "unit_system", self.store.project.unit_system, name))
 
     def _ensure_unit_system(self, project):
         names = {item.name for item in self.settings.unit_systems}

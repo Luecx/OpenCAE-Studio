@@ -45,7 +45,7 @@ def auto_deformation_scale(result, field=None, target_fraction=0.10):
 def _mesh_edges(plotter, grid, name):
     try:
         edges = grid.extract_all_edges()
-    except Exception:
+    except (AttributeError, RuntimeError, TypeError, ValueError):
         edges = grid.extract_surface(algorithm="dataset_surface").extract_feature_edges(
             boundary_edges=True, feature_edges=True, manifold_edges=True,
             non_manifold_edges=True, feature_angle=1

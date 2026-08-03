@@ -13,16 +13,3 @@ class ConstraintType(StrEnum):
     def coerce(cls, value):
         try: return cls(value)
         except ValueError: return value
-
-
-class ConstraintReferenceKind(StrEnum):
-    REFERENCE_POINT = "Reference Point"
-    NODE_SET = "Node Set"
-    ELEMENT_SET = "Element Set"
-    SURFACE = "Surface"
-    UNKNOWN = "Unknown"
-
-    @classmethod
-    def coerce(cls, value):
-        try: return cls(value)
-        except ValueError: return cls.UNKNOWN

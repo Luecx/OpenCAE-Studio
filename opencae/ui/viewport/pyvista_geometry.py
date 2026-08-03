@@ -28,7 +28,7 @@ def add_geometry(plotter, snapshot, instance=None):
             name=f"{prefix}face-{patch.tag}", render=False,
         )
         _BASE_COLORS[actor] = color
-        faces[actor] = ActorReference(instance.name if instance else None, 2, patch.tag, instance.id if instance else None)
+        faces[actor] = ActorReference(instance.id if instance else None, 2, patch.tag, instance.name if instance else "")
     for patch in snapshot.edges:
         points = transform_points(patch.points, instance) if instance else patch.points
         mesh = pv.PolyData(points); mesh.lines = patch.lines
@@ -37,7 +37,7 @@ def add_geometry(plotter, snapshot, instance=None):
             render_lines_as_tubes=False, pickable=True,
             name=f"{prefix}edge-{patch.tag}", render=False,
         )
-        edges[actor] = ActorReference(instance.name if instance else None, 1, patch.tag, instance.id if instance else None)
+        edges[actor] = ActorReference(instance.id if instance else None, 1, patch.tag, instance.name if instance else "")
     for patch in snapshot.vertices:
         point = transform_points(np.asarray([patch.point]), instance)[0] if instance else patch.point
         actor = plotter.add_mesh(
@@ -45,7 +45,7 @@ def add_geometry(plotter, snapshot, instance=None):
             render_points_as_spheres=True, lighting=False, pickable=True,
             name=f"{prefix}vertex-{patch.tag}", render=False,
         )
-        vertices[actor] = ActorReference(instance.name if instance else None, 0, patch.tag, instance.id if instance else None)
+        vertices[actor] = ActorReference(instance.id if instance else None, 0, patch.tag, instance.name if instance else "")
     return faces, edges, vertices
 
 

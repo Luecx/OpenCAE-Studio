@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 from PyQt6.QtWidgets import QDialog, QMessageBox
 
 from opencae.model.entities.fields import FieldDefinition
 from opencae.model.naming import next_name
+from opencae.model.selection import RegionProjection
 from opencae.model.resources import Material, create_profile, create_section
 from opencae.ui.dialogs.field_definition import FieldDefinitionDialog
 from opencae.ui.dialogs.material import MaterialDialog
@@ -37,12 +40,14 @@ class ResourceController:
             return
         behavior = dialog.behavior_value()
 
-        def apply(project):
-            stored = project.try_resolve(material.id)
-            stored.behaviors = [item for item in stored.behaviors if item.category != category]
-            stored.behaviors.append(behavior)
-
-        self.store.mutate(f"Set {category} for {material.name}", apply)
+        stored = self.store.project.try_resolve(material.id)
+        if stored is None:
+            self.store.message.emit("The selected material no longer exists")
+            return
+        replacement = deepcopy(stored)
+        replacement.behaviors = [item for item in replacement.behaviors if item.category != category]
+        replacement.behaviors.append(behavior)
+        self.store.replace_entity(f"Set {category} for {material.name}", self.store.project.id, "materials", replacement)
 
     def _material_dialog(self, material=None, parent=None):
         project = self.store.project
@@ -95,8 +100,8 @@ class ResourceController:
     def _section_dialog(self, section=None, initial_type=None, parent=None):
         project = self.store.project
         owner = parent or self.parent
-        create_material = lambda child=None: self._material_dialog(parent=child or owner)
-        create_profile = lambda child=None: self._profile_dialog(parent=child or owner)
+        def create_material(child, done): done(self._material_dialog(parent=child or owner))
+        def create_profile(child, done): done(self._profile_dialog(parent=child or owner))
         dialog = SectionDialog(
             project.materials, project.profiles, create_material, create_profile, section,
             [item.name for item in project.sections], owner, initial_type, next_name("Section", project.sections),
@@ -125,9 +130,18 @@ class ResourceController:
     def _field_dialog(self, field=None, parent=None):
         project = self.store.project
         regions = []
+        allowed = {RegionProjection.NODES, RegionProjection.ELEMENTS, None}
         for part in project.parts:
-            regions.extend((f"{part.name}.{item.name}", item.id) for item in (*part.node_sets, *part.element_sets))
-        regions.extend((f"Assembly.{item.name}", item.id) for item in (*project.assembly.node_sets, *project.assembly.element_sets))
+            regions.extend(
+                (f"{part.name}.{item.name}", item.id)
+                for item in part.regions
+                if item.preferred_projection in allowed
+            )
+        regions.extend(
+            (f"Assembly.{item.name}", item.id)
+            for item in project.assembly.regions
+            if item.preferred_projection in allowed
+        )
         dialog = FieldDefinitionDialog(field, [item.name for item in project.fields], regions, parent or self.parent, next_name("Field", project.fields))
         state = {"existing": field}
 
@@ -159,11 +173,8 @@ class ResourceController:
         if isinstance(entity, FieldDefinition): return self._field_dialog(entity)
 
     def _replace_or_append(self, attribute, old, new, description):
-        def apply(project):
-            collection = getattr(project, attribute)
-            if old is None:
-                collection.append(new)
-            else:
-                index = next(index for index, item in enumerate(collection) if item.id == old.id)
-                collection[index] = new
-        self.store.mutate(description, apply)
+        project = self.store.project
+        if old is None:
+            self.store.add_entity(description, project.id, attribute, new)
+        else:
+            self.store.replace_entity(description, project.id, attribute, new)

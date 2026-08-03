@@ -13,7 +13,4 @@ class Section(Entity):
 
     def write_abaqus(self, writer, context) -> None: return None
     def write_femaster(self, writer, context) -> None:
-        from opencae.solvers.femaster_dsl.emitters.resources import write_section
-        elset = context.options.get("elset")
-        if elset: write_section(self, elset, context.options.get("orientation"), writer, context)
-        else: writer.comment(f"Section {self.name} requires a section assignment / ELSET")
+        return None

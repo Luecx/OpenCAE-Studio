@@ -4,16 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opencae-studio"
-version = "0.12.1"
-description = "Modular PyQt6 CAE desktop prototype"
+version = "0.15.2"
+description = "Open-source CAE pre- and post-processing desktop application"
 requires-python = ">=3.11"
-dependencies = ["PyQt6>=6.6", "numpy>=1.26", "pyvista>=0.48,<0.49", "pyvistaqt>=0.12,<0.13", "gmsh>=4.13"]
+dependencies = [
+  "PyQt6",
+  "numpy",
+  "pyvista",
+  "pyvistaqt",
+  "vtk",
+  "gmsh",
+]
 
 [project.scripts]
-opencae = "opencae.app.application:run"
+opencae-studio = "opencae.app.application:run"
 
 [tool.setuptools.packages.find]
 include = ["opencae*"]
 
-[tool.setuptools.package-data]
-"opencae" = ["ui/assets/*.png", "ui/assets/*.ico"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]

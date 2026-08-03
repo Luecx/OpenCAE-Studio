@@ -2,14 +2,14 @@ import numpy as np
 import pyvista as pv
 from .instance_transform import transform_points, transform_vector
 from .screen_scale import world_size_for_pixels
+from .safe_operations import remove_actor
 
 
 class CoordinateSystemOverlay:
     def __init__(self):self._names=[]
     def clear(self,plotter):
         for name in self._names:
-            try:plotter.remove_actor(name,reset_camera=False,render=False)
-            except Exception:pass
+            remove_actor(plotter, name)
         self._names.clear()
     def show_part(self,plotter,part):
         self.clear(plotter)
@@ -17,10 +17,10 @@ class CoordinateSystemOverlay:
     def show_assembly(self,plotter,project,scene):
         self.clear(plotter)
         for i,system in enumerate(project.assembly.coordinate_systems):self._draw(plotter,system,f"assembly-{i}")
-        for instance_name,instance in scene.assembly_instances.items():
+        for instance_id,instance in scene.assembly_instances.items():
             part=project.try_resolve(instance.part_ref)
             if part:
-                for i,system in enumerate(part.coordinate_systems):self._draw(plotter,system,f"{instance_name}-{i}",instance)
+                for i,system in enumerate(part.coordinate_systems):self._draw(plotter,system,f"{instance_id}-{i}",instance)
     def _draw(self,plotter,system,key,instance=None):
         origin=np.asarray(system.origin,dtype=float); x,y,z=self._axes(system)
         if instance:origin=transform_points([origin],instance)[0]; x,y,z=(transform_vector(v,instance) for v in (x,y,z))

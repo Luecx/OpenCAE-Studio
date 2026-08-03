@@ -19,7 +19,7 @@ from .supports.base import Support
 @register_model_type("project")
 @dataclass
 class Project(Entity):
-    schema_version: int = 13
+    schema_version: int = 18
     name: str = "Untitled"
     unit_system: str = "mm-N-s-°C"
     path: Path | None = None
@@ -68,10 +68,9 @@ class Project(Entity):
         return self._index
 
     def rebuild_index(self, strict: bool = False) -> ProjectIndex:
-        from ..core.reference_binding import bind_project_references
-        initial = ProjectIndex(self)
-        self.reference_errors = bind_project_references(self, initial, strict)
+        from ..core.reference_binding import validate_project_references
         self._index = ProjectIndex(self)
+        self.reference_errors = validate_project_references(self, self._index, strict)
         return self._index
 
     def ensure_references(self, strict: bool = False) -> list[str]:
@@ -83,11 +82,8 @@ class Project(Entity):
         entity_id = getattr(entity_or_id, "id", entity_or_id); return self.index.references_to(str(entity_id))
 
     def render_deck(self, solver: SolverName | str, analysis: Analysis | None = None) -> str:
-        self.ensure_references(strict=True)
-        writer = DeckWriter()
-        context = ExportContext(self, analysis)
-        self.write_solver(solver, writer, context)
-        return writer.text()
+        from opencae.exporting import render_deck
+        return render_deck(self, solver, analysis)
 
     def write_abaqus(self, writer, context) -> None:
         writer.comment("OpenCAE Studio generated Abaqus deck")
@@ -96,9 +92,7 @@ class Project(Entity):
         self._write_contents(SolverName.ABAQUS, writer, context)
 
     def write_femaster(self, writer, context) -> None:
-        from opencae.solvers.femaster_dsl.emitters import write_project
-        writer.comment("OpenCAE Studio generated FEMaster deck")
-        write_project(self, writer, context)
+        raise RuntimeError("Use opencae.exporting.render_deck for FEMaster export")
 
     def write_generic(self, writer, context) -> None:
         writer.comment(f"OpenCAE generic deck for {self.name}")

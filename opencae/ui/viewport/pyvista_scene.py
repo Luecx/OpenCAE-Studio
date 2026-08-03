@@ -7,6 +7,7 @@ from .pyvista_geometry import add_geometry
 from .pyvista_mesh import add_mesh
 from .seed_overlay import SeedOverlay
 from .region_overlay import RegionOverlay
+from .selection_preview_overlay import SelectionPreviewOverlay
 from .reference_point_overlay import ReferencePointOverlay
 from .datum_overlay import DatumOverlay
 from .coupling_overlay import CouplingOverlay
@@ -20,7 +21,7 @@ class PyVistaScene(SceneDisplayMixin):
         self.face_actors = {}; self.edge_actors = {}; self.vertex_actors = {}; self.reference_actors = {}; self.datum_actors = {}
         self.mesh_actor = None; self.mesh_grid = None; self.mesh_snapshot = None
         self.mesh_actors = []; self.mesh_grids = {}; self.assembly_mesh_snapshots = {}
-        self.seed_overlay = SeedOverlay(); self.coordinate_overlay = CoordinateSystemOverlay(); self.reference_overlay = ReferencePointOverlay(); self.datum_overlay = DatumOverlay(); self.coupling_overlay = CouplingOverlay(); self.region_overlay = RegionOverlay()
+        self.seed_overlay = SeedOverlay(); self.coordinate_overlay = CoordinateSystemOverlay(); self.reference_overlay = ReferencePointOverlay(); self.datum_overlay = DatumOverlay(); self.coupling_overlay = CouplingOverlay(); self.region_overlay = RegionOverlay(); self.selection_preview_overlay = SelectionPreviewOverlay()
         self.boundary_overlay = BoundaryOverlay(owner); self.field_actor = None
         self.result_actor = None; self.result_grid = None; self.result_mesh_actor = None; self.result_boundary_actor = None; self.result_undeformed_actor = None
     def refresh(self, part, fit=False):
@@ -34,7 +35,7 @@ class PyVistaScene(SceneDisplayMixin):
         self.owner.plotter.render()
     def clear(self, render=True):
         self.seed_overlay.clear(self.owner.plotter, render=False)
-        self.coordinate_overlay.clear(self.owner.plotter); self.reference_overlay.clear(self.owner.plotter); self.datum_overlay.clear(self.owner.plotter); self.coupling_overlay.clear(self.owner.plotter); self.boundary_overlay.clear(self.owner.plotter); self.region_overlay.clear(self.owner.plotter)
+        self.coordinate_overlay.clear(self.owner.plotter); self.reference_overlay.clear(self.owner.plotter); self.datum_overlay.clear(self.owner.plotter); self.coupling_overlay.clear(self.owner.plotter); self.boundary_overlay.clear(self.owner.plotter); self.region_overlay.clear(self.owner.plotter); self.selection_preview_overlay.clear(self.owner.plotter)
         self.owner.plotter.clear(); self.owner.plotter.set_background(PALETTE["viewport"])
         self.face_actors.clear(); self.edge_actors.clear(); self.vertex_actors.clear(); self.reference_actors.clear(); self.datum_actors.clear()
         self.assembly_snapshots.clear(); self.assembly_instances.clear(); self.mesh_actors.clear(); self.mesh_grids.clear(); self.assembly_mesh_snapshots.clear()
@@ -59,8 +60,8 @@ class PyVistaScene(SceneDisplayMixin):
             if part.geometry:
                 try: snapshot = self.owner.service.build_geometry(part)
                 except GeometryError as exc: self.owner.message.emit(str(exc)); continue
-            if snapshot is not None: self.assembly_snapshots[instance.name] = snapshot
-            self.assembly_instances[instance.name] = instance
+            if snapshot is not None: self.assembly_snapshots[instance.id] = snapshot
+            self.assembly_instances[instance.id] = instance
             if self.owner.display_mode == "mesh" or not part.geometry: self._show_instance_mesh(part, instance)
             elif snapshot is not None: self._merge_actors(add_geometry(self.owner.plotter, snapshot, instance))
         self.coordinate_overlay.show_assembly(self.owner.plotter, project, self)
@@ -80,16 +81,21 @@ class PyVistaScene(SceneDisplayMixin):
     def _show_instance_mesh(self, part, instance):
         snapshot = CACHE.mesh(part.id) or snapshot_from_part(part)
         if snapshot is None:
-            geometry = self.assembly_snapshots.get(instance.name)
+            geometry = self.assembly_snapshots.get(instance.id)
             if geometry is not None: self._merge_actors(add_geometry(self.owner.plotter, geometry, instance))
             return
         actor, grid = add_mesh(self.owner.plotter, snapshot, instance)
         if actor is not None:
-            self.mesh_actors.append(actor); self.mesh_grids[instance.name] = grid; self.assembly_mesh_snapshots[instance.name] = snapshot
+            self.mesh_actors.append(actor); self.mesh_grids[instance.id] = grid; self.assembly_mesh_snapshots[instance.id] = snapshot
     def _merge_actors(self, actors):
         faces, edges, vertices = actors
         self.face_actors.update(faces); self.edge_actors.update(edges); self.vertex_actors.update(vertices)
-    def snapshot_for(self, instance_name):
-        return self.assembly_snapshots.get(instance_name) if instance_name else self.snapshot
-    def instance_for(self, instance_name): return self.assembly_instances.get(instance_name)
+    def snapshot_for(self, instance_key):
+        if not instance_key:
+            return self.snapshot
+        return self.assembly_snapshots.get(instance_key)
+    def instance_for(self, instance_key):
+        if not instance_key:
+            return None
+        return self.assembly_instances.get(instance_key)
     def _uses_assembly(self): return self.owner.stage in {"ASSEMBLY", "CONSTRAINTS", "BOUNDARY CONDITIONS", "ANALYSIS", "SOLVE"}

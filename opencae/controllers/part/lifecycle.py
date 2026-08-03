@@ -27,7 +27,7 @@ class PartLifecycle:
         if not values:
             return
         part = Part(name=values["name"], metadata={"part_type": values["part_type"]})
-        self.ctx.store.mutate(f"Created part {part.name}", lambda project: project.parts.append(part))
+        self.ctx.store.add_entity(f"Created part {part.name}", self.ctx.store.project.id, "parts", part)
         self.ctx.store.set_active_part(part.id)
 
 
@@ -40,7 +40,7 @@ class PartLifecycle:
             return
         clone = clone_entity_graph(source)
         clone.name = next_name(source.name, self.ctx.store.project.parts)
-        self.ctx.store.mutate(f"Duplicated part {source.name} as {clone.name}", lambda project: project.parts.append(clone))
+        self.ctx.store.add_entity(f"Duplicated part {source.name} as {clone.name}", self.ctx.store.project.id, "parts", clone)
         self.ctx.store.set_active_part(clone.id)
         self.ctx.store.select(clone)
         self.ctx.store.invalidate_scene("Part duplicated")
@@ -49,10 +49,10 @@ class PartLifecycle:
         values = get_values(NewPartDialog([item.name for item in self.ctx.store.project.parts], part, self.ctx.parent))
         if not values:
             return
-        def apply(_project):
-            part.name = values["name"]
-            part.metadata["part_type"] = values["part_type"]
-        self.ctx.store.mutate(f"Edited part {part.name}", apply)
+        replacement = deepcopy(part)
+        replacement.name = values["name"]
+        replacement.metadata["part_type"] = values["part_type"]
+        self.ctx.store.replace_entity(f"Edited part {part.name}", self.ctx.store.project.id, "parts", replacement)
 
     def import_geometry(self):
         active = self.ctx.active_part()
@@ -68,14 +68,14 @@ class PartLifecycle:
         candidate.geometry_settings.tolerance = values["tolerance"]
         candidate.geometry = [ImportedStepFeature(
             name=values["name"],
-            parameters={"file": values["file"]},
+            source_file=values["file"],
         )]
         if not self.ctx.validate_geometry(candidate, "Import failed"):
             return
         if active and active.id == candidate.id:
             self.ctx.replace_part(candidate, f"Imported geometry into {candidate.name}")
         else:
-            self.ctx.store.mutate(f"Imported {candidate.name}", lambda project: project.parts.append(candidate))
+            self.ctx.store.add_entity(f"Imported {candidate.name}", self.ctx.store.project.id, "parts", candidate)
             self.ctx.store.set_active_part(candidate.id)
 
 
@@ -88,7 +88,7 @@ class PartLifecycle:
             self.ctx.error("Mesh import failed", exc); return
         apply_mesh_snapshot(part, snapshot, [])
         CACHE.set_mesh(snapshot)
-        self.ctx.store.mutate(f"Imported mesh {part.name}", lambda project: project.parts.append(part))
+        self.ctx.store.add_entity(f"Imported mesh {part.name}", self.ctx.store.project.id, "parts", part)
         self.ctx.store.set_active_part(part.id); self.ctx.store.invalidate_scene("Mesh imported")
         if hasattr(self.ctx.parent, "viewport"): self.ctx.parent.viewport.set_display_mode("mesh")
 
@@ -106,7 +106,7 @@ class PartLifecycle:
         candidate.geometry_settings.remove_degenerate = values["remove_degenerate"]
         candidate.geometry_settings.tolerance = values["tolerance"]
         target.name = values["name"]
-        target.parameters["file"] = values["file"]
+        target.source_file = values["file"]
         candidate.mesh.status = "Outdated"
         if self.ctx.validate_geometry(candidate, "Geometry source update failed"):
             self.ctx.replace_part(candidate, f"Edited {target.name}")

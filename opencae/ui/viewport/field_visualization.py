@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import numpy as np
 from .scalar_bar import scalar_bar_args
+from .safe_operations import remove_actor
 
 
 def add_field(plotter, grid, snapshot, field):
@@ -15,8 +16,7 @@ def add_field(plotter, grid, snapshot, field):
     if location == "Element": target.cell_data[field.name] = values
     else: target.point_data[field.name] = values
     for name in ("field-visualization", "generated-mesh", "generated-mesh-lines"):
-        try: plotter.remove_actor(name, reset_camera=False, render=False)
-        except Exception: pass
+        remove_actor(plotter, name)
     actor = plotter.add_mesh(target, scalars=field.name, cmap="turbo", n_colors=18, show_edges=True,
         edge_color="#10161c", line_width=1.0, lighting=True, ambient=0.25,
         diffuse=0.72, scalar_bar_args=scalar_bar_args(field.name), name="field-visualization", render=False)
@@ -52,7 +52,7 @@ def _formula_values(expression, point, components):
     result = []
     for index in range(components):
         try: result.append(float(eval(expressions[min(index, len(expressions) - 1)], {"__builtins__": {}}, env)))
-        except Exception: result.append(0.0)
+        except (ArithmeticError, NameError, SyntaxError, TypeError, ValueError): result.append(0.0)
     return result
 
 
@@ -65,7 +65,7 @@ def _file_values(path, identifiers, points, components, interpolation):
             return [_interpolate(sources, values, point, interpolation) for point in points]
         table = {str(int(row[0])): row[1:] for row in rows if len(row)}
         return [_row_values(table.get(str(int(tag)), ()), components) for tag in identifiers]
-    except Exception:
+    except (OSError, TypeError, ValueError):
         return np.zeros((len(identifiers), components), dtype=float)
 
 

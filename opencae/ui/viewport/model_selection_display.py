@@ -1,4 +1,12 @@
+from __future__ import annotations
+
+from dataclasses import replace
 from PyQt6.QtCore import QTimer
+
+from opencae.model.selection import (
+    GeometryOperand, MeshElementOperand, MeshFacetOperand, MeshNodeOperand,
+    NamedRegionOperand, ReferencePointOperand, RegionDefinition, RegionSelectionItem, ViewportSelection,
+)
 
 
 def show_model_selection(viewport, entity):
@@ -12,37 +20,51 @@ def show_model_selection(viewport, entity):
             viewport.scene.show_field(entity)
         return
     if isinstance(entity, Region):
-        viewport._pending_members = list(entity.members)
-        target = "mesh" if _contains_mesh_members(entity.members) else "geometry"
+        definition = _expanded(viewport.store.project, entity.definition)
+        viewport._pending_members = definition
+        target = "mesh" if _contains_mesh_operands(definition) else "geometry"
         if viewport.display_mode != target:
             viewport.display_mode = target; viewport.toolbar.set_display(target); viewport.request_refresh()
         else:
             QTimer.singleShot(0, viewport._show_pending_members)
         return
-    if viewport._field_id is not None and not isinstance(entity, dict):
+    if viewport._field_id is not None and not isinstance(entity, ViewportSelection):
         viewport._field_id = None; viewport.request_refresh()
-    elif not isinstance(entity, dict):
+    elif not isinstance(entity, ViewportSelection):
         viewport.picker.clear(False); viewport.scene.region_overlay.clear(viewport.plotter); viewport.plotter.render()
 
 
 def show_pending_members(viewport):
     if viewport._pending_members is None: return
-    members = viewport._pending_members; viewport._pending_members = None
-    viewport.picker.show_labels(members, render=False)
-    viewport.scene.region_overlay.show(viewport.plotter, viewport.scene, members)
+    definition = RegionDefinition.from_values(viewport._pending_members)
+    viewport._pending_members = None
+    viewport.picker.show_labels(definition, render=False)
+    viewport.scene.region_overlay.show(viewport.plotter, viewport.scene, definition)
     viewport.plotter.render()
 
 
 def highlight_members(viewport, members):
-    viewport._pending_members = list(members or ())
+    viewport._pending_members = RegionDefinition.from_values(members)
     QTimer.singleShot(0, viewport._show_pending_members)
 
 
-def _contains_mesh_members(members):
-    from opencae.model.core import RegionMemberKind, RegionMemberRef
-    for value in members:
-        if isinstance(value, RegionMemberRef) and value.kind in {RegionMemberKind.NODE, RegionMemberKind.ELEMENT}:
-            return True
-        if str(value).split(".")[-1].startswith(("Node-", "Element-")):
-            return True
-    return False
+def _contains_mesh_operands(definition):
+    return any(isinstance(item.operand, (MeshNodeOperand, MeshElementOperand, MeshFacetOperand)) for item in definition.items)
+
+
+def _expanded(project, definition, inherited_instance=None, stack=None):
+    stack = set(stack or ())
+    result = []
+    for item in RegionDefinition.from_values(definition).items:
+        operand = item.operand
+        if isinstance(operand, NamedRegionOperand):
+            region = project.try_resolve(operand.region_ref)
+            if region is None or region.id in stack: continue
+            instance_ref = operand.instance_ref or inherited_instance
+            result.extend(_expanded(project, region.definition, instance_ref, {*stack, region.id}).items)
+            continue
+        if inherited_instance and hasattr(operand, "instance_ref") and operand.instance_ref is None:
+            operand = replace(operand, instance_ref=inherited_instance)
+            item = RegionSelectionItem(operand, item.picked_position, item.display_label)
+        result.append(item)
+    return RegionDefinition(tuple(result))

@@ -1,9 +1,29 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import fields, is_dataclass, replace
 
 from .entity import Entity
 from .reference import EntityRef
+
+
+def entity_with_replaced_references(entity: Entity, old_id: str, new_entity):
+    """Return a copied entity with references to *old_id* replaced.
+
+    The source entity itself is never mutated. This makes reference replacement
+    suitable for reversible collection commands and safe across undo/redo.
+    """
+    replacement = EntityRef.of(new_entity)
+    clone = deepcopy(entity)
+    changed = False
+    for info in fields(clone):
+        if info.name in {"id", "_index", "reference_errors"}:
+            continue
+        updated, did_change = _replace_value(getattr(clone, info.name), old_id, replacement)
+        if did_change:
+            setattr(clone, info.name, updated)
+            changed = True
+    return clone, changed
 
 
 def replace_references(project, old_id: str, new_entity) -> int:
@@ -184,7 +204,7 @@ def _same_semantic_scope(project, entity, candidate, parent_id):
     if isinstance(entity, Region):
         return (
             isinstance(candidate, Region)
-            and candidate.region_type == entity.region_type
+            and candidate.preferred_projection == entity.preferred_projection
             and project.index.parent_id.get(candidate.id) == parent_id
         )
     if isinstance(entity, Section):
@@ -213,13 +233,21 @@ def _same_semantic_scope(project, entity, candidate, parent_id):
 
 
 def _matches_expected(entity, expected):
+    from opencae.model.entities.regions import ReferencePoint, Region
+    from opencae.model.selection import RegionProjection
+
     normalized = str(expected).replace(" ", "").casefold()
     names = {cls.__name__.replace(" ", "").casefold() for cls in type(entity).mro()}
-    region_type = str(getattr(entity, "region_type", "")).replace(" ", "").casefold()
-    if normalized in {"nodeset", "elementset", "surface", "referencepoint"} and region_type == normalized:
-        return True
+    if normalized == "referencepoint": return isinstance(entity, ReferencePoint)
+    projections = {
+        "nodeset": RegionProjection.NODES,
+        "elementset": RegionProjection.ELEMENTS,
+        "surface": RegionProjection.FACETS,
+    }
+    if normalized in projections:
+        return isinstance(entity, Region) and entity.preferred_projection == projections[normalized]
+    if normalized == "region": return isinstance(entity, Region)
     aliases = {
-        "region": {"nodeset", "elementset", "surface", "referencepoint", "region"},
         "load": {"load"},
         "support": {"support"},
         "section": {"section"},

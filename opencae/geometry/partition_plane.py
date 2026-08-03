@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import math
 
+from opencae.model.selection import local_geometry_tags
+
 from .errors import GeometryError
-from .labels import parse_labels
 
 
-def apply_plane_partition(gmsh, feature) -> None:
-    origin = tuple(float(v) for v in feature.parameters.get("origin", (0, 0, 0)))
-    normal = _normalized(tuple(float(v) for v in feature.parameters.get("normal", (1, 0, 0))))
-    targets = parse_labels(feature.references, expected_dim=3)
-    objects = targets or list(gmsh.model.getEntities(3))
+def apply_plane_partition(gmsh, part, feature) -> None:
+    origin = tuple(float(v) for v in feature.origin)
+    normal = _normalized(tuple(float(v) for v in feature.normal))
+    target_tags = sorted(local_geometry_tags(part, feature.target, 3))
+    objects = [(3, tag) for tag in target_tags] or list(gmsh.model.getEntities(3))
     if not objects:
         raise GeometryError("Plane partition requires at least one solid cell")
     size = _model_size(gmsh, objects) * 1.5

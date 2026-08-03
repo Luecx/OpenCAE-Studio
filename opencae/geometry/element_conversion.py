@@ -1,8 +1,6 @@
 from collections import defaultdict
 import re
 
-from opencae.model.core import RegionMemberKind, RegionMemberRef
-
 from opencae.model.element_catalog import CATALOG, resulting_type
 from opencae.model.mesh import ElementBlock, ElementOrder, create_element_definition
 from .element_records import records
@@ -30,7 +28,7 @@ def convert(part, selected_ids, affected_ids, order, formulation):
     mesh.nodes.coordinates = [tuple(coordinates[node]) for node in mesh.nodes.ids]
     mesh.entity_nodes = _entity_nodes(mesh.entity_nodes, midpoints, used)
     mesh.elements = [block.definition for block in mesh.element_blocks]; mesh.node_count = len(mesh.nodes.ids)
-    mesh.element_count = sum(len(block.ids) for block in mesh.element_blocks); mesh.status = "Current"
+    mesh.element_count = sum(len(block.ids) for block in mesh.element_blocks); mesh.status = "Current"; mesh.revision = f"{mesh.revision or 'mesh'}:converted"
 
 
 def _existing_midpoints(elements):
@@ -57,16 +55,22 @@ def _block(key, values):
 def _middle(first, second): return tuple((float(a) + float(b)) * .5 for a, b in zip(first, second))
 
 
-_NODE = re.compile(r"(?:^|\.)Node-(\d+)$", re.I)
-
 def _protected_nodes(part):
+    from opencae.model.selection import MeshNodeOperand, NamedRegionOperand
     result = set()
-    for region in part.node_sets:
-        for member in region.members:
-            if isinstance(member, RegionMemberRef) and member.kind == RegionMemberKind.NODE:
-                result.add(int(member.tag)); continue
-            match = _NODE.search(str(member))
-            if match: result.add(int(match.group(1)))
+    visited = set()
+    def collect(definition):
+        for item in definition.items:
+            operand = item.operand
+            if isinstance(operand, MeshNodeOperand) and operand.owner_ref.entity_id == part.id:
+                result.add(int(operand.node_id))
+            elif isinstance(operand, NamedRegionOperand) and operand.region_ref.entity_id not in visited:
+                region = next((value for value in part.regions if value.id == operand.region_ref.entity_id), None)
+                if region is not None:
+                    visited.add(region.id); collect(region.definition)
+    for region in part.regions:
+        if str(getattr(region, "preferred_projection", "")) == "nodes":
+            collect(region.definition)
     return result
 
 def _entity_nodes(entity_nodes, midpoints, used):

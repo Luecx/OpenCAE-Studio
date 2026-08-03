@@ -6,7 +6,7 @@ from .element_targets import resolve_target_ids
 
 
 def apply_control(part, control):
-    elements = records(part.mesh); target = resolve_target_ids(part, control.targets)
+    elements = records(part.mesh); target = resolve_target_ids(part, control.target)
     selected = {eid for eid in target if elements[eid].topology == control.topology}
     affected = propagation_closure(part.mesh, selected)
     if selected: convert(part, selected, affected, control.order, control.formulation)

@@ -1,25 +1,94 @@
-from opencae.model.entities.constraints import ConstraintReferenceKind, ConstraintType
+from __future__ import annotations
+
+from opencae.model.entities.constraints import (
+    DistributingCoupling, EquationConstraint, KinematicCoupling, MPCConstraint,
+    RigidBodyConstraint, TieConstraint,
+)
+from opencae.model.selection import RegionProjection
 from ..command import command
-from .target_resolution import entity_target_name
+from .region_materialization import materialize_region
 
 
 def write_constraint(value, writer, context):
-    master_entity = context.resolve(value.master_ref)
-    slave_entity = context.resolve(value.slave_ref)
-    if master_entity is None:
-        raise ValueError(f"Constraint '{value.name}' has no valid master")
-    if slave_entity is None:
-        raise ValueError(f"Constraint '{value.name}' has no valid slave")
-    master = entity_target_name(master_entity, value.master.kind.value, writer, context)
-    slave = entity_target_name(slave_entity, value.slave.kind.value, writer, context)
-    kind = ConstraintType.coerce(value.constraint_type)
-    if kind in {ConstraintType.KINEMATIC, ConstraintType.DISTRIBUTING}:
-        options = {"MASTER": master, "TYPE": "KINEMATIC" if kind == ConstraintType.KINEMATIC else "STRUCTURAL"}
-        options["SFSET" if value.slave.kind == ConstraintReferenceKind.SURFACE else "SLAVE"] = slave
-        command(writer, "COUPLING", [value.components], **options)
-    elif kind == ConstraintType.TIE:
+    if isinstance(value, (KinematicCoupling, DistributingCoupling)):
+        master = materialize_region(
+            value.control_point,
+            RegionProjection.SINGLE_CONTROL_NODE,
+            writer,
+            context,
+            owner=value,
+            proposed_name=f"__{value.name}_CONTROL",
+            cache_key=("constraint-control", value.id),
+            allowed_dimensions=(0,),
+            min_count=1,
+            max_count=1,
+            require_unique_occurrence=True,
+        ).name
+        slave = materialize_region(
+            value.slave,
+            RegionProjection.NODES,
+            writer,
+            context,
+            owner=value,
+            proposed_name=f"__{value.name}_SLAVE",
+            cache_key=("constraint-slave", value.id),
+        ).name
+        coupling_type = "KINEMATIC" if isinstance(value, KinematicCoupling) else "STRUCTURAL"
+        command(writer, "COUPLING", [tuple(value.components)], MASTER=master, TYPE=coupling_type, SLAVE=slave)
+        return
+
+    if isinstance(value, TieConstraint):
+        master = materialize_region(
+            value.master,
+            RegionProjection.FACETS,
+            writer,
+            context,
+            owner=value,
+            proposed_name=f"__{value.name}_MASTER",
+            cache_key=("tie-master", value.id),
+            allowed_dimensions=(2,),
+        ).name
+        slave = materialize_region(
+            value.slave,
+            RegionProjection.FACETS,
+            writer,
+            context,
+            owner=value,
+            proposed_name=f"__{value.name}_SLAVE",
+            cache_key=("tie-slave", value.id),
+            allowed_dimensions=(2,),
+        ).name
         command(writer, "TIE", MASTER=master, SLAVE=slave, ADJUST=value.adjust, DISTANCE=value.distance)
-    elif kind == ConstraintType.RIGID_BODY:
-        command(writer, "RBM", ELSET=slave or master)
-    else:
-        writer.comment(f"Constraint {value.name} ({kind}) has no documented FEMaster command mapping")
+        return
+
+    if isinstance(value, RigidBodyConstraint):
+        reference = materialize_region(
+            value.reference,
+            RegionProjection.SINGLE_CONTROL_NODE,
+            writer,
+            context,
+            owner=value,
+            proposed_name=f"__{value.name}_REFERENCE",
+            cache_key=("rigid-reference", value.id),
+            allowed_dimensions=(0,),
+            min_count=1,
+            max_count=1,
+            require_unique_occurrence=True,
+        ).name
+        body = materialize_region(
+            value.body,
+            RegionProjection.ELEMENTS,
+            writer,
+            context,
+            owner=value,
+            proposed_name=f"__{value.name}_BODY",
+            cache_key=("rigid-body", value.id),
+        ).name
+        command(writer, "RBM", ELSET=body, SET=reference)
+        return
+
+    if isinstance(value, (EquationConstraint, MPCConstraint)):
+        writer.comment(f"Constraint {value.name} ({value.constraint_type}) has no documented FEMaster command mapping")
+        return
+
+    raise ValueError(f"Unsupported constraint class '{type(value).__name__}'")

@@ -19,5 +19,4 @@ class AnalysisStep(Entity):
     def uses_supports(self) -> bool: return True
     def write_abaqus(self, writer, context) -> None: return None
     def write_femaster(self, writer, context) -> None:
-        from opencae.solvers.femaster_dsl.emitters.loadcase import write_step
-        write_step(self, writer, context)
+        return None

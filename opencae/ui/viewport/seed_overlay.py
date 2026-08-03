@@ -4,6 +4,7 @@ import numpy as np
 import pyvista as pv
 
 from .seed_sampling import divisions, edge_overrides, sample_polyline
+from .safe_operations import remove_actor
 
 
 class SeedOverlay:
@@ -15,21 +16,18 @@ class SeedOverlay:
 
     def clear(self, plotter, render=True):
         for name in (self.POINTS, self.LABELS):
-            try:
-                plotter.remove_actor(name, reset_camera=False, render=False)
-            except Exception:
-                pass
+            remove_actor(plotter, name)
         self.positions.clear()
         if render:
             plotter.render()
 
-    def show(self, plotter, snapshot, seeds):
+    def show(self, plotter, snapshot, part, seeds):
         self.clear(plotter, render=False)
         if snapshot is None or not seeds:
             plotter.render()
             return
         default = next((item for item in seeds if item.seed_type == "Default"), None)
-        overrides = edge_overrides(seeds)
+        overrides = edge_overrides(part, seeds)
         all_points, centers, labels = [], [], []
         for patch in snapshot.edges:
             count = divisions(patch, overrides.get(patch.tag), default)
@@ -69,5 +67,5 @@ class SeedOverlay:
                 if distance < best[0]:
                     best = (distance, label)
             return best[1]
-        except Exception:
+        except (ImportError, AttributeError, RuntimeError, TypeError, ValueError):
             return None

@@ -22,6 +22,7 @@ class PyVistaViewport(QWidget):
         self.selection_mode = "auto"; self.display_mode = "geometry"; self._field_id = None
         self._refresh_pending = self._fit_pending = False; self._active_result = self._active_result_field = self._pending_members = None
         self._pending_element_control_preview = None
+        self._region_previews = {}
         layout = QVBoxLayout(self); layout.setContentsMargins(0,0,0,0); layout.setSpacing(0)
         self.toolbar = SelectionToolbar(); layout.addWidget(self.toolbar); self.canvas = ViewportCanvas(); layout.addWidget(self.canvas,1)
         self.plotter = SafeQtInteractor(self.canvas); self.canvas.set_render_widget(self.plotter); self.plotter.set_background(PALETTE["viewport"])
@@ -38,6 +39,7 @@ class PyVistaViewport(QWidget):
     def _perform_refresh(self):
         self._refresh_pending = False; fit = self._fit_pending; self._fit_pending = False
         self.scene.refresh(self.store.active_part() if self.store else None,fit=fit)
+        self._restore_region_previews(render=True)
         if self._pending_members is not None:
             members = self._pending_members; self._pending_members = None; self.picker.show_labels(members,render=False); self.scene.region_overlay.show(self.plotter,self.scene,members); self.plotter.render()
         if self._pending_element_control_preview is not None:
@@ -46,7 +48,11 @@ class PyVistaViewport(QWidget):
     def set_selection_mode(self, mode):
         self.selection_mode = mode; self.toolbar.set_mode(mode); self.picker.clear(); self.picker.configure(); self.message.emit(f"Selection mode: {mode.title()}")
     def set_display_mode(self, mode):
-        if mode != self.display_mode: self.display_mode = mode; self.toolbar.set_display(mode); self.request_refresh()
+        if mode != self.display_mode:
+            self.display_mode = mode
+            self.toolbar.set_display(mode)
+            self.context_pick.refresh_for_display()
+            self.request_refresh()
     def set_stage(self, stage):
         self.toolbar.setVisible(True); self.toolbar.set_results_mode(stage == "RESULTS")
         if stage == self.stage: return
@@ -57,6 +63,7 @@ class PyVistaViewport(QWidget):
         else: self.request_refresh()
     def handle_entities(self, entities): return self.context_pick.consume(entities)
     def begin_context_pick(self, allowed, callback): self.context_pick.begin(allowed,callback)
+    def begin_selection_session(self, policy, callback, finished=None): self.context_pick.begin(policy, callback, finished=finished)
     def cancel_context_pick(self): self.context_pick.cancel()
     def show_datum_preview(self, values): self.datum_preview.show(self.plotter,self.scene,values)
     def hide_datum_preview(self): self.datum_preview.clear(self.plotter); self.plotter.render()
@@ -64,8 +71,36 @@ class PyVistaViewport(QWidget):
     def _set_view(self, name):
         {"TOP":self.plotter.view_xy,"FRONT":self.plotter.view_xz,"RIGHT":self.plotter.view_yz}.get(name,self.plotter.view_isometric)(); self.plotter.reset_camera(); self.plotter.render()
     def toggle_mesh(self): self.set_display_mode("mesh" if self.display_mode == "geometry" else "geometry")
-    def clear_scene(self): self.scene.clear()
+    def clear_scene(self):
+        self._region_previews.clear(); self.scene.clear()
     def clear_selection(self): self.picker.clear()
+    def show_region_preview(self, channel, definition, **style):
+        self._region_previews[str(channel)] = (definition, dict(style))
+        if self._refresh_pending:
+            return
+        self.scene.selection_preview_overlay.show_channel(
+            self.plotter, self.scene, str(channel), definition, **style
+        )
+        self.plotter.render()
+    def clear_region_preview(self, channel):
+        self._region_previews.pop(str(channel), None)
+        self.scene.selection_preview_overlay.clear_channel(self.plotter, str(channel))
+        self.plotter.render()
+    def clear_region_previews(self, prefix=None):
+        channels = tuple(self._region_previews)
+        if prefix is not None:
+            channels = tuple(value for value in channels if value.startswith(str(prefix)))
+        for channel in channels:
+            self._region_previews.pop(channel, None)
+            self.scene.selection_preview_overlay.clear_channel(self.plotter, channel)
+        self.plotter.render()
+    def _restore_region_previews(self, render=True):
+        for channel, (definition, style) in self._region_previews.items():
+            self.scene.selection_preview_overlay.show_channel(
+                self.plotter, self.scene, channel, definition, **style
+            )
+        if render:
+            self.plotter.render()
     def show_element_control_preview(self, selected, propagated):
         self._pending_element_control_preview = (tuple(selected), tuple(propagated))
         if self._refresh_pending: return

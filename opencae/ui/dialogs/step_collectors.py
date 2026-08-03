@@ -41,19 +41,30 @@ class StepCollectorsDialog(QDialog):
         item.setCheckState(Qt.CheckState.Checked if selected else Qt.CheckState.Unchecked)
         self.table.setItem(row, col, item)
 
-    def apply(self):
+    def values(self):
+        result = {}
         for col, step in enumerate(self.steps, 1):
-            step.support_refs = [
-                EntityRef.of(entity, "Support")
+            support_ids = [
+                entity.id
                 for row, entity in enumerate(self.supports)
                 if self._checked(row, col)
             ]
             offset = len(self.supports)
-            step.load_refs = [
-                EntityRef.of(entity, "Load")
+            load_ids = [
+                entity.id
                 for index, entity in enumerate(self.loads)
                 if step.uses_loads and self._checked(offset + index, col)
             ]
+            result[step.id] = {"support_ids": support_ids, "load_ids": load_ids}
+        return result
+
+    def apply(self):
+        """Legacy convenience method; new controllers consume :meth:`values`."""
+        values = self.values()
+        for step in self.steps:
+            selected = values[step.id]
+            step.support_refs = [EntityRef(entity_id, "Support") for entity_id in selected["support_ids"]]
+            step.load_refs = [EntityRef(entity_id, "Load") for entity_id in selected["load_ids"]]
 
     def _checked(self, row, col):
         item = self.table.item(row, col)

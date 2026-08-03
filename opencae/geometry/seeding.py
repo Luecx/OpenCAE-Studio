@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .labels import parse_labels
+from opencae.model.selection import local_geometry_tags
 
 
 def apply_edge_seeds(gmsh, part) -> None:
@@ -8,7 +8,7 @@ def apply_edge_seeds(gmsh, part) -> None:
     for seed in part.mesh.seeds:
         if seed.seed_type != "Edge" or not seed.enabled:
             continue
-        tags = [tag for _, tag in parse_labels(seed.targets, 1) if tag in available]
+        tags = sorted(local_geometry_tags(part, seed.target, 1) & available)
         for tag in tags:
             divisions = _divisions(gmsh, seed, tag)
             mesh_type, coefficient = _distribution(seed)
@@ -24,8 +24,6 @@ def _divisions(gmsh, seed, tag: int) -> int:
 
 def _distribution(seed):
     factor = max(float(seed.bias_factor), 1.0)
-    if seed.bias == "Single":
-        return "Progression", factor
-    if seed.bias == "Double":
-        return "Bump", factor
+    if seed.bias == "Single": return "Progression", factor
+    if seed.bias == "Double": return "Bump", factor
     return "Progression", 1.0

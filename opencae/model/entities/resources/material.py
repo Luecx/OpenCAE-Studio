@@ -29,5 +29,4 @@ class Material(Entity):
                 writer.line("*DENSITY"); writer.line(str(behavior.value))
 
     def write_femaster(self, writer, context) -> None:
-        from opencae.solvers.femaster_dsl.emitters.resources import write_material
-        write_material(self, writer, context)
+        return None

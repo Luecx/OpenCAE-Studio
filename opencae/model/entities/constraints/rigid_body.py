@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from ...core import register_model_type
+from opencae.model.selection import RegionDefinition, as_region_definition
 from .base import Constraint
 
 
@@ -8,9 +9,17 @@ from .base import Constraint
 @dataclass
 class RigidBodyConstraint(Constraint):
     constraint_type: str = field(init=False, default="Rigid Body")
+    reference: RegionDefinition = field(default_factory=RegionDefinition)
+    body: RegionDefinition = field(default_factory=RegionDefinition)
 
-    def write_abaqus(self, writer, context) -> None:
-        return None
+    def __post_init__(self):
+        super().__post_init__(); self.reference = as_region_definition(self.reference); self.body = as_region_definition(self.body)
 
-    def write_femaster(self, writer, context) -> None:
-        super().write_femaster(writer, context)
+    @property
+    def master(self): return self.reference
+    @master.setter
+    def master(self, value): self.reference = as_region_definition(value)
+    @property
+    def slave(self): return self.body
+    @slave.setter
+    def slave(self, value): self.body = as_region_definition(value)

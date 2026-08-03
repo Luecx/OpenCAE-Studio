@@ -1,4 +1,7 @@
-from opencae.model.geometry import GeometryFeature
+from opencae.model.geometry import (
+    GeometryFeature, ImportedStepFeature, PartitionCellFeature, PartitionEdgeFeature,
+    PartitionFaceFeature, PartitionPlaneFeature,
+)
 
 from .context import PartContext
 from .geometry_settings import PartGeometrySettings
@@ -34,9 +37,9 @@ class PartController:
         return self.context.active_part()
 
     def edit_geometry_feature(self, feature: GeometryFeature):
-        if feature.feature_type.startswith("Imported"):
+        if isinstance(feature, ImportedStepFeature):
             return self.lifecycle.edit_import(feature)
-        if feature.feature_type in {"Partition by Plane", "Partition Cell", "Partition Face", "Partition Edge"}:
+        if isinstance(feature, (PartitionPlaneFeature, PartitionCellFeature, PartitionFaceFeature, PartitionEdgeFeature)):
             return self.partitions.edit_partition(feature)
         self.context.store.message.emit(f"No editor is available for {feature.feature_type}")
 

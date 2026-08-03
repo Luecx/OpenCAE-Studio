@@ -1,3 +1,4 @@
+from opencae.model.selection import ViewportSelection
 from opencae.ui.actions.ids import A
 
 
@@ -11,5 +12,5 @@ def available(action_id,store,kind):
     if action_id in {A.DUPLICATE_INSTANCE,A.TRANSFORM_INSTANCE,A.SUPPRESS_INSTANCE}:return has_assembly
     if action_id in {A.FIXED,A.DISPLACEMENT,A.SYMMETRY,A.CLOAD,A.DLOAD,A.PRESSURE,A.VLOAD,A.INERTIA_LOAD,A.TEMPERATURE,A.STEP_LINEAR,A.STEP_NONLINEAR,A.STEP_MODAL,A.STEP_BUCKLING,A.STEP_TRANSIENT}:return has_assembly
     if action_id in {A.PREVIEW_DECK,A.WRITE_DECK,A.RUN}:return bool(project.analyses) and has_assembly
-    if action_id in {A.DELETE_SELECTED,A.EDIT_SELECTED}:return store.selection is not None and not isinstance(store.selection,dict)
+    if action_id in {A.DELETE_SELECTED,A.EDIT_SELECTED}:return store.selection is not None and not isinstance(store.selection, ViewportSelection)
     return True

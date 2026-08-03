@@ -6,7 +6,7 @@ from ...core import Entity, EntityRef, register_model_type
 @register_model_type("orientation")
 @dataclass
 class Orientation(Entity):
-    region_ref: EntityRef = field(default_factory=lambda: EntityRef(expected_type="ElementSet"))
+    region_ref: EntityRef = field(default_factory=lambda: EntityRef(expected_type="Region"))
     coordinate_system_ref: EntityRef | None = None
     orientation_type: str = "Material"
 

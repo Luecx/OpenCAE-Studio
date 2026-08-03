@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QMessageBox
 from opencae.geometry import GeometryService
 from opencae.geometry.errors import GeometryError
 from opencae.model.geometry import GeometryFeature
+from opencae.model.selection import ViewportSelection
 
 from ..busy import busy_cursor
 
@@ -22,10 +23,7 @@ class PartContext:
 
     def replace_part(self, candidate, description):
         part_id = candidate.id
-        def replace(project):
-            index = next(i for i, part in enumerate(project.parts) if part.id == part_id)
-            project.parts[index] = candidate
-        self.store.mutate(description, replace)
+        self.store.replace_entity(description, self.store.project.id, "parts", candidate)
         self.store.set_active_part(part_id)
         self.store.invalidate_scene(description)
 
@@ -46,21 +44,18 @@ class PartContext:
 
     def selected_labels(self, expected_dim=None):
         selection = self.store.selection
-        if not isinstance(selection, dict):
+        if not isinstance(selection, ViewportSelection):
             return ()
-        items = selection.get("entities", [selection])
         return tuple(
-            item.get("name", "") for item in items
-            if (expected_dim is None or item.get("dimension") == expected_dim)
-            and item.get("name")
+            hit.label for hit in selection.hits
+            if (expected_dim is None or hit.dimension == expected_dim) and hit.label
         )
 
     def selected_points(self):
         selection = self.store.selection
-        if not isinstance(selection, dict):
+        if not isinstance(selection, ViewportSelection):
             return ()
-        items = selection.get("entities", [selection])
-        return tuple(tuple(item["point"]) for item in items if item.get("point") is not None)
+        return tuple(hit.world_position for hit in selection.hits if hit.world_position is not None)
 
     @staticmethod
     def split_labels(text):

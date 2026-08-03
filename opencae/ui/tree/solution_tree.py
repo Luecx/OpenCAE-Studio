@@ -1,3 +1,6 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
 from PyQt6.QtCore import QSize,Qt,pyqtSignal
 from PyQt6.QtGui import QStandardItem,QStandardItemModel
 from PyQt6.QtWidgets import QTreeView
@@ -16,8 +19,11 @@ class SolutionTree(QTreeView):
         model=QStandardItemModel(); model.setHorizontalHeaderLabels(["Solutions"]); root=model.invisibleRootItem(); loader=FrdLoader()
         for result in self.store.project.results:
             if result.source_file:
-                try:result.fields=loader.fields(result.source_file)
-                except Exception:pass
+                try:
+                    result.fields = loader.fields(result.source_file)
+                except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                    _LOG.warning("Could not load result tree from %s: %s", result.source_file, exc)
+                    self.store.message.emit(f"Could not load results '{result.name}': {exc}")
             result_item=self._item(result.name,result,None,IconKind.RESULTS); root.appendRow(result_item)
             for step_index,step_id in enumerate(step_ids(result.fields)):
                 step=self._item(step_label(result,step_id,step_index),result,None,IconKind.RESULT_STEP); result_item.appendRow(step)

@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import fields, is_dataclass
 
 from opencae.geometry.section_filter import region_families
-from opencae.model.core import EntityRef, EntityTarget, MeshElementTarget, MeshNodeTarget, TargetKind
-from opencae.model.entities.loads import ConcentratedLoad, DistributedLoad, InertiaLoad, PressureLoad, TemperatureLoad, VolumeLoad
-from opencae.model.entities.supports import Support
+from opencae.model.core import EntityRef
+from opencae.model.entities.loads import TemperatureLoad
+from opencae.model.selection import RegionProjection, RegionRequirement, validate_region_definition
 
 
 def section_assignment_errors(project):
@@ -14,18 +14,25 @@ def section_assignment_errors(project):
     for part in project.parts:
         for assignment in part.section_assignments:
             section = project.try_resolve(assignment.section_ref)
-            region = project.try_resolve(assignment.region_ref)
             if section is None:
                 errors.append(f"{part.name}/{assignment.name}: referenced section does not exist")
                 continue
-            if region is None:
-                errors.append(f"{part.name}/{assignment.name}: referenced element set does not exist")
-                continue
-            families = region_families(part, region)
+            diagnostics = validate_region_definition(
+                project,
+                assignment.target,
+                RegionRequirement(RegionProjection.ELEMENTS, (1, 2, 3), 1),
+                allow_part_local=True,
+            )
+            errors.extend(
+                f"{part.name}/{assignment.name}: {item.message}"
+                for item in diagnostics
+                if item.severity == "error"
+            )
+            families = region_families(project, part, assignment.target)
             if families and section.section_type not in families:
                 actual = ", ".join(sorted(families))
                 errors.append(f"{part.name}/{assignment.name}: {section.section_type} section cannot be assigned to {actual} elements")
-    return errors
+    return _unique(errors)
 
 
 def validate_section_assignments(project):
@@ -39,7 +46,7 @@ def validate_project(project):
     errors = list(project.reference_errors)
     errors.extend(_reference_errors(project))
     errors.extend(section_assignment_errors(project))
-    errors.extend(_target_errors(project))
+    errors.extend(_region_consumer_errors(project))
     errors.extend(_step_errors(project))
     return _unique(errors)
 
@@ -57,9 +64,8 @@ def _reference_errors(project):
             if target is None:
                 errors.append(f"{source.name}.{path}: target '{value.entity_id}' does not exist")
                 return
-            expected = value.expected_type
-            if expected and not _matches_expected(target, expected):
-                errors.append(f"{source.name}.{path}: expected {expected}, got {type(target).__name__}")
+            if value.expected_type and not _matches_expected(target, value.expected_type):
+                errors.append(f"{source.name}.{path}: expected {value.expected_type}, got {type(target).__name__}")
             return
         if hasattr(value, "id") and is_dataclass(value):
             return
@@ -79,86 +85,32 @@ def _reference_errors(project):
     return errors
 
 
-def _matches_expected(entity, expected):
-    normalized = expected.replace(" ", "").casefold()
-    names = {cls.__name__.replace(" ", "").casefold() for cls in type(entity).mro()}
-    region_type = str(getattr(entity, "region_type", "")).replace(" ", "").casefold()
-    if normalized in {"nodeset", "elementset", "surface", "referencepoint"} and region_type == normalized:
-        return True
-    aliases = {
-        "region": {"nodeset", "elementset", "surface", "referencepoint", "region"},
-        "load": {"concentratedload", "distributedload", "pressureload", "volumeload", "temperatureload", "inertiaload", "load"},
-        "support": {"fixedsupport", "displacementsupport", "symmetrysupport", "remotedisplacementsupport", "temperaturesupport", "support"},
-    }
-    return normalized in names or any(name in names for name in aliases.get(normalized, set()))
-
-
-def _target_errors(project):
+def _region_consumer_errors(project):
+    # Reference binding already performs the canonical region checks. Keep this
+    # entry point for callers of validate_project and add domain-specific fields.
     errors = []
-    for entity in (*project.loads, *project.supports):
-        if isinstance(entity, TemperatureLoad):
-            if entity.temperature_field_ref is None or project.try_resolve(entity.temperature_field_ref) is None:
-                errors.append(f"{entity.name}: temperature field is missing")
-            continue
-        target = entity.target
-        if target is None:
-            errors.append(f"{entity.name}: target is missing")
-            continue
-        allowed = _allowed_target_kinds(entity)
-        if target.kind not in allowed:
-            errors.append(f"{entity.name}: {target.kind.value} is not valid for {getattr(entity, 'load_type', getattr(entity, 'support_type', type(entity).__name__))}")
-            continue
-        if isinstance(target, EntityTarget):
-            if target.kind == TargetKind.WHOLE_MODEL:
-                continue
-            resolved = project.try_resolve(target.ref)
-            if resolved is None:
-                errors.append(f"{entity.name}: target does not exist")
-        elif isinstance(target, (MeshNodeTarget, MeshElementTarget)):
-            errors.extend(_mesh_target_errors(project, entity, target))
-        else:
-            errors.append(f"{entity.name}: unsupported target type {type(target).__name__}")
+    for load in project.loads:
+        if isinstance(load, TemperatureLoad):
+            if load.temperature_field_ref is None or project.try_resolve(load.temperature_field_ref) is None:
+                errors.append(f"{load.name}: temperature field is missing")
     return errors
 
 
-def _allowed_target_kinds(entity):
-    if isinstance(entity, Support):
-        return {TargetKind.NODE_SET, TargetKind.REFERENCE_POINT, TargetKind.MESH_NODE}
-    load_type = str(getattr(entity, "load_type", ""))
-    if isinstance(entity, (ConcentratedLoad,)) or load_type in {"Concentrated Load", "Force", "Moment"}:
-        return {TargetKind.NODE_SET, TargetKind.REFERENCE_POINT, TargetKind.MESH_NODE}
-    if isinstance(entity, (DistributedLoad, PressureLoad)) or load_type in {"Surface Traction", "Pressure"}:
-        return {TargetKind.SURFACE}
-    if isinstance(entity, VolumeLoad) or load_type == "Volume Load":
-        return {TargetKind.ELEMENT_SET, TargetKind.MESH_ELEMENT}
-    if isinstance(entity, InertiaLoad) or load_type in {"Inertia Load", "Gravity", "Body load"}:
-        return {TargetKind.ELEMENT_SET, TargetKind.MESH_ELEMENT, TargetKind.WHOLE_MODEL}
-    return {TargetKind.NODE_SET, TargetKind.REFERENCE_POINT, TargetKind.MESH_NODE}
+def _matches_expected(entity, expected):
+    normalized = expected.replace(" ", "").casefold()
+    names = {cls.__name__.replace(" ", "").casefold() for cls in type(entity).mro()}
+    if normalized in names:
+        return True
+    aliases = {
+        "region": {"region", "nodeset", "elementset", "surface"},
+        "nodeset": {"region", "nodeset"},
+        "elementset": {"region", "elementset"},
+        "surface": {"region", "surface"},
+        "load": {"load", "concentratedload", "distributedload", "pressureload", "volumeload", "temperatureload", "inertiaload"},
+        "support": {"support", "fixedsupport", "displacementsupport", "symmetrysupport", "remotedisplacementsupport", "temperaturesupport"},
+    }
+    return bool(names & aliases.get(normalized, set()))
 
-
-def _mesh_target_errors(project, source, target):
-    from opencae.model.entities.assembly import Instance
-    from opencae.model.entities.parts import Part
-
-    owner = project.try_resolve(target.owner_ref)
-    if owner is None:
-        return [f"{source.name}: direct target owner does not exist"]
-    if isinstance(owner, Instance):
-        part = project.try_resolve(owner.part_ref, Part)
-        if part is None:
-            return [f"{source.name}: target instance has no valid part"]
-    elif isinstance(owner, Part):
-        part = owner
-    else:
-        return [f"{source.name}: direct target owner must be a Part or Instance"]
-    if isinstance(target, MeshNodeTarget):
-        if int(target.node_id) not in {int(value) for value in part.mesh.nodes.ids}:
-            return [f"{source.name}: node {target.node_id} does not exist in {owner.name}"]
-    else:
-        element_ids = {int(value) for block in part.mesh.element_blocks for value in block.ids}
-        if int(target.element_id) not in element_ids:
-            return [f"{source.name}: element {target.element_id} does not exist in {owner.name}"]
-    return []
 
 def _step_errors(project):
     errors = []

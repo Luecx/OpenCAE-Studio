@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import opencae.model.entities  # registers all polymorphic model types
+import opencae.model.selection  # registers region/selection model types
 from opencae.model.core import decode_model, encode_model
 from opencae.model.project import Project
 
@@ -23,7 +24,10 @@ def project_from_dict(data: dict[str, Any]) -> Project:
     project = decode_model(migrated)
     if not isinstance(project, Project):
         raise TypeError("The file does not contain an OpenCAE project")
+    from opencae.model.core.reference_binding import repair_project_references
+    repair_errors = repair_project_references(project)
     project.ensure_references(strict=False)
+    project.reference_errors[:0] = repair_errors
     project.metadata["migration"] = {
         "source_version": report.source_version,
         "target_version": report.target_version,

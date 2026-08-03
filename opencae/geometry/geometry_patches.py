@@ -1,3 +1,7 @@
+import logging
+
+_LOG = logging.getLogger(__name__)
+
 import numpy as np
 
 from .snapshots import EdgePatch, SurfacePatch, VertexPatch
@@ -72,5 +76,6 @@ def vertex_patch(gmsh, tag: int) -> VertexPatch | None:
     try:
         point = np.asarray(gmsh.model.getValue(0, tag, []), dtype=float).reshape(3)
         return VertexPatch(tag=tag, point=point)
-    except Exception:
+    except Exception as exc:
+        _LOG.warning("Could not extract vertex patch %s: %s", tag, exc)
         return None

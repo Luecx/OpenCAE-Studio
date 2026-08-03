@@ -1,6 +1,7 @@
 import numpy as np
 
 from .vtk_cell_data import cell_array
+from .safe_operations import remove_actor
 
 
 class ElementControlOverlay:
@@ -8,8 +9,7 @@ class ElementControlOverlay:
 
     def clear(self, plotter):
         for name in self.names:
-            try: plotter.remove_actor(name, reset_camera=False, render=False)
-            except Exception: pass
+            remove_actor(plotter, name)
 
     def show(self, plotter, scene, selected=(), propagated=()):
         self.clear(plotter); grid = scene.mesh_grid

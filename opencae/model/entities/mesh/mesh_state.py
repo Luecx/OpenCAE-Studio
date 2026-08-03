@@ -22,9 +22,11 @@ class MeshState:
     element_blocks: list[ElementBlock] = field(default_factory=list)
     entity_nodes: dict[str, list[int]] = field(default_factory=dict)
     entity_elements: dict[str, list[int]] = field(default_factory=dict)
+    entity_facets: dict[str, list[tuple[int, str]]] = field(default_factory=dict)
     node_count: int = 0
     element_count: int = 0
     mesh_dimension: int = 0
     minimum_quality: float | None = None
     mean_quality: float | None = None
     status: str = "Not generated"
+    revision: str = ""

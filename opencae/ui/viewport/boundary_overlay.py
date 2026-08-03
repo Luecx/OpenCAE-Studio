@@ -5,6 +5,7 @@ import pyvista as pv
 
 from .boundary_geometry import region_samples
 from .screen_scale import world_size_for_pixels
+from .safe_operations import add_interaction_observer, remove_actor
 
 _AXES = np.eye(3)
 
@@ -12,13 +13,11 @@ _AXES = np.eye(3)
 class BoundaryOverlay:
     def __init__(self, owner):
         self.owner = owner; self._names = []; self._project = self._scene = None
-        try: owner.plotter.iren.add_observer("EndInteractionEvent", self._camera_changed)
-        except Exception: pass
+        add_interaction_observer(owner.plotter.iren, "EndInteractionEvent", self._camera_changed)
 
     def clear(self, plotter):
         for name in self._names:
-            try: plotter.remove_actor(name, reset_camera=False, render=False)
-            except Exception: pass
+            remove_actor(plotter, name)
         self._names.clear()
 
     def show(self, plotter, project, scene):

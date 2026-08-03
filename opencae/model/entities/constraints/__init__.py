@@ -4,13 +4,13 @@ from .equation import EquationConstraint
 from .factory import create_constraint
 from .kinematic_coupling import KinematicCoupling
 from .mpc import MPCConstraint
-from .reference import ConstraintReference
 from .rigid_body import RigidBodyConstraint
+from .requirements import constraint_region_requirement, constraint_selection_policy, direct_control_point_error
 from .tie import TieConstraint
-from .types import ConstraintReferenceKind, ConstraintType
+from .types import ConstraintType
 
 __all__ = [
-    "Constraint", "ConstraintReference", "ConstraintReferenceKind", "ConstraintType",
+    "Constraint", "ConstraintType",
     "DistributingCoupling", "EquationConstraint", "KinematicCoupling", "MPCConstraint",
-    "RigidBodyConstraint", "TieConstraint", "create_constraint",
+    "RigidBodyConstraint", "TieConstraint", "create_constraint", "direct_control_point_error",
 ]

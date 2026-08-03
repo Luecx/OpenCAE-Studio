@@ -20,7 +20,7 @@ def face_color(mesh, tag: int):
             directional = 0.62 + 0.30 * abs(float(np.dot(normal, _LIGHT)))
         else:
             directional = 0.78
-    except Exception:
+    except (AttributeError, KeyError, RuntimeError, TypeError, ValueError):
         directional = 0.74 + 0.03 * ((tag % 5) - 2)
     tint = 0.018 * ((tag % 7) - 3)
     return tuple(np.clip(_BASE * directional + tint, 0.18, 0.92))
@@ -30,7 +30,7 @@ def mesh_cell_colors(mesh):
     """Return stable per-cell RGB shading for a triangulated mesh surface."""
     try:
         normals = np.asarray(mesh.cell_data["Normals"], dtype=float)
-    except Exception:
+    except (AttributeError, KeyError, RuntimeError, TypeError, ValueError):
         normals = mesh.compute_normals(
             cell_normals=True, point_normals=False, inplace=False,
         ).cell_data["Normals"]

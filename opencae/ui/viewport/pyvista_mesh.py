@@ -53,5 +53,5 @@ def _display_surface(grid):
             cell_normals=True, point_normals=True, split_vertices=True,
             consistent_normals=True, auto_orient_normals=False, inplace=False,
         )
-    except Exception:
+    except (AttributeError, RuntimeError, TypeError, ValueError):
         return surface

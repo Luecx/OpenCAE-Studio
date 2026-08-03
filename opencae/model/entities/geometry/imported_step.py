@@ -8,9 +8,8 @@ from .feature import GeometryFeature
 @dataclass
 class ImportedStepFeature(GeometryFeature):
     feature_type: str = field(init=False, default="Imported OCC Geometry")
+    source_file: str = ""
 
-    def write_abaqus(self, writer, context) -> None:
-        return None
-
-    def write_femaster(self, writer, context) -> None:
-        return None
+    def __post_init__(self):
+        super().__post_init__()
+        self.source_file = str(self.source_file or "")

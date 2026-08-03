@@ -1,4 +1,6 @@
 from .tree_items import append_collection, folder, item
+from opencae.model.selection import RegionProjection, selection_item_label
+from opencae.model.entities.regions.collection import regions_with_projection
 
 
 def append_part(parts, part):
@@ -7,10 +9,14 @@ def append_part(parts, part):
     _append_geometry(part_node, part)
     _append_datums(part_node, part)
     _append_mesh(part_node, part)
+    regions = folder("Regions", "regions", part.id)
+    part_node.appendRow(regions)
+    append_collection(regions, "Node Regions", regions_with_projection(part.regions, RegionProjection.NODES), "node_sets", part.id)
+    append_collection(regions, "Element Regions", regions_with_projection(part.regions, RegionProjection.ELEMENTS), "element_sets", part.id)
+    append_collection(regions, "Surface Regions", regions_with_projection(part.regions, RegionProjection.FACETS), "surfaces", part.id)
+    mixed = [item for item in part.regions if item.preferred_projection is None]
+    append_collection(regions, "Mixed Regions", mixed, "regions_mixed", part.id)
     collections = (
-        ("Node Sets", part.node_sets, "node_sets"),
-        ("Element Sets", part.element_sets, "element_sets"),
-        ("Surfaces", part.surfaces, "surfaces"),
         ("Coordinate Systems", part.coordinate_systems, "coordinate_systems"),
         ("Reference Points", part.reference_points, "reference_points"),
         ("Orientations", part.orientations, "orientations"),
@@ -48,7 +54,7 @@ def _append_mesh(part_node, part):
     for control in part.mesh.controls:
         mesh.appendRow(item(control.name, control, "mesh_control", part_id=part.id))
     for control in part.mesh.element_controls:
-        target = "Entire Part" if not control.targets else ", ".join(map(str, control.targets))
+        target = "Entire Part" if control.target.empty else ", ".join(selection_item_label(None, value) for value in control.target.items)
         mesh.appendRow(item(control.name, control, "element_control", f"[{control.order.value} | {target}]", part_id=part.id))
     mesh.appendRow(item("Nodes", {"count": part.mesh.node_count, "status": part.mesh.status}, "nodes", f"({part.mesh.node_count:,})", part_id=part.id))
     elements = folder("Elements", "elements", part.id)

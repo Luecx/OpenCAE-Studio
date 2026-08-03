@@ -9,7 +9,7 @@ from opencae.ui.core.form_dialog import FormDialog
 class ImportGeometryDialog(FormDialog):
     def __init__(self,active_part=None,feature=None,existing_names=(),parent=None,default_part_name="Part-1",default_feature_name="Import Geometry-1"):
         self.active_part=active_part; self.existing_names={name.casefold() for name in existing_names}
-        current_file=str(feature.parameters.get('file','')) if feature else ''
+        current_file=str(getattr(feature, 'source_file', '')) if feature else ''
         part_name=active_part.name if active_part else default_part_name
         if active_part and active_part.geometry and feature is None:part_name=default_part_name
         settings=active_part.geometry_settings if active_part else None

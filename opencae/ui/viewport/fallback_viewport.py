@@ -17,6 +17,10 @@ class FallbackViewport(QWidget):
     def show_model_selection(self,*_): pass
     def show_solution(self,*_): pass
     def begin_context_pick(self,*_): pass
+    def begin_selection_session(self,*_,**__): pass
     def cancel_context_pick(self): pass
     def show_datum_preview(self,*_): pass
     def hide_datum_preview(self): pass
+    def show_region_preview(self,*_,**__): pass
+    def clear_region_preview(self,*_): pass
+    def clear_region_previews(self,*_): pass

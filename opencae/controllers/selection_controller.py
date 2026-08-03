@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 from PyQt6.QtWidgets import QDialog, QInputDialog, QMessageBox
 
 from opencae.model.geometry import GeometryFeature
 from opencae.model.mesh import ElementControl, MeshControl, Seed
 from opencae.model.part import Part
 from opencae.model.regions import Region
+from opencae.model.selection import ViewportSelection
+from opencae.store.commands import CompositeCommand, entity_collection_location, make_delete_command, make_replace_command
 from opencae.ui.dialogs.entity_editor import EntityEditorDialog
 
 
@@ -18,7 +22,7 @@ class SelectionController:
 
     def edit_selected(self):
         entity = self.store.selection
-        if entity is None or isinstance(entity, dict):
+        if entity is None or isinstance(entity, ViewportSelection):
             self.store.message.emit("Select an editable model object first")
             return
         if self.part_controller and isinstance(entity, Part):
@@ -67,16 +71,24 @@ class SelectionController:
             if isinstance(entity, (Material, Profile, Section, FieldDefinition)):
                 return self.resource_controller.edit(entity)
 
-        dialog = EntityEditorDialog(entity, self.parent)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.store.mutate(f"Edited {getattr(entity, 'name', type(entity).__name__)}", lambda project: dialog.apply())
-            from opencae.model.regions import CoordinateSystem
-            if isinstance(entity, CoordinateSystem):
-                self.store.invalidate_scene("Coordinate system edited")
+        candidate = deepcopy(entity)
+        dialog = EntityEditorDialog(candidate, self.parent)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        dialog.apply()
+        try:
+            parent_id, attribute = entity_collection_location(self.store.project, entity.id)
+        except ValueError as exc:
+            self.store.message.emit(str(exc))
+            return
+        self.store.replace_entity(f"Edited {getattr(entity, 'name', type(entity).__name__)}", parent_id, attribute, candidate)
+        from opencae.model.regions import CoordinateSystem
+        if isinstance(entity, CoordinateSystem):
+            self.store.invalidate_scene("Coordinate system edited")
 
     def delete_selected(self):
         entity = self.store.selection
-        if entity is None or isinstance(entity, dict):
+        if entity is None or isinstance(entity, ViewportSelection):
             self.store.message.emit("Select a model object first")
             return
         project = self.store.project
@@ -89,7 +101,7 @@ class SelectionController:
         self._delete_referenced(entity, uses)
 
     def _delete_referenced(self, entity, uses):
-        from opencae.model.core import compatible_replacements, delete_entity_graph, remove_entity, replace_references
+        from opencae.model.core import compatible_replacements
 
         lines = [f"• {use.source_name} — {use.field_path}" for use in uses[:12]]
         if len(uses) > 12:
@@ -109,34 +121,64 @@ class SelectionController:
             if not candidates:
                 QMessageBox.information(self.parent, "No replacement", "No type-compatible replacement exists in the current project.")
                 return
-            labels = [candidate.name for candidate in candidates]
+            labels = [self._replacement_label(item) for item in candidates]
             label, accepted = QInputDialog.getItem(self.parent, "Replace references", f"Replace {entity.name} with", labels, 0, False)
             if not accepted:
                 return
             replacement = candidates[labels.index(label)]
-
-            def apply(project):
-                replace_references(project, entity.id, replacement)
-                remove_entity(project, entity.id)
-
-            self.store.mutate(f"Replaced references to {entity.name}", apply)
+            command = self._replace_and_delete_command(entity.id, replacement)
+            self.store.execute(f"Replaced references to {entity.name}", command)
             self._after_delete(entity)
         elif clicked is cascade_button:
-            self.store.mutate(f"Deleted {entity.name} and dependents", lambda project: delete_entity_graph(project, entity.id))
+            command = self._cascade_delete_command(entity.id)
+            self.store.execute(f"Deleted {entity.name} and dependents", command)
             self._after_delete(entity)
 
     def _delete_direct(self, entity):
-        from opencae.model.core import remove_entity
-        removed = {"value": False}
-
-        def apply(project):
-            removed["value"] = remove_entity(project, entity.id)
-
-        self.store.mutate(f"Deleted {entity.name}", apply)
-        if removed["value"]:
-            self._after_delete(entity)
-        else:
+        try:
+            parent_id, attribute = entity_collection_location(self.store.project, entity.id)
+        except ValueError:
             self.store.message.emit("This tree node cannot be deleted directly")
+            return
+        self.store.delete_entity(f"Deleted {entity.name}", parent_id, attribute, entity.id)
+        self._after_delete(entity)
+
+    def _replace_and_delete_command(self, old_id, replacement):
+        from opencae.model.core import entity_with_replaced_references
+
+        project = self.store.project
+        commands = []
+        source_ids = sorted({use.source_id for use in project.references_to(old_id) if use.source_id != old_id})
+        for source_id in source_ids:
+            source = project.try_resolve(source_id)
+            if source is None:
+                continue
+            candidate, changed = entity_with_replaced_references(source, old_id, replacement)
+            if not changed:
+                continue
+            parent_id, attribute = entity_collection_location(project, source_id)
+            commands.append(make_replace_command(project, parent_id, attribute, candidate))
+        parent_id, attribute = entity_collection_location(project, old_id)
+        commands.append(make_delete_command(project, parent_id, attribute, old_id))
+        return CompositeCommand(tuple(commands))
+
+    def _cascade_delete_command(self, root_id):
+        from opencae.model.core import cascade_entity_ids
+
+        project = self.store.project
+        ids = cascade_entity_ids(project, root_id)
+        roots = [entity_id for entity_id in ids if project.index.parent_id.get(entity_id) not in ids]
+        commands = []
+        for entity_id in sorted(roots, key=lambda value: project.index.path.get(value, ""), reverse=True):
+            parent_id, attribute = entity_collection_location(project, entity_id)
+            commands.append(make_delete_command(project, parent_id, attribute, entity_id))
+        if not commands:
+            raise ValueError("The selected entity graph cannot be deleted")
+        return CompositeCommand(tuple(commands))
+
+    def _replacement_label(self, entity):
+        path = self.store.project.index.path.get(entity.id, "")
+        return f"{entity.name} — {path}"
 
     def _after_delete(self, entity):
         self.store.select(None)

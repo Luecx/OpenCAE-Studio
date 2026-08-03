@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QCheckBox,QDoubleSpinBox,QGroupBox,QVBoxLayout
+from PyQt6.QtWidgets import QCheckBox,QDoubleSpinBox,QGroupBox,QVBoxLayout,QFormLayout
 
-from opencae.ui.core.widgets import ComponentsWidget,ReferenceSelector
+from opencae.ui.core.widgets import ChevronComboBox,ComponentsWidget,ReferenceSelector
 from .load_common import BaseLoadDialog
 
 
 class LoadDialog(BaseLoadDialog):
-    def __init__(self,load_type,regions=(),coordinate_systems=(),fields=(),create_region=None,pick_region=None,parent=None,default_name="",existing_names=(),load=None):
-        show_csys=load_type in {"Concentrated Load","Surface Traction","Volume Load"};show_region=load_type!="Temperature";super().__init__(load_type,regions,coordinate_systems,create_region,pick_region,show_region,show_csys,parent,default_name,existing_names,load);self.load_type=load_type;self.components=None;self.scalar=None;self.temperature_field=None;self.inertia=None
-        if load_type=="Concentrated Load":self.components=ComponentsWidget(("Fx","Fy","Fz","Mx","My","Mz"),getattr(load,"components",[0.0]*6));self.root.addWidget(self.components)
+    def __init__(self,load_type,project,regions=(),coordinate_systems=(),fields=(),create_region=None,pick_region=None,parent=None,default_name="",existing_names=(),load=None,target_validator=None,target_requirement=None):
+        show_csys=load_type in {"Concentrated Load","Surface Traction","Volume Load"};show_region=load_type!="Temperature";super().__init__(load_type,project,regions,coordinate_systems,create_region,pick_region,show_region,show_csys,parent,default_name,existing_names,load,target_validator,target_requirement);self.load_type=load_type;self.components=None;self.scalar=None;self.temperature_field=None;self.inertia=None;self.distribution=None
+        if load_type=="Concentrated Load":
+            self.components=ComponentsWidget(("Fx","Fy","Fz","Mx","My","Mz"),getattr(load,"components",[0.0]*6));self.root.addWidget(self.components)
+            self.distribution=ChevronComboBox();self.distribution.addItem("Value per resolved node","per_node");self.distribution.addItem("Total value, uniformly distributed","total_uniform");index=self.distribution.findData(str(getattr(load,"distribution","per_node")));self.distribution.setCurrentIndex(max(0,index));self.form.addRow("Interpretation",self.distribution)
         elif load_type in {"Surface Traction","Volume Load"}:self.components=ComponentsWidget(("Fx","Fy","Fz"),getattr(load,"components",[0.0]*3));self.root.addWidget(self.components)
         elif load_type=="Pressure":self.scalar=self._number(getattr(load,"pressure",1.0));self.form.addRow("Pressure",self.scalar)
         elif load_type=="Temperature":
@@ -26,6 +28,7 @@ class LoadDialog(BaseLoadDialog):
     def values(self):
         values=self.common_values()
         if self.components is not None:values["components"]=self.components.values()
+        if self.distribution is not None:values["distribution"]=self.distribution.currentData()
         if self.load_type=="Pressure":values["pressure"]=self.scalar.value()
         if self.load_type=="Temperature":values.update(reference_temperature=self.scalar.value(),temperature_field_id=self.temperature_field.currentValue())
         if self.load_type=="Inertia Load":

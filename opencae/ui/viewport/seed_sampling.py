@@ -2,18 +2,16 @@ from __future__ import annotations
 
 import numpy as np
 
-from opencae.geometry.labels import parse_entity_label
+from opencae.model.selection import local_geometry_tags
 
 
-def edge_overrides(seeds):
+def edge_overrides(part, seeds):
     values = {}
     for seed in seeds:
         if seed.seed_type != "Edge":
             continue
-        for label in seed.targets:
-            parsed = parse_entity_label(label)
-            if parsed and parsed[0] == 1:
-                values[parsed[1]] = seed
+        for tag in local_geometry_tags(part, seed.target, 1):
+            values[tag] = seed
     return values
 
 
@@ -38,17 +36,10 @@ def sample_polyline(patch, count):
         return [points[0]]
     result = []
     for distance in np.linspace(0.0, total, count + 1):
-        index = min(
-            np.searchsorted(cumulative, distance, side="right") - 1,
-            len(points) - 2,
-        )
+        index = min(np.searchsorted(cumulative, distance, side="right") - 1, len(points) - 2)
         span = cumulative[index + 1] - cumulative[index]
-        factor = 0.0 if span <= 1e-14 else (
-            distance - cumulative[index]
-        ) / span
-        result.append(
-            points[index] * (1.0 - factor) + points[index + 1] * factor
-        )
+        factor = 0.0 if span <= 1e-14 else (distance - cumulative[index]) / span
+        result.append(points[index] * (1.0 - factor) + points[index + 1] * factor)
     return result
 
 

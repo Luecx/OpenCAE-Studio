@@ -4,7 +4,10 @@ from ..command import command
 from .assembly_regions import write_assembly_regions
 from .constraints import write_constraint
 from .loads import write_load, write_support
+from .loadcase import write_step
 from .mesh import _safe, write_part_mesh
+from .region_materialization import materialize_region
+from opencae.model.selection import RegionProjection
 from .resources import write_field, write_material, write_orientation, write_profile, write_section
 from .reference_points import write_assembly_reference_points
 
@@ -30,18 +33,28 @@ def write_project(project, writer, context):
         prefix = _safe(instance.name if instance else part.name)
         for assignment in part.section_assignments:
             section = project.try_resolve(assignment.section_ref)
-            region = project.try_resolve(assignment.region_ref)
-            if section is None or region is None: continue
-            elset = context.options.get("instance_region_aliases", {}).get((instance.id, region.id), f"{prefix}_{_safe(region.name)}")
+            if section is None:
+                raise ValueError(f"Section assignment '{assignment.name}' references a missing section")
+            target = materialize_region(
+                assignment.target,
+                RegionProjection.ELEMENTS,
+                writer,
+                context,
+                owner=assignment,
+                proposed_name=f"{prefix}_{_safe(assignment.name)}",
+                instance_id=instance.id,
+                cache_key=("section-assignment", instance.id, assignment.id),
+            ).name
             orientation = project.try_resolve(assignment.orientation_ref) if assignment.orientation_ref else None
             orientation_name = context.solver_name(orientation, orientation.name) if orientation else None
-            write_section(section, elset, orientation_name, writer, context)
+            write_section(section, target, orientation_name, writer, context)
     for constraint in project.assembly.constraints: write_constraint(constraint, writer, context)
     for support in project.supports: write_support(support, writer, context)
     for load in project.loads: write_load(load, writer, context)
-    if context.analysis: context.analysis.write_femaster(writer, context)
-    else:
-        for analysis in project.analyses: analysis.write_femaster(writer, context)
+    analyses = (context.analysis,) if context.analysis else tuple(project.analyses)
+    for analysis in analyses:
+        for step in analysis.steps:
+            write_step(step, writer, context)
     command(writer, "END")
 
 

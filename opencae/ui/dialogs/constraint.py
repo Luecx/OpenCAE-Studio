@@ -1,93 +1,131 @@
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QCheckBox, QDoubleSpinBox, QFormLayout, QLineEdit, QMessageBox, QVBoxLayout
 
-from opencae.model.core import EntityRef
-from opencae.model.entities.constraints import ConstraintReference, ConstraintReferenceKind, ConstraintType
+from opencae.model.entities.constraints import ConstraintType, constraint_region_requirement, direct_control_point_error
 from opencae.model.naming import is_unique
-from opencae.ui.core.fields import FieldSpec
-from opencae.ui.core.form_dialog import FormDialog
+from opencae.model.selection import RegionDefinition
+from opencae.ui.core.apply_dialog import ApplyDialog
+from opencae.ui.core.controls import dialog_buttons
+from opencae.ui.core.widgets import ChevronComboBox, CompactRegionSelector
 
 
-class ConstraintDialog(FormDialog):
-    def __init__(self, masters=(), slaves=(), create_master=None, create_slave=None, parent=None,
+class ConstraintDialog(ApplyDialog):
+    preview_changed = pyqtSignal(object, object)
+    def __init__(self, project, options=(), pick_callback=None, save_callback=None, parent=None,
                  default_name="Constraint-1", existing_names=(), initial_type=ConstraintType.KINEMATIC,
-                 constraint=None, pick_master=None, pick_slave=None):
-        self.existing_names = tuple(existing_names)
-        self.constraint = constraint
-        self.master_refs = _reference_map(masters, ConstraintReferenceKind.REFERENCE_POINT)
-        self.slave_refs = _reference_map(slaves, ConstraintReferenceKind.UNKNOWN)
-        current_master = getattr(getattr(constraint, "master", None), "ref", EntityRef()).entity_id
-        current_slave = getattr(getattr(constraint, "slave", None), "ref", EntityRef()).entity_id
+                 constraint=None, validator=None):
+        super().__init__(parent)
+        self.project = project; self.existing_names = tuple(existing_names); self.constraint = constraint; self.validator = validator
+        self.pick_callback = pick_callback; self.save_callback = save_callback
+        self.setWindowTitle("Edit Constraint" if constraint else "Create Constraint"); self.setMinimumWidth(760)
+        root = QVBoxLayout(self); form = QFormLayout(); self.form = form
+        self.name = QLineEdit(getattr(constraint, "name", default_name))
+        self.kind = ChevronComboBox()
+        for value in ConstraintType: self.kind.addItem(value.value, value.value)
+        current_kind = str(getattr(constraint, "constraint_type", initial_type)); self.kind.setCurrentIndex(max(0, self.kind.findData(current_kind)))
+        master = _master_definition(constraint); slave = _slave_definition(constraint)
+        self.master = CompactRegionSelector(
+            project, master, options,
+            lambda owner, done, finished: self._pick("master", owner, done, finished),
+            lambda owner, definition: self._save("master", owner, definition),
+        )
+        self.slave = CompactRegionSelector(
+            project, slave, options,
+            lambda owner, done, finished: self._pick("slave", owner, done, finished),
+            lambda owner, definition: self._save("slave", owner, definition),
+        )
+        form.addRow("Name", self.name); form.addRow("Type", self.kind); form.addRow("Master / control", self.master); form.addRow("Slave / body", self.slave)
         components = tuple(getattr(constraint, "components", (1, 1, 1, 1, 1, 1)))
-        super().__init__("Edit Constraint" if constraint else "Create Constraint", (
-            FieldSpec("name", "Name", "text", getattr(constraint, "name", default_name)),
-            FieldSpec("constraint_type", "Type", "choice", str(getattr(constraint, "constraint_type", initial_type)), tuple(item.value for item in ConstraintType)),
-            FieldSpec("master_id", "Master / control", "reference", current_master or _first(self.master_refs), tuple((item[0], key) for key, item in self.master_refs.items()), create_callback=create_master, pick_callback=pick_master),
-            FieldSpec("slave_id", "Slave / region", "reference", current_slave or _first(self.slave_refs), tuple((item[0], key) for key, item in self.slave_refs.items()), create_callback=create_slave, pick_callback=pick_slave),
-            FieldSpec("u1", "U1", "bool", bool(components[0])),
-            FieldSpec("u2", "U2", "bool", bool(components[1])),
-            FieldSpec("u3", "U3", "bool", bool(components[2])),
-            FieldSpec("r1", "R1", "bool", bool(components[3])),
-            FieldSpec("r2", "R2", "bool", bool(components[4])),
-            FieldSpec("r3", "R3", "bool", bool(components[5])),
-            FieldSpec("adjust", "Adjust tie", "bool", bool(getattr(constraint, "adjust", False))),
-            FieldSpec("distance", "Tie distance", "float", float(getattr(constraint, "distance", 0.0) or 0.0), minimum=0.0),
-        ), parent, width=580, allow_apply=True)
+        self.components = []
+        for label, value in zip(("U1", "U2", "U3", "R1", "R2", "R3"), components):
+            box = QCheckBox(); box.setChecked(bool(value)); self.components.append(box); form.addRow(label, box)
+        self.adjust = QCheckBox(); self.adjust.setChecked(bool(getattr(constraint, "adjust", False)))
+        self.distance = QDoubleSpinBox(); self.distance.setRange(0.0, 1e300); self.distance.setDecimals(12); self.distance.setValue(float(getattr(constraint, "distance", 0.0) or 0.0))
+        form.addRow("Adjust tie", self.adjust); form.addRow("Tie distance", self.distance)
+        root.addLayout(form); buttons = dialog_buttons(include_apply=True); self.bind_buttons(buttons, True); root.addWidget(buttons)
+        self.kind.currentIndexChanged.connect(self._update_type)
+        self.master.value_changed.connect(lambda _value: self._emit_preview())
+        self.slave.value_changed.connect(lambda _value: self._emit_preview())
+        self._update_type()
+
+    def _pick(self, role, owner, done, finished):
+        return self.pick_callback(self.constraint_type(), role, owner, done, finished) if self.pick_callback else None
+
+    def _save(self, role, owner, definition):
+        if self.save_callback: return self.save_callback(self.constraint_type(), role, owner, definition)
+
+    def constraint_type(self): return ConstraintType.coerce(self.kind.currentData())
+
+    def _update_type(self):
+        # A policy belongs to one concrete field/type.  Changing the constraint
+        # type ends any active viewport session before installing new policies.
+        self.master.finish_pick(); self.slave.finish_pick()
+        kind = self.constraint_type(); tie = kind == ConstraintType.TIE; coupling = kind in {ConstraintType.KINEMATIC, ConstraintType.DISTRIBUTING}
+        self.master.set_requirement(constraint_region_requirement(kind, "master"))
+        self.slave.set_requirement(constraint_region_requirement(kind, "slave"))
+        master_label, slave_label = {
+            ConstraintType.KINEMATIC: ("Control point", "Coupled region"),
+            ConstraintType.DISTRIBUTING: ("Control point", "Distributed region"),
+            ConstraintType.TIE: ("Master surface", "Slave surface"),
+            ConstraintType.RIGID_BODY: ("Reference point", "Rigid body region"),
+        }.get(kind, ("Master", "Slave"))
+        self.form.labelForField(self.master).setText(master_label)
+        self.form.labelForField(self.slave).setText(slave_label)
+        self.form.labelForField(self.adjust).setVisible(tie); self.adjust.setVisible(tie)
+        self.form.labelForField(self.distance).setVisible(tie); self.distance.setVisible(tie)
+        # Coupling and rigid-body control points are always direct visual point
+        # selections.  Named sets/regions are valid only for surface/body and
+        # coupled-region fields.
+        self.master.set_extended_visible(tie)
+        self.slave.set_extended_visible(True)
+        if (coupling or kind == ConstraintType.RIGID_BODY) and not self.master.definition().empty:
+            if direct_control_point_error(self.master.definition()):
+                self.master.clear()
+        for component in self.components:
+            component.setVisible(coupling)
+            label = self.form.labelForField(component)
+            if label: label.setVisible(coupling)
+        self._emit_preview()
+
+    def _emit_preview(self):
+        self.preview_changed.emit(self.master.definition(), self.slave.definition())
+
+    def preview_definitions(self):
+        return self.master.definition(), self.slave.definition()
 
     def values(self):
-        values = super().values()
-        kind = ConstraintType.coerce(values["constraint_type"])
-        values["constraint_type"] = kind
-        master_id = values.pop("master_id")
-        slave_id = values.pop("slave_id")
-        values["master"] = self.master_refs.get(master_id, ("", ConstraintReference(ConstraintReferenceKind.REFERENCE_POINT, EntityRef(str(master_id or ""), "ReferencePoint"))))[1]
-        values["slave"] = self.slave_refs.get(slave_id, ("", ConstraintReference(ConstraintReferenceKind.SURFACE, EntityRef(str(slave_id or "")))))[1]
-        values["components"] = tuple(int(values.pop(key)) for key in ("u1", "u2", "u3", "r1", "r2", "r3"))
-        if kind != ConstraintType.TIE:
-            values["adjust"] = None
-            values["distance"] = None
+        kind = self.constraint_type()
+        values = {"name": self.name.text().strip(), "constraint_type": kind}
+        if kind in {ConstraintType.KINEMATIC, ConstraintType.DISTRIBUTING}:
+            values.update(control_point=self.master.definition(), slave=self.slave.definition(), components=tuple(int(item.isChecked()) for item in self.components))
+        elif kind == ConstraintType.TIE:
+            values.update(master=self.master.definition(), slave=self.slave.definition(), adjust=self.adjust.isChecked(), distance=self.distance.value())
+        elif kind == ConstraintType.RIGID_BODY:
+            values.update(reference=self.master.definition(), body=self.slave.definition())
+        else:
+            values.update(master=self.master.definition(), slave=self.slave.definition())
         return values
 
     def validate(self):
-        values = self.values()
-        name = values["name"]
         allowed = [item for item in self.existing_names if not self.constraint or item.casefold() != self.constraint.name.casefold()]
-        if not is_unique(name, allowed):
-            QMessageBox.warning(self, "Duplicate name", f"A constraint named '{name}' already exists.")
-            return False
-        if not values["master"].ref.entity_id or not values["slave"].ref.entity_id:
-            QMessageBox.warning(self, "Missing reference", "Create or select master and slave references.")
-            return False
+        if not is_unique(self.name.text().strip(), allowed):
+            QMessageBox.warning(self, "Duplicate name", f"A constraint named '{self.name.text().strip()}' already exists."); return False
+        if self.master.definition().empty or self.slave.definition().empty:
+            QMessageBox.warning(self, "Missing target", "Select both master/control and slave/body regions."); return False
+        if self.validator:
+            error = self.validator(self.values())
+            if error: QMessageBox.warning(self, "Invalid constraint regions", error); return False
         return True
 
     def prepare_new(self, default_name, existing_names):
-        self.constraint = None
-        self.existing_names = tuple(existing_names)
-        self._editors["name"].setText(default_name)
-        self._editors["master_id"].clear()
-        self._editors["slave_id"].clear()
+        self.constraint = None; self.existing_names = tuple(existing_names); self.name.setText(default_name); self.master.clear(); self.slave.clear()
 
 
-def _reference_map(values, fallback):
-    result = {}
-    for value in values:
-        if isinstance(value, tuple) and len(value) == 2 and isinstance(value[1], ConstraintReference):
-            label, reference = str(value[0]), value[1]
-        elif isinstance(value, ConstraintReference):
-            reference = value
-            label = reference.ref.legacy_name or reference.ref.entity_id
-        else:
-            kind = _kind_for_entity(value, fallback)
-            reference = ConstraintReference(kind, EntityRef.of(value, kind.value.replace(" ", "")))
-            label = getattr(value, "name", str(value))
-        key = reference.ref.entity_id or reference.ref.legacy_name
-        result[key] = (label, reference)
-    return result
+def _master_definition(constraint):
+    if constraint is None: return RegionDefinition()
+    return getattr(constraint, "control_point", getattr(constraint, "reference", getattr(constraint, "master", RegionDefinition())))
 
 
-def _kind_for_entity(value, fallback):
-    region_type = str(getattr(value, "region_type", ""))
-    return ConstraintReferenceKind.coerce(region_type) if region_type else fallback
-
-
-def _first(values):
-    return next(iter(values), "")
+def _slave_definition(constraint):
+    if constraint is None: return RegionDefinition()
+    return getattr(constraint, "body", getattr(constraint, "slave", RegionDefinition()))

@@ -8,6 +8,7 @@ from .base import Support
 @dataclass
 class SymmetrySupport(Support):
     support_type: str = field(init=False, default="Symmetry")
+    components: list[float | None] = field(default_factory=lambda: [0.0, None, None, None, None, None])
 
     def write_abaqus(self, writer, context) -> None:
         return None

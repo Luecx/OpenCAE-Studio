@@ -8,9 +8,8 @@ from .feature import GeometryFeature
 @dataclass
 class PartitionFaceFeature(GeometryFeature):
     feature_type: str = field(init=False, default="Partition Face")
+    points: tuple[tuple[float, float, float], ...] = field(default_factory=tuple)
 
-    def write_abaqus(self, writer, context) -> None:
-        return None
-
-    def write_femaster(self, writer, context) -> None:
-        return None
+    def __post_init__(self):
+        super().__post_init__()
+        self.points = tuple(tuple(float(component) for component in point) for point in self.points)

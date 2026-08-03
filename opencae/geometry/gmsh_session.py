@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from threading import RLock
+import logging
 
 from .errors import GeometryError
 
 _LOCK = RLock()
+_LOG = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -37,10 +39,10 @@ def gmsh_model(name: str):
         finally:
             try:
                 gmsh.clear()
-            except Exception:
-                pass
+            except Exception as exc:
+                _LOG.debug("Gmsh cleanup failed: %s", exc, exc_info=True)
             if initialized_here:
                 try:
                     gmsh.finalize()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    _LOG.debug("Gmsh finalization failed: %s", exc, exc_info=True)

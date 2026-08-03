@@ -1,114 +1,189 @@
-from PyQt6.QtWidgets import QDialog
+from __future__ import annotations
 
-from opencae.model.naming import next_name
-from opencae.model.core import members_from_selection, region_member_label
+from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
+from PyQt6.QtWidgets import QInputDialog
+
 from opencae.geometry.section_filter import compatible_sections
+from opencae.model.core import EntityRef
+from opencae.model.naming import next_name
 from opencae.model.regions import CoordinateSystem, ReferencePoint, SectionAssignment, create_region
+from opencae.model.selection import NamedRegionOperand, RegionProjection, region_definition_error
 from opencae.ui.dialogs.coordinate_system import CoordinateSystemDialog
 from opencae.ui.dialogs.element_set import ElementSetDialog
 from opencae.ui.dialogs.node_set import NodeSetDialog
 from opencae.ui.dialogs.reference_point import ReferencePointDialog
 from opencae.ui.dialogs.section_assignment import SectionAssignmentDialog
 from opencae.ui.dialogs.surface import SurfaceDialog
-
 from ..dialog_runner import get_values
-from ..region_dialog_session import RegionDialogSession
-from ..region_nested import open_nested_region
+from ..region_selection import begin_region_pick, policy_for_projection, region_options
 
 
 class PartRegions:
     def __init__(self, context):
-        self.ctx = context; self._dialogs = []
-        self._session = RegionDialogSession(context.store, context.parent, self._dialogs)
+        self.ctx = context
+        self._dialogs = []
 
-    def _selection_labels(self): return members_from_selection(self.ctx.store.project, self.ctx.store.selection, self.ctx.active_part())
-    def node_set(self): self._region(NodeSetDialog, "node_sets", "Node Set", "NODE_SET")
-    def element_set(self): self._region(ElementSetDialog, "element_sets", "Element Set", "ELEMENT_SET")
-    def surface(self): self._region(SurfaceDialog, "surfaces", "Surface", "SURFACE")
-
-    def _region(self, dialog_cls, target, region_type, prefix, region=None):
-        part = self.ctx.active_part()
-        if part is None: return
-        collection = getattr(part, target)
-        dialog = dialog_cls(region, self._selection_labels, next_name(prefix, collection),
-                            [item.name for item in collection], self.ctx.parent,
-                            lambda member: region_member_label(self.ctx.store.project, member))
-        self._session.open(dialog, lambda values: self._commit(part.id, target, region_type, region, values))
-
-    def _commit(self, part_id, target, region_type, region, values):
-        part = next((item for item in self.ctx.store.project.parts if item.id == part_id), None)
-        if part is None: return
-        if region is not None: values["id"] = region.id
-        value = create_region(region_type, **values)
-        def apply(_project):
-            collection = getattr(part, target)
-            if region is None: collection.append(value)
-            else: collection[collection.index(region)] = value
-        self.ctx.store.mutate(f"{'Edited' if region else 'Created'} {value.name}", apply)
+    def node_set(self): self._region(RegionProjection.NODES)
+    def element_set(self): self._region(RegionProjection.ELEMENTS)
+    def surface(self): self._region(RegionProjection.FACETS)
 
     def edit_region(self, region):
+        self._region(region.preferred_projection or RegionProjection.NODES, region)
+
+    def _region(self, projection, region=None):
         part = self.ctx.active_part()
-        specs = (("node_sets", "Node Set", "NODE_SET", NodeSetDialog),
-                 ("element_sets", "Element Set", "ELEMENT_SET", ElementSetDialog),
-                 ("surfaces", "Surface", "SURFACE", SurfaceDialog))
-        for target, kind, prefix, dialog in specs:
-            if part and region in getattr(part, target): return self._region(dialog, target, kind, prefix, region)
+        if part is None: return
+        project = self.ctx.store.project
+        projection = RegionProjection(projection)
+        dialog_cls, prefix = {
+            RegionProjection.NODES: (NodeSetDialog, "NODE_REGION"),
+            RegionProjection.ELEMENTS: (ElementSetDialog, "ELEMENT_REGION"),
+            RegionProjection.FACETS: (SurfaceDialog, "SURFACE_REGION"),
+        }[projection]
+        policy = policy_for_projection(projection)
+        options = _without_region(region_options(project, owner=part), getattr(region, "id", None))
+
+        def pick(_owner, done, finished):
+            return begin_region_pick(project, self.ctx.parent.viewport, policy, done, default_owner=part, finished=finished)
+
+        def validate(definition):
+            return region_definition_error(
+                project, definition, policy.requirement, allow_part_local=True
+            )
+
+        dialog = dialog_cls(
+            region=region,
+            project=project,
+            options=options,
+            pick_callback=pick,
+            validator=validate,
+            requirement=policy.requirement,
+            allow_part_local=True,
+            default_name=next_name(prefix, part.regions),
+            existing_names=[item.name for item in part.regions],
+            parent=self.ctx.parent,
+        )
+        self._dialogs.append(dialog)
+        existing_id = getattr(region, "id", None)
+
+        def commit(values):
+            payload = dict(values)
+            if existing_id: payload["id"] = existing_id
+            replacement = create_region("Region", scope="Part", preferred_projection=projection, **payload)
+            description = f"{'Edited' if existing_id else 'Created'} {replacement.name}"
+            if existing_id:
+                self.ctx.store.replace_entity(description, part.id, "regions", replacement)
+            else:
+                self.ctx.store.add_entity(description, part.id, "regions", replacement)
+            self.ctx.store.select(replacement)
+
+        dialog.committed.connect(commit)
+        dialog.finished.connect(lambda _code: self._finish_dialog(dialog))
+        show_modeless_dialog(dialog)
 
     def coordinate_system(self):
         part = self.ctx.active_part()
         if part is None: return
-        values = get_values(CoordinateSystemDialog(next_name("CSYS", part.coordinate_systems),
-                                                    [item.name for item in part.coordinate_systems], self.ctx.parent))
-        if values:
-            csys = CoordinateSystem(name=values["name"], system_type=values["system_type"], origin=values["origin"], axis_1=values["axis_1"], axis_2=values["axis_2"], scope="Part")
-            self.ctx.store.mutate(f"Created {csys.name}", lambda p: part.coordinate_systems.append(csys)); self.ctx.store.invalidate_scene("Coordinate system created")
+        values = get_values(CoordinateSystemDialog(next_name("CSYS", part.coordinate_systems), [item.name for item in part.coordinate_systems], self.ctx.parent))
+        if not values: return
+        system = CoordinateSystem(name=values["name"], system_type=values["system_type"], origin=values["origin"], axis_1=values["axis_1"], axis_2=values["axis_2"], scope="Part")
+        self.ctx.store.add_entity(f"Created {system.name}", part.id, "coordinate_systems", system)
+        self.ctx.store.invalidate_scene("Coordinate system created")
 
     def reference_point(self):
         part = self.ctx.active_part()
         if part is None: return
-        values = get_values(ReferencePointDialog(next_name("RP", part.reference_points),
-                                                  [item.name for item in part.reference_points], parent=self.ctx.parent))
-        if values:
-            point = ReferencePoint(name=values["name"], position=(values["x"], values["y"], values["z"]))
-            self.ctx.store.mutate(f"Created {point.name}", lambda p: part.reference_points.append(point))
+        values = get_values(ReferencePointDialog(next_name("RP", part.reference_points), [item.name for item in part.reference_points], parent=self.ctx.parent))
+        if not values: return
+        point = ReferencePoint(name=values["name"], position=(values["x"], values["y"], values["z"]))
+        self.ctx.store.add_entity(f"Created {point.name}", part.id, "reference_points", point)
 
     def section_assignment(self, assignment=None):
-        part=self.ctx.active_part()
-        if part is None:return
-        project=self.ctx.store.project; resources=getattr(self.ctx.parent.controllers,"resources",None); create_section=(lambda owner=None:resources._section_dialog(parent=owner)) if resources else None
-        dialog=SectionAssignmentDialog(
-            sections=project.sections,regions=part.element_sets,orientations=part.orientations,create_section=create_section,
-            create_region=lambda owner,done:self._nested_element_set(part,owner,done),pick_region=None,
-            default_name=next_name("Section Assignment",part.section_assignments),existing_names=[item.name for item in part.section_assignments],
-            assignment=assignment,section_filter=lambda region_id:compatible_sections(project,part,region_id),parent=self.ctx.parent)
-        dialog.setModal(False);self._dialogs.append(dialog);state={"existing":assignment}
-        def commit():state["existing"]=self._commit_assignment(part.id,dialog,state["existing"])
-        dialog.applied.connect(commit);dialog.accepted.connect(commit);dialog.finished.connect(lambda _code:self._finish_dialog(dialog));dialog.show();dialog.raise_();dialog.activateWindow()
+        part = self.ctx.active_part()
+        if part is None: return
+        project = self.ctx.store.project
+        resources = getattr(self.ctx.parent.controllers, "resources", None)
+        def create_section(owner, done): done(resources._section_dialog(parent=owner))
+        if resources is None: create_section = None
+        policy = policy_for_projection(RegionProjection.ELEMENTS)
 
+        def pick(_owner, done, finished):
+            return begin_region_pick(project, self.ctx.parent.viewport, policy, done, default_owner=part, finished=finished)
+
+        def save(_widget, definition):
+            name, ok = QInputDialog.getText(self.ctx.parent, "Save Region", "Region name:", text=next_name("ELEMENT_REGION", part.regions))
+            if not ok or not name.strip(): return
+            region = create_region("Region", name=name.strip(), scope="Part", definition=definition, preferred_projection=RegionProjection.ELEMENTS)
+            self.ctx.store.add_entity(f"Created {region.name}", part.id, "regions", region)
+
+        def validate(definition):
+            return region_definition_error(
+                project, definition, policy.requirement, allow_part_local=True
+            )
+
+        dialog = SectionAssignmentDialog(
+            project=project,
+            sections=project.sections,
+            regions=region_options(project, owner=part, include_reference_points=False),
+            orientations=part.orientations,
+            create_section=create_section,
+            create_region=save,
+            pick_region=pick,
+            default_name=next_name("Section Assignment", part.section_assignments),
+            existing_names=[item.name for item in part.section_assignments],
+            assignment=assignment,
+            section_filter=lambda definition: compatible_sections(project, part, definition),
+            target_validator=validate,
+            target_requirement=policy.requirement,
+            parent=self.ctx.parent,
+        )
+        self._dialogs.append(dialog)
+        state = {"existing_id": getattr(assignment, "id", None)}
+        preview_channel = f"section-assignment-dialog-{id(dialog)}"
+
+        def preview(definition):
+            self.ctx.parent.viewport.show_region_preview(
+                preview_channel, definition, color="#3296e6",
+                opacity=.62, point_size=16, show_point_labels=False,
+            )
+
+        def finish(_code):
+            self.ctx.parent.viewport.clear_region_preview(preview_channel)
+            self._finish_dialog(dialog)
+
+        dialog.target.value_changed.connect(preview)
+        dialog.applied.connect(lambda: state.update(existing_id=self._commit_assignment(part.id, dialog, state["existing_id"])))
+        dialog.accepted.connect(lambda: state.update(existing_id=self._commit_assignment(part.id, dialog, state["existing_id"])))
+        dialog.finished.connect(finish)
+        show_modeless_dialog(dialog)
+        preview(dialog.target.definition())
+
+    def edit_assignment(self, assignment): self.section_assignment(assignment)
+
+    def _commit_assignment(self, part_id, dialog, existing_id=None):
+        values = dialog.values()
+        if existing_id: values["id"] = existing_id
+        assignment = SectionAssignment(**values)
+        description = f"{'Edited' if existing_id else 'Created'} {assignment.name}"
+        if existing_id:
+            self.ctx.store.replace_entity(description, part_id, "section_assignments", assignment)
+        else:
+            self.ctx.store.add_entity(description, part_id, "section_assignments", assignment)
+        self.ctx.store.select(assignment)
+        return assignment.id
 
     def _finish_dialog(self, dialog):
-        self.ctx.parent.viewport.cancel_context_pick()
+        if hasattr(self.ctx.parent, "viewport"):
+            self.ctx.parent.viewport.cancel_context_pick()
         if dialog in self._dialogs:
             self._dialogs.remove(dialog)
 
-    def edit_assignment(self,assignment):self.section_assignment(assignment)
 
-    def _commit_assignment(self,part_id,dialog,old=None):
-        values=dialog.values()
-        if old:values["id"]=old.id
-        assignment=SectionAssignment(**values)
-        def apply(project):
-            part=project.try_resolve(part_id); collection=part.section_assignments
-            if old is None:collection.append(assignment)
-            else:
-                index=next(i for i,item in enumerate(collection) if item.id==old.id);collection[index]=assignment
-        self.ctx.store.mutate(f"{'Edited' if old else 'Created'} {assignment.name}",apply);self.ctx.store.select(assignment);return assignment
-
-    def _nested_element_set(self, part, owner, done):
-        owner.hide(); collection = part.element_sets
-        dialog = ElementSetDialog(selection_provider=self._selection_labels, default_name=next_name("ELEMENT_SET", collection), existing_names=[i.name for i in collection], parent=self.ctx.parent, member_formatter=lambda member: region_member_label(self.ctx.store.project, member))
-        open_nested_region(self.ctx, dialog, owner, lambda values: self._finish_nested(part, values, done))
-
-    def _finish_nested(self, part, values, done):
-        value = create_region("Element Set", **values)
-        self.ctx.store.mutate(f"Created {value.name}", lambda _project: part.element_sets.append(value)); done(value)
+def _without_region(options, region_id):
+    if not region_id: return options
+    result = []
+    for label, definition in options:
+        if any(isinstance(item.operand, NamedRegionOperand) and item.operand.region_ref.entity_id == region_id for item in definition.items):
+            continue
+        result.append((label, definition))
+    return result

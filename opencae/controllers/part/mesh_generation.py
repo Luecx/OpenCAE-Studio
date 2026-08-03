@@ -42,41 +42,39 @@ class PartMeshGeneration:
         part = self.ctx.active_part()
         if part is None:
             return
-        def clear(_project):
-            part.mesh.node_count = part.mesh.element_count = part.mesh.mesh_dimension = 0
-            part.mesh.minimum_quality = part.mesh.mean_quality = None
-            part.mesh.elements.clear(); part.mesh.nodes.ids.clear(); part.mesh.nodes.coordinates.clear(); part.mesh.element_blocks.clear()
-            part.mesh.entity_nodes.clear(); part.mesh.entity_elements.clear()
-            part.mesh.status = "Not generated"
-        self.ctx.store.mutate(f"Cleared mesh for {part.name}", clear)
+        candidate = deepcopy(part)
+        candidate.mesh.node_count = candidate.mesh.element_count = candidate.mesh.mesh_dimension = 0
+        candidate.mesh.minimum_quality = candidate.mesh.mean_quality = None
+        candidate.mesh.elements.clear()
+        candidate.mesh.nodes.ids.clear()
+        candidate.mesh.nodes.coordinates.clear()
+        candidate.mesh.element_blocks.clear()
+        candidate.mesh.entity_nodes.clear()
+        candidate.mesh.entity_elements.clear()
+        candidate.mesh.entity_facets.clear()
+        candidate.mesh.status = "Not generated"
         self.ctx.service.invalidate(part.id, mesh_only=True)
-        self.ctx.store.invalidate_scene(f"Cleared mesh for {part.name}")
+        self.ctx.replace_part(candidate, f"Cleared mesh for {part.name}")
 
     def edit_elements(self):
         values = get_values(EditElementsDialog(self.ctx.parent))
         part = self.ctx.active_part()
         if not values or part is None:
             return
+        candidate = deepcopy(part)
         existing = next(
             (
-                item for item in part.mesh.elements
+                item for item in candidate.mesh.elements
                 if item.category == values["category"] and item.topology == values["topology"]
             ),
             None,
         )
-
-        def update(_project):
-            if existing is None:
-                target = create_element_definition(
-                    values["category"],
-                    values["topology"],
-                    name=values["topology"],
-                )
-                part.mesh.elements.append(target)
-            else:
-                target = existing
-            target.order = values["order"]
-            target.formulation = values["formulation"]
-            target.count = values["count"] or target.count
-
-        self.ctx.store.mutate(f"Edited {values['topology']}", update)
+        if existing is None:
+            target = create_element_definition(values["category"], values["topology"], name=values["topology"])
+            candidate.mesh.elements.append(target)
+        else:
+            target = existing
+        target.order = values["order"]
+        target.formulation = values["formulation"]
+        target.count = values["count"] or target.count
+        self.ctx.replace_part(candidate, f"Edited {values['topology']}")

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 
 from .entity_membership import extract_entity_membership
 from .snapshots import MeshBlock, MeshSnapshot
+
+_LOG = logging.getLogger(__name__)
 
 
 def extract_mesh(gmsh, part_id: str, dimension: int, fingerprint: str) -> MeshSnapshot:
@@ -55,5 +59,6 @@ def _qualities(gmsh, tags):
     try:
         values = gmsh.model.mesh.getElementQualities(tags, "minSICN")
         return np.asarray(values, dtype=float)
-    except Exception:
+    except Exception as exc:
+        _LOG.warning("Could not evaluate mesh quality: %s", exc)
         return None

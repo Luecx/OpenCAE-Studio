@@ -23,7 +23,7 @@ class FieldSpec:
     maximum: float = 1e12
     decimals: int = 4
     file_filter: str = "All files (*.*)"
-    create_callback: Callable[[], str | None] | None = None
+    create_callback: Callable[[QWidget, Callable[[object], None]], None] | None = None
     pick_callback: Callable | None = None
     read_only: bool = False
 

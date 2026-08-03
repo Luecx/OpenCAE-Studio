@@ -12,9 +12,7 @@ from .instance import Instance
 @dataclass
 class Assembly(Entity):
     instances: list[Instance] = field(default_factory=list)
-    node_sets: list[Region] = field(default_factory=list)
-    element_sets: list[Region] = field(default_factory=list)
-    surfaces: list[Region] = field(default_factory=list)
+    regions: list[Region] = field(default_factory=list)
     coordinate_systems: list[CoordinateSystem] = field(default_factory=list)
     reference_points: list[ReferencePoint] = field(default_factory=list)
     constraints: list[Constraint] = field(default_factory=list)

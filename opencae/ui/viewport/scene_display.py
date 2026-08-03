@@ -21,7 +21,7 @@ class SceneDisplayMixin:
         if self.face_actors or self.mesh_actor or self.mesh_actors or self.result_actor:
             self.owner.plotter.view_isometric(); self.owner.plotter.reset_camera()
 
-    def show_seed_preview(self, seeds): self.seed_overlay.show(self.owner.plotter, self.snapshot, seeds)
+    def show_seed_preview(self, seeds): self.seed_overlay.show(self.owner.plotter, self.snapshot, self.owner.store.active_part(), seeds)
     def hide_seed_preview(self): self.seed_overlay.clear(self.owner.plotter)
 
     def show_field(self, field):

@@ -7,7 +7,7 @@ from .tree_roles import ENTITY_ROLE, KIND_ROLE, PART_ROLE
 _CHILD_KIND = {
     "instances": "instance", "asm_node_sets": "asm_node_set", "asm_element_sets": "asm_element_set",
     "asm_surfaces": "asm_surface", "asm_coordinate_systems": "asm_coordinate_system",
-    "asm_reference_points": "asm_reference_point", "constraints": "constraint",
+    "asm_reference_points": "asm_reference_point", "regions_mixed": "region", "asm_regions_mixed": "asm_region", "constraints": "constraint",
     "supports": "support", "loads": "load",
 }
 

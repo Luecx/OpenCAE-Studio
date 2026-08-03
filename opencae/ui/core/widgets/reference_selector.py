@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable, Iterable
 
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
 from .chevron_combo import ChevronComboBox
+from opencae.ui.core.dialog_lifecycle import activate_dialog
 
 
 class ReferenceSelector(QWidget):
@@ -62,19 +62,15 @@ class ReferenceSelector(QWidget):
         label, data = self._option(value)
         index = self.combo.findData(data)
         if index < 0: self.combo.addItem(label, data); index = self.combo.count() - 1
-        self.combo.setCurrentIndex(index); self.window().raise_(); self.window().activateWindow()
+        self.combo.setCurrentIndex(index); activate_dialog(self)
 
     def _create(self):
         callback = self._create_callback
         if callback is None: return
-        parameters = len(inspect.signature(callback).parameters)
-        if parameters >= 2: callback(self.window(), self._apply_created); return
-        value = callback(self.window()) if parameters == 1 else callback(); self._apply_created(value)
+        callback(self.window(), self._apply_created)
 
     def _pick(self):
         callback = self._pick_callback
         if callback is None: return
         self.pick_button.setChecked(True)
-        parameters = len(inspect.signature(callback).parameters)
-        if parameters >= 2: callback(self.window(), self._apply_created); return
-        value = callback(self.window()) if parameters == 1 else callback(); self._apply_created(value)
+        callback(self.window(), self._apply_created)

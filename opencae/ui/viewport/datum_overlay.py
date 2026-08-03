@@ -4,8 +4,10 @@ import numpy as np
 import pyvista as pv
 
 from opencae.model.entities.datums import DatumPlane, DatumPoint, DatumVector
+from opencae.model.selection import SelectableKind, ViewportHit
 from .instance_transform import transform_points, transform_vector
 from .screen_scale import world_size_for_pixels
+from .safe_operations import remove_actor
 
 
 class DatumOverlay:
@@ -13,8 +15,7 @@ class DatumOverlay:
 
     def clear(self, plotter):
         for name in self._names:
-            try: plotter.remove_actor(name, reset_camera=False, render=False)
-            except Exception: pass
+            remove_actor(plotter, name)
         self._names.clear()
 
     def show_part(self, plotter, part, scene):
@@ -23,11 +24,11 @@ class DatumOverlay:
 
     def show_assembly(self, plotter, project, scene):
         self.clear(plotter)
-        for instance_name, instance in scene.assembly_instances.items():
+        for instance_id, instance in scene.assembly_instances.items():
             part = project.try_resolve(instance.part_ref)
             if part:
                 for index, datum in enumerate(getattr(part, "datums", ())):
-                    self._draw(plotter, scene, datum, f"{instance_name}-{index}", instance, instance_name)
+                    self._draw(plotter, scene, datum, f"{instance_id}-{index}", instance, instance.name)
 
     def _draw(self, plotter, scene, datum, key, instance=None, instance_name=None):
         if isinstance(datum, DatumPoint): self._point(plotter, scene, datum, key, instance, instance_name)
@@ -39,8 +40,14 @@ class DatumOverlay:
         actor = plotter.add_mesh(pv.PolyData([position]), color="#f2cc60", point_size=12,
                                  render_points_as_spheres=True, lighting=False, pickable=True, name=name, render=False)
         label = f"{instance_name}.{datum.name}" if instance_name else datum.name
-        scene.datum_actors[actor] = {"name": label, "kind": "datum_point", "dimension": 0,
-                                    "tag": datum.id, "instance": instance_name, "instance_id": getattr(instance, "id", None), "point": tuple(position)}
+        scene.datum_actors[actor] = ViewportHit(
+            kind=SelectableKind.DATUM_POINT,
+            entity_id=datum.id,
+            instance_id=getattr(instance, "id", None),
+            world_position=tuple(position),
+            dimension=0,
+            label=label,
+        )
         self._label(plotter, position, datum.name, name)
 
     def _vector(self, plotter, scene, datum, key, instance, instance_name):
@@ -49,8 +56,14 @@ class DatumOverlay:
         actor = plotter.add_mesh(pv.Arrow(start=origin, direction=direction, scale=scale), color="#63c7d8",
                                  lighting=False, pickable=True, name=name, render=False)
         label = f"{instance_name}.{datum.name}" if instance_name else datum.name
-        scene.datum_actors[actor] = {"name": label, "kind": "datum_vector", "dimension": -1, "tag": datum.id,
-                                    "instance": instance_name, "instance_id": getattr(instance, "id", None), "point": tuple(origin), "direction": tuple(direction)}
+        scene.datum_actors[actor] = ViewportHit(
+            kind=SelectableKind.DATUM_VECTOR,
+            entity_id=datum.id,
+            instance_id=getattr(instance, "id", None),
+            world_position=tuple(origin),
+            dimension=-1,
+            label=label,
+        )
         self._label(plotter, origin + direction * scale, datum.name, name)
 
     def _plane(self, plotter, scene, datum, key, instance):
@@ -60,8 +73,16 @@ class DatumOverlay:
         mesh = pv.PolyData(points, np.asarray([4, 0, 1, 2, 3])); name = f"datum-plane-{key}"; self._names.append(name)
         actor = plotter.add_mesh(mesh, color="#8f78d8", opacity=.22, show_edges=True, edge_color="#b7a7ef",
                          line_width=1.5, lighting=False, pickable=True, name=name, render=False)
-        scene.datum_actors[actor] = {"name":datum.name,"kind":"datum_plane","dimension":2,"tag":datum.id,
-                                    "point":tuple(origin),"origin":tuple(origin),"normal":tuple(normal),"direction":tuple(normal)}
+        instance_name = getattr(instance, "name", None)
+        label = f"{instance_name}.{datum.name}" if instance_name else datum.name
+        scene.datum_actors[actor] = ViewportHit(
+            kind=SelectableKind.DATUM_PLANE,
+            entity_id=datum.id,
+            instance_id=getattr(instance, "id", None),
+            world_position=tuple(origin),
+            dimension=2,
+            label=label,
+        )
         self._label(plotter, origin, datum.name, name)
 
     def _label(self, plotter, point, text, prefix):

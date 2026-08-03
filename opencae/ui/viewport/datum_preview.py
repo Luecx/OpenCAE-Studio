@@ -9,6 +9,6 @@ class DatumPreview:
     def show(self, plotter, scene, values):
         self.clear(plotter)
         try: datum = create_datum(values["kind"], values.get("name") or "Preview", values["method"], values["parameters"])
-        except Exception: return
+        except (KeyError, TypeError, ValueError): return
         preview_scene = SimpleNamespace(datum_actors={}, assembly_instances={})
         self.overlay.show_part(plotter, SimpleNamespace(datums=[datum]), preview_scene); plotter.render()

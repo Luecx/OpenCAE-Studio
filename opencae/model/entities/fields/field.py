@@ -19,5 +19,4 @@ class FieldDefinition(Entity):
 
     def write_abaqus(self, writer, context) -> None: return None
     def write_femaster(self, writer, context) -> None:
-        from opencae.solvers.femaster_dsl.emitters.resources import write_field
-        write_field(self, writer, context)
+        return None

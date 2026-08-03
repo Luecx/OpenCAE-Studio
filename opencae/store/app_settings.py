@@ -26,8 +26,10 @@ class AppSettings:
     @property
     def solver_configs(self) -> dict:
         raw = self.value("solver/configs", "")
-        try: stored = json.loads(str(raw)) if raw else {}
-        except Exception: stored = {}
+        try:
+            stored = json.loads(str(raw)) if raw else {}
+        except (json.JSONDecodeError, TypeError, ValueError):
+            stored = {}
         configs = {name: dict(values) for name, values in _DEFAULT_SOLVERS.items()}
         for name, values in stored.items():
             if name in configs: configs[name].update(values)
@@ -51,8 +53,10 @@ class AppSettings:
     @property
     def unit_systems(self) -> list[UnitSystem]:
         raw = self.value("units/systems", "")
-        try: values = json.loads(str(raw)) if raw else []
-        except Exception: values = []
+        try:
+            values = json.loads(str(raw)) if raw else []
+        except (json.JSONDecodeError, TypeError, ValueError):
+            values = []
         systems = [UnitSystem.from_dict(item) for item in values if isinstance(item, dict)]
         return systems or default_systems()
 
