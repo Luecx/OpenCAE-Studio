@@ -19,4 +19,5 @@ class IconKind(Enum):
     PROFILE_GRAPH = auto(); STEP_LINEAR = auto(); STEP_NONLINEAR = auto(); STEP_MODAL = auto()
     STEP_BUCKLING = auto(); STEP_TRANSIENT = auto(); REORDER = auto(); MATRIX = auto(); CONTOUR = auto()
     RESULT_STEP = auto(); RESULT_FRAME = auto(); MESH_LINES = auto(); BOUNDARY_LINES = auto(); DEFORMATION = auto()
+    PICK = auto()
     UNDEFORMED = auto(); QUERY_NODE = auto(); QUERY_ELEMENT = auto(); RANGE = auto()

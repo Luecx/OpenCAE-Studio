@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QSignalBlocker, Qt, pyqtSignal
+from PyQt6.QtCore import QSize, QSignalBlocker, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -20,6 +20,8 @@ from opencae.model.selection import (
     selection_item_label,
 )
 from opencae.ui.core.dialog_lifecycle import activate_dialog, show_modeless_dialog
+from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.core.theme import PALETTE
 from .region_selection import RegionSelectionWidget
 
 
@@ -83,7 +85,9 @@ class CompactRegionSelector(QWidget):
         self.summary.setToolTip("No target region selected")
         root.addWidget(self.summary, 1)
 
-        self.pick_button = QPushButton("→")
+        self.pick_button = QPushButton()
+        self.pick_button.setIcon(make_icon(IconKind.PICK, 18, PALETTE["text"]))
+        self.pick_button.setIconSize(QSize(18, 18))
         self.pick_button.setObjectName("InlinePickButton")
         self.pick_button.setAccessibleName("Select in View")
         self.pick_button.setCheckable(True)

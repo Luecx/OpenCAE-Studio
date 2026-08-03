@@ -91,6 +91,14 @@ def make_icon(kind: IconKind | str, size: int = 40, accent: str | None = None) -
         for i,c in enumerate(['#375fc7','#31a6d8','#49bd79','#e5c64a','#e46545']): p.setPen(QPen(QColor(c),4)); p.drawArc(QRectF(size*(.12+i*.05),size*(.15+i*.05),size*(.75-i*.1),size*(.62-i*.1)),20*16,220*16)
     elif kind == IconKind.DEFORM:
         p.drawLine(QPointF(size*.12,size*.65),QPointF(size*.88,size*.65)); path=QPainterPath(); path.moveTo(size*.12,size*.65); path.cubicTo(size*.35,size*.15,size*.62,size*.85,size*.88,size*.28); p.drawPath(path)
+    elif kind == IconKind.PICK:
+        body = QRectF(size*.27, size*.10, size*.46, size*.72)
+        p.drawRoundedRect(body, size*.20, size*.20)
+        p.drawLine(QPointF(size*.50, size*.11), QPointF(size*.50, size*.38))
+        p.drawLine(QPointF(size*.28, size*.39), QPointF(size*.72, size*.39))
+        p.setBrush(fg)
+        p.drawRoundedRect(QRectF(size*.455, size*.19, size*.09, size*.14), size*.04, size*.04)
+        p.setBrush(Qt.BrushStyle.NoBrush)
     elif kind == IconKind.PROBE:
         p.drawEllipse(QRectF(size*.18,size*.18,size*.5,size*.5)); p.drawLine(QPointF(size*.58,size*.58),QPointF(size*.84,size*.84)); p.setBrush(fg); p.drawEllipse(QRectF(size*.38,size*.38,size*.1,size*.1))
     elif kind == IconKind.ANIMATE:

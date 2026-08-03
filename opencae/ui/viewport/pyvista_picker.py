@@ -15,7 +15,7 @@ class PyVistaPicker:
         try: self.owner.plotter.disable_picking()
         except Exception as exc: self.owner.message.emit(f"Could not reset viewport picker: {exc}")
         mode = self.owner.selection_mode
-        if self.owner.stage == "RESULTS":
+        if self.owner.stage == "RESULTS" or not self.owner.context_pick.active or mode == "none":
             self.update_pickability(); return
         try:
             if mode == "point":
@@ -77,9 +77,9 @@ class PyVistaPicker:
         if render: self.owner.plotter.render()
     def update_pickability(self):
         mode = self.owner.selection_mode; scene = self.owner.scene
-        if self.owner.stage == "RESULTS": mode = "none"
         context = self.owner.context_pick
-        if context.active:
+        active = context.active and self.owner.stage != "RESULTS" and mode != "none"
+        if active:
             kinds = context.policy.accepted_kinds
             for actor in scene.face_actors: actor.SetPickable(SelectableKind.GEOMETRY_FACE in kinds or SelectableKind.GEOMETRY_CELL in kinds)
             for actor in scene.edge_actors: actor.SetPickable(SelectableKind.GEOMETRY_EDGE in kinds)
@@ -91,11 +91,13 @@ class PyVistaPicker:
             if scene.mesh_actor is not None: scene.mesh_actor.SetPickable(mesh_pickable)
             for actor in scene.mesh_actors: actor.SetPickable(mesh_pickable)
             return
-        for actor in scene.face_actors: actor.SetPickable(mode in {"auto","face","cell"})
-        for actor in scene.edge_actors: actor.SetPickable(mode in {"auto","edge"})
-        for actor in scene.vertex_actors: actor.SetPickable(mode in {"auto","point"}); actor.SetVisibility(mode in {"auto","point"})
-        for actor in scene.reference_actors: actor.SetPickable(mode in {"auto","point"})
-        for actor, ref in scene.datum_actors.items():
-            actor.SetPickable(mode == "auto" or (mode == "point" and getattr(ref, "kind", None) == SelectableKind.DATUM_POINT))
-        if scene.mesh_actor is not None: scene.mesh_actor.SetPickable(mode in {"point","element"})
-        for actor in scene.mesh_actors: actor.SetPickable(mode in {"point","element"})
+        # No free-form viewport selection exists outside a dialog-owned
+        # context session. Geometry remains visible, but every actor is inert.
+        for actor in scene.face_actors: actor.SetPickable(False)
+        for actor in scene.edge_actors: actor.SetPickable(False)
+        for actor in scene.vertex_actors:
+            actor.SetPickable(False); actor.SetVisibility(False)
+        for actor in scene.reference_actors: actor.SetPickable(False)
+        for actor in scene.datum_actors: actor.SetPickable(False)
+        if scene.mesh_actor is not None: scene.mesh_actor.SetPickable(False)
+        for actor in scene.mesh_actors: actor.SetPickable(False)

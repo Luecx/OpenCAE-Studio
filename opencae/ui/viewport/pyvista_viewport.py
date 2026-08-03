@@ -19,7 +19,7 @@ class PyVistaViewport(QWidget):
     selection_changed = pyqtSignal(object); seed_adjust_requested = pyqtSignal(str,int); message = pyqtSignal(str)
     def __init__(self, store=None, parent=None):
         super().__init__(parent); self.store = store; self.service = GeometryService(); self.stage = "PART"
-        self.selection_mode = "auto"; self.display_mode = "geometry"; self._field_id = None
+        self.selection_mode = "none"; self.display_mode = "geometry"; self._field_id = None
         self._refresh_pending = self._fit_pending = False; self._active_result = self._active_result_field = self._pending_members = None
         self._pending_element_control_preview = None
         self._region_previews = {}
@@ -46,7 +46,17 @@ class PyVistaViewport(QWidget):
             selected, propagated = self._pending_element_control_preview
             self.element_control_overlay.show(self.plotter, self.scene, selected, propagated); self.plotter.render()
     def set_selection_mode(self, mode):
-        self.selection_mode = mode; self.toolbar.set_mode(mode); self.picker.clear(); self.picker.configure(); self.message.emit(f"Selection mode: {mode.title()}")
+        mode = str(mode or "none").lower()
+        if mode != "none" and not self.context_pick.active:
+            mode = "none"
+        self.selection_mode = mode
+        self.toolbar.set_mode(mode)
+        # Changing a dialog-owned pick mode must not clear the object selected
+        # in the project tree. Only temporary viewport pick state is reset.
+        self.picker.clear(False)
+        self.picker.configure()
+        if mode != "none":
+            self.message.emit(f"Selection mode: {mode.title()}")
     def set_display_mode(self, mode):
         if mode != self.display_mode:
             self.display_mode = mode

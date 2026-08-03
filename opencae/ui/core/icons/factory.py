@@ -38,8 +38,9 @@ _ICON_MAP = {
     IconKind.RESULT_STEP:LegacyKind.RESULT_STEP, IconKind.RESULT_FRAME:LegacyKind.RESULT_FRAME,
     IconKind.MESH_LINES:LegacyKind.MESH_LINES, IconKind.BOUNDARY_LINES:LegacyKind.BOUNDARY_LINES, IconKind.DEFORMATION:LegacyKind.DEFORMATION,
     IconKind.UNDEFORMED:LegacyKind.BOUNDARY_LINES, IconKind.QUERY_NODE:LegacyKind.NODE_SET, IconKind.QUERY_ELEMENT:LegacyKind.ELEMENT_SET, IconKind.RANGE:LegacyKind.CONTOUR,
+    IconKind.PICK:LegacyKind.PICK,
 }
 
 
-def make_icon(kind: IconKind, size: int = 40) -> QIcon:
-    return make_legacy_icon(_ICON_MAP[kind], size)
+def make_icon(kind: IconKind, size: int = 40, accent: str | None = None) -> QIcon:
+    return make_legacy_icon(_ICON_MAP[kind], size, accent)
