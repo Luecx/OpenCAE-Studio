@@ -9,6 +9,8 @@ class FallbackViewport(QWidget):
 
     def __init__(self, store=None, parent=None):
         super().__init__(parent)
+        self.display_mode = "geometry"
+        self.visibility = None
         layout = QVBoxLayout(self)
         label = QLabel("3D viewport unavailable\nInstall pyvista, pyvistaqt and VTK")
         label.setObjectName("MutedLabel")
@@ -18,7 +20,8 @@ class FallbackViewport(QWidget):
     def refresh(self, *_): pass
     def request_refresh(self, *_, **__): pass
     def fit_view(self): pass
-    def toggle_mesh(self): pass
+    def toggle_mesh(self): self.set_display_mode("mesh" if self.display_mode == "geometry" else "geometry")
+    def set_display_mode(self, mode): self.display_mode = str(mode or "geometry")
     def clear_scene(self): pass
     def set_stage(self, *_): pass
     def show_model_selection(self, *_): pass
