@@ -10,4 +10,9 @@ def show_result(scene, result, field=None, options=None):
         scene.owner.message.emit(f"Could not open solution: {exc}"); scene.owner.plotter.render(); return
     if camera is None: scene.owner.plotter.view_isometric(); scene.owner.plotter.reset_camera()
     else: restore_camera(scene.owner.plotter, camera)
+    scene.owner.section_view.apply(
+        (options or {}).get("section", {}),
+        scene.result_grid,
+        (scene.result_actor, scene.result_mesh_actor, scene.result_boundary_actor, scene.result_undeformed_actor),
+    )
     scene.owner.plotter.add_axes(color="#dce3e8"); scene.owner.result_query.configure((options or {}).get("query", ""), field); scene.owner.plotter.render()
