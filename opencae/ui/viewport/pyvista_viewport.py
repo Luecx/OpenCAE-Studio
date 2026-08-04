@@ -14,11 +14,13 @@ from .seed_label_events import handle_seed_label_event
 from .safe_qt_interactor import SafeQtInteractor
 from .scene_camera import camera_position, restore_camera
 from .selection_toolbar import SelectionToolbar
+from .section_view import SectionViewController
 from .viewport_canvas import ViewportCanvas
 
 
 class PyVistaViewport(QWidget):
     selection_changed = pyqtSignal(object); seed_adjust_requested = pyqtSignal(str,int); message = pyqtSignal(str)
+    section_changed = pyqtSignal(object)
     def __init__(self, store=None, parent=None):
         super().__init__(parent); self.store = store; self.service = GeometryService(); self.stage = "PART"
         self.selection_mode = "none"; self.display_mode = "geometry"; self._field_id = None
@@ -30,6 +32,7 @@ class PyVistaViewport(QWidget):
         self.plotter = SafeQtInteractor(self.canvas); self.canvas.set_render_widget(self.plotter); self.plotter.set_background(PALETTE["viewport"])
         self.view_cube = self.canvas.cube; self.query_panel = self.canvas.query; self.result_selection_panel = self.canvas.result_selection; self.view_cube.view_requested.connect(self._set_view)
         self.context_pick = ContextPickManager(self); self.datum_preview = DatumPreview(); self.element_control_overlay = ElementControlOverlay(); self.result_query = ResultQueryState(self)
+        self.section_view = SectionViewController(self)
         self.picker = PyVistaPicker(self); self.scene = PyVistaScene(self); self.picker.enable()
         for watched in (self.plotter, getattr(self.plotter,"interactor",None)):
             if watched is not None: watched.installEventFilter(self)
@@ -71,7 +74,7 @@ class PyVistaViewport(QWidget):
         if stage == self.stage: return
         previous = self.stage; self.stage = stage; self.picker.clear(False, False); self.picker.configure()
         self._sync_meshability_legend()
-        if stage != "RESULTS": self.result_query.configure(""); self.result_selection_panel.clear_selection()
+        if stage != "RESULTS": self.section_view.clear_scene(); self.result_query.configure(""); self.result_selection_panel.clear_selection()
         elif self._active_result is not None: self.result_selection_panel.show()
         if self.scene.same_display_context(previous,stage): self.scene.update_stage_overlays(stage)
         else: self.request_refresh()
