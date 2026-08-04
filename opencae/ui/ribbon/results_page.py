@@ -51,6 +51,8 @@ class ResultsPage(QWidget):
         self.previous_frame = ribbon_button("Previous", IconKind.PREVIOUS_FRAME, None, 72)
         self.choose = ResultFieldButton()
         self.next_frame = ribbon_button("Next", IconKind.NEXT_FRAME, None, 72)
+        self.previous_frame.setToolTip("Previous frame in the current step")
+        self.next_frame.setToolTip("Next frame in the current step")
         self.previous_frame.setEnabled(False)
         self.next_frame.setEnabled(False)
         layout.addWidget(ResultRibbonGroup("FIELD", (self.previous_frame, self.choose, self.next_frame)))
