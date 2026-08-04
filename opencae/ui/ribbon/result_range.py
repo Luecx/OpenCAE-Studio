@@ -9,7 +9,7 @@ class ResultRangeButton(QToolButton):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setText("Range")
+        self.setText("Contour")
         self.setIcon(make_icon(IconKind.RANGE, 28))
         self.setIconSize(QSize(28, 28))
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
