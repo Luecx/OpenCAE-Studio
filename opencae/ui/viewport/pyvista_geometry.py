@@ -16,12 +16,13 @@ _BASE_COLORS = {}
 
 
 def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True):
-    """Add CAD actors with diffuse-only normal shading.
+    """Add CAD actors with subtle diffuse-only normal shading.
 
-    The face brightness is produced exclusively by the Lambert diffuse term,
-    i.e. by the angle between the surface normal and one neutral directional
-    light. There are no specular highlights, reflections, rim lights or colored
-    fill lights. The Regular/Irregular classification remains the base tint.
+    Face brightness depends only on the angle between the surface normal and one
+    neutral directional light. A high ambient contribution keeps back-facing
+    surfaces close to their classification color, while a small diffuse term
+    provides a restrained depth cue. Specular highlights and reflections are
+    disabled.
     """
     _configure_geometry_light(plotter)
     faces, edges, vertices = {}, {}, {}
@@ -56,8 +57,8 @@ def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True)
             show_edges=False,
             lighting=True,
             smooth_shading=True,
-            ambient=0.24,
-            diffuse=0.76,
+            ambient=0.88,
+            diffuse=0.12,
             specular=0.0,
             specular_power=1.0,
             pickable=True,
@@ -68,8 +69,8 @@ def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True)
             prop = actor.GetProperty()
             prop.SetLighting(True)
             prop.SetInterpolationToPhong()
-            prop.SetAmbient(0.24)
-            prop.SetDiffuse(0.76)
+            prop.SetAmbient(0.88)
+            prop.SetDiffuse(0.12)
             prop.SetSpecular(0.0)
             prop.SetSpecularPower(1.0)
         except (AttributeError, RuntimeError):
@@ -147,13 +148,7 @@ def set_actor_selected(actor, selected: bool, kind: str = "face"):
 
 
 def _configure_geometry_light(plotter) -> None:
-    """Install one neutral camera light for pure Lambert shading.
-
-    ``Plotter.clear()`` does not consistently preserve PyVista's implicit light
-    on every VTK/PyVista combination. A single explicit non-positional white
-    camera light gives deterministic normal-angle shading without introducing
-    highlights or reflection-like effects.
-    """
+    """Install one neutral camera light for restrained Lambert shading."""
     try:
         from vtkmodules.vtkRenderingCore import vtkLight
 
@@ -179,8 +174,6 @@ def _configure_geometry_light(plotter) -> None:
         light.SwitchOn()
         renderer.AddLight(light)
     except (AttributeError, ImportError, RuntimeError, TypeError):
-        # Lighting setup must never block geometry display. The actor retains
-        # its normals and diffuse-only material settings as a safe fallback.
         return
 
 
