@@ -76,25 +76,24 @@ def write_project(project, writer, context):
     for load in project.loads:
         write_load(load, writer, context)
 
-    steps = _steps_for_export(project, context)
+    steps = _steps_for_export(project)
     if not steps:
         raise ValueError("FEMaster export requires at least one analysis step")
     for step in steps:
         write_step(step, writer, context)
 
 
-def _steps_for_export(project, context):
-    """Return current project-owned steps, never a stale selected object."""
-    if context.analysis is not None:
-        analysis_id = getattr(context.analysis, "id", None)
-        current = project.try_resolve(analysis_id) if analysis_id else None
-        analyses = (current,) if current is not None and hasattr(current, "steps") else tuple(project.analyses)
-    else:
-        analyses = tuple(project.analyses)
+def _steps_for_export(project):
+    """Return every current step in the explicit project order.
 
+    OpenCAE stores each UI step as one entry in ``project.analyses``. Exporting
+    only the currently selected analysis therefore dropped all other steps and
+    made repeated runs depend on the tree selection. A FEMaster model deck now
+    always contains the complete ordered step sequence.
+    """
     result = []
     seen = set()
-    for analysis in analyses:
+    for analysis in tuple(project.analyses):
         for step in tuple(getattr(analysis, "steps", ()) or ()):
             key = getattr(step, "id", None) or id(step)
             if key in seen:
