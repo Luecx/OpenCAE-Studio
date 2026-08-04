@@ -13,6 +13,12 @@ from .responses import evaluate_response
 
 _REQUIRED_FIELDS = {"COMPLIANCE", "DENS_GRAD", "VOLUME", "DENSITY"}
 
+# FEMaster's ResWriter enables scientific formatting but keeps the C++ stream
+# default precision. Arbitrary densities therefore round to about seven
+# significant decimal digits in the text .res file.
+_DENSITY_RELATIVE_TOLERANCE = 2.0e-6
+_DENSITY_ABSOLUTE_TOLERANCE = 5.0e-9
+
 
 @dataclass(frozen=True, slots=True)
 class IterationComputation:
@@ -39,17 +45,52 @@ def read_topology_fields(path, index, expected_density, reader=None):
         name: dense_values(fields[name], index.solver_ids)[:, 0]
         for name in _REQUIRED_FIELDS
     }
-    if not np.allclose(
+    _validate_returned_density(
         values["DENSITY"],
         expected_density,
-        rtol=1.0e-8,
-        atol=1.0e-10,
-        equal_nan=False,
-    ):
-        raise ValueError(
-            "FEMaster returned a DENSITY field that does not match the submitted design"
-        )
+        index.solver_ids,
+    )
     return values
+
+
+def _validate_returned_density(returned, expected, solver_ids):
+    """Check FEMaster's rounded text output against the submitted density."""
+
+    actual = np.asarray(returned, dtype=float).ravel()
+    submitted = np.asarray(expected, dtype=float).ravel()
+    ids = np.asarray(solver_ids, dtype=np.int64).ravel()
+    if actual.shape != submitted.shape or actual.shape != ids.shape:
+        raise ValueError(
+            "FEMaster returned a DENSITY field with a different element count "
+            "than the submitted design"
+        )
+    if not np.all(np.isfinite(actual)) or not np.all(np.isfinite(submitted)):
+        raise ValueError(
+            "FEMaster returned a DENSITY field containing NaN or infinity"
+        )
+
+    difference = np.abs(actual - submitted)
+    allowance = (
+        _DENSITY_ABSOLUTE_TOLERANCE
+        + _DENSITY_RELATIVE_TOLERANCE * np.abs(submitted)
+    )
+    mismatch = difference > allowance
+    if not np.any(mismatch):
+        return
+
+    normalized = difference / np.maximum(allowance, np.finfo(float).tiny)
+    worst = int(np.argmax(normalized))
+    relative = difference[worst] / max(
+        abs(submitted[worst]),
+        _DENSITY_ABSOLUTE_TOLERANCE,
+    )
+    raise ValueError(
+        "FEMaster returned a DENSITY field that does not match the submitted "
+        f"design at solver element {int(ids[worst])}: "
+        f"submitted={submitted[worst]:.12g}, returned={actual[worst]:.12g}, "
+        f"absolute difference={difference[worst]:.3g}, "
+        f"relative difference={relative:.3g}"
+    )
 
 
 def compute_iteration(
