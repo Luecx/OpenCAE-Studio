@@ -6,6 +6,7 @@ from opencae.ui.actions.catalog import register_actions
 from opencae.ui.actions.registry import ActionRegistry
 from opencae.ui.dialogs.about import AboutDialog
 from opencae.ui.menus.menu_bar import build_menus
+from opencae.ui.visibility_state import VisibilityState
 from . import window_layout
 
 
@@ -13,6 +14,7 @@ class MainWindow(QMainWindow):
     def __init__(self, context):
         super().__init__()
         self.context = context
+        self.visibility = VisibilityState(context.store.project, self)
         self.setWindowTitle("OpenCAE Studio — Bracket Study")
         self.resize(1600, 980)
         self.setDockOptions(
@@ -35,6 +37,9 @@ class MainWindow(QMainWindow):
         window_layout.build_status(self)
         context.store.changed.connect(self.refresh_title)
         context.store.changed.connect(self.refresh_action_states)
+        context.store.changed.connect(
+            lambda *_: self.visibility.sync_project(context.store.project)
+        )
         context.store.active_part_changed.connect(self.refresh_action_states)
         context.store.selection_changed.connect(self.refresh_action_states)
         context.store.message.connect(self.statusBar().showMessage)
@@ -68,6 +73,7 @@ class MainWindow(QMainWindow):
             A.ELEMENT_SET,
             A.SURFACE,
             A.SECTION_ASSIGNMENT,
+            A.VISIBILITY,
         ):
             self.actions.get(action_id).setEnabled(has_part)
         for action_id in (
