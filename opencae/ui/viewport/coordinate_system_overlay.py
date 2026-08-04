@@ -11,16 +11,19 @@ class CoordinateSystemOverlay:
         for name in self._names:
             remove_actor(plotter, name)
         self._names.clear()
-    def show_part(self,plotter,part):
+    def show_part(self,plotter,part,scene=None):
         self.clear(plotter)
-        for i,system in enumerate(getattr(part,"coordinate_systems",())):self._draw(plotter,system,f"part-{i}")
+        for i,system in enumerate(getattr(part,"coordinate_systems",())):
+            if _visible(scene,system):self._draw(plotter,system,f"part-{i}")
     def show_assembly(self,plotter,project,scene):
         self.clear(plotter)
-        for i,system in enumerate(project.assembly.coordinate_systems):self._draw(plotter,system,f"assembly-{i}")
+        for i,system in enumerate(project.assembly.coordinate_systems):
+            if _visible(scene,system):self._draw(plotter,system,f"assembly-{i}")
         for instance_id,instance in scene.assembly_instances.items():
             part=project.try_resolve(instance.part_ref)
             if part:
-                for i,system in enumerate(part.coordinate_systems):self._draw(plotter,system,f"{instance_id}-{i}",instance)
+                for i,system in enumerate(part.coordinate_systems):
+                    if _visible(scene,system):self._draw(plotter,system,f"{instance_id}-{i}",instance)
     def _draw(self,plotter,system,key,instance=None):
         origin=np.asarray(system.origin,dtype=float); x,y,z=self._axes(system)
         if instance:origin=transform_points([origin],instance)[0]; x,y,z=(transform_vector(v,instance) for v in (x,y,z))
@@ -45,3 +48,8 @@ class CoordinateSystemOverlay:
     @staticmethod
     def _unit(value):
         vector=np.asarray(value,dtype=float); norm=np.linalg.norm(vector); return vector/norm if norm>1e-14 else np.asarray((1.,0.,0.))
+
+
+def _visible(scene,entity):
+    visibility=getattr(getattr(scene,"owner",None),"visibility",None)
+    return visibility is None or visibility.is_entity_visible(entity)
