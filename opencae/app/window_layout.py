@@ -25,10 +25,9 @@ def build_ribbon(window):
 
 
 def build_viewport(window):
-    window.viewport = create_viewport(
-        window.context.store,
-        visibility=window.visibility,
-    )
+    window.viewport = create_viewport(window.context.store)
+    window.viewport.visibility = window.visibility
+    window.visibility.changed.connect(window.viewport.request_refresh)
     window.setCentralWidget(window.viewport)
     window.context.store.scene_changed.connect(window.viewport.request_refresh)
     window.context.store.active_part_changed.connect(window.viewport.request_refresh)
