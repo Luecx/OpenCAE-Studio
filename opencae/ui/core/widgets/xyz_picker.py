@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSize, QSignalBlocker, pyqtSignal
-from PyQt6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QPushButton, QWidget
+from PyQt6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QPushButton, QSizePolicy, QWidget
 
 from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.theme import PALETTE
 
 
 class XYZPicker(QWidget):
-    """Three editable coordinates with an optional viewport-pick action."""
+    """Three compact editable coordinates with an optional viewport-pick action."""
 
     pick_requested = pyqtSignal(object, object, object)
     cancel_requested = pyqtSignal()
@@ -28,9 +28,12 @@ class XYZPicker(QWidget):
             editor.setDecimals(8)
             editor.setValue(float(value))
             editor.setPrefix(f"{axis}: ")
+            editor.setMinimumWidth(92)
+            editor.setMaximumWidth(112)
+            editor.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             editor.valueChanged.connect(lambda _value: self.changed.emit())
             self.editors.append(editor)
-            layout.addWidget(editor, 1)
+            layout.addWidget(editor)
         self.pick_button = QPushButton()
         self.pick_button.setIcon(make_icon(IconKind.PICK, 18, PALETTE["text"]))
         self.pick_button.setIconSize(QSize(18, 18))
@@ -42,6 +45,8 @@ class XYZPicker(QWidget):
         self.pick_button.toggled.connect(self._toggle_pick)
         self.pick_button.setVisible(bool(self.allowed))
         layout.addWidget(self.pick_button)
+        layout.addStretch(1)
+        self.setMaximumWidth(390)
 
     def value(self):
         return tuple(editor.value() for editor in self.editors)
