@@ -1,3 +1,5 @@
+"""Builds sparse density, constraint, sensitivity and symmetry operators."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -15,6 +17,8 @@ from opencae.model.entities.optimization import (
 
 @dataclass(frozen=True, slots=True)
 class FilterOperators:
+    """Resolved sparse operators and radii frozen for one optimization run."""
+
     density_constraint: csr_matrix
     sensitivity: csr_matrix
     minimum_distance: float
@@ -22,7 +26,10 @@ class FilterOperators:
     sensitivity_radius: float
 
     def physical_density(self, design_density: np.ndarray) -> np.ndarray:
-        return np.asarray(self.density_constraint @ design_density, dtype=float).ravel()
+        return np.asarray(
+            self.density_constraint @ design_density,
+            dtype=float,
+        ).ravel()
 
     def sensitivity_gradient(
         self,
@@ -36,15 +43,20 @@ class FilterOperators:
         density = np.asarray(physical_density, dtype=float).ravel()
         if density_weighted:
             smoothed = np.asarray(
-                self.sensitivity @ (density * raw), dtype=float
+                self.sensitivity @ (density * raw),
+                dtype=float,
             ).ravel() / np.maximum(density, float(minimum_density))
         else:
             smoothed = np.asarray(self.sensitivity @ raw, dtype=float).ravel()
-        return np.asarray(self.density_constraint.T @ smoothed, dtype=float).ravel()
+        return np.asarray(
+            self.density_constraint.T @ smoothed,
+            dtype=float,
+        ).ravel()
 
     def constraint_gradient(self, physical_gradient: np.ndarray) -> np.ndarray:
         return np.asarray(
-            self.density_constraint.T @ np.asarray(physical_gradient, dtype=float).ravel(),
+            self.density_constraint.T
+            @ np.asarray(physical_gradient, dtype=float).ravel(),
             dtype=float,
         ).ravel()
 
@@ -56,10 +68,20 @@ def build_filter_operators(
     *,
     active_mask: np.ndarray | None = None,
 ) -> FilterOperators:
+    """Build both topology operators once from design-element centroids."""
+
     all_points = np.asarray(centroids, dtype=float)
-    if all_points.ndim != 2 or all_points.shape[1] != 3 or not len(all_points):
+    if (
+        all_points.ndim != 2
+        or all_points.shape[1] != 3
+        or not len(all_points)
+    ):
         raise ValueError("Topology filters require an N x 3 centroid array")
-    active = np.ones(len(all_points), dtype=bool) if active_mask is None else np.asarray(active_mask, dtype=bool).ravel()
+    active = (
+        np.ones(len(all_points), dtype=bool)
+        if active_mask is None
+        else np.asarray(active_mask, dtype=bool).ravel()
+    )
     if len(active) != len(all_points):
         raise ValueError("The topology-filter active mask has the wrong length")
     if not np.any(active):
@@ -103,22 +125,32 @@ def build_filter_operators(
 
 
 def minimum_element_distance(points: np.ndarray) -> float:
+    """Return the minimum positive nearest-neighbour centroid distance."""
+
     values = np.asarray(points, dtype=float)
     if len(values) < 2:
-        scale = float(np.linalg.norm(np.ptp(values, axis=0))) if len(values) else 1.0
+        scale = (
+            float(np.linalg.norm(np.ptp(values, axis=0)))
+            if len(values)
+            else 1.0
+        )
         return max(scale, 1.0)
     distances, _indices = cKDTree(values).query(values, k=2)
     nearest = np.asarray(distances[:, 1], dtype=float)
-    positive = nearest[np.isfinite(nearest) & (nearest > 1.0e-12)]
+    positive = nearest[
+        np.isfinite(nearest) & (nearest > 1.0e-12)
+    ]
     if not len(positive):
-        raise ValueError("Element centroids are coincident; an automatic filter radius cannot be determined")
-    # The literal minimum positive nearest-neighbour distance is used as the
-    # characteristic spacing, matching the UI wording. Near-zero duplicates
-    # have already been removed by the positive tolerance above.
+        raise ValueError(
+            "Element centroids are coincident; an automatic filter radius "
+            "cannot be determined"
+        )
     return float(np.min(positive))
 
 
 def build_distance_matrix(points: np.ndarray, radius: float) -> csr_matrix:
+    """Build a row-normalized linear-distance filter matrix."""
+
     values = np.asarray(points, dtype=float)
     radius = float(radius)
     if radius <= 0.0:
@@ -142,7 +174,10 @@ def build_distance_matrix(points: np.ndarray, radius: float) -> csr_matrix:
             rows.append(row)
             cols.append(column)
             data.append(weight / total)
-    return csr_matrix((data, (rows, cols)), shape=(len(values), len(values)))
+    return csr_matrix(
+        (data, (rows, cols)),
+        shape=(len(values), len(values)),
+    )
 
 
 def build_density_constraint_matrix(
@@ -152,15 +187,7 @@ def build_density_constraint_matrix(
     *,
     duplicate_tolerance: float = 1.0e-9,
 ) -> csr_matrix:
-    """Build the small-radius density/constraint coupling matrix.
-
-    Every symmetry expands the centroid cloud. Each virtual point retains the
-    column index of its original design element. Neighbour weights are then
-    accumulated back onto those original columns. Sequential symmetries form
-    the requested closure: N points become 2N for one mirror and up to 4N for
-    two independent mirrors, while rotational symmetry adds all requested
-    occurrences.
-    """
+    """Build the local density, resource-gradient and symmetry coupling matrix."""
 
     real = np.asarray(points, dtype=float)
     virtual = real.copy()
@@ -172,10 +199,13 @@ def build_density_constraint_matrix(
             transformed_points.append(operation(virtual))
             transformed_sources.append(sources.copy())
         if transformed_points:
-            projected_count = len(virtual) + sum(len(value) for value in transformed_points)
+            projected_count = len(virtual) + sum(
+                len(value) for value in transformed_points
+            )
             if projected_count > 5_000_000:
                 raise ValueError(
-                    "The requested symmetry closure would create more than five million virtual points"
+                    "The requested symmetry closure would create more than "
+                    "five million virtual points"
                 )
             virtual = np.vstack((virtual, *transformed_points))
             sources = np.concatenate((sources, *transformed_sources))
@@ -187,11 +217,14 @@ def build_density_constraint_matrix(
 
     if symmetries and len(virtual) > len(real):
         nearest, _ = cKDTree(real).query(virtual[len(real):], k=1)
-        unmatched = int(np.count_nonzero(np.asarray(nearest) > float(radius)))
+        unmatched = int(
+            np.count_nonzero(np.asarray(nearest) > float(radius))
+        )
         if unmatched:
             raise ValueError(
-                f"Symmetry mapping could not associate {unmatched} virtual element "
-                f"centroid(s) within the density/constraint radius {float(radius):.6g}"
+                f"Symmetry mapping could not associate {unmatched} virtual "
+                "element centroid(s) within the density/constraint radius "
+                f"{float(radius):.6g}"
             )
 
     tree = cKDTree(virtual)
@@ -201,7 +234,9 @@ def build_density_constraint_matrix(
     for row, point in enumerate(real):
         accumulated: dict[int, float] = {}
         for virtual_index in tree.query_ball_point(point, float(radius)):
-            distance = float(np.linalg.norm(point - virtual[virtual_index]))
+            distance = float(
+                np.linalg.norm(point - virtual[virtual_index])
+            )
             weight = max(float(radius) - distance, 0.0)
             if weight <= 0.0:
                 continue
@@ -214,14 +249,23 @@ def build_density_constraint_matrix(
             rows.append(row)
             cols.append(column)
             data.append(weight / total)
-    return csr_matrix((data, (rows, cols)), shape=(len(real), len(real)))
+    return csr_matrix(
+        (data, (rows, cols)),
+        shape=(len(real), len(real)),
+    )
 
 
 def _symmetry_operations(symmetry: TopologySymmetry):
     reference = dict(symmetry.reference or {})
     if symmetry.symmetry_type == SymmetryType.PLANAR:
-        origin = _vector(reference.get("origin") or reference.get("point"), "plane origin")
-        normal = _unit(reference.get("normal") or reference.get("direction"), "plane normal")
+        origin = _vector(
+            reference.get("origin") or reference.get("point"),
+            "plane origin",
+        )
+        normal = _unit(
+            reference.get("normal") or reference.get("direction"),
+            "plane normal",
+        )
 
         def reflect(points):
             values = np.asarray(points, dtype=float)
@@ -230,8 +274,14 @@ def _symmetry_operations(symmetry: TopologySymmetry):
 
         return (reflect,)
 
-    origin = _vector(reference.get("origin") or reference.get("point"), "rotation-axis origin")
-    axis = _unit(reference.get("direction"), "rotation-axis direction")
+    origin = _vector(
+        reference.get("origin") or reference.get("point"),
+        "rotation-axis origin",
+    )
+    axis = _unit(
+        reference.get("direction"),
+        "rotation-axis direction",
+    )
     operations = []
     for index in range(1, int(symmetry.occurrences)):
         angle = 2.0 * np.pi * index / int(symmetry.occurrences)
@@ -250,22 +300,34 @@ def _deduplicate_virtual(points, sources, tolerance):
     keys = np.rint(np.asarray(points, dtype=float) / tolerance).astype(np.int64)
     keep = []
     seen = set()
-    # Source participates in the key: coincident images of different design
-    # elements must both contribute to the coupling weights.
     for index, (key, source) in enumerate(zip(keys, sources)):
-        marker = (int(source), int(key[0]), int(key[1]), int(key[2]))
+        marker = (
+            int(source),
+            int(key[0]),
+            int(key[1]),
+            int(key[2]),
+        )
         if marker in seen:
             continue
         seen.add(marker)
         keep.append(index)
-    return np.asarray(points, dtype=float)[keep], np.asarray(sources, dtype=np.int64)[keep]
+    return (
+        np.asarray(points, dtype=float)[keep],
+        np.asarray(sources, dtype=np.int64)[keep],
+    )
 
 
 def _rodrigues(axis, angle):
     x, y, z = axis
-    cross = np.asarray(((0.0, -z, y), (z, 0.0, -x), (-y, x, 0.0)))
-    identity = np.eye(3)
-    return identity * np.cos(angle) + (1.0 - np.cos(angle)) * np.outer(axis, axis) + np.sin(angle) * cross
+    cross = np.asarray(
+        ((0.0, -z, y), (z, 0.0, -x), (-y, x, 0.0))
+    )
+    unit = np.eye(3)
+    return (
+        unit * np.cos(angle)
+        + (1.0 - np.cos(angle)) * np.outer(axis, axis)
+        + np.sin(angle) * cross
+    )
 
 
 def _vector(value, label):
@@ -285,7 +347,10 @@ def _unit(value, label):
     return result / norm
 
 
-def _embed_active_matrix(matrix: csr_matrix, active_mask: np.ndarray) -> csr_matrix:
+def _embed_active_matrix(
+    matrix: csr_matrix,
+    active_mask: np.ndarray,
+) -> csr_matrix:
     active = np.asarray(active_mask, dtype=bool).ravel()
     active_rows = np.flatnonzero(active)
     inactive_rows = np.flatnonzero(~active)
@@ -296,4 +361,7 @@ def _embed_active_matrix(matrix: csr_matrix, active_mask: np.ndarray) -> csr_mat
     rows.extend(int(value) for value in inactive_rows)
     cols.extend(int(value) for value in inactive_rows)
     data.extend(1.0 for _ in inactive_rows)
-    return csr_matrix((data, (rows, cols)), shape=(len(active), len(active)))
+    return csr_matrix(
+        (data, (rows, cols)),
+        shape=(len(active), len(active)),
+    )
