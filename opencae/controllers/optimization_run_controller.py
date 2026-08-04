@@ -12,11 +12,8 @@ from opencae.model.entities.optimization import (
     OptimizationIteration,
     OptimizationRun,
 )
-from opencae.optimization import (
-    TopologyOptimizationRunner,
-    build_mesh_index,
-    validate_topology_optimization,
-)
+from opencae.optimization import build_mesh_index, validate_topology_optimization
+from opencae.optimization.runner import TopologyOptimizationRunner
 from opencae.ui.dialogs.topology_run import TopologyRunDialog
 
 

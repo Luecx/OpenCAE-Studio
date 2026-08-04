@@ -10,7 +10,6 @@ from .mesh_index import TopologyMeshIndex, build_mesh_index
 from .oc import OcUpdate, optimality_criteria_update
 from .res_reader import ResField, ResFieldReader, ResFormatError, dense_values
 from .responses import ResponseEvaluation, evaluate_response
-from .runner import TopologyOptimizationRunner
 from .validation import validate_topology_optimization
 
 __all__ = [
@@ -22,7 +21,6 @@ __all__ = [
     "ResFormatError",
     "ResponseEvaluation",
     "TopologyMeshIndex",
-    "TopologyOptimizationRunner",
     "build_density_constraint_matrix",
     "build_distance_matrix",
     "build_filter_operators",

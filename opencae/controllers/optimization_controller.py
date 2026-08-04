@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from opencae.optimization import TopologyOptimizationRunner
+from opencae.optimization.runner import TopologyOptimizationRunner
 from opencae.ui.dialogs.topology_run import TopologyRunDialog
 from opencae.ui.viewport.topology_overlay import TopologyDensityOverlay
 
