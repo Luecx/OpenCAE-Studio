@@ -1,6 +1,24 @@
 from PyQt6.QtWidgets import QMenu
+
 from opencae.ui.actions.ids import A
 from .context_rules import available
+from .tree_roles import ENTITY_ROLE, KIND_ROLE
+
+
+VISIBILITY_KINDS = {
+    "datum_point",
+    "datum_vector",
+    "datum_plane",
+    "coordinate_system",
+    "asm_coordinate_system",
+    "reference_point",
+    "asm_reference_point",
+    "orientation",
+    "support",
+    "load",
+    "constraint",
+}
+
 
 MAP={
  "geometry_feature":(A.EDIT_SELECTED,A.SUPPRESS_FEATURE,A.REBUILD_GEOMETRY,A.DELETE_SELECTED),"seed":(A.EDIT_SELECTED,A.DELETE_SELECTED),"element_control":(A.EDIT_SELECTED,A.DELETE_SELECTED),"element_definition":(A.ELEMENT_CONTROLS,),"instance":(A.EDIT_SELECTED,A.TRANSFORM_INSTANCE,A.SUPPRESS_INSTANCE,A.DELETE_SELECTED),
@@ -17,9 +35,38 @@ MAP={
 }
 
 
-def show_context_menu(view,pos,kind,actions,store):
-    ids=[action_id for action_id in MAP.get(kind,()) if available(action_id,store,kind) and actions.get(action_id).isEnabled()]
-    if not ids:return
-    menu=QMenu(view)
-    for action_id in ids:menu.addAction(actions.get(action_id))
+def show_context_menu(view, pos, index, actions, store, visibility=None):
+    kind = index.data(KIND_ROLE) if index.isValid() else None
+    entity = index.data(ENTITY_ROLE) if index.isValid() else None
+    ids = [
+        action_id
+        for action_id in MAP.get(kind, ())
+        if available(action_id, store, kind) and actions.get(action_id).isEnabled()
+    ]
+    can_toggle = bool(
+        visibility is not None
+        and entity is not None
+        and kind in VISIBILITY_KINDS
+    )
+    if not ids and not can_toggle:
+        return
+
+    menu = QMenu(view)
+    if can_toggle:
+        currently_visible = visibility.is_entity_visible(entity)
+        toggle = menu.addAction("Hide" if currently_visible else "Show")
+        toggle.setToolTip(
+            "Hide this object in the viewport"
+            if currently_visible else
+            "Show this object in the viewport"
+        )
+        toggle.triggered.connect(
+            lambda _checked=False, value=entity, visible=currently_visible: visibility.set_entity_visible(
+                value, not visible
+            )
+        )
+        if ids:
+            menu.addSeparator()
+    for action_id in ids:
+        menu.addAction(actions.get(action_id))
     menu.exec(view.viewport().mapToGlobal(pos))
