@@ -87,7 +87,9 @@ class ResultFieldButton(QToolButton):
         for index, step_id in enumerate(step_ids(self.fields)):
             self.step.addItem(make_icon(IconKind.RESULT_STEP, 16), step_label(self.result, step_id, index), step_id)
         if preferred:
-            self.step.setCurrentIndex(max(self.step.findData(preferred.metadata.get("step_id", 1)), 0))
+            step_index = self.step.findData(preferred.metadata.get("step_id", 1))
+            if step_index >= 0:
+                self.step.setCurrentIndex(step_index)
         self._frames(preferred)
 
     def _frames(self, preferred=None, field_name=None, component_name=None):
@@ -96,7 +98,9 @@ class ResultFieldButton(QToolButton):
             self.frame.addItem(make_icon(IconKind.RESULT_FRAME, 16), frame_label(frame_id, value), (frame_id, value))
         if preferred:
             target = int(preferred.metadata.get("frame_id", 1))
-            self.frame.setCurrentIndex(next((index for index in range(self.frame.count()) if self.frame.itemData(index)[0] == target), 0))
+            frame_index = next((index for index in range(self.frame.count()) if self.frame.itemData(index)[0] == target), -1)
+            if frame_index >= 0:
+                self.frame.setCurrentIndex(frame_index)
         self._fields(preferred, field_name, component_name)
 
     def _fields(self, preferred=None, field_name=None, component_name=None):
@@ -107,7 +111,9 @@ class ResultFieldButton(QToolButton):
             self.field.addItem(make_icon(IconKind.RESULT_FIELD, 16), value.name, value)
         target_name = preferred.name if preferred else field_name
         if target_name:
-            self.field.setCurrentIndex(next((index for index, value in enumerate(values) if value.name == target_name), 0))
+            field_index = next((index for index, value in enumerate(values) if value.name == target_name), -1)
+            if field_index >= 0:
+                self.field.setCurrentIndex(field_index)
         self._components(preferred, component_name)
 
     def _components(self, preferred=None, component_name=None):
