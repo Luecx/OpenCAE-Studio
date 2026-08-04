@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 
-REGULAR_COLOR = "#7895a3"
-IRREGULAR_COLOR = "#8b8793"
+# Deliberately distinct, muted CAE-style classification colors.  The colors
+# remain light enough for diffuse normal shading while being immediately
+# distinguishable in the viewport and legend.
+REGULAR_COLOR = "#72a86a"    # green: directly sweep-/structured-meshable
+IRREGULAR_COLOR = "#d0a84f"  # yellow/ochre: requires additional partitioning
 DEFAULT_COLOR = "#7f8d99"
 
 _BASE = np.asarray((0.50, 0.58, 0.64), dtype=float)
