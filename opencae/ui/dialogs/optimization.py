@@ -1,12 +1,12 @@
-from .optimization_setup import (
+"""Compatibility exports for the structured topology optimization dialogs."""
+
+from .optimization_dialogs import (
     OptimizationConstraintDialog,
     OptimizationObjectiveDialog,
     OptimizationResponseDialog,
-    TopologyOptimizationDialog,
-)
-from .optimization_regularization import (
     TopologyControlsDialog,
     TopologyFilterDialog,
+    TopologyOptimizationDialog,
     TopologySymmetryDialog,
 )
 
