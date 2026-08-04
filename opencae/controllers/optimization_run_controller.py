@@ -1,3 +1,5 @@
+"""Controls topology execution, cancellation, iteration navigation and display."""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -18,6 +20,8 @@ from opencae.ui.dialogs.topology_run import TopologyRunDialog
 
 
 class OptimizationRunMixin:
+    """Adds topology run lifecycle and saved-density navigation to a controller."""
+
     def run(self):
         optimization = self._optimization()
         if optimization is None:
@@ -33,11 +37,14 @@ class OptimizationRunMixin:
             QMessageBox.warning(
                 self.parent,
                 "FEMaster unavailable",
-                "Configure a valid FEMaster executable before running topology optimization.",
+                "Configure a valid FEMaster executable before running "
+                "topology optimization.",
             )
             return
         errors, _index, _masks, _operators = validate_topology_optimization(
-            self.store.project, optimization, build_operators=True
+            self.store.project,
+            optimization,
+            build_operators=True,
         )
         if errors:
             QMessageBox.warning(
@@ -59,7 +66,8 @@ class OptimizationRunMixin:
         run = OptimizationRun(
             name=run_name,
             optimization_ref=EntityRef.of(
-                optimization, "TopologyOptimization"
+                optimization,
+                "TopologyOptimization",
             ),
             status="Prepared",
         )
@@ -70,7 +78,10 @@ class OptimizationRunMixin:
         directory = root / f"{safe_name}-{run.id[-8:]}"
         run.directory = str(directory)
         self.store.add_entity(
-            f"Started {run_name}", optimization.id, "runs", run
+            f"Started {run_name}",
+            optimization.id,
+            "runs",
+            run,
         )
         project_snapshot = deepcopy(self.store.project)
         runner = TopologyOptimizationRunner(
@@ -105,7 +116,9 @@ class OptimizationRunMixin:
         candidates = []
         if optimization is not None:
             candidates = [
-                run.id for run in optimization.runs if run.id in self._runners
+                run.id
+                for run in optimization.runs
+                if run.id in self._runners
             ]
         if not candidates:
             candidates = list(self._runners)
@@ -145,11 +158,16 @@ class OptimizationRunMixin:
             selected if isinstance(selected, OptimizationIteration) else None
         )
         if iteration is not None:
-            run = project.try_resolve(project.index.parent_id.get(iteration.id))
+            run = project.try_resolve(
+                project.index.parent_id.get(iteration.id)
+            )
         if not isinstance(run, OptimizationRun) or not run.iterations:
             return
         if iteration is None:
-            index = self._display_iteration.get(run.id, len(run.iterations) - 1)
+            index = self._display_iteration.get(
+                run.id,
+                len(run.iterations) - 1,
+            )
             index = min(max(index, 0), len(run.iterations) - 1)
             iteration = run.iterations[index]
         else:
@@ -192,7 +210,9 @@ class OptimizationRunMixin:
         selected = self.store.selection
         run = selected if isinstance(selected, OptimizationRun) else None
         if isinstance(selected, OptimizationIteration):
-            run = project.try_resolve(project.index.parent_id.get(selected.id))
+            run = project.try_resolve(
+                project.index.parent_id.get(selected.id)
+            )
         if not isinstance(run, OptimizationRun) or not run.iterations:
             optimization = self._optimization()
             run = (
@@ -202,8 +222,14 @@ class OptimizationRunMixin:
             )
         if not isinstance(run, OptimizationRun) or not run.iterations:
             return
-        current = self._display_iteration.get(run.id, len(run.iterations) - 1)
-        target = min(max(current + int(delta), 0), len(run.iterations) - 1)
+        current = self._display_iteration.get(
+            run.id,
+            len(run.iterations) - 1,
+        )
+        target = min(
+            max(current + int(delta), 0),
+            len(run.iterations) - 1,
+        )
         if target == current:
             return
         self._display_iteration[run.id] = target
@@ -213,7 +239,8 @@ class OptimizationRunMixin:
         run = self.store.project.try_resolve(run_id)
         iteration = self.store.project.try_resolve(iteration_id)
         if not isinstance(run, OptimizationRun) or not isinstance(
-            iteration, OptimizationIteration
+            iteration,
+            OptimizationIteration,
         ):
             return
         self._display_iteration[run.id] = len(run.iterations) - 1
@@ -230,12 +257,17 @@ class OptimizationRunMixin:
         if stage != "OPTIMIZATION":
             self._pending_display = None
             self._overlay.clear(self.parent.viewport)
-            self.parent.viewport.clear_region_previews("optimization-selection")
+            self.parent.viewport.clear_region_previews(
+                "optimization-selection"
+            )
             self.parent.viewport.clear_datum_reference_preview()
 
     def _show_density(self, run, iteration, mesh_index, density):
         viewport = self.parent.viewport
-        if not hasattr(viewport, "scene") or not hasattr(viewport, "plotter"):
+        if not hasattr(viewport, "scene") or not hasattr(
+            viewport,
+            "plotter",
+        ):
             return
         self._pending_display = (
             run,
