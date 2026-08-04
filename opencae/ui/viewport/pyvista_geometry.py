@@ -19,7 +19,7 @@ def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True)
     """Add shaded CAD actors while preserving the meshability tint.
 
     QtInteractor can lose PyVista's automatically-created light kit after a
-    renderer clear.  Reinstalling a small camera-light rig here makes the
+    renderer clear. Reinstalling a small camera-light rig here makes the
     normal-based depth cue deterministic instead of depending on whether the
     renderer happened to retain its default light.
     """
@@ -150,7 +150,7 @@ def _configure_geometry_lights(plotter) -> None:
     """Install a clear key/fill/rim rig in camera coordinates.
 
     ``Plotter.clear()`` and the native Qt render path do not consistently keep
-    PyVista's implicit light kit on all VTK/PyVista combinations.  Explicit
+    PyVista's implicit light kit on all VTK/PyVista combinations. Explicit
     camera lights give planar faces visibly different intensities and keep the
     effect attached to the camera while the user rotates the model.
     """
@@ -162,6 +162,9 @@ def _configure_geometry_lights(plotter) -> None:
         automatic = getattr(renderer, "AutomaticLightCreationOff", None)
         if automatic is not None:
             automatic()
+        follow_camera = getattr(renderer, "LightFollowCameraOn", None)
+        if follow_camera is not None:
+            follow_camera()
         two_sided = getattr(renderer, "SetTwoSidedLighting", None)
         if two_sided is not None:
             two_sided(True)
