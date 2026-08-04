@@ -194,16 +194,20 @@ class PartVisibility:
         if snapshot is None:
             return set()
         result = set()
-        fallback = 1
+        next_element_id = 1
         for block in snapshot.blocks:
             if block.dimension != snapshot.dimension:
                 continue
-            tags = block.element_tags
-            if tags is None:
-                tags = range(fallback, fallback + len(block.connectivity))
-            values = [int(value) for value in tags]
+            if block.element_tags is None:
+                values = list(range(
+                    next_element_id,
+                    next_element_id + len(block.connectivity),
+                ))
+            else:
+                values = [int(value) for value in block.element_tags]
             result.update(values)
-            fallback += len(block.connectivity)
+            if values:
+                next_element_id = max(next_element_id, max(values) + 1)
         return result
 
     def _stop_pick(self, dialog):
