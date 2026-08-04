@@ -15,7 +15,7 @@ class ResultFieldButton(QToolButton):
         self.result = None
         self.fields = []
         self.setText("Field")
-        self.setIcon(make_icon(IconKind.FIELD, 28))
+        self.setIcon(make_icon(IconKind.RESULT_FIELD, 28))
         self.setIconSize(QSize(28, 28))
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
@@ -104,7 +104,7 @@ class ResultFieldButton(QToolButton):
         frame = self.frame.currentData() or (1, 0.0)
         values = fields_for(self.fields, self.step.currentData(), frame[0])
         for value in values:
-            self.field.addItem(make_icon(IconKind.FIELD, 16), value.name, value)
+            self.field.addItem(make_icon(IconKind.RESULT_FIELD, 16), value.name, value)
         target_name = preferred.name if preferred else field_name
         if target_name:
             self.field.setCurrentIndex(next((index for index, value in enumerate(values) if value.name == target_name), 0))
