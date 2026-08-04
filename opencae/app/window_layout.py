@@ -28,6 +28,9 @@ def build_viewport(window):
     window.viewport = create_viewport(window.context.store)
     window.viewport.visibility = window.visibility
     window.visibility.changed.connect(window.viewport.request_refresh)
+    window.visibility.changed.connect(
+        lambda: window.viewport.show_model_selection(window.context.store.selection)
+    )
     window.setCentralWidget(window.viewport)
     window.context.store.scene_changed.connect(window.viewport.request_refresh)
     window.context.store.active_part_changed.connect(window.viewport.request_refresh)
