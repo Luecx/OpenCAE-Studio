@@ -10,7 +10,7 @@ def write_step(step, writer, context):
     if support_names: command(writer, "SUPPORTS", [(name,) for name in support_names])
     if step.uses_loads and load_names: command(writer, "LOADS", [(name,) for name in load_names])
     settings = step.settings
-    if step.step_type in {"Linear Static", "Nonlinear Static", "Linear Buckling", "Transient"}: command(writer, "SOLVER", DEVICE=settings.get("device", "CPU"), METHOD=settings.get("method", "DIRECT"))
+    if step.step_type in {"Linear Static", "Linear Static Topology", "Nonlinear Static", "Linear Buckling", "Transient"}: command(writer, "SOLVER", DEVICE=settings.get("device", "CPU"), METHOD=settings.get("method", "DIRECT"))
     if step.step_type in {"Linear Static", "Linear Static Topology", "Nonlinear Static"}: command(writer, "CONSTRAINTMETHOD", TYPE=settings.get("constraint_method", "NULLSPACE"))
     if step.step_type in {"Eigenfrequency", "Linear Buckling"}: command(writer, "NUMEIGENVALUES", [(step.number_of_modes,)])
     if step.step_type == "Nonlinear Static": command(writer, "NONLINEAR", CONTROL=settings.get("control", "LOAD"), INITIAL_INCREMENT=settings.get("initial_increment", 0.1), MINIMUM_INCREMENT=settings.get("minimum_increment", 1e-6), MAXIMUM_INCREMENT=settings.get("maximum_increment", 0.1), MAX_INCREMENTS=settings.get("max_increments", 100), ADAPTIVE=settings.get("adaptive", True), MAXITER=settings.get("max_iterations", 25), TOL=settings.get("tolerance", 1e-8), REGULARIZE_ZERO_ROWS=settings.get("regularize_zero_rows", False), ARC_LENGTH_PSI=settings.get("arc_length_psi") if settings.get("control") == "ARC_LENGTH" else None)
