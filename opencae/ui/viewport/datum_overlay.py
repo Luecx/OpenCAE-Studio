@@ -11,7 +11,8 @@ from .safe_operations import remove_actor
 
 
 class DatumOverlay:
-    def __init__(self): self._names = []
+    def __init__(self):
+        self._names = []
 
     def clear(self, plotter):
         for name in self._names:
@@ -20,7 +21,8 @@ class DatumOverlay:
 
     def show_part(self, plotter, part, scene):
         self.clear(plotter)
-        for index, datum in enumerate(getattr(part, "datums", ())): self._draw(plotter, scene, datum, f"part-{index}")
+        for index, datum in enumerate(getattr(part, "datums", ())):
+            self._draw(plotter, scene, datum, f"part-{index}")
 
     def show_assembly(self, plotter, project, scene):
         self.clear(plotter)
@@ -31,14 +33,28 @@ class DatumOverlay:
                     self._draw(plotter, scene, datum, f"{instance_id}-{index}", instance, instance.name)
 
     def _draw(self, plotter, scene, datum, key, instance=None, instance_name=None):
-        if isinstance(datum, DatumPoint): self._point(plotter, scene, datum, key, instance, instance_name)
-        elif isinstance(datum, DatumVector): self._vector(plotter, scene, datum, key, instance, instance_name)
-        elif isinstance(datum, DatumPlane): self._plane(plotter, scene, datum, key, instance)
+        if isinstance(datum, DatumPoint):
+            self._point(plotter, scene, datum, key, instance, instance_name)
+        elif isinstance(datum, DatumVector):
+            self._vector(plotter, scene, datum, key, instance, instance_name)
+        elif isinstance(datum, DatumPlane):
+            self._plane(plotter, scene, datum, key, instance)
 
     def _point(self, plotter, scene, datum, key, instance, instance_name):
-        position = self._point_transform(datum.position, instance); name = f"datum-point-{key}"; self._names.append(name)
-        actor = plotter.add_mesh(pv.PolyData([position]), color="#f2cc60", point_size=12,
-                                 render_points_as_spheres=True, lighting=False, pickable=True, name=name, render=False)
+        position = self._point_transform(datum.position, instance)
+        name = f"datum-point-{key}"
+        self._names.append(name)
+        actor = plotter.add_mesh(
+            pv.PolyData([position]),
+            color="#ffd166",
+            point_size=15,
+            render_points_as_spheres=True,
+            lighting=False,
+            pickable=True,
+            name=name,
+            render=False,
+        )
+        self._prefer_coincident_point(actor)
         label = f"{instance_name}.{datum.name}" if instance_name else datum.name
         scene.datum_actors[actor] = ViewportHit(
             kind=SelectableKind.DATUM_POINT,
@@ -48,13 +64,22 @@ class DatumOverlay:
             dimension=0,
             label=label,
         )
-        self._label(plotter, position, datum.name, name)
+        self._label(plotter, position, datum.name, name, boxed=True)
 
     def _vector(self, plotter, scene, datum, key, instance, instance_name):
-        origin = self._point_transform(datum.origin, instance); direction = self._vector_transform(datum.direction, instance)
-        scale = world_size_for_pixels(plotter, origin, 55); name = f"datum-vector-{key}"; self._names.append(name)
-        actor = plotter.add_mesh(pv.Arrow(start=origin, direction=direction, scale=scale), color="#63c7d8",
-                                 lighting=False, pickable=True, name=name, render=False)
+        origin = self._point_transform(datum.origin, instance)
+        direction = self._vector_transform(datum.direction, instance)
+        scale = world_size_for_pixels(plotter, origin, 55)
+        name = f"datum-vector-{key}"
+        self._names.append(name)
+        actor = plotter.add_mesh(
+            pv.Arrow(start=origin, direction=direction, scale=scale),
+            color="#63c7d8",
+            lighting=False,
+            pickable=True,
+            name=name,
+            render=False,
+        )
         label = f"{instance_name}.{datum.name}" if instance_name else datum.name
         scene.datum_actors[actor] = ViewportHit(
             kind=SelectableKind.DATUM_VECTOR,
@@ -77,9 +102,21 @@ class DatumOverlay:
             origin + .5 * width * sx * axis + .5 * height * sy * second
             for sx, sy in ((-1., -1.), (1., -1.), (1., 1.), (-1., 1.))
         ])
-        mesh = pv.PolyData(points, np.asarray([4, 0, 1, 2, 3])); name = f"datum-plane-{key}"; self._names.append(name)
-        actor = plotter.add_mesh(mesh, color="#8f78d8", opacity=.16, show_edges=True, edge_color="#b7a7ef",
-                         line_width=1.8, lighting=False, pickable=True, name=name, render=False)
+        mesh = pv.PolyData(points, np.asarray([4, 0, 1, 2, 3]))
+        name = f"datum-plane-{key}"
+        self._names.append(name)
+        actor = plotter.add_mesh(
+            mesh,
+            color="#8f78d8",
+            opacity=.16,
+            show_edges=True,
+            edge_color="#b7a7ef",
+            line_width=1.8,
+            lighting=False,
+            pickable=True,
+            name=name,
+            render=False,
+        )
         instance_name = getattr(instance, "name", None)
         label = f"{instance_name}.{datum.name}" if instance_name else datum.name
         scene.datum_actors[actor] = ViewportHit(
@@ -116,6 +153,15 @@ class DatumOverlay:
         return width, height
 
     @staticmethod
+    def _prefer_coincident_point(actor):
+        try:
+            mapper = actor.GetMapper()
+            mapper.SetResolveCoincidentTopologyToPolygonOffset()
+            mapper.SetRelativeCoincidentTopologyPointOffsetParameter(-2.0)
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+
+    @staticmethod
     def _unit(vector):
         value = np.asarray(vector, dtype=float)
         length = float(np.linalg.norm(value))
@@ -123,12 +169,28 @@ class DatumOverlay:
             return np.asarray((1.0, 0.0, 0.0), dtype=float)
         return value / length
 
-    def _label(self, plotter, point, text, prefix):
-        name = prefix + "-label"; self._names.append(name)
-        plotter.add_point_labels(np.asarray([point]), [text], name=name, point_size=0, show_points=False,
-                                 font_size=10, text_color="#f7f9fb", shape=None, always_visible=True, render=False)
+    def _label(self, plotter, point, text, prefix, boxed=False):
+        name = prefix + "-label"
+        self._names.append(name)
+        options = dict(
+            name=name,
+            point_size=0,
+            show_points=False,
+            font_size=10,
+            text_color="#f7f9fb",
+            always_visible=True,
+            render=False,
+        )
+        if boxed:
+            options.update(shape_color="#242a30", shape_opacity=.84)
+        else:
+            options.update(shape=None)
+        plotter.add_point_labels(np.asarray([point]), [text], **options)
 
     @staticmethod
-    def _point_transform(point, instance): return transform_points([point], instance)[0] if instance else np.asarray(point, float)
+    def _point_transform(point, instance):
+        return transform_points([point], instance)[0] if instance else np.asarray(point, float)
+
     @staticmethod
-    def _vector_transform(vector, instance): return transform_vector(vector, instance) if instance else np.asarray(vector, float)
+    def _vector_transform(vector, instance):
+        return transform_vector(vector, instance) if instance else np.asarray(vector, float)
