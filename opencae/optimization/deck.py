@@ -1,3 +1,5 @@
+"""Renders one FEMaster LINEARSTATICTOPO deck for a density evaluation."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -9,8 +11,12 @@ from opencae.solvers.femaster_dsl.emitters.assembly_regions import write_assembl
 from opencae.solvers.femaster_dsl.emitters.constraints import write_constraint
 from opencae.solvers.femaster_dsl.emitters.loads import write_load, write_support
 from opencae.solvers.femaster_dsl.emitters.mesh import _safe, write_part_mesh
-from opencae.solvers.femaster_dsl.emitters.reference_points import write_assembly_reference_points
-from opencae.solvers.femaster_dsl.emitters.region_materialization import materialize_region
+from opencae.solvers.femaster_dsl.emitters.reference_points import (
+    write_assembly_reference_points,
+)
+from opencae.solvers.femaster_dsl.emitters.region_materialization import (
+    materialize_region,
+)
 from opencae.solvers.femaster_dsl.emitters.resources import (
     write_field,
     write_material,
@@ -19,12 +25,11 @@ from opencae.solvers.femaster_dsl.emitters.resources import (
     write_section,
 )
 
-
 DENSITY_FIELD_NAME = "OPENCAE_TOPO_DENSITY"
 
 
 def render_topology_deck(project, optimization, mesh_index, density: np.ndarray) -> str:
-    """Render one FEMaster ``LINEARSTATICTOPO`` evaluation deck."""
+    """Render one FEMaster topology sensitivity evaluation deck."""
 
     project.ensure_references(strict=True)
     analysis = project.try_resolve(optimization.analysis_ref)
@@ -32,23 +37,39 @@ def render_topology_deck(project, optimization, mesh_index, density: np.ndarray)
         raise ValueError("Topology optimization references a missing analysis")
     steps = tuple(getattr(analysis, "steps", ()) or ())
     if len(steps) != 1:
-        raise ValueError("Topology optimization currently requires exactly one analysis step")
+        raise ValueError(
+            "Topology optimization currently requires exactly one analysis step"
+        )
     step = steps[0]
     if step.step_type != "Linear Static":
-        raise ValueError("Topology optimization currently requires a Linear Static analysis")
+        raise ValueError(
+            "Topology optimization currently requires a Linear Static analysis"
+        )
 
     values = np.asarray(density, dtype=float).ravel()
     if len(values) != mesh_index.count:
-        raise ValueError("The density vector does not match the exported element count")
+        raise ValueError(
+            "The density vector does not match the exported element count"
+        )
 
     writer = DeckWriter()
     context = ExportContext(project, analysis)
-    writer.comment("OpenCAE Studio generated FEMaster topology-optimization deck")
-    command(writer, "MODEL", NAME=context.solver_name(project, project.name))
+    writer.comment(
+        "OpenCAE Studio generated FEMaster topology-optimization deck"
+    )
+    command(
+        writer,
+        "MODEL",
+        NAME=context.solver_name(project, project.name),
+    )
 
-    instances = [item for item in project.assembly.instances if not item.suppressed]
+    instances = [
+        item for item in project.assembly.instances if not item.suppressed
+    ]
     if not instances:
-        raise ValueError("FEMaster topology export requires an active assembly instance")
+        raise ValueError(
+            "FEMaster topology export requires an active assembly instance"
+        )
     node_offset = element_offset = 0
     exported = []
     context.options["region_aliases"] = {}
@@ -75,7 +96,12 @@ def render_topology_deck(project, optimization, mesh_index, density: np.ndarray)
             f"element count ({mesh_index.count} vs {element_offset})"
         )
 
-    node_offset = write_assembly_reference_points(project, writer, context, node_offset)
+    node_offset = write_assembly_reference_points(
+        project,
+        writer,
+        context,
+        node_offset,
+    )
     write_assembly_regions(project, exported, writer, context)
     for system in (
         *project.assembly.coordinate_systems,
@@ -108,7 +134,8 @@ def render_topology_deck(project, optimization, mesh_index, density: np.ndarray)
             section = project.try_resolve(assignment.section_ref)
             if section is None:
                 raise ValueError(
-                    f"Section assignment {assignment.name!r} references a missing section"
+                    f"Section assignment {assignment.name!r} references "
+                    "a missing section"
                 )
             target = materialize_region(
                 assignment.target,
@@ -118,7 +145,11 @@ def render_topology_deck(project, optimization, mesh_index, density: np.ndarray)
                 owner=assignment,
                 proposed_name=f"{prefix}_{_safe(assignment.name)}",
                 instance_id=instance.id,
-                cache_key=("section-assignment", instance.id, assignment.id),
+                cache_key=(
+                    "section-assignment",
+                    instance.id,
+                    assignment.id,
+                ),
             ).name
             orientation = (
                 project.try_resolve(assignment.orientation_ref)
@@ -130,7 +161,13 @@ def render_topology_deck(project, optimization, mesh_index, density: np.ndarray)
                 if orientation
                 else None
             )
-            write_section(section, target, orientation_name, writer, context)
+            write_section(
+                section,
+                target,
+                orientation_name,
+                writer,
+                context,
+            )
 
     for constraint in project.assembly.constraints:
         write_constraint(constraint, writer, context)
@@ -165,7 +202,11 @@ def _write_topology_loadcase(step, optimization, writer, context):
         for entity in [context.resolve(ref)]
     ]
     if support_names:
-        command(writer, "SUPPORTS", [(name,) for name in support_names])
+        command(
+            writer,
+            "SUPPORTS",
+            [(name,) for name in support_names],
+        )
     if step.uses_loads and load_names:
         command(writer, "LOADS", [(name,) for name in load_names])
     settings = step.settings
