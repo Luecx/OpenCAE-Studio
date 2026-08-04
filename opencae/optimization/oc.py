@@ -1,3 +1,5 @@
+"""Implements the first scalar optimality-criteria update with bisection."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,6 +10,8 @@ import numpy as np
 
 @dataclass(frozen=True, slots=True)
 class OcUpdate:
+    """Density and Lagrange-multiplier result of one OC update."""
+
     density: np.ndarray
     multiplier: float
     constraint_value: float
@@ -29,7 +33,7 @@ def optimality_criteria_update(
     tolerance: float = 1.0e-8,
     maximum_steps: int = 100,
 ) -> OcUpdate:
-    """One OC update with a scalar resource constraint and bisection."""
+    """Perform one OC update for a single scalar resource constraint."""
 
     current = np.asarray(density, dtype=float).ravel()
     objective = np.asarray(objective_gradient, dtype=float).ravel()
@@ -52,10 +56,14 @@ def optimality_criteria_update(
     active = design & ~solid & ~void
     if not np.any(active):
         raise ValueError("The topology design domain has no free elements")
-    if np.any(~np.isfinite(objective[active])) or np.any(~np.isfinite(resource[active])):
+    if np.any(~np.isfinite(objective[active])) or np.any(
+        ~np.isfinite(resource[active])
+    ):
         raise ValueError("OC gradients contain NaN or infinity")
     if np.any(resource[active] <= 0.0):
-        raise ValueError("The active resource-constraint gradient must be positive")
+        raise ValueError(
+            "The active resource-constraint gradient must be positive"
+        )
 
     lower_bound = max(float(minimum_density), 1.0e-9)
     upper_bound = 1.0
@@ -70,7 +78,8 @@ def optimality_criteria_update(
     for steps in range(1, max(int(maximum_steps), 1) + 1):
         multiplier = 0.5 * (l1 + l2)
         ratio = np.maximum(
-            -objective[active] / np.maximum(multiplier * resource[active], 1.0e-300),
+            -objective[active]
+            / np.maximum(multiplier * resource[active], 1.0e-300),
             1.0e-30,
         )
         trial = current.copy()
@@ -80,7 +89,9 @@ def optimality_criteria_update(
         trial[active] = np.clip(proposed, lower_bound, upper_bound)
         trial[solid] = upper_bound
         trial[void] = lower_bound
-        trial[~design & ~solid & ~void] = current[~design & ~solid & ~void]
+        trial[~design & ~solid & ~void] = current[
+            ~design & ~solid & ~void
+        ]
         value = float(evaluate_constraint(trial))
         best = trial
         best_value = value
