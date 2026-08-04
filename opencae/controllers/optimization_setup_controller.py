@@ -1,3 +1,5 @@
+"""Coordinates creation, editing, validation and picking for topology setup entities."""
+
 from __future__ import annotations
 
 from PyQt6.QtWidgets import QMessageBox
@@ -34,6 +36,8 @@ from opencae.ui.dialogs.optimization import (
 
 
 class OptimizationSetupMixin:
+    """Provides topology setup actions shared by the optimization controller."""
+
     def new_topology(self):
         selected = self.store.selection
         current = selected if isinstance(selected, TopologyOptimization) else None
@@ -51,6 +55,7 @@ class OptimizationSetupMixin:
             value,
             pick_callback=self._region_pick,
             options=options,
+            existing_names=[item.name for item in project.optimizations],
             parent=self.parent,
         )
         self._show(dialog, lambda: self._save_topology(dialog.result(), current))
@@ -74,12 +79,16 @@ class OptimizationSetupMixin:
             value,
             pick_callback=self._region_pick,
             options=options,
+            existing_names=[item.name for item in optimization.responses],
             parent=self.parent,
         )
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id, "responses", dialog.result(), current
+                optimization.id,
+                "responses",
+                dialog.result(),
+                current,
             ),
         )
 
@@ -88,11 +97,19 @@ class OptimizationSetupMixin:
         if optimization is None:
             return self._need_optimization()
         current = optimization.objective
-        dialog = OptimizationObjectiveDialog(optimization, current, self.parent)
+        dialog = OptimizationObjectiveDialog(
+            optimization,
+            current,
+            existing_names=[item.name for item in optimization.objectives],
+            parent=self.parent,
+        )
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id, "objectives", dialog.result(), current
+                optimization.id,
+                "objectives",
+                dialog.result(),
+                current,
             ),
         )
 
@@ -105,11 +122,19 @@ class OptimizationSetupMixin:
         value = current or OptimizationConstraint(
             name=f"Constraint-{len(optimization.constraints) + 1}"
         )
-        dialog = OptimizationConstraintDialog(optimization, value, self.parent)
+        dialog = OptimizationConstraintDialog(
+            optimization,
+            value,
+            existing_names=[item.name for item in optimization.constraints],
+            parent=self.parent,
+        )
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id, "constraints", dialog.result(), current
+                optimization.id,
+                "constraints",
+                dialog.result(),
+                current,
             ),
         )
 
@@ -118,11 +143,18 @@ class OptimizationSetupMixin:
         if optimization is None:
             return self._need_optimization()
         current = optimization.filter_settings
-        dialog = TopologyFilterDialog(current, self.parent)
+        dialog = TopologyFilterDialog(
+            current,
+            existing_names=[item.name for item in optimization.filters],
+            parent=self.parent,
+        )
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id, "filters", dialog.result(), current
+                optimization.id,
+                "filters",
+                dialog.result(),
+                current,
             ),
         )
 
@@ -139,12 +171,16 @@ class OptimizationSetupMixin:
             value,
             pick_reference=self._begin_symmetry_pick,
             clear_preview=self.parent.viewport.clear_datum_reference_preview,
+            existing_names=[item.name for item in optimization.symmetries],
             parent=self.parent,
         )
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id, "symmetries", dialog.result(), current
+                optimization.id,
+                "symmetries",
+                dialog.result(),
+                current,
             ),
         )
 
@@ -153,11 +189,18 @@ class OptimizationSetupMixin:
         if optimization is None:
             return self._need_optimization()
         current = optimization.control_settings
-        dialog = TopologyControlsDialog(current, self.parent)
+        dialog = TopologyControlsDialog(
+            current,
+            existing_names=[item.name for item in optimization.controls],
+            parent=self.parent,
+        )
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id, "controls", dialog.result(), current
+                optimization.id,
+                "controls",
+                dialog.result(),
+                current,
             ),
         )
 
@@ -166,7 +209,9 @@ class OptimizationSetupMixin:
         if optimization is None:
             return self._need_optimization()
         errors, _index, _masks, operators = validate_topology_optimization(
-            self.store.project, optimization, build_operators=True
+            self.store.project,
+            optimization,
+            build_operators=True,
         )
         if errors:
             QMessageBox.warning(
@@ -217,10 +262,16 @@ class OptimizationSetupMixin:
         self._dialogs.append(dialog)
 
         def apply():
+            if hasattr(dialog, "validate") and not dialog.validate():
+                return
             try:
                 accepted()
             except Exception as exc:
-                QMessageBox.warning(dialog, "Optimization definition", str(exc))
+                QMessageBox.warning(
+                    dialog,
+                    "Optimization definition",
+                    str(exc),
+                )
                 return
             dialog.close()
 
@@ -246,11 +297,17 @@ class OptimizationSetupMixin:
             raise ValueError("Select a Linear Static analysis")
         if current is None:
             self.store.add_entity(
-                f"Created {candidate.name}", project.id, "optimizations", candidate
+                f"Created {candidate.name}",
+                project.id,
+                "optimizations",
+                candidate,
             )
         else:
             self.store.replace_entity(
-                f"Edited {candidate.name}", project.id, "optimizations", candidate
+                f"Edited {candidate.name}",
+                project.id,
+                "optimizations",
+                candidate,
             )
         self.store.select(candidate)
 
@@ -260,16 +317,25 @@ class OptimizationSetupMixin:
             raise ValueError("The topology optimization no longer exists")
         if current is None:
             self.store.add_entity(
-                f"Created {candidate.name}", optimization.id, attribute, candidate
+                f"Created {candidate.name}",
+                optimization.id,
+                attribute,
+                candidate,
             )
         else:
             self.store.replace_entity(
-                f"Edited {candidate.name}", optimization.id, attribute, candidate
+                f"Edited {candidate.name}",
+                optimization.id,
+                attribute,
+                candidate,
             )
         self.store.select(candidate)
 
     def _region_pick(self, _selector, done, finished):
-        policy = policy_for_projection(RegionProjection.ELEMENTS, multiple=True)
+        policy = policy_for_projection(
+            RegionProjection.ELEMENTS,
+            multiple=True,
+        )
         return begin_region_pick(
             self.store.project,
             self.parent.viewport,
@@ -280,16 +346,24 @@ class OptimizationSetupMixin:
 
     def _begin_symmetry_pick(self, symmetry_type, callback, finished):
         if symmetry_type == SymmetryType.PLANAR:
-            allowed = {SelectableKind.GEOMETRY_FACE, SelectableKind.DATUM_PLANE}
+            allowed = {
+                SelectableKind.GEOMETRY_FACE,
+                SelectableKind.DATUM_PLANE,
+            }
         else:
-            allowed = {SelectableKind.GEOMETRY_EDGE, SelectableKind.DATUM_VECTOR}
+            allowed = {
+                SelectableKind.GEOMETRY_EDGE,
+                SelectableKind.DATUM_VECTOR,
+            }
 
         def selected(reference):
             callback(reference)
             self.parent.viewport.show_datum_reference_preview((reference,))
 
         self.parent.viewport.begin_datum_reference_pick(
-            allowed, selected, finished=finished
+            allowed,
+            selected,
+            finished=finished,
         )
 
     def _optimization(self):
@@ -303,4 +377,6 @@ class OptimizationSetupMixin:
         return project.optimizations[0] if project.optimizations else None
 
     def _need_optimization(self):
-        self.store.message.emit("Create or select a topology optimization first")
+        self.store.message.emit(
+            "Create or select a topology optimization first"
+        )
