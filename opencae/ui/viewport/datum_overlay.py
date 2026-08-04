@@ -93,7 +93,8 @@ class DatumOverlay:
         self._label(plotter, points[2], datum.name, name)
 
     def _plane_size(self, plotter, scene, instance, origin, axis, second):
-        snapshot = scene.snapshot if instance is None else scene.assembly_snapshots.get(getattr(instance, "id", ""))
+        snapshots = getattr(scene, "assembly_snapshots", {})
+        snapshot = getattr(scene, "snapshot", None) if instance is None else snapshots.get(getattr(instance, "id", ""))
         bounds = getattr(snapshot, "bounds", None)
         if not bounds:
             fallback = world_size_for_pixels(plotter, origin, 260)
