@@ -1,3 +1,5 @@
+"""Builds the stable OpenCAE-to-FEMaster element manifest for topology runs."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,6 +19,8 @@ from opencae.solvers.femaster_dsl.element_types import element_type
 
 @dataclass(slots=True)
 class TopologyMeshIndex:
+    """Stable solver ids, source occurrences, centroids and material densities."""
+
     solver_ids: np.ndarray
     part_ids: tuple[str, ...]
     instance_ids: tuple[str, ...]
@@ -40,7 +44,9 @@ class TopologyMeshIndex:
             ),
         )
         if not resolved.valid:
-            raise ValueError("; ".join(item.message for item in resolved.diagnostics))
+            raise ValueError(
+                "; ".join(item.message for item in resolved.diagnostics)
+            )
         mask = np.zeros(self.count, dtype=bool)
         for occurrence in resolved.elements:
             key = (
@@ -52,14 +58,22 @@ class TopologyMeshIndex:
             if row is not None:
                 mask[row] = True
         if not np.any(mask):
-            raise ValueError("The selected optimization region contains no exported elements")
+            raise ValueError(
+                "The selected optimization region contains no exported elements"
+            )
         return mask
 
 
 def build_mesh_index(project) -> TopologyMeshIndex:
-    instances = [item for item in project.assembly.instances if not item.suppressed]
+    """Create the solver-element manifest for all active assembly instances."""
+
+    instances = [
+        item for item in project.assembly.instances if not item.suppressed
+    ]
     if not instances:
-        raise ValueError("Topology optimization requires at least one active assembly instance")
+        raise ValueError(
+            "Topology optimization requires at least one active assembly instance"
+        )
 
     solver_ids: list[int] = []
     part_ids: list[str] = []
@@ -75,37 +89,56 @@ def build_mesh_index(project) -> TopologyMeshIndex:
             continue
         node_coordinates = {
             int(node_id): np.asarray(point, dtype=float)
-            for node_id, point in zip(part.mesh.nodes.ids, part.mesh.nodes.coordinates)
+            for node_id, point in zip(
+                part.mesh.nodes.ids,
+                part.mesh.nodes.coordinates,
+            )
         }
         rotation, translation = _transform(instance)
         for block in part.mesh.element_blocks:
             if not block.connectivity:
                 continue
-            mapped = element_type(block.definition, len(block.connectivity[0]))
+            mapped = element_type(
+                block.definition,
+                len(block.connectivity[0]),
+            )
             if mapped is None:
                 continue
-            for local_id, connectivity in zip(block.ids, block.connectivity):
+            for local_id, connectivity in zip(
+                block.ids,
+                block.connectivity,
+            ):
                 try:
                     local_points = np.asarray(
-                        [node_coordinates[int(node)] for node in connectivity],
+                        [
+                            node_coordinates[int(node)]
+                            for node in connectivity
+                        ],
                         dtype=float,
                     )
                 except KeyError as exc:
                     raise ValueError(
-                        f"Element {local_id} in part {part.name} references missing node {exc.args[0]}"
+                        f"Element {local_id} in part {part.name} references "
+                        f"missing node {exc.args[0]}"
                     ) from exc
-                world_points = (rotation @ local_points.T).T + translation
+                world_points = (
+                    rotation @ local_points.T
+                ).T + translation
                 row = len(solver_ids)
                 solver_ids.append(next_solver_id)
                 part_ids.append(part.id)
                 instance_ids.append(instance.id)
                 element_ids.append(int(local_id))
                 centroids.append(np.mean(world_points, axis=0))
-                occurrence_to_row[(part.id, instance.id, int(local_id))] = row
+                occurrence_to_row[
+                    (part.id, instance.id, int(local_id))
+                ] = row
                 next_solver_id += 1
 
     if not solver_ids:
-        raise ValueError("The active assembly contains no FEMaster-supported mesh elements")
+        raise ValueError(
+            "The active assembly contains no FEMaster-supported mesh elements"
+        )
 
     solver_array = np.asarray(solver_ids, dtype=np.int64)
     element_array = np.asarray(element_ids, dtype=np.int64)
@@ -157,7 +190,11 @@ def _material_densities(
             continue
         for assignment in part.section_assignments:
             section = project.try_resolve(assignment.section_ref)
-            material = project.try_resolve(getattr(section, "material_ref", None)) if section else None
+            material = (
+                project.try_resolve(getattr(section, "material_ref", None))
+                if section
+                else None
+            )
             density = _material_density(material)
             if density is None:
                 continue
@@ -196,13 +233,28 @@ def _transform(instance):
     angles = np.radians(np.asarray(instance.rotation, dtype=float))
     cx, cy, cz = np.cos(angles)
     sx, sy, sz = np.sin(angles)
-    rx = np.asarray(((1, 0, 0), (0, cx, -sx), (0, sx, cx)), dtype=float)
-    ry = np.asarray(((cy, 0, sy), (0, 1, 0), (-sy, 0, cy)), dtype=float)
-    rz = np.asarray(((cz, -sz, 0), (sz, cz, 0), (0, 0, 1)), dtype=float)
+    rx = np.asarray(
+        ((1, 0, 0), (0, cx, -sx), (0, sx, cx)),
+        dtype=float,
+    )
+    ry = np.asarray(
+        ((cy, 0, sy), (0, 1, 0), (-sy, 0, cy)),
+        dtype=float,
+    )
+    rz = np.asarray(
+        ((cz, -sz, 0), (sz, cz, 0), (0, 0, 1)),
+        dtype=float,
+    )
     return rz @ ry @ rx, np.asarray(instance.translation, dtype=float)
 
 
-def _fingerprint(solver_ids, part_ids, instance_ids, element_ids, centroids) -> str:
+def _fingerprint(
+    solver_ids,
+    part_ids,
+    instance_ids,
+    element_ids,
+    centroids,
+) -> str:
     digest = sha256()
     digest.update(np.asarray(solver_ids, dtype=np.int64).tobytes())
     digest.update(np.asarray(element_ids, dtype=np.int64).tobytes())
