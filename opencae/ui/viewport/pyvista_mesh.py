@@ -27,15 +27,22 @@ def build_grid(snapshot, instance=None):
     return grid
 
 
-def add_mesh(plotter, snapshot, instance=None):
+def add_mesh(plotter, snapshot, instance=None, *, hidden_elements=()):
     grid = build_grid(snapshot, instance)
     if grid is None: return None, None
-    surface = _display_surface(grid); surface.cell_data["display_rgb"] = mesh_cell_colors(surface)
+    hidden = {int(value) for value in hidden_elements}
+    if hidden:
+        ids = np.asarray(grid.cell_data["element_id"], dtype=np.int64)
+        visible_indices = np.flatnonzero(~np.isin(ids, tuple(hidden)))
+        grid = grid.extract_cells(visible_indices)
     prefix = f"{instance.name}-" if instance else ""
+    if not grid.n_cells:
+        return None, grid
+    surface = _display_surface(grid); surface.cell_data["display_rgb"] = mesh_cell_colors(surface)
     actor = plotter.add_mesh(
         surface, scalars="display_rgb", rgb=True, show_edges=False,
-        lighting=True, smooth_shading=True, ambient=0.22, diffuse=0.76,
-        specular=0.04, pickable=False,
+        lighting=True, smooth_shading=True, ambient=0.88, diffuse=0.12,
+        specular=0.0, pickable=False,
         name=f"{prefix}generated-mesh-surface", render=False,
     )
     plotter.add_mesh(
