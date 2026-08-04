@@ -1,3 +1,5 @@
+"""Shows topology regions, symmetries and saved iterations for tree selections."""
+
 from __future__ import annotations
 
 from opencae.model.entities.optimization import (
@@ -14,6 +16,8 @@ from opencae.model.entities.optimization import (
 
 
 class OptimizationSelectionMixin:
+    """Adds viewport previews for selected topology entities."""
+
     def _selection_changed(self, entity):
         if not isinstance(
             entity,
@@ -31,7 +35,9 @@ class OptimizationSelectionMixin:
         ):
             return
         try:
-            self.parent.viewport.clear_region_previews("optimization-selection")
+            self.parent.viewport.clear_region_previews(
+                "optimization-selection"
+            )
         except (AttributeError, RuntimeError):
             pass
         if not isinstance(entity, TopologySymmetry):
@@ -44,39 +50,44 @@ class OptimizationSelectionMixin:
                 "optimization-selection-design",
                 entity.design_domain,
                 color="#4fa3d9",
-                opacity=.38,
+                opacity=0.38,
             )
             if not entity.frozen_solid.empty:
                 self.parent.viewport.show_region_preview(
                     "optimization-selection-solid",
                     entity.frozen_solid,
                     color="#5fbf75",
-                    opacity=.75,
+                    opacity=0.75,
                 )
             if not entity.frozen_void.empty:
                 self.parent.viewport.show_region_preview(
                     "optimization-selection-void",
                     entity.frozen_void,
                     color="#cf6b75",
-                    opacity=.75,
+                    opacity=0.75,
                 )
         elif isinstance(entity, OptimizationResponse):
             self.parent.viewport.show_region_preview(
                 "optimization-selection-response",
                 entity.region,
                 color="#64b5f6",
-                opacity=.62,
+                opacity=0.62,
             )
-        elif isinstance(entity, (OptimizationObjective, OptimizationConstraint)):
+        elif isinstance(
+            entity,
+            (OptimizationObjective, OptimizationConstraint),
+        ):
             response = self.store.project.try_resolve(entity.response_ref)
             if isinstance(response, OptimizationResponse):
                 self.parent.viewport.show_region_preview(
                     "optimization-selection-response",
                     response.region,
                     color="#64b5f6",
-                    opacity=.62,
+                    opacity=0.62,
                 )
         elif isinstance(entity, TopologySymmetry):
-            self.parent.viewport.show_datum_reference_preview((entity.reference,))
+            self.parent.viewport.show_datum_reference_preview(
+                (entity.reference,)
+            )
         if isinstance(entity, (OptimizationRun, OptimizationIteration)):
             self._show_selected_iteration()
