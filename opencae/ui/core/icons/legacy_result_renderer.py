@@ -1,6 +1,7 @@
 from PyQt6.QtCore import QPointF,QRectF,Qt
-from PyQt6.QtGui import QColor,QPen
+from PyQt6.QtGui import QColor,QPen,QPolygonF
 from .legacy_kinds import IconKind
+from .legacy_shapes import draw_cube
 
 
 def draw_result_icon(p,kind,size,fg,muted,pen):
@@ -8,6 +9,22 @@ def draw_result_icon(p,kind,size,fg,muted,pen):
         p.drawPolyline([QPointF(size*.16,size*.72),QPointF(size*.36,size*.72),QPointF(size*.36,size*.5),QPointF(size*.58,size*.5),QPointF(size*.58,size*.28),QPointF(size*.84,size*.28)]); return True
     if kind==IconKind.RESULT_FRAME:
         p.drawRect(QRectF(size*.16,size*.2,size*.68,size*.58)); p.drawLine(QPointF(size*.3,size*.12),QPointF(size*.3,size*.86)); p.drawLine(QPointF(size*.7,size*.12),QPointF(size*.7,size*.86)); return True
+    if kind==IconKind.RESULT_FIELD:
+        colors=("#356bc2","#32a6c8","#59be75","#e1c54a","#df6b48")
+        band_width=size*.12
+        for index,color in enumerate(colors):
+            p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor(color)); p.drawRect(QRectF(size*.16+index*band_width,size*.22,band_width,size*.56))
+        p.setBrush(Qt.BrushStyle.NoBrush); p.setPen(QPen(fg,max(1.6,size/22))); p.drawRect(QRectF(size*.16,size*.22,band_width*len(colors),size*.56)); return True
+    if kind in {IconKind.PREVIOUS_FRAME,IconKind.NEXT_FRAME}:
+        previous=kind==IconKind.PREVIOUS_FRAME
+        p.setPen(QPen(fg,max(1.8,size/18)))
+        bar_x=size*(.24 if previous else .76)
+        p.drawLine(QPointF(bar_x,size*.20),QPointF(bar_x,size*.80))
+        if previous:
+            triangle=QPolygonF((QPointF(size*.68,size*.20),QPointF(size*.32,size*.50),QPointF(size*.68,size*.80)))
+        else:
+            triangle=QPolygonF((QPointF(size*.32,size*.20),QPointF(size*.68,size*.50),QPointF(size*.32,size*.80)))
+        p.setBrush(fg); p.drawPolygon(triangle); p.setBrush(Qt.BrushStyle.NoBrush); return True
     if kind==IconKind.MESH_LINES:
         for i in range(4):
             p.drawLine(QPointF(size*.15,size*(.18+i*.18)),QPointF(size*.85,size*(.18+i*.18)))
@@ -18,4 +35,10 @@ def draw_result_icon(p,kind,size,fg,muted,pen):
     if kind==IconKind.DEFORMATION:
         p.setPen(QPen(muted,max(1.4,size/24),Qt.PenStyle.DashLine)); p.drawLine(QPointF(size*.12,size*.66),QPointF(size*.88,size*.66))
         p.setPen(pen); path=__import__('PyQt6.QtGui',fromlist=['QPainterPath']).QPainterPath(); path.moveTo(size*.12,size*.66); path.cubicTo(size*.34,size*.14,size*.62,size*.84,size*.88,size*.28); p.drawPath(path); return True
+    if kind==IconKind.SECTION_VIEW:
+        draw_cube(p,QRectF(size*.10,size*.17,size*.66,size*.60),muted)
+        plane=QPolygonF((QPointF(size*.16,size*.68),QPointF(size*.47,size*.28),QPointF(size*.88,size*.39),QPointF(size*.58,size*.80)))
+        p.setBrush(QColor(fg.red(),fg.green(),fg.blue(),72)); p.setPen(QPen(fg,max(1.8,size/18)))
+        p.drawPolygon(plane); p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawLine(QPointF(size*.53,size*.52),QPointF(size*.79,size*.19)); return True
     return False

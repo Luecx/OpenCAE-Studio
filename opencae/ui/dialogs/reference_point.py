@@ -21,7 +21,7 @@ class ReferencePointDialog(QDialog):
         self.setWindowTitle("Create Reference Point")
         self.setModal(False)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-        self.setMinimumWidth(640)
+        self.setMinimumWidth(430)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 16, 18, 14)
@@ -34,8 +34,11 @@ class ReferencePointDialog(QDialog):
         form.setVerticalSpacing(9)
         self.name = QLineEdit(default_name)
         self.position = XYZPicker(allowed=_POINT_KINDS, value_kind="point")
+        self.position.setMaximumWidth(390)
         self.position.pick_requested.connect(self.pick_requested)
         self.position.cancel_requested.connect(self.cancel_pick_requested)
+        self.position.changed.connect(self._preview)
+        self.name.textChanged.connect(self._preview)
         form.addRow("Name", self.name)
         form.addRow("Position", self.position)
         root.addLayout(form)
@@ -50,9 +53,25 @@ class ReferencePointDialog(QDialog):
         buttons.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(lambda: self._commit(False))
         buttons.rejected.connect(self.close)
         root.addWidget(buttons)
+        self.resize(470, self.sizeHint().height())
 
     def values(self):
         return {"name": self.name.text().strip(), "position": self.position.value()}
+
+    def _viewport(self):
+        return getattr(self.parent(), "viewport", None)
+
+    def _preview(self, *_):
+        viewport = self._viewport()
+        if viewport is None:
+            return
+        name = self.name.text().strip() or "Reference Point"
+        viewport.show_reference_point_preview(name, self.position.value())
+
+    def _clear_preview(self):
+        viewport = self._viewport()
+        if viewport is not None:
+            viewport.clear_reference_point_preview()
 
     def _commit(self, close_after):
         values = self.values()
@@ -62,11 +81,17 @@ class ReferencePointDialog(QDialog):
         if not is_unique(values["name"], self.existing_names):
             QMessageBox.warning(self, "Duplicate name", f"A reference point named '{values['name']}' already exists.")
             return
+        self._clear_preview()
         self.apply_requested.emit(values)
         if close_after:
             self.accept()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._preview()
+
     def closeEvent(self, event):
         self.position.finish_pick()
         self.cancel_pick_requested.emit()
+        self._clear_preview()
         super().closeEvent(event)

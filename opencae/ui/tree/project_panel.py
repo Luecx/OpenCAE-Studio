@@ -9,7 +9,7 @@ from .solution_tree import SolutionTree
 
 class ProjectPanel(QWidget):
     browser_requested=pyqtSignal(str)
-    def __init__(self, store, actions, parent=None):
+    def __init__(self, store, actions, parent=None, visibility=None):
         super().__init__(parent); self.setObjectName("ProjectPanel")
         layout = QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(0)
         self.tabs = QTabBar(); self.tabs.addTab(make_icon(IconKind.PART,16),"Project"); self.tabs.addTab(make_icon(IconKind.RESULTS,16),"Solution"); self.tabs.setExpanding(True)
@@ -19,7 +19,7 @@ class ProjectPanel(QWidget):
         self.filter = QLineEdit(); self.filter.setPlaceholderText("Filter…"); self.filter.setClearButtonEnabled(True); row.addWidget(self.filter, 1)
         self.expand_button = self._small_button("+"); self.collapse_button = self._small_button("−")
         row.addWidget(self.expand_button); row.addWidget(self.collapse_button); layout.addWidget(toolbar)
-        self.stack = QStackedWidget(); self.tree = ProjectTree(store, actions); self.solution_tree = SolutionTree(store)
+        self.stack = QStackedWidget(); self.tree = ProjectTree(store, actions, parent=None, visibility=visibility); self.solution_tree = SolutionTree(store)
         self.stack.addWidget(self.tree); self.stack.addWidget(self.solution_tree); layout.addWidget(self.stack, 1)
         self.filter.textChanged.connect(self._filter); self.expand_button.clicked.connect(self._expand); self.collapse_button.clicked.connect(self._collapse)
 

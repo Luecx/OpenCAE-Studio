@@ -26,12 +26,21 @@ class SolverController:
     def _analysis(self):
         from opencae.model.entities.analysis import Analysis, AnalysisStep
 
+        project = self.store.project
         selected = self.store.selection
         if isinstance(selected, Analysis):
-            return selected
+            current = project.try_resolve(selected.id)
+            return current if isinstance(current, Analysis) else None
         if isinstance(selected, AnalysisStep):
-            return next((analysis for analysis in self.store.project.analyses if any(step.id == selected.id for step in analysis.steps)), None)
-        return self.store.project.analyses[0] if self.store.project.analyses else None
+            return next(
+                (
+                    analysis
+                    for analysis in project.analyses
+                    if any(step.id == selected.id for step in analysis.steps)
+                ),
+                None,
+            )
+        return project.analyses[0] if project.analyses else None
 
     def _adapter(self):
         return self.solvers.get(self.settings.selected_solver)
@@ -66,7 +75,12 @@ class SolverController:
     def write(self):
         if self._adapter() is None:
             return
-        path, _ = QFileDialog.getSaveFileName(self.parent, "Write Input Deck", "model.inp", "Input deck (*.inp);;All files (*)")
+        path, _ = QFileDialog.getSaveFileName(
+            self.parent,
+            "Write Input Deck",
+            "model.inp",
+            "Input deck (*.inp);;All files (*)",
+        )
         if not path:
             return
         try:
@@ -83,20 +97,35 @@ class SolverController:
             return
         executable = str(config.get("executable", ""))
         if not Path(executable).is_file():
-            QMessageBox.warning(self.parent, "Solver unavailable", "The configured executable does not exist.")
+            QMessageBox.warning(
+                self.parent,
+                "Solver unavailable",
+                "The configured executable does not exist.",
+            )
             return
         try:
             deck = self.deck_text()
         except Exception as exc:
             QMessageBox.critical(self.parent, "Validation failed", str(exc))
             return
-        options = JobSettingsDialog(adapter.name, str(config.get("extra_arguments", "")), self.parent)
+        options = JobSettingsDialog(
+            adapter.name,
+            str(config.get("extra_arguments", "")),
+            self.parent,
+        )
         if options.exec() != QDialog.DialogCode.Accepted:
             return
         run_options = options.values()
         analysis = self._analysis()
         job_name = f"Job-{len(self.store.project.jobs) + 1}"
-        root = Path(self.settings.working_directory or (self.store.project.path.parent if self.store.project.path else Path.cwd()))
+        root = Path(
+            self.settings.working_directory
+            or (
+                self.store.project.path.parent
+                if self.store.project.path
+                else Path.cwd()
+            )
+        )
         directory = root / job_name
         directory.mkdir(parents=True, exist_ok=True)
         deck_path = directory / f"{job_name}.inp"
@@ -115,8 +144,21 @@ class SolverController:
         if adapter.name == "FEMaster":
             extra = f"--ncpus {run_options['threads']} {extra}".strip()
         command = adapter.build_command(executable, deck_path, output_base, extra)
-        dialog = SolverRunDialog(f"{job_name} — {adapter.name}", command, directory, self.parent)
-        dialog.completed.connect(lambda code, d=dialog, jid=job.id: self._finished(jid, adapter, output_base, code, d))
+        dialog = SolverRunDialog(
+            f"{job_name} — {adapter.name}",
+            command,
+            directory,
+            self.parent,
+        )
+        dialog.completed.connect(
+            lambda code, d=dialog, jid=job.id: self._finished(
+                jid,
+                adapter,
+                output_base,
+                code,
+                d,
+            )
+        )
         self._runs[job.name] = dialog
         dialog.show()
 
@@ -126,7 +168,10 @@ class SolverController:
         if stored_job is None:
             return
         status = "Completed" if code == 0 else f"Failed ({code})"
-        source = next((path for path in adapter.result_candidates(output_base) if path.exists()), None)
+        source = next(
+            (path for path in adapter.result_candidates(output_base) if path.exists()),
+            None,
+        )
         fields = []
         if source and source.suffix.lower() == ".frd":
             try:
@@ -138,9 +183,19 @@ class SolverController:
         replacement_job.status = status
         commands = [make_replace_command(project, project.id, "jobs", replacement_job)]
         if source and source.suffix.lower() == ".frd":
-            analysis = project.try_resolve(stored_job.analysis_ref)
-            step_names = [step.name for step in analysis.steps] if analysis else []
-            previous = next((item for item in project.results if item.job_ref and item.job_ref.entity_id == stored_job.id), None)
+            step_names = [
+                step.name
+                for analysis in project.analyses
+                for step in analysis.steps
+            ]
+            previous = next(
+                (
+                    item
+                    for item in project.results
+                    if item.job_ref and item.job_ref.entity_id == stored_job.id
+                ),
+                None,
+            )
             kwargs = dict(
                 name=stored_job.name,
                 job_ref=EntityRef.of(stored_job, "Job"),
@@ -152,9 +207,13 @@ class SolverController:
             result = ResultSet(id=previous.id, **kwargs) if previous else ResultSet(**kwargs)
             commands.append(
                 make_replace_command(project, project.id, "results", result)
-                if previous else make_add_command(project, project.id, "results", result)
+                if previous
+                else make_add_command(project, project.id, "results", result)
             )
-        self.store.execute(f"Finished {stored_job.name}", CompositeCommand(tuple(commands)))
+        self.store.execute(
+            f"Finished {stored_job.name}",
+            CompositeCommand(tuple(commands)),
+        )
         self.store.message.emit(status)
 
     def show_job(self, job_name):

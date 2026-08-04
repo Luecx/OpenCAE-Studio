@@ -26,6 +26,11 @@ def build_ribbon(window):
 
 def build_viewport(window):
     window.viewport = create_viewport(window.context.store)
+    window.viewport.visibility = window.visibility
+    window.visibility.changed.connect(window.viewport.request_refresh)
+    window.visibility.changed.connect(
+        lambda: window.viewport.show_model_selection(window.context.store.selection)
+    )
     window.setCentralWidget(window.viewport)
     window.context.store.scene_changed.connect(window.viewport.request_refresh)
     window.context.store.active_part_changed.connect(window.viewport.request_refresh)
@@ -37,7 +42,12 @@ def build_viewport(window):
 
 def build_docks(window):
     store = window.context.store
-    window.project_dock = ProjectDock(store, window.actions, window)
+    window.project_dock = ProjectDock(
+        store,
+        window.actions,
+        visibility=window.visibility,
+        parent=window,
+    )
     window.properties_dock = PropertiesDock(store, window)
     window.output_dock = OutputDock(store, window)
     window.output_dock.tabs.jobs.job_requested.connect(window.controllers.solver.show_job)
@@ -46,8 +56,11 @@ def build_docks(window):
     window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, window.output_dock)
     window.project_dock.tree.stage_requested.connect(window.ribbon.set_stage)
     window.project_dock.solution_tree.solution_requested.connect(window.show_solution)
+    window.project_dock.solution_tree.delete_requested.connect(window.delete_result)
     window.project_dock.panel.browser_requested.connect(window.ribbon.set_browser)
     window.ribbon.result_requested.connect(window.viewport.show_solution)
+    if window.ribbon.results_page is not None:
+        window.viewport.section_changed.connect(window.ribbon.results_page.set_section_state)
     window.ribbon.stage_changed.connect(lambda stage: window.project_dock.panel.set_browser("solution" if stage == "RESULTS" else "project"))
     window.ribbon.stage_changed.connect(window.project_dock.tree.set_stage_focus)
     window.ribbon.stage_changed.connect(window.viewport.set_stage)

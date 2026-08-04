@@ -24,9 +24,13 @@ class BoundaryOverlay:
         self._project, self._scene = project, scene; self.clear(plotter)
         support_meshes, load_meshes, thermal_meshes = [], [], []
         for support in project.supports:
+            if not _visible(scene, support):
+                continue
             for point, normal in region_samples(project, support.target, scene):
                 support_meshes.extend(_support_glyphs(plotter, point, support))
         for load in project.loads:
+            if not _visible(scene, load):
+                continue
             for point, normal in region_samples(project, load.target, scene):
                 target = thermal_meshes if getattr(load, "load_type", "") == "Temperature" else load_meshes
                 target.extend(_load_glyphs(plotter, point, normal, load))
@@ -85,3 +89,8 @@ def _ring(center, normal, radius):
     angles = np.linspace(0, 2 * np.pi, 33)
     points = np.asarray(center) + radius * (np.cos(angles)[:, None] * first + np.sin(angles)[:, None] * second)
     mesh = pv.PolyData(points); mesh.lines = np.asarray([len(points), *range(len(points))], dtype=np.int64); return mesh
+
+
+def _visible(scene, entity):
+    visibility = getattr(getattr(scene, "owner", None), "visibility", None)
+    return visibility is None or visibility.is_entity_visible(entity)

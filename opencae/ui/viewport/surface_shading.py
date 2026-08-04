@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 
-REGULAR_COLOR = "#7895a3"
-IRREGULAR_COLOR = "#8b8793"
+# Distinct but muted CAE-style classification colors. Regular keeps the
+# established green; Irregular uses a restrained plum tone instead of yellow.
+REGULAR_COLOR = "#72a86a"
+IRREGULAR_COLOR = "#9a789f"
 DEFAULT_COLOR = "#7f8d99"
 
 _BASE = np.asarray((0.50, 0.58, 0.64), dtype=float)
@@ -25,11 +27,13 @@ def mesh_cell_colors(mesh):
         normals = np.asarray(mesh.cell_data["Normals"], dtype=float)
     except (AttributeError, KeyError, RuntimeError, TypeError, ValueError):
         normals = mesh.compute_normals(
-            cell_normals=True, point_normals=False, consistent_normals=True,
+            cell_normals=True,
+            point_normals=False,
+            consistent_normals=True,
             inplace=False,
         ).cell_data["Normals"]
     norms = np.linalg.norm(normals, axis=1)
     normalized = normals / np.maximum(norms[:, None], 1.0e-14)
-    directional = 0.58 + 0.34 * np.abs(normalized @ _LIGHT)
+    directional = 0.90 + 0.10 * np.abs(normalized @ _LIGHT)
     colors = np.clip(_BASE[None, :] * directional[:, None], 0.18, 0.92)
     return np.asarray(np.rint(colors * 255.0), dtype=np.uint8)

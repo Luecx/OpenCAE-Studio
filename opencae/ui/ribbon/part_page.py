@@ -11,6 +11,7 @@ def create(actions, store):
     page.part_selector = PartSelector(store); layout.addWidget(page.part_selector)
     specs = (
         RibbonGroupSpec("GEOMETRY", (A.NEW_PART, A.DUPLICATE_PART, A.IMPORT_GEOMETRY, A.IMPORT_MESH, A.PARTITION, A.REBUILD_GEOMETRY, A.SUPPRESS_FEATURE)),
+        RibbonGroupSpec("DISPLAY", (A.VISIBILITY,)),
         RibbonGroupSpec("DATUM", (A.DATUM_POINT, A.DATUM_VECTOR, A.DATUM_PLANE)),
         RibbonGroupSpec("MESH", (A.DEFAULT_SEED, A.EDGE_SEED, A.ELEMENT_CONTROLS, A.MESH_SETTINGS, A.GENERATE_MESH, A.CLEAR_MESH)),
         RibbonGroupSpec("REGIONS", (A.NODE_SET, A.ELEMENT_SET, A.SURFACE, A.PART_RP, A.PART_CSYS)),

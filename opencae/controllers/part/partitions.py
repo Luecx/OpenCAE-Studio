@@ -170,10 +170,16 @@ class PartPartitions:
     def _create_datum_plane(self, part_id, owner, done):
         part = self.ctx.store.project.try_resolve(part_id)
         if part is None: return
+        viewport = self.ctx.parent.viewport
         dialog = DatumPlaneDialog(next_name("Datum Plane", part.datums), [item.name for item in part.datums], part.coordinate_systems, owner or self.ctx.parent)
-        dialog.pick_requested.connect(lambda allowed, callback, finished: self.ctx.parent.viewport.begin_datum_reference_pick(allowed, callback, finished))
-        dialog.cancel_pick_requested.connect(self.ctx.parent.viewport.cancel_context_pick)
-        dialog.preview_requested.connect(self.ctx.parent.viewport.show_datum_preview)
+        dialog.pick_requested.connect(lambda allowed, callback, finished: viewport.begin_datum_reference_pick(allowed, callback, finished))
+        dialog.cancel_pick_requested.connect(viewport.cancel_context_pick)
+        dialog.preview_requested.connect(viewport.show_datum_preview)
+        # The inline "+ Create Datum" workflow must behave exactly like the
+        # normal Part > Create Datum Plane action. Keep every already-picked
+        # point, edge, face, vector or plane highlighted while the nested dialog
+        # remains open, including after the individual picker session ends.
+        dialog.reference_preview_requested.connect(viewport.show_datum_reference_preview)
 
         def apply(values):
             current = self.ctx.store.project.try_resolve(part_id)
@@ -186,9 +192,15 @@ class PartPartitions:
             done(stored or datum)
             dialog.close()
 
+        def finished(_code):
+            viewport.cancel_context_pick()
+            viewport.hide_datum_preview()
+            viewport.clear_datum_reference_preview()
+
         dialog.apply_requested.connect(apply)
-        dialog.finished.connect(lambda _code: (self.ctx.parent.viewport.cancel_context_pick(), self.ctx.parent.viewport.hide_datum_preview()))
+        dialog.finished.connect(finished)
         show_modeless_dialog(dialog)
+        dialog.emit_reference_preview()
 
     def rebuild_geometry(self):
         part = self.ctx.active_part()

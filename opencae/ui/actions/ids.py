@@ -24,6 +24,7 @@ class A:
     DEFAULT_SEED = "mesh.default_seed"; EDGE_SEED = "mesh.edge_seed"
     ELEMENT_CONTROLS = "mesh.element_controls"; MESH_SETTINGS = "mesh.settings"
     GENERATE_MESH = "mesh.generate"; CLEAR_MESH = "mesh.clear"
+    VISIBILITY = "part.visibility"
     NODE_SET = "part.node_set"
     ELEMENT_SET = "part.element_set"; SURFACE = "part.surface"
     PART_CSYS = "part.csys"; PART_RP = "part.rp"

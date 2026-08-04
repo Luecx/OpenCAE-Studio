@@ -24,6 +24,8 @@ class CouplingOverlay:
             getattr(scene.owner.store, "selection", None), "id", None
         )
         for index, constraint in enumerate(project.assembly.constraints):
+            if not _visible(scene, constraint):
+                continue
             if not isinstance(
                 constraint, (KinematicCoupling, DistributingCoupling)
             ):
@@ -85,3 +87,8 @@ class CouplingOverlay:
             name=marker,
             render=False,
         )
+
+
+def _visible(scene, entity):
+    visibility = getattr(getattr(scene, "owner", None), "visibility", None)
+    return visibility is None or visibility.is_entity_visible(entity)

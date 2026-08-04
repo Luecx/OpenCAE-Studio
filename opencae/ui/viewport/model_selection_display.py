@@ -27,6 +27,19 @@ def show_model_selection(viewport, entity):
         viewport.clear_region_previews(_MODEL_SELECTION_PREFIX)
         _refresh_coupling_overlay(viewport)
 
+    visibility = getattr(viewport, "visibility", None)
+    if (
+        not isinstance(entity, ViewportSelection)
+        and entity is not None
+        and visibility is not None
+        and not visibility.is_entity_visible(entity)
+    ):
+        viewport._pending_members = None
+        viewport.picker.clear(False, False)
+        viewport.scene.region_overlay.clear(viewport.plotter)
+        viewport.plotter.render()
+        return
+
     if isinstance(entity, FieldDefinition):
         viewport._field_id = entity.id
         if viewport.display_mode != "mesh":
