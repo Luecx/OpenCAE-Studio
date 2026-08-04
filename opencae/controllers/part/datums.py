@@ -82,8 +82,9 @@ class PartDatums:
         self.ctx.store.invalidate_scene("Datum updated")
 
     def _closed(self, dialog):
-        self.ctx.parent.viewport.context_pick.cancel()
-        self.ctx.parent.viewport.hide_datum_preview()
-        self.ctx.parent.viewport.clear_datum_reference_preview()
+        viewport = self.ctx.parent.viewport
+        viewport.cancel_context_pick()
+        viewport.hide_datum_preview()
+        viewport.clear_datum_reference_preview()
         if dialog in self._dialogs:
             self._dialogs.remove(dialog)
