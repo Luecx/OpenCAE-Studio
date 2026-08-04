@@ -13,6 +13,7 @@ from .mesh_settings import PartMeshSettings
 from .mesh_seeds import PartMeshSeeds
 from .partitions import PartPartitions
 from .regions import PartRegions
+from .visibility import PartVisibility
 
 
 class PartController:
@@ -28,10 +29,11 @@ class PartController:
         self.generation = PartMeshGeneration(self.context)
         self.regions = PartRegions(self.context)
         self.datums = PartDatums(self.context)
+        self.visibility_manager = PartVisibility(self.context)
         self._delegates = (
             self.lifecycle, self.partitions, self.settings, self.seeds,
             self.mesh_settings_manager, self.element_control_manager, self.generation,
-            self.regions, self.datums,
+            self.regions, self.datums, self.visibility_manager,
         )
 
     def active_part(self):
