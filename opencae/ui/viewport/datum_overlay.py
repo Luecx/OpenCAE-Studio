@@ -22,7 +22,8 @@ class DatumOverlay:
     def show_part(self, plotter, part, scene):
         self.clear(plotter)
         for index, datum in enumerate(getattr(part, "datums", ())):
-            self._draw(plotter, scene, datum, f"part-{index}")
+            if _visible(scene, datum):
+                self._draw(plotter, scene, datum, f"part-{index}")
 
     def show_assembly(self, plotter, project, scene):
         self.clear(plotter)
@@ -30,7 +31,8 @@ class DatumOverlay:
             part = project.try_resolve(instance.part_ref)
             if part:
                 for index, datum in enumerate(getattr(part, "datums", ())):
-                    self._draw(plotter, scene, datum, f"{instance_id}-{index}", instance, instance.name)
+                    if _visible(scene, datum):
+                        self._draw(plotter, scene, datum, f"{instance_id}-{index}", instance, instance.name)
 
     def _draw(self, plotter, scene, datum, key, instance=None, instance_name=None):
         if isinstance(datum, DatumPoint):
@@ -194,3 +196,8 @@ class DatumOverlay:
     @staticmethod
     def _vector_transform(vector, instance):
         return transform_vector(vector, instance) if instance else np.asarray(vector, float)
+
+
+def _visible(scene, entity):
+    visibility = getattr(getattr(scene, "owner", None), "visibility", None)
+    return visibility is None or visibility.is_entity_visible(entity)
