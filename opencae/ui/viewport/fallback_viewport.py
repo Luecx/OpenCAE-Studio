@@ -31,6 +31,8 @@ class FallbackViewport(QWidget):
     def cancel_context_pick(self): pass
     def show_datum_preview(self, *_): pass
     def hide_datum_preview(self): pass
+    def show_datum_reference_preview(self, *_): pass
+    def clear_datum_reference_preview(self): pass
     def show_reference_point_preview(self, *_): pass
     def clear_reference_point_preview(self): pass
     def show_region_preview(self, *_, **__): pass
