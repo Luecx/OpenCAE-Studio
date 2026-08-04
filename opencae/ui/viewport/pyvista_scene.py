@@ -51,9 +51,15 @@ class PyVistaScene(SceneDisplayMixin):
             except GeometryError as exc: self.owner.message.emit(str(exc)); return
         if self.owner.display_mode == "mesh" or not part.geometry: self._show_part_mesh(part)
         elif self.snapshot is not None:
-            self._merge_actors(add_geometry(self.owner.plotter, self.snapshot, color_by_meshability=True))
+            self._merge_actors(add_geometry(
+                self.owner.plotter,
+                self.snapshot,
+                color_by_meshability=True,
+                hidden_faces=self._hidden(part.id, "faces"),
+                hidden_cells=self._hidden(part.id, "cells"),
+            ))
             self._show_meshability_legend()
-        self.coordinate_overlay.show_part(self.owner.plotter, part); self.reference_overlay.show_part(self.owner.plotter, part, self); self.datum_overlay.show_part(self.owner.plotter, part, self)
+        self.coordinate_overlay.show_part(self.owner.plotter, part, self); self.reference_overlay.show_part(self.owner.plotter, part, self); self.datum_overlay.show_part(self.owner.plotter, part, self)
         self.owner.plotter.add_axes(color="#dce3e8"); self.owner.picker.configure()
     def _show_assembly(self):
         project = self.owner.store.project; instances = [item for item in project.assembly.instances if not item.suppressed]
@@ -89,9 +95,19 @@ class PyVistaScene(SceneDisplayMixin):
             try: snapshot, _ = self.owner.service.generate_mesh(part)
             except GeometryError as exc: self.owner.message.emit(str(exc))
         if snapshot is None:
-            if self.snapshot is not None: self._merge_actors(add_geometry(self.owner.plotter, self.snapshot, color_by_meshability=True))
+            if self.snapshot is not None: self._merge_actors(add_geometry(
+                self.owner.plotter,
+                self.snapshot,
+                color_by_meshability=True,
+                hidden_faces=self._hidden(part.id, "faces"),
+                hidden_cells=self._hidden(part.id, "cells"),
+            ))
             self.owner.message.emit("No generated mesh"); return
-        self.mesh_snapshot = snapshot; self.mesh_actor, self.mesh_grid = add_mesh(self.owner.plotter, snapshot)
+        self.mesh_snapshot = snapshot; self.mesh_actor, self.mesh_grid = add_mesh(
+            self.owner.plotter,
+            snapshot,
+            hidden_elements=self._hidden(part.id, "elements"),
+        )
     def _show_instance_mesh(self, part, instance):
         snapshot = CACHE.mesh(part.id) or snapshot_from_part(part)
         if snapshot is None:
@@ -104,6 +120,9 @@ class PyVistaScene(SceneDisplayMixin):
     def _merge_actors(self, actors):
         faces, edges, vertices = actors
         self.face_actors.update(faces); self.edge_actors.update(edges); self.vertex_actors.update(vertices)
+    def _hidden(self, owner_id, kind):
+        visibility = getattr(self.owner, "visibility", None)
+        return visibility.hidden_topology(owner_id, kind) if visibility is not None else ()
     def snapshot_for(self, instance_key):
         if not instance_key:
             return self.snapshot
