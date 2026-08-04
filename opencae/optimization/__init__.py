@@ -1,3 +1,5 @@
+"""Public API for topology optimization algorithms and FEMaster integration."""
+
 from .deck import DENSITY_FIELD_NAME, render_topology_deck
 from .filtering import (
     FilterOperators,
@@ -8,7 +10,10 @@ from .filtering import (
 )
 from .mesh_index import TopologyMeshIndex, build_mesh_index
 from .oc import OcUpdate, optimality_criteria_update
-from .res_reader import ResField, ResFieldReader, ResFormatError, dense_values
+from .res_field import ResField
+from .res_field_reader import ResFieldReader
+from .res_format_error import ResFormatError
+from .res_values import dense_values
 from .responses import ResponseEvaluation, evaluate_response
 from .validation import validate_topology_optimization
 
