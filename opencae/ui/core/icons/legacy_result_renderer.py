@@ -9,6 +9,12 @@ def draw_result_icon(p,kind,size,fg,muted,pen):
         p.drawPolyline([QPointF(size*.16,size*.72),QPointF(size*.36,size*.72),QPointF(size*.36,size*.5),QPointF(size*.58,size*.5),QPointF(size*.58,size*.28),QPointF(size*.84,size*.28)]); return True
     if kind==IconKind.RESULT_FRAME:
         p.drawRect(QRectF(size*.16,size*.2,size*.68,size*.58)); p.drawLine(QPointF(size*.3,size*.12),QPointF(size*.3,size*.86)); p.drawLine(QPointF(size*.7,size*.12),QPointF(size*.7,size*.86)); return True
+    if kind==IconKind.RESULT_FIELD:
+        colors=("#356bc2","#32a6c8","#59be75","#e1c54a","#df6b48")
+        band_width=size*.12
+        for index,color in enumerate(colors):
+            p.setPen(Qt.PenStyle.NoPen); p.setBrush(QColor(color)); p.drawRect(QRectF(size*.16+index*band_width,size*.22,band_width,size*.56))
+        p.setBrush(Qt.BrushStyle.NoBrush); p.setPen(QPen(fg,max(1.6,size/22))); p.drawRect(QRectF(size*.16,size*.22,band_width*len(colors),size*.56)); return True
     if kind in {IconKind.PREVIOUS_FRAME,IconKind.NEXT_FRAME}:
         previous=kind==IconKind.PREVIOUS_FRAME
         p.setPen(QPen(fg,max(1.8,size/18)))
