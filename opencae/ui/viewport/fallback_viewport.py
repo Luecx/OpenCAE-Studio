@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 
 class FallbackViewport(QWidget):
-    selection_changed = pyqtSignal(object); message = pyqtSignal(str)
+    selection_changed = pyqtSignal(object); message = pyqtSignal(str); section_changed = pyqtSignal(object)
     def __init__(self, store=None, parent=None):
         super().__init__(parent); layout = QVBoxLayout(self)
         label = QLabel("3D viewport unavailable\nInstall pyvista, pyvistaqt and VTK"); label.setObjectName("MutedLabel")
