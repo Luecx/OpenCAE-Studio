@@ -48,6 +48,8 @@ def build_docks(window):
     window.project_dock.solution_tree.solution_requested.connect(window.show_solution)
     window.project_dock.panel.browser_requested.connect(window.ribbon.set_browser)
     window.ribbon.result_requested.connect(window.viewport.show_solution)
+    if window.ribbon.results_page is not None:
+        window.viewport.section_changed.connect(window.ribbon.results_page.set_section_state)
     window.ribbon.stage_changed.connect(lambda stage: window.project_dock.panel.set_browser("solution" if stage == "RESULTS" else "project"))
     window.ribbon.stage_changed.connect(window.project_dock.tree.set_stage_focus)
     window.ribbon.stage_changed.connect(window.viewport.set_stage)
