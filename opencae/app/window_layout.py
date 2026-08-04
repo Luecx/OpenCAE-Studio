@@ -25,7 +25,10 @@ def build_ribbon(window):
 
 
 def build_viewport(window):
-    window.viewport = create_viewport(window.context.store)
+    window.viewport = create_viewport(
+        window.context.store,
+        visibility=window.visibility,
+    )
     window.setCentralWidget(window.viewport)
     window.context.store.scene_changed.connect(window.viewport.request_refresh)
     window.context.store.active_part_changed.connect(window.viewport.request_refresh)
@@ -37,7 +40,12 @@ def build_viewport(window):
 
 def build_docks(window):
     store = window.context.store
-    window.project_dock = ProjectDock(store, window.actions, window)
+    window.project_dock = ProjectDock(
+        store,
+        window.actions,
+        visibility=window.visibility,
+        parent=window,
+    )
     window.properties_dock = PropertiesDock(store, window)
     window.output_dock = OutputDock(store, window)
     window.output_dock.tabs.jobs.job_requested.connect(window.controllers.solver.show_job)
