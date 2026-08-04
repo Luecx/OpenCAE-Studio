@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QSignalBlocker, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -63,7 +64,7 @@ class VisibilityDialog(QDialog):
         self.summary.setObjectName("MutedLabel")
         hidden_layout.addWidget(self.summary)
         self.items = QListWidget()
-        self.items.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        self.items.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.items.setMinimumHeight(170)
         hidden_layout.addWidget(self.items)
         root.addWidget(hidden_group)
