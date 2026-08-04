@@ -18,6 +18,6 @@ class IconKind(Enum):
     PROFILE_PIPE = auto(); PROFILE_I = auto(); PROFILE_CHANNEL = auto(); PROFILE_U = auto(); PROFILE_H = auto(); PROFILE_CIRCLE = auto(); PROFILE_GENERAL = auto()
     PROFILE_GRAPH = auto(); STEP_LINEAR = auto(); STEP_NONLINEAR = auto(); STEP_MODAL = auto()
     STEP_BUCKLING = auto(); STEP_TRANSIENT = auto(); REORDER = auto(); MATRIX = auto(); CONTOUR = auto()
-    RESULT_STEP = auto(); RESULT_FRAME = auto(); MESH_LINES = auto(); BOUNDARY_LINES = auto(); DEFORMATION = auto()
+    RESULT_STEP = auto(); RESULT_FRAME = auto(); MESH_LINES = auto(); BOUNDARY_LINES = auto(); DEFORMATION = auto(); SECTION_VIEW = auto()
     PICK = auto()
     UNDEFORMED = auto(); QUERY_NODE = auto(); QUERY_ELEMENT = auto(); RANGE = auto()
