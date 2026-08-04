@@ -34,6 +34,7 @@ class PyVistaScene(SceneDisplayMixin):
         else: restore_camera(self.owner.plotter, camera)
         self.owner.plotter.render()
     def clear(self, render=True):
+        self.owner.section_view.clear_scene()
         self.seed_overlay.clear(self.owner.plotter, render=False)
         self.coordinate_overlay.clear(self.owner.plotter); self.reference_overlay.clear(self.owner.plotter); self.datum_overlay.clear(self.owner.plotter); self.coupling_overlay.clear(self.owner.plotter); self.boundary_overlay.clear(self.owner.plotter); self.region_overlay.clear(self.owner.plotter); self.selection_preview_overlay.clear(self.owner.plotter)
         self.owner.plotter.clear(); self.owner.plotter.set_background(PALETTE["viewport"])
