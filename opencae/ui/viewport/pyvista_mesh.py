@@ -11,15 +11,27 @@ _CELL_TYPES = {(1, 2): 3, (2, 3): 5, (2, 4): 9, (3, 4): 10, (3, 5): 14, (3, 6): 
 
 def build_grid(snapshot, instance=None):
     cells, cell_types, element_ids = [], [], []
+    next_element_id = 1
     for block in snapshot.blocks:
-        if block.dimension != snapshot.dimension: continue
+        if block.dimension != snapshot.dimension:
+            continue
         vtk_type = _CELL_TYPES.get((block.dimension, block.primary_nodes))
-        if vtk_type is None: continue
-        tags = block.element_tags if block.element_tags is not None else range(1, len(block.connectivity) + 1)
-        for element_id, connectivity in zip(tags, block.connectivity):
+        if vtk_type is None:
+            continue
+        if block.element_tags is None:
+            tags = range(next_element_id, next_element_id + len(block.connectivity))
+        else:
+            tags = [int(value) for value in block.element_tags]
+        values = [int(value) for value in tags]
+        if values:
+            next_element_id = max(next_element_id, max(values) + 1)
+        for element_id, connectivity in zip(values, block.connectivity):
             nodes = connectivity[:block.primary_nodes]
-            cells.extend((len(nodes), *map(int, nodes))); cell_types.append(vtk_type); element_ids.append(int(element_id))
-    if not cells: return None
+            cells.extend((len(nodes), *map(int, nodes)))
+            cell_types.append(vtk_type)
+            element_ids.append(element_id)
+    if not cells:
+        return None
     points = transform_points(snapshot.points, instance) if instance else snapshot.points
     grid = pv.UnstructuredGrid(np.asarray(cells, np.int64), np.asarray(cell_types, np.uint8), points)
     grid.point_data["node_id"] = snapshot.node_tags
@@ -29,7 +41,8 @@ def build_grid(snapshot, instance=None):
 
 def add_mesh(plotter, snapshot, instance=None, *, hidden_elements=()):
     grid = build_grid(snapshot, instance)
-    if grid is None: return None, None
+    if grid is None:
+        return None, None
     hidden = {int(value) for value in hidden_elements}
     if hidden:
         ids = np.asarray(grid.cell_data["element_id"], dtype=np.int64)
@@ -38,7 +51,8 @@ def add_mesh(plotter, snapshot, instance=None, *, hidden_elements=()):
     prefix = f"{instance.name}-" if instance else ""
     if not grid.n_cells:
         return None, grid
-    surface = _display_surface(grid); surface.cell_data["display_rgb"] = mesh_cell_colors(surface)
+    surface = _display_surface(grid)
+    surface.cell_data["display_rgb"] = mesh_cell_colors(surface)
     actor = plotter.add_mesh(
         surface, scalars="display_rgb", rgb=True, show_edges=False,
         lighting=True, smooth_shading=True, ambient=0.88, diffuse=0.12,
