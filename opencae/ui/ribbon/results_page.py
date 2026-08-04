@@ -11,6 +11,7 @@ from opencae.ui.viewport.result_visualization import auto_deformation_scale
 from .result_deformation import ResultDeformationButton
 from .result_field_menu import ResultFieldButton
 from .result_range import ResultRangeButton
+from .result_section import ResultSectionButton
 from .result_group import ResultRibbonGroup
 from .result_widgets import action_button, ribbon_button
 
@@ -30,13 +31,15 @@ class ResultsPage(QWidget):
         self.boundary_lines = ribbon_button("Boundary", IconKind.BOUNDARY_LINES, True)
         self.deform = ResultDeformationButton()
         self.undeformed = ribbon_button("Undeformed", IconKind.UNDEFORMED, False, 82)
-        layout.addWidget(ResultRibbonGroup("VISUALS", (self.mesh_lines, self.boundary_lines, self.deform, self.undeformed)))
+        self.section = ResultSectionButton()
+        layout.addWidget(ResultRibbonGroup("VISUALS", (self.mesh_lines, self.boundary_lines, self.deform, self.undeformed, self.section)))
         self.range = ResultRangeButton(); layout.addWidget(ResultRibbonGroup("CONTOUR", (self.range,)))
         self.choose = ResultFieldButton(); layout.addWidget(ResultRibbonGroup("FIELD", (self.choose,)))
         self.query_nodes = ribbon_button("Query Nodes", IconKind.QUERY_NODE, False, 82)
         self.query_elements = ribbon_button("Query Elements", IconKind.QUERY_ELEMENT, False, 88)
         layout.addWidget(ResultRibbonGroup("QUERY", (self.query_nodes, self.query_elements))); layout.addStretch(1)
         for button in (self.mesh_lines, self.boundary_lines, self.undeformed): button.toggled.connect(self._emit)
+        self.section.settings_changed.connect(self._emit)
         self.deform.settings_changed.connect(self._emit); self.deform.auto_requested.connect(self._auto_deformation_scale); self.range.range_changed.connect(self._emit)
         self.choose.selection_changed.connect(self._field_changed); self._wire_queries()
 
@@ -51,8 +54,13 @@ class ResultsPage(QWidget):
         self.query_elements.toggled.connect(lambda checked: self._query_toggled(self.query_elements, self.query_nodes, checked))
 
     def set_solution(self, result, field=None):
+        if getattr(result, "id", None) != getattr(self.result, "id", None):
+            self.section.reset_for_result()
         self.result = result; fields = self.loader.fields(result.source_file) if result and result.source_file else []
         self.save.setEnabled(bool(result and result.source_file)); self.choose.set_solution(result, fields, field)
+
+    def set_section_state(self, state):
+        self.section.set_state(state)
 
     def _field_changed(self):
         field = self.choose.current_field()
@@ -84,7 +92,8 @@ class ResultsPage(QWidget):
         query = "node" if self.query_nodes.isChecked() else "element" if self.query_elements.isChecked() else ""
         options = {"mesh_lines": self.mesh_lines.isChecked(), "boundary_lines": self.boundary_lines.isChecked(),
                    "deform": deform, "undeformed": self.undeformed.isChecked(), "scale": scale,
-                   "query": query, "range": self.range.values(), "selection": self.choose.labels()}
+                   "query": query, "range": self.range.values(), "selection": self.choose.labels(),
+                   "section": self.section.values()}
         if self.result: self.result_requested.emit(self.result, field, options)
 
 
