@@ -8,6 +8,7 @@ from opencae.ui.core.theme import PALETTE
 from .context_pick import ContextPickManager
 from .datum_preview import DatumPreview
 from .datum_reference import reference_from_hit
+from .datum_reference_overlay import DatumReferenceOverlay
 from .element_control_overlay import ElementControlOverlay
 from .model_selection_display import highlight_members, show_model_selection, show_pending_members
 from .pyvista_picker import PyVistaPicker
@@ -43,6 +44,7 @@ class PyVistaViewport(QWidget):
         self._pending_element_control_preview = None
         self._region_previews = {}
         self._reference_point_preview = None
+        self._datum_reference_preview = ()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -61,6 +63,7 @@ class PyVistaViewport(QWidget):
 
         self.context_pick = ContextPickManager(self)
         self.datum_preview = DatumPreview()
+        self.datum_reference_overlay = DatumReferenceOverlay()
         self.element_control_overlay = ElementControlOverlay()
         self.result_query = ResultQueryState(self)
         self.section_view = SectionViewController(self)
@@ -91,6 +94,7 @@ class PyVistaViewport(QWidget):
         self.scene.refresh(self.store.active_part() if self.store else None, fit=fit)
         self._restore_region_previews(render=False)
         self._restore_reference_point_preview(render=False)
+        self._restore_datum_reference_preview(render=False)
         self.plotter.render()
         if self._pending_members is not None:
             members = self._pending_members
@@ -114,6 +118,11 @@ class PyVistaViewport(QWidget):
         # frame, so vertices and datum points only appeared after zooming.
         self.picker.clear(False, False)
         self.picker.configure()
+        # Picker configuration may restore normal point visibility or line
+        # widths. Reapply dialog-owned datum highlights afterwards so completed
+        # Point 1 / Edge / Face selections stay visible while the next field is
+        # being picked.
+        self.datum_reference_overlay.reapply()
         self.plotter.render()
         if mode != "none":
             self.message.emit(f"Selection mode: {mode.title()}")
@@ -135,6 +144,7 @@ class PyVistaViewport(QWidget):
         self.stage = stage
         self.picker.clear(False, False)
         self.picker.configure()
+        self.datum_reference_overlay.reapply()
         self._sync_meshability_legend()
         if stage != "RESULTS":
             self.section_view.clear_scene()
@@ -170,6 +180,8 @@ class PyVistaViewport(QWidget):
                 self.message.emit(str(exc))
 
         self.context_pick.begin(allowed, selected, finished=finished)
+        self.datum_reference_overlay.reapply()
+        self.plotter.render()
 
     def begin_selection_session(self, policy, callback, finished=None):
         self.context_pick.begin(policy, callback, finished=finished)
@@ -183,6 +195,30 @@ class PyVistaViewport(QWidget):
     def hide_datum_preview(self):
         self.datum_preview.clear(self.plotter)
         self.plotter.render()
+
+    def show_datum_reference_preview(self, references):
+        self._datum_reference_preview = tuple(
+            dict(reference) for reference in tuple(references or ()) if reference
+        )
+        if self._refresh_pending:
+            return
+        self._restore_datum_reference_preview(render=True)
+
+    def clear_datum_reference_preview(self):
+        self._datum_reference_preview = ()
+        self.datum_reference_overlay.clear(self.plotter)
+        self.plotter.render()
+
+    def _restore_datum_reference_preview(self, render=True):
+        camera = camera_position(self.plotter)
+        self.datum_reference_overlay.show(
+            self.plotter,
+            self.scene,
+            self._datum_reference_preview,
+        )
+        restore_camera(self.plotter, camera)
+        if render:
+            self.plotter.render()
 
     def show_reference_point_preview(self, name, position):
         self._reference_point_preview = (str(name), tuple(float(value) for value in position))
@@ -219,6 +255,8 @@ class PyVistaViewport(QWidget):
     def clear_scene(self):
         self._region_previews.clear()
         self._reference_point_preview = None
+        self._datum_reference_preview = ()
+        self.datum_reference_overlay.clear(self.plotter)
         self.scene.clear()
 
     def clear_selection(self):
@@ -266,6 +304,7 @@ class PyVistaViewport(QWidget):
                 self.scene.selection_preview_overlay.clear_channel(self.plotter, channel)
         self.scene.region_overlay.clear(self.plotter)
         self.picker.clear(False, False)
+        self.datum_reference_overlay.reapply()
         restore_camera(self.plotter, camera)
         self.plotter.render()
 
