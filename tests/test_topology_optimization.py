@@ -1,3 +1,6 @@
+"""Regression tests for topology algorithms, FEMaster I/O and module structure."""
+
+import ast
 from pathlib import Path
 
 import numpy as np
@@ -7,9 +10,12 @@ from opencae.model.entities.optimization import (
     TopologyFilterSettings,
     TopologySymmetry,
 )
-from opencae.optimization.filtering import build_filter_operators
-from opencae.optimization.oc import optimality_criteria_update
-from opencae.optimization.res_reader import ResFieldReader, dense_values
+from opencae.optimization import (
+    ResFieldReader,
+    build_filter_operators,
+    dense_values,
+    optimality_criteria_update,
+)
 
 
 def test_res_reader_reads_dense_topology_fields_by_solver_id(tmp_path: Path):
@@ -31,14 +37,25 @@ END FIELD
 """,
         encoding="utf-8",
     )
-    fields = ResFieldReader().read_fields(path, names={"DENS_GRAD", "VOLUME"})
+    fields = ResFieldReader().read_fields(
+        path,
+        names={"DENS_GRAD", "VOLUME"},
+    )
     ids = np.asarray([1, 3], dtype=np.int64)
-    assert np.allclose(dense_values(fields["DENS_GRAD"], ids)[:, 0], [-1.0, -3.0])
-    assert np.allclose(dense_values(fields["VOLUME"], ids)[:, 0], [10.0, 12.0])
+    assert np.allclose(
+        dense_values(fields["DENS_GRAD"], ids)[:, 0],
+        [-1.0, -3.0],
+    )
+    assert np.allclose(
+        dense_values(fields["VOLUME"], ids)[:, 0],
+        [10.0, 12.0],
+    )
 
 
 def test_two_filter_radii_are_resolved_independently():
-    points = np.asarray([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    points = np.asarray(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]]
+    )
     settings = TopologyFilterSettings(
         name="Filter",
         density_constraint_radius=FilterRadius(True, 2.5, 0.0),
@@ -52,7 +69,9 @@ def test_two_filter_radii_are_resolved_independently():
 
 
 def test_manual_density_radius_can_be_smaller_than_element_spacing():
-    points = np.asarray([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    points = np.asarray(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]
+    )
     settings = TopologyFilterSettings(
         name="Filter",
         density_constraint_radius=FilterRadius(False, 2.5, 0.25),
@@ -64,24 +83,34 @@ def test_manual_density_radius_can_be_smaller_than_element_spacing():
 
 
 def test_filter_does_not_couple_non_design_elements():
-    points = np.asarray([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    points = np.asarray(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]]
+    )
     settings = TopologyFilterSettings(name="Filter")
     operators = build_filter_operators(
         points,
         settings,
         active_mask=np.asarray([True, True, False]),
     )
-    physical = operators.physical_density(np.asarray([0.2, 0.8, 1.0]))
+    physical = operators.physical_density(
+        np.asarray([0.2, 0.8, 1.0])
+    )
     assert physical[2] == 1.0
     assert physical[0] < 1.0
     assert physical[1] < 1.0
 
 
 def test_planar_symmetry_density_matrix_equalizes_mirrored_points():
-    points = np.asarray([[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    points = np.asarray(
+        [[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0]]
+    )
     symmetry = TopologySymmetry(
         name="Mirror",
-        reference={"kind": "datum_plane", "origin": (0, 0, 0), "normal": (1, 0, 0)},
+        reference={
+            "kind": "datum_plane",
+            "origin": (0, 0, 0),
+            "normal": (1, 0, 0),
+        },
     )
     settings = TopologyFilterSettings(
         name="Filter",
@@ -124,13 +153,17 @@ def test_topology_model_roundtrip_preserves_separate_radii():
     optimization = TopologyOptimization(name="Topology-1")
     optimization.filter_settings.density_constraint_radius.factor = 2.25
     optimization.filter_settings.sensitivity_radius.factor = 5.5
-    decoded = decode_model(encode_model(Project(name="P", optimizations=[optimization])))
+    decoded = decode_model(
+        encode_model(Project(name="P", optimizations=[optimization]))
+    )
     restored = decoded.optimizations[0].filter_settings
     assert restored.density_constraint_radius.factor == 2.25
     assert restored.sensitivity_radius.factor == 5.5
 
 
-def test_topology_deck_uses_native_femaster_topology_loadcase(project_factory):
+def test_topology_deck_uses_native_femaster_topology_loadcase(
+    project_factory,
+):
     from opencae.model.core import EntityRef
     from opencae.model.entities.optimization import (
         OptimizationConstraint,
@@ -143,21 +176,97 @@ def test_topology_deck_uses_native_femaster_topology_loadcase(project_factory):
 
     data = project_factory(two_instances=True, include_constraints=False)
     project = data["project"]
-    stiffness = OptimizationResponse(name="Compliance", response_type=ResponseType.STIFFNESS_ENERGY)
-    volume = OptimizationResponse(name="Volume Fraction", response_type=ResponseType.VOLUME_FRACTION)
+    stiffness = OptimizationResponse(
+        name="Compliance",
+        response_type=ResponseType.STIFFNESS_ENERGY,
+    )
+    volume = OptimizationResponse(
+        name="Volume Fraction",
+        response_type=ResponseType.VOLUME_FRACTION,
+    )
     optimization = TopologyOptimization(
         name="Topology-1",
         analysis_ref=EntityRef.of(data["analysis"], "Analysis"),
         responses=[stiffness, volume],
-        objectives=[OptimizationObjective(name="Minimize", response_ref=EntityRef.of(stiffness, "OptimizationResponse"))],
-        constraints=[OptimizationConstraint(name="Volume", response_ref=EntityRef.of(volume, "OptimizationResponse"), limit=0.5)],
+        objectives=[
+            OptimizationObjective(
+                name="Minimize",
+                response_ref=EntityRef.of(
+                    stiffness,
+                    "OptimizationResponse",
+                ),
+            )
+        ],
+        constraints=[
+            OptimizationConstraint(
+                name="Volume",
+                response_ref=EntityRef.of(
+                    volume,
+                    "OptimizationResponse",
+                ),
+                limit=0.5,
+            )
+        ],
     )
     project.optimizations.append(optimization)
     project.rebuild_index()
     index = build_mesh_index(project)
-    deck = render_topology_deck(project, optimization, index, np.full(index.count, 0.5))
+    deck = render_topology_deck(
+        project,
+        optimization,
+        index,
+        np.full(index.count, 0.5),
+    )
     assert "*LOADCASE, TYPE=LINEARSTATICTOPO" in deck
     assert "*TOPODENSITY, FIELD=OPENCAE_TOPO_DENSITY" in deck
     assert "*TOPOEXPONENT" in deck
-    assert "*FIELD, NAME=OPENCAE_TOPO_DENSITY, TYPE=ELEMENT, COLS=1" in deck
+    assert (
+        "*FIELD, NAME=OPENCAE_TOPO_DENSITY, TYPE=ELEMENT, COLS=1"
+        in deck
+    )
     assert "*END" not in deck
+
+
+def test_optimization_modules_have_headers_and_at_most_one_class():
+    repository = Path(__file__).resolve().parents[1]
+    directories = (
+        repository / "opencae/model/entities/optimization",
+        repository / "opencae/optimization",
+        repository / "opencae/ui/dialogs/optimization_dialogs",
+    )
+    files = [
+        path
+        for directory in directories
+        for path in directory.glob("*.py")
+    ]
+    files.extend(
+        repository / path
+        for path in (
+            "opencae/controllers/optimization_controller.py",
+            "opencae/controllers/optimization_run_controller.py",
+            "opencae/controllers/optimization_selection_controller.py",
+            "opencae/controllers/optimization_setup_controller.py",
+            "opencae/ui/core/named_entity_dialog.py",
+            "opencae/ui/core/widgets/automatic_manual_value_editor.py",
+            "opencae/ui/dialogs/optimization.py",
+            "opencae/ui/dialogs/optimization_common.py",
+            "opencae/ui/dialogs/optimization_regularization.py",
+            "opencae/ui/dialogs/optimization_setup.py",
+            "opencae/ui/dialogs/topology_run.py",
+            "opencae/ui/actions/catalog/optimization_actions.py",
+            "opencae/ui/ribbon/optimization_page.py",
+            "opencae/ui/tree/optimization_tree.py",
+            "opencae/ui/viewport/topology_overlay.py",
+        )
+    )
+
+    for path in sorted(set(files)):
+        module = ast.parse(path.read_text(encoding="utf-8"))
+        assert ast.get_docstring(module), f"Missing file header: {path}"
+        classes = [
+            node for node in module.body if isinstance(node, ast.ClassDef)
+        ]
+        assert len(classes) <= 1, (
+            f"Expected at most one class in {path}, found "
+            f"{[node.name for node in classes]}"
+        )
