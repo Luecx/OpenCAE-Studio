@@ -1,6 +1,7 @@
 from PyQt6.QtCore import QPointF,QRectF,Qt
-from PyQt6.QtGui import QColor,QPen
+from PyQt6.QtGui import QColor,QPen,QPolygonF
 from .legacy_kinds import IconKind
+from .legacy_shapes import draw_cube
 
 
 def draw_result_icon(p,kind,size,fg,muted,pen):
@@ -18,4 +19,10 @@ def draw_result_icon(p,kind,size,fg,muted,pen):
     if kind==IconKind.DEFORMATION:
         p.setPen(QPen(muted,max(1.4,size/24),Qt.PenStyle.DashLine)); p.drawLine(QPointF(size*.12,size*.66),QPointF(size*.88,size*.66))
         p.setPen(pen); path=__import__('PyQt6.QtGui',fromlist=['QPainterPath']).QPainterPath(); path.moveTo(size*.12,size*.66); path.cubicTo(size*.34,size*.14,size*.62,size*.84,size*.88,size*.28); p.drawPath(path); return True
+    if kind==IconKind.SECTION_VIEW:
+        draw_cube(p,QRectF(size*.10,size*.17,size*.66,size*.60),muted)
+        plane=QPolygonF((QPointF(size*.16,size*.68),QPointF(size*.47,size*.28),QPointF(size*.88,size*.39),QPointF(size*.58,size*.80)))
+        p.setBrush(QColor(fg.red(),fg.green(),fg.blue(),72)); p.setPen(QPen(fg,max(1.8,size/18)))
+        p.drawPolygon(plane); p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawLine(QPointF(size*.53,size*.52),QPointF(size*.79,size*.19)); return True
     return False
