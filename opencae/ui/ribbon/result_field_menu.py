@@ -1,4 +1,4 @@
-from PyQt6.QtCore import QSignalBlocker, pyqtSignal
+from PyQt6.QtCore import QSize, QSignalBlocker, Qt, pyqtSignal
 from PyQt6.QtWidgets import QFormLayout, QMenu, QToolButton, QWidget, QWidgetAction
 
 from opencae.results.navigation import display_field, fields_for, frame_keys, frame_label, step_ids, step_label
@@ -8,55 +8,139 @@ from opencae.ui.core.widgets import ChevronComboBox
 
 class ResultFieldButton(QToolButton):
     selection_changed = pyqtSignal()
+    navigation_changed = pyqtSignal(bool, bool)
+
     def __init__(self, parent=None):
-        super().__init__(parent); self.result = None; self.fields = []; self.setText("Choose Field"); self.setIcon(make_icon(IconKind.CONTOUR, 28))
-        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup); self.setProperty("ribbonButton", True); self.setFixedSize(92, 70)
-        panel = QWidget(); form = QFormLayout(panel); form.setContentsMargins(12, 10, 12, 10)
+        super().__init__(parent)
+        self.result = None
+        self.fields = []
+        self.setText("Field")
+        self.setIcon(make_icon(IconKind.FIELD, 28))
+        self.setIconSize(QSize(28, 28))
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.setProperty("ribbonButton", True)
+        self.setFixedSize(92, 70)
+        panel = QWidget()
+        form = QFormLayout(panel)
+        form.setContentsMargins(12, 10, 12, 10)
         self.step, self.frame, self.field, self.component = (ChevronComboBox() for _ in range(4))
         for label, combo in (("Step", self.step), ("Frame", self.frame), ("Field", self.field), ("Component", self.component)):
-            combo.setMinimumWidth(190); form.addRow(label, combo); combo.currentIndexChanged.connect(self._changed)
-        menu = QMenu(self); action = QWidgetAction(menu); action.setDefaultWidget(panel); menu.addAction(action); self.setMenu(menu)
+            combo.setMinimumWidth(190)
+            form.addRow(label, combo)
+            combo.currentIndexChanged.connect(self._changed)
+        menu = QMenu(self)
+        action = QWidgetAction(menu)
+        action.setDefaultWidget(panel)
+        menu.addAction(action)
+        self.setMenu(menu)
 
     def set_solution(self, result, fields, preferred=None):
-        self.result, self.fields = result, fields; blockers = [QSignalBlocker(c) for c in self._combos()]
-        self._steps(preferred); del blockers; self.selection_changed.emit()
+        self.result, self.fields = result, fields
+        blockers = [QSignalBlocker(combo) for combo in self._combos()]
+        self._steps(preferred)
+        del blockers
+        self.selection_changed.emit()
+        self._emit_navigation()
 
     def current_field(self):
-        source, component = self.field.currentData(), self.component.currentData(); return display_field(source, component) if source and component else None
+        source, component = self.field.currentData(), self.component.currentData()
+        return display_field(source, component) if source and component else None
 
     def labels(self):
-        return {"Step": self.step.currentText(), "Frame": self.frame.currentText(), "Field": self.field.currentText(), "Component": self.component.currentText()}
+        return {
+            "Step": self.step.currentText(),
+            "Frame": self.frame.currentText(),
+            "Field": self.field.currentText(),
+            "Component": self.component.currentText(),
+        }
+
+    def select_previous_frame(self, *_):
+        self._move_frame(-1)
+
+    def select_next_frame(self, *_):
+        self._move_frame(1)
+
+    def can_select_previous_frame(self):
+        return self.frame.currentIndex() > 0
+
+    def can_select_next_frame(self):
+        index = self.frame.currentIndex()
+        return index >= 0 and index + 1 < self.frame.count()
+
+    def _move_frame(self, offset):
+        target = self.frame.currentIndex() + int(offset)
+        if target < 0 or target >= self.frame.count():
+            self._emit_navigation()
+            return
+        field_name = self.field.currentText()
+        component_name = self.component.currentText()
+        blockers = [QSignalBlocker(combo) for combo in self._combos()]
+        self.frame.setCurrentIndex(target)
+        self._fields(field_name=field_name, component_name=component_name)
+        del blockers
+        self.selection_changed.emit()
+        self._emit_navigation()
 
     def _steps(self, preferred=None):
         self.step.clear()
-        for index, sid in enumerate(step_ids(self.fields)): self.step.addItem(make_icon(IconKind.RESULT_STEP, 16), step_label(self.result, sid, index), sid)
-        if preferred: self.step.setCurrentIndex(max(self.step.findData(preferred.metadata.get("step_id", 1)), 0))
+        for index, step_id in enumerate(step_ids(self.fields)):
+            self.step.addItem(make_icon(IconKind.RESULT_STEP, 16), step_label(self.result, step_id, index), step_id)
+        if preferred:
+            self.step.setCurrentIndex(max(self.step.findData(preferred.metadata.get("step_id", 1)), 0))
         self._frames(preferred)
 
-    def _frames(self, preferred=None):
+    def _frames(self, preferred=None, field_name=None, component_name=None):
         self.frame.clear()
-        for fid, value in frame_keys(self.fields, self.step.currentData()): self.frame.addItem(make_icon(IconKind.RESULT_FRAME, 16), frame_label(fid, value), (fid, value))
+        for frame_id, value in frame_keys(self.fields, self.step.currentData()):
+            self.frame.addItem(make_icon(IconKind.RESULT_FRAME, 16), frame_label(frame_id, value), (frame_id, value))
         if preferred:
-            target = int(preferred.metadata.get("frame_id", 1)); self.frame.setCurrentIndex(next((i for i in range(self.frame.count()) if self.frame.itemData(i)[0] == target), 0))
-        self._fields(preferred)
+            target = int(preferred.metadata.get("frame_id", 1))
+            self.frame.setCurrentIndex(next((index for index in range(self.frame.count()) if self.frame.itemData(index)[0] == target), 0))
+        self._fields(preferred, field_name, component_name)
 
-    def _fields(self, preferred=None):
-        self.field.clear(); frame = self.frame.currentData() or (1, 0.0); values = fields_for(self.fields, self.step.currentData(), frame[0])
-        for value in values: self.field.addItem(make_icon(IconKind.FIELD, 16), value.name, value)
-        if preferred: self.field.setCurrentIndex(next((i for i, value in enumerate(values) if value.name == preferred.name), 0))
-        self._components(preferred)
+    def _fields(self, preferred=None, field_name=None, component_name=None):
+        self.field.clear()
+        frame = self.frame.currentData() or (1, 0.0)
+        values = fields_for(self.fields, self.step.currentData(), frame[0])
+        for value in values:
+            self.field.addItem(make_icon(IconKind.FIELD, 16), value.name, value)
+        target_name = preferred.name if preferred else field_name
+        if target_name:
+            self.field.setCurrentIndex(next((index for index, value in enumerate(values) if value.name == target_name), 0))
+        self._components(preferred, component_name)
 
-    def _components(self, preferred=None):
-        self.component.clear(); source = self.field.currentData()
-        if source:
-            for name in ("Magnitude", *source.metadata.get("components", ()), *source.metadata.get("derived", ())): self.component.addItem(make_icon(IconKind.CONTOUR, 16), name, name)
-            if preferred: self.component.setCurrentText(preferred.metadata.get("component", "Magnitude"))
+    def _components(self, preferred=None, component_name=None):
+        self.component.clear()
+        source = self.field.currentData()
+        if not source:
+            return
+        names = tuple(dict.fromkeys(("Magnitude", *source.metadata.get("components", ()), *source.metadata.get("derived", ()))))
+        for name in names:
+            self.component.addItem(make_icon(IconKind.CONTOUR, 16), name, name)
+        target = preferred.metadata.get("component", "Magnitude") if preferred else component_name
+        if target:
+            index = self.component.findText(str(target))
+            if index >= 0:
+                self.component.setCurrentIndex(index)
 
     def _changed(self, *_):
-        sender = self.sender(); blockers = [QSignalBlocker(c) for c in self._combos()]
-        if sender is self.step: self._frames()
-        elif sender is self.frame: self._fields()
-        elif sender is self.field: self._components()
-        del blockers; self.selection_changed.emit()
+        sender = self.sender()
+        field_name = self.field.currentText()
+        component_name = self.component.currentText()
+        blockers = [QSignalBlocker(combo) for combo in self._combos()]
+        if sender is self.step:
+            self._frames(field_name=field_name, component_name=component_name)
+        elif sender is self.frame:
+            self._fields(field_name=field_name, component_name=component_name)
+        elif sender is self.field:
+            self._components(component_name=component_name)
+        del blockers
+        self.selection_changed.emit()
+        self._emit_navigation()
 
-    def _combos(self): return (self.step, self.frame, self.field, self.component)
+    def _emit_navigation(self):
+        self.navigation_changed.emit(self.can_select_previous_frame(), self.can_select_next_frame())
+
+    def _combos(self):
+        return self.step, self.frame, self.field, self.component
