@@ -1,3 +1,5 @@
+"""Evaluates one topology iteration and prepares the next OC density update."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -5,7 +7,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from .oc import optimality_criteria_update
-from .res_reader import ResFieldReader, dense_values
+from .res_field_reader import ResFieldReader
+from .res_values import dense_values
 from .responses import evaluate_response
 
 _REQUIRED_FIELDS = {"COMPLIANCE", "DENS_GRAD", "VOLUME", "DENSITY"}
@@ -13,6 +16,8 @@ _REQUIRED_FIELDS = {"COMPLIANCE", "DENS_GRAD", "VOLUME", "DENSITY"}
 
 @dataclass(frozen=True, slots=True)
 class IterationComputation:
+    """Numerical outcome of one completed topology solver evaluation."""
+
     objective_value: float
     constraint_value: float
     constraint_id: str
@@ -24,14 +29,22 @@ class IterationComputation:
 
 
 def read_topology_fields(path, index, expected_density, reader=None):
-    fields = (reader or ResFieldReader()).read_fields(path, names=_REQUIRED_FIELDS)
+    """Read and validate the FEMaster fields required by the optimizer."""
+
+    fields = (reader or ResFieldReader()).read_fields(
+        path,
+        names=_REQUIRED_FIELDS,
+    )
     values = {
         name: dense_values(fields[name], index.solver_ids)[:, 0]
         for name in _REQUIRED_FIELDS
     }
     if not np.allclose(
-        values["DENSITY"], expected_density,
-        rtol=1.0e-8, atol=1.0e-10, equal_nan=False,
+        values["DENSITY"],
+        expected_density,
+        rtol=1.0e-8,
+        atol=1.0e-10,
+        equal_nan=False,
     ):
         raise ValueError(
             "FEMaster returned a DENSITY field that does not match the submitted design"
@@ -50,6 +63,8 @@ def compute_iteration(
     previous_objective,
     fields,
 ):
+    """Evaluate responses, filter gradients and run one OC/bisection update."""
+
     controls = optimization.control_settings
     volumes = fields["VOLUME"]
     compliance = fields["COMPLIANCE"]
@@ -78,11 +93,17 @@ def compute_iteration(
     objective_gradient = operators.sensitivity_gradient(
         objective.gradient,
         physical_density,
-        density_weighted=optimization.filter_settings.density_weighted_sensitivities,
+        density_weighted=(
+            optimization.filter_settings.density_weighted_sensitivities
+        ),
         minimum_density=controls.minimum_density,
     )
     resource_gradient = operators.constraint_gradient(resource.gradient)
-    fixed = ~masks["design"] | masks["frozen_solid"] | masks["frozen_void"]
+    fixed = (
+        ~masks["design"]
+        | masks["frozen_solid"]
+        | masks["frozen_void"]
+    )
     objective_gradient[fixed] = 0.0
     resource_gradient[fixed] = 0.0
 
@@ -108,7 +129,11 @@ def compute_iteration(
             material_densities=index.material_densities,
         ).value
 
-    free = masks["design"] & ~masks["frozen_solid"] & ~masks["frozen_void"]
+    free = (
+        masks["design"]
+        & ~masks["frozen_solid"]
+        & ~masks["frozen_void"]
+    )
     minimum_candidate = np.asarray(design_density, dtype=float).copy()
     minimum_candidate[free] = controls.minimum_density
     minimum_value = constraint_value(minimum_candidate)
@@ -131,10 +156,14 @@ def compute_iteration(
         tolerance=controls.bisection_tolerance,
         maximum_steps=controls.maximum_bisection_steps,
     )
-    maximum_change = float(np.max(np.abs(update.density - design_density)[masks["design"]]))
+    maximum_change = float(
+        np.max(np.abs(update.density - design_density)[masks["design"]])
+    )
     relative_change = (
-        np.inf if previous_objective is None
-        else abs(objective.value - previous_objective) / max(abs(previous_objective), 1.0)
+        np.inf
+        if previous_objective is None
+        else abs(objective.value - previous_objective)
+        / max(abs(previous_objective), 1.0)
     )
     converged = bool(
         maximum_change <= controls.density_change_tolerance
