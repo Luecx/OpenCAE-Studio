@@ -46,6 +46,7 @@ def build_docks(window):
     window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, window.output_dock)
     window.project_dock.tree.stage_requested.connect(window.ribbon.set_stage)
     window.project_dock.solution_tree.solution_requested.connect(window.show_solution)
+    window.project_dock.solution_tree.delete_requested.connect(window.delete_result)
     window.project_dock.panel.browser_requested.connect(window.ribbon.set_browser)
     window.ribbon.result_requested.connect(window.viewport.show_solution)
     if window.ribbon.results_page is not None:
