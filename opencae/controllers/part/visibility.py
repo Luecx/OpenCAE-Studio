@@ -108,15 +108,19 @@ class PartVisibility:
             self.ctx.parent.visibility.hide_topology(part_id, mode, (int(value),))
 
         # Start after a pending Geometry/Mesh display switch has had a chance to
-        # rebuild the scene. The context session itself survives later refreshes
-        # as picked objects are progressively removed from the viewport.
+        # rebuild the scene. Re-check the button because the user can cancel the
+        # request before this deferred callback runs.
         QTimer.singleShot(
             0,
             lambda: self.ctx.parent.viewport.begin_selection_session(
                 policy,
                 selected,
                 finished=dialog.finish_pick,
-            ) if dialog is self._dialog else None,
+            ) if (
+                dialog is self._dialog
+                and dialog.add_button.isChecked()
+                and dialog.current_mode() == mode
+            ) else None,
         )
 
     def _show_selected(self, part_id, dialog, mode, values):
