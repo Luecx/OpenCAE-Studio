@@ -8,6 +8,9 @@ import pyvista as pv
 from .safe_operations import remove_actor
 from .vtk_cell_data import cell_array
 
+_THRESHOLD_ABSOLUTE_TOLERANCE = 1.0e-9
+_THRESHOLD_RELATIVE_TOLERANCE = 1.0e-9
+
 
 class TopologyDensityOverlay:
     """Display one saved topology iteration on the current assembly mesh."""
@@ -70,10 +73,7 @@ class TopologyDensityOverlay:
                 ],
                 dtype=float,
             )
-            keep = np.where(
-                np.isfinite(cell_density)
-                & (cell_density >= float(threshold))
-            )[0]
+            keep = visible_density_indices(cell_density, threshold)
             if not len(keep):
                 continue
             copy = grid.copy(deep=False)
@@ -82,6 +82,7 @@ class TopologyDensityOverlay:
 
         if (
             not pieces
+            and not scene.mesh_grids
             and scene.mesh_grid is not None
             and scene.mesh_grid.n_cells
         ):
@@ -101,10 +102,7 @@ class TopologyDensityOverlay:
                 ],
                 dtype=float,
             )
-            keep = np.where(
-                np.isfinite(cell_density)
-                & (cell_density >= float(threshold))
-            )[0]
+            keep = visible_density_indices(cell_density, threshold)
             if len(keep):
                 copy = grid.copy(deep=False)
                 copy.cell_data["Topology Density"] = cell_density
@@ -145,10 +143,19 @@ class TopologyDensityOverlay:
                 },
             )
             self._names.append(name)
+
+        finite = values[np.isfinite(values)]
+        density_text = (
+            f"ρ min/mean/max "
+            f"{np.min(finite):.3f}/{np.mean(finite):.3f}/{np.max(finite):.3f}"
+            if len(finite)
+            else "ρ unavailable"
+        )
         label = (
             f"Iteration {iteration.number}   "
             f"Objective {iteration.objective_value:.6g}   "
-            f"Threshold {float(threshold):.3f}"
+            f"Threshold {float(threshold):.3f}   "
+            f"{density_text}"
         )
         label_name = "topology-density-label"
         viewport.plotter.add_text(
@@ -160,3 +167,18 @@ class TopologyDensityOverlay:
         )
         self._names.append(label_name)
         viewport.plotter.render()
+
+
+def visible_density_indices(density, threshold):
+    """Return stable visible indices for a floating-point density threshold."""
+
+    values = np.asarray(density, dtype=float).ravel()
+    limit = float(threshold)
+    tolerance = max(
+        _THRESHOLD_ABSOLUTE_TOLERANCE,
+        abs(limit) * _THRESHOLD_RELATIVE_TOLERANCE,
+    )
+    return np.flatnonzero(
+        np.isfinite(values)
+        & (values >= limit - tolerance)
+    )
