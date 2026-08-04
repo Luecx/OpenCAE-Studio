@@ -7,6 +7,12 @@ ASSEMBLY_KINDS = {"assembly", "asm_regions", "asm_region", "instances", "instanc
 CONSTRAINT_KINDS = {"constraints", "constraint"}
 BC_KINDS = {"boundary_conditions", "supports", "support", "loads", "load"}
 ANALYSIS_KINDS = {"steps", "analysis_step"}
+OPTIMIZATION_KINDS = {
+    "optimizations", "topology_optimization", "optimization_responses", "optimization_response",
+    "optimization_objectives", "optimization_objective", "optimization_constraints", "optimization_constraint",
+    "topology_filters", "topology_filter_settings", "topology_symmetries", "topology_symmetry",
+    "topology_controls", "optimization_runs", "optimization_run", "optimization_iteration",
+}
 
 
 def stage_for_kind(kind):
@@ -19,4 +25,5 @@ def stage_for_kind(kind):
     if kind in CONSTRAINT_KINDS: return "CONSTRAINTS"
     if kind in BC_KINDS: return "BOUNDARY CONDITIONS"
     if kind in ANALYSIS_KINDS: return "ANALYSIS"
+    if kind in OPTIMIZATION_KINDS: return "OPTIMIZATION"
     return None

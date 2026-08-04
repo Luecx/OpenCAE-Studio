@@ -15,6 +15,15 @@ _KIND_ICONS={
     "loads":IconKind.LOAD,"load":IconKind.LOAD,"materials":IconKind.MATERIAL,"material":IconKind.MATERIAL,
     "sections":IconKind.SECTION,"section":IconKind.SECTION,"fields":IconKind.FIELD,"field_definition":IconKind.FIELD,
     "profiles":IconKind.PROFILE,"profile":IconKind.PROFILE,"steps":IconKind.ANALYSIS,"analysis_step":IconKind.ANALYSIS,
+    "optimizations":IconKind.CONTOUR,"topology_optimization":IconKind.CONTOUR,
+    "optimization_responses":IconKind.FIELD,"optimization_response":IconKind.FIELD,
+    "optimization_objectives":IconKind.CONTOUR,"optimization_objective":IconKind.CONTOUR,
+    "optimization_constraints":IconKind.CONSTRAINT,"optimization_constraint":IconKind.CONSTRAINT,
+    "topology_filters":IconKind.RANGE,"topology_filter_settings":IconKind.RANGE,
+    "topology_symmetries":IconKind.CSYS,"topology_symmetry":IconKind.CSYS,
+    "topology_controls":IconKind.SETTINGS,
+    "optimization_runs":IconKind.RUN,"optimization_run":IconKind.RUN,
+    "optimization_iteration":IconKind.RESULT_FRAME,
 }
 
 
