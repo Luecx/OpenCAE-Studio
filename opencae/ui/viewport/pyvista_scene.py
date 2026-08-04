@@ -3,6 +3,7 @@ from opencae.geometry.errors import GeometryError
 from opencae.ui.core.theme import PALETTE
 from .boundary_overlay import BoundaryOverlay
 from .coordinate_system_overlay import CoordinateSystemOverlay
+from .orientation_overlay import OrientationOverlay
 from .pyvista_geometry import add_geometry
 from .pyvista_mesh import add_mesh
 from .seed_overlay import SeedOverlay
@@ -21,7 +22,7 @@ class PyVistaScene(SceneDisplayMixin):
         self.face_actors = {}; self.edge_actors = {}; self.vertex_actors = {}; self.reference_actors = {}; self.datum_actors = {}
         self.mesh_actor = None; self.mesh_grid = None; self.mesh_snapshot = None
         self.mesh_actors = []; self.mesh_grids = {}; self.assembly_mesh_snapshots = {}
-        self.seed_overlay = SeedOverlay(); self.coordinate_overlay = CoordinateSystemOverlay(); self.reference_overlay = ReferencePointOverlay(); self.datum_overlay = DatumOverlay(); self.coupling_overlay = CouplingOverlay(); self.region_overlay = RegionOverlay(); self.selection_preview_overlay = SelectionPreviewOverlay()
+        self.seed_overlay = SeedOverlay(); self.coordinate_overlay = CoordinateSystemOverlay(); self.orientation_overlay = OrientationOverlay(); self.reference_overlay = ReferencePointOverlay(); self.datum_overlay = DatumOverlay(); self.coupling_overlay = CouplingOverlay(); self.region_overlay = RegionOverlay(); self.selection_preview_overlay = SelectionPreviewOverlay()
         self.boundary_overlay = BoundaryOverlay(owner); self.field_actor = None
         self.result_actor = None; self.result_grid = None; self.result_mesh_actor = None; self.result_boundary_actor = None; self.result_undeformed_actor = None
     def refresh(self, part, fit=False):
@@ -36,7 +37,7 @@ class PyVistaScene(SceneDisplayMixin):
     def clear(self, render=True):
         self.owner.section_view.clear_scene()
         self.seed_overlay.clear(self.owner.plotter, render=False)
-        self.coordinate_overlay.clear(self.owner.plotter); self.reference_overlay.clear(self.owner.plotter); self.datum_overlay.clear(self.owner.plotter); self.coupling_overlay.clear(self.owner.plotter); self.boundary_overlay.clear(self.owner.plotter); self.region_overlay.clear(self.owner.plotter); self.selection_preview_overlay.clear(self.owner.plotter)
+        self.coordinate_overlay.clear(self.owner.plotter); self.orientation_overlay.clear(self.owner.plotter); self.reference_overlay.clear(self.owner.plotter); self.datum_overlay.clear(self.owner.plotter); self.coupling_overlay.clear(self.owner.plotter); self.boundary_overlay.clear(self.owner.plotter); self.region_overlay.clear(self.owner.plotter); self.selection_preview_overlay.clear(self.owner.plotter)
         self.owner.plotter.clear(); self.owner.plotter.set_background(PALETTE["viewport"])
         self.owner.canvas.meshability.hide()
         self.face_actors.clear(); self.edge_actors.clear(); self.vertex_actors.clear(); self.reference_actors.clear(); self.datum_actors.clear()
@@ -59,7 +60,7 @@ class PyVistaScene(SceneDisplayMixin):
                 hidden_cells=self._hidden(part.id, "cells"),
             ))
             self._show_meshability_legend()
-        self.coordinate_overlay.show_part(self.owner.plotter, part, self); self.reference_overlay.show_part(self.owner.plotter, part, self); self.datum_overlay.show_part(self.owner.plotter, part, self)
+        self.coordinate_overlay.show_part(self.owner.plotter, part, self); self.orientation_overlay.show_part(self.owner.plotter, self.owner.store.project, part, self); self.reference_overlay.show_part(self.owner.plotter, part, self); self.datum_overlay.show_part(self.owner.plotter, part, self)
         self.owner.plotter.add_axes(color="#dce3e8"); self.owner.picker.configure()
     def _show_assembly(self):
         project = self.owner.store.project; instances = [item for item in project.assembly.instances if not item.suppressed]
