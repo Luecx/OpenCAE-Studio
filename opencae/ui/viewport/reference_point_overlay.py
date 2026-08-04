@@ -25,17 +25,20 @@ class ReferencePointOverlay:
     def show_part(self, plotter, part, scene):
         self.clear(plotter)
         for index, point in enumerate(getattr(part, "reference_points", ())):
-            self._draw(plotter, scene, point, f"part-{index}")
+            if _visible(scene, point):
+                self._draw(plotter, scene, point, f"part-{index}")
 
     def show_assembly(self, plotter, project, scene):
         self.clear(plotter)
         for index, point in enumerate(project.assembly.reference_points):
-            self._draw(plotter, scene, point, f"assembly-{index}")
+            if _visible(scene, point):
+                self._draw(plotter, scene, point, f"assembly-{index}")
         for instance_id, instance in scene.assembly_instances.items():
             part = project.try_resolve(instance.part_ref)
             if part:
                 for index, point in enumerate(part.reference_points):
-                    self._draw(plotter, scene, point, f"{instance_id}-{index}", instance, instance.name)
+                    if _visible(scene, point):
+                        self._draw(plotter, scene, point, f"{instance_id}-{index}", instance, instance.name)
 
     def show_preview(self, plotter, name, position):
         self.clear_preview(plotter)
@@ -117,3 +120,8 @@ class ReferencePointOverlay:
             mapper.SetRelativeCoincidentTopologyPointOffsetParameter(-2.0)
         except (AttributeError, RuntimeError, TypeError):
             pass
+
+
+def _visible(scene, entity):
+    visibility = getattr(getattr(scene, "owner", None), "visibility", None)
+    return visibility is None or visibility.is_entity_visible(entity)
