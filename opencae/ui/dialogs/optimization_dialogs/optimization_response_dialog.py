@@ -40,7 +40,7 @@ class OptimizationResponseDialog(NamedEntityDialog):
             (ResponseType.VOLUME_FRACTION, "Volume Fraction"),
             (ResponseType.MASS, "Mass"),
             (ResponseType.MASS_FRACTION, "Mass Fraction"),
-            (ResponseType.STIFFNESS_ENERGY, "Stiffness Energy Measure"),
+            (ResponseType.STIFFNESS_ENERGY, "Compliance (Global Stiffness)"),
         ):
             self.kind.addItem(label, kind.value)
         current = self.kind.findData(self.value.response_type.value)
@@ -63,8 +63,9 @@ class OptimizationResponseDialog(NamedEntityDialog):
         self.form.addRow("Region", self.region)
 
         note = QLabel(
-            "Stiffness Energy uses the complete model in the current OC solver. "
-            "Volume and mass responses may use arbitrary element regions."
+            "Compliance is minimized to maximize global stiffness. The current "
+            "OC solver evaluates this objective on the complete model. Volume "
+            "and mass responses may use arbitrary element regions."
         )
         note.setWordWrap(True)
         note.setObjectName("MutedLabel")
