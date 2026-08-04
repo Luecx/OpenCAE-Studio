@@ -1,3 +1,5 @@
+"""Composes setup, run and selection behavior for the Optimization stage."""
+
 from __future__ import annotations
 
 from opencae.optimization.runner import TopologyOptimizationRunner
@@ -10,8 +12,12 @@ from .optimization_setup_controller import OptimizationSetupMixin
 
 
 class OptimizationController(
-    OptimizationSetupMixin, OptimizationRunMixin, OptimizationSelectionMixin
+    OptimizationSetupMixin,
+    OptimizationRunMixin,
+    OptimizationSelectionMixin,
 ):
+    """Stateful controller for topology definitions, execution and display."""
+
     def __init__(self, store, parent, settings, solvers):
         self.store = store
         self.parent = parent
