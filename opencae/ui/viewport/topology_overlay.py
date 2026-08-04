@@ -1,3 +1,5 @@
+"""Renders saved element densities for topology iterations in the viewport."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -30,12 +32,23 @@ class TopologyDensityOverlay:
         if render:
             plotter.render()
 
-    def show(self, viewport, run, iteration, mesh_index, density, *, threshold=0.30):
+    def show(
+        self,
+        viewport,
+        run,
+        iteration,
+        mesh_index,
+        density,
+        *,
+        threshold=0.30,
+    ):
         self.clear(viewport, render=False)
         scene = viewport.scene
         values = np.asarray(density, dtype=float).ravel()
         if len(values) != mesh_index.count:
-            raise ValueError("Saved topology density does not match the current mesh manifest")
+            raise ValueError(
+                "Saved topology density does not match the current mesh manifest"
+            )
         pieces = []
         for instance_id, grid in scene.mesh_grids.items():
             if grid is None or not grid.n_cells:
@@ -43,34 +56,55 @@ class TopologyDensityOverlay:
             element_ids = cell_array(grid, "element_id")
             if not len(element_ids):
                 continue
-            rows = np.where(np.asarray(mesh_index.instance_ids) == str(instance_id))[0]
+            rows = np.where(
+                np.asarray(mesh_index.instance_ids) == str(instance_id)
+            )[0]
             lookup = {
                 int(mesh_index.source_element_ids[row]): float(values[row])
                 for row in rows
             }
             cell_density = np.asarray(
-                [lookup.get(int(element_id), np.nan) for element_id in element_ids],
+                [
+                    lookup.get(int(element_id), np.nan)
+                    for element_id in element_ids
+                ],
                 dtype=float,
             )
-            keep = np.where(np.isfinite(cell_density) & (cell_density >= float(threshold)))[0]
+            keep = np.where(
+                np.isfinite(cell_density)
+                & (cell_density >= float(threshold))
+            )[0]
             if not len(keep):
                 continue
             copy = grid.copy(deep=False)
             copy.cell_data["Topology Density"] = cell_density
             pieces.append(copy.extract_cells(keep))
 
-        if not pieces and scene.mesh_grid is not None and scene.mesh_grid.n_cells:
+        if (
+            not pieces
+            and scene.mesh_grid is not None
+            and scene.mesh_grid.n_cells
+        ):
             grid = scene.mesh_grid
             element_ids = cell_array(grid, "element_id")
             lookup = {
                 int(element_id): float(value)
-                for element_id, value in zip(mesh_index.source_element_ids, values)
+                for element_id, value in zip(
+                    mesh_index.source_element_ids,
+                    values,
+                )
             }
             cell_density = np.asarray(
-                [lookup.get(int(element_id), np.nan) for element_id in element_ids],
+                [
+                    lookup.get(int(element_id), np.nan)
+                    for element_id in element_ids
+                ],
                 dtype=float,
             )
-            keep = np.where(np.isfinite(cell_density) & (cell_density >= float(threshold)))[0]
+            keep = np.where(
+                np.isfinite(cell_density)
+                & (cell_density >= float(threshold))
+            )[0]
             if len(keep):
                 copy = grid.copy(deep=False)
                 copy.cell_data["Topology Density"] = cell_density
@@ -105,7 +139,10 @@ class TopologyDensityOverlay:
                 pickable=False,
                 reset_camera=False,
                 render=False,
-                scalar_bar_args={"title": "Density", "vertical": True},
+                scalar_bar_args={
+                    "title": "Density",
+                    "vertical": True,
+                },
             )
             self._names.append(name)
         label = (
