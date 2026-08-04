@@ -26,7 +26,7 @@ def test_density_echo_accepts_femaster_res_writer_rounding():
 
 def test_density_echo_rejects_a_real_solver_mapping_mismatch():
     expected = np.asarray([0.3, 0.25, 0.2], dtype=float)
-    returned = np.asarray([0.3, 0.2, 0.25], dtype=float)
+    returned = np.asarray([0.3, 0.2, 0.2], dtype=float)
 
     with pytest.raises(ValueError, match="solver element 2"):
         _validate_returned_density(
