@@ -1,4 +1,13 @@
-from . import analysis_actions, assembly_actions, load_actions, part_actions, project_actions, resource_actions, view_actions
+from . import (
+    analysis_actions,
+    assembly_actions,
+    load_actions,
+    optimization_actions,
+    part_actions,
+    project_actions,
+    resource_actions,
+    view_actions,
+)
 
 
 def register_actions(registry, controllers, window, store):
@@ -9,7 +18,9 @@ def register_actions(registry, controllers, window, store):
         assembly_actions.specs(controllers),
         load_actions.specs(controllers),
         analysis_actions.specs(controllers),
+        optimization_actions.specs(controllers),
         view_actions.specs(window),
     )
     for specs in groups:
-        for spec in specs: registry.add(spec)
+        for spec in specs:
+            registry.add(spec)

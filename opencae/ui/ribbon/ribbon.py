@@ -4,13 +4,13 @@ from PyQt6.QtWidgets import QLabel, QStackedWidget, QVBoxLayout, QWidget
 from opencae.ui.core.metrics import CONTEXT_BAR_HEIGHT, RIBBON_PAGE_HEIGHT
 from opencae.ui.core.theme import PALETTE
 from . import analysis_page, assembly_page, bc_page, constraints_page, fields_page
-from . import materials_page, part_page, profiles_page, results_page, sections_page, solve_page
+from . import materials_page, optimization_page, part_page, profiles_page, results_page, sections_page, solve_page
 from .ribbon_page import RibbonPage
 from .stage_bar import STAGES, StageBar
 
 _PAGES = (
     materials_page, sections_page, profiles_page, fields_page, part_page, assembly_page,
-    constraints_page, bc_page, analysis_page, solve_page, results_page,
+    constraints_page, bc_page, analysis_page, optimization_page, solve_page, results_page,
 )
 
 
@@ -48,16 +48,13 @@ class Ribbon(QWidget):
 
     def set_stage(self, stage):
         if stage not in STAGES or stage == self.current_stage: return
-        if stage != "RESULTS":
-            self.last_project_stage = stage
+        if stage != "RESULTS": self.last_project_stage = stage
         self.current_stage = stage; self.stage_bar.set_stage(stage); self.stack.setCurrentIndex(STAGES.index(stage))
         self.refresh_context(); self.stage_changed.emit(stage)
 
     def set_browser(self, name):
-        if str(name).casefold() == "solution":
-            self.set_stage("RESULTS")
-        elif self.current_stage == "RESULTS":
-            self.set_stage(self.last_project_stage or "PART")
+        if str(name).casefold() == "solution": self.set_stage("RESULTS")
+        elif self.current_stage == "RESULTS": self.set_stage(self.last_project_stage or "PART")
 
     def refresh_context(self, *_):
         project = self.store.project; part = self.store.active_part(); stage = self.current_stage
@@ -71,6 +68,9 @@ class Ribbon(QWidget):
         elif stage == "CONSTRAINTS": text = f"  Constraints: {len(project.assembly.constraints)}"
         elif stage == "BOUNDARY CONDITIONS": text = f"  Supports: {len(project.supports)}     Loads: {len(project.loads)}"
         elif stage == "ANALYSIS": text = f"  Steps: {sum(len(item.steps) for item in project.analyses)}"
+        elif stage == "OPTIMIZATION":
+            runs = sum(len(item.runs) for item in project.optimizations)
+            text = f"  Topology optimizations: {len(project.optimizations)}     Runs: {runs}"
         elif stage == "SOLVE": text = f"  Active solver: {self.settings.selected_solver or 'No solver'}"
         else: text = f"  Available solutions: {len(project.results)}"
         self.context.setText(text)
