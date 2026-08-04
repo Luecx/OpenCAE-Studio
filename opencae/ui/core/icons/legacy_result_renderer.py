@@ -9,6 +9,16 @@ def draw_result_icon(p,kind,size,fg,muted,pen):
         p.drawPolyline([QPointF(size*.16,size*.72),QPointF(size*.36,size*.72),QPointF(size*.36,size*.5),QPointF(size*.58,size*.5),QPointF(size*.58,size*.28),QPointF(size*.84,size*.28)]); return True
     if kind==IconKind.RESULT_FRAME:
         p.drawRect(QRectF(size*.16,size*.2,size*.68,size*.58)); p.drawLine(QPointF(size*.3,size*.12),QPointF(size*.3,size*.86)); p.drawLine(QPointF(size*.7,size*.12),QPointF(size*.7,size*.86)); return True
+    if kind in {IconKind.PREVIOUS_FRAME,IconKind.NEXT_FRAME}:
+        previous=kind==IconKind.PREVIOUS_FRAME
+        p.setPen(QPen(fg,max(1.8,size/18)))
+        bar_x=size*(.24 if previous else .76)
+        p.drawLine(QPointF(bar_x,size*.20),QPointF(bar_x,size*.80))
+        if previous:
+            triangle=QPolygonF((QPointF(size*.68,size*.20),QPointF(size*.32,size*.50),QPointF(size*.68,size*.80)))
+        else:
+            triangle=QPolygonF((QPointF(size*.32,size*.20),QPointF(size*.68,size*.50),QPointF(size*.32,size*.80)))
+        p.setBrush(fg); p.drawPolygon(triangle); p.setBrush(Qt.BrushStyle.NoBrush); return True
     if kind==IconKind.MESH_LINES:
         for i in range(4):
             p.drawLine(QPointF(size*.15,size*(.18+i*.18)),QPointF(size*.85,size*(.18+i*.18)))
