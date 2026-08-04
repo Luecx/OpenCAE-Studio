@@ -84,17 +84,11 @@ def write_project(project, writer, context):
 
 
 def _steps_for_export(project, context):
-    """Return current project-owned steps, never a stale selected object.
-
-    Store commands can replace analysis objects while the UI selection still
-    points at an older Python instance. Resolving the selected analysis by id on
-    every export prevents later runs from silently emitting a deck without a
-    loadcase.
-    """
+    """Return current project-owned steps, never a stale selected object."""
     if context.analysis is not None:
         analysis_id = getattr(context.analysis, "id", None)
         current = project.try_resolve(analysis_id) if analysis_id else None
-        analyses = (current or context.analysis,)
+        analyses = (current,) if current is not None and hasattr(current, "steps") else tuple(project.analyses)
     else:
         analyses = tuple(project.analyses)
 
