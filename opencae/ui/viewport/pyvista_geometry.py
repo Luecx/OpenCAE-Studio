@@ -16,14 +16,14 @@ _BASE_COLORS = {}
 
 
 def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True):
-    """Add shaded CAD actors while preserving the meshability tint.
+    """Add CAD actors with diffuse-only normal shading.
 
-    QtInteractor can lose PyVista's automatically-created light kit after a
-    renderer clear. Reinstalling a small camera-light rig here makes the
-    normal-based depth cue deterministic instead of depending on whether the
-    renderer happened to retain its default light.
+    The face brightness is produced exclusively by the Lambert diffuse term,
+    i.e. by the angle between the surface normal and one neutral directional
+    light. There are no specular highlights, reflections, rim lights or colored
+    fill lights. The Regular/Irregular classification remains the base tint.
     """
-    _configure_geometry_lights(plotter)
+    _configure_geometry_light(plotter)
     faces, edges, vertices = {}, {}, {}
     prefix = f"{instance.name}-" if instance else ""
     for patch in snapshot.surfaces:
@@ -31,9 +31,9 @@ def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True)
         mesh = pv.PolyData(points, oriented_faces(snapshot, patch))
         try:
             # OCC tessellation can repeat the same geometric vertex for several
-            # triangles. Merge those ids before calculating point normals so
-            # curved CAD faces shade smoothly while sharp CAD-face boundaries
-            # remain sharp because every face is still a separate actor.
+            # triangles. Merge those ids before calculating point normals so a
+            # curved CAD face shades smoothly. Sharp CAD-face boundaries remain
+            # sharp because every face is represented by a separate actor.
             mesh = mesh.clean(tolerance=1.0e-10, absolute=False)
         except (AttributeError, TypeError, ValueError, RuntimeError):
             pass
@@ -56,10 +56,10 @@ def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True)
             show_edges=False,
             lighting=True,
             smooth_shading=True,
-            ambient=0.16,
-            diffuse=0.82,
-            specular=0.18,
-            specular_power=22.0,
+            ambient=0.24,
+            diffuse=0.76,
+            specular=0.0,
+            specular_power=1.0,
             pickable=True,
             name=f"{prefix}face-{patch.tag}",
             render=False,
@@ -68,10 +68,10 @@ def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True)
             prop = actor.GetProperty()
             prop.SetLighting(True)
             prop.SetInterpolationToPhong()
-            prop.SetAmbient(0.16)
-            prop.SetDiffuse(0.82)
-            prop.SetSpecular(0.18)
-            prop.SetSpecularPower(22.0)
+            prop.SetAmbient(0.24)
+            prop.SetDiffuse(0.76)
+            prop.SetSpecular(0.0)
+            prop.SetSpecularPower(1.0)
         except (AttributeError, RuntimeError):
             pass
         actor.GetProperty().BackfaceCullingOff()
@@ -146,13 +146,13 @@ def set_actor_selected(actor, selected: bool, kind: str = "face"):
         actor.GetProperty().SetPointSize(20.0 if selected else 15.0)
 
 
-def _configure_geometry_lights(plotter) -> None:
-    """Install a clear key/fill/rim rig in camera coordinates.
+def _configure_geometry_light(plotter) -> None:
+    """Install one neutral camera light for pure Lambert shading.
 
-    ``Plotter.clear()`` and the native Qt render path do not consistently keep
-    PyVista's implicit light kit on all VTK/PyVista combinations. Explicit
-    camera lights give planar faces visibly different intensities and keep the
-    effect attached to the camera while the user rotates the model.
+    ``Plotter.clear()`` does not consistently preserve PyVista's implicit light
+    on every VTK/PyVista combination. A single explicit non-positional white
+    camera light gives deterministic normal-angle shading without introducing
+    highlights or reflection-like effects.
     """
     try:
         from vtkmodules.vtkRenderingCore import vtkLight
@@ -169,24 +169,18 @@ def _configure_geometry_lights(plotter) -> None:
         if two_sided is not None:
             two_sided(True)
 
-        definitions = (
-            ((0.55, -0.45, 1.00), (1.00, 0.98, 0.95), 0.92),
-            ((-0.70, 0.25, 0.45), (0.72, 0.82, 1.00), 0.38),
-            ((0.15, 0.85, -0.35), (1.00, 1.00, 1.00), 0.24),
-        )
-        for position, color, intensity in definitions:
-            light = vtkLight()
-            light.SetLightTypeToCameraLight()
-            light.SetPosition(*position)
-            light.SetFocalPoint(0.0, 0.0, 0.0)
-            light.SetColor(*color)
-            light.SetIntensity(float(intensity))
-            light.SetPositional(False)
-            light.SwitchOn()
-            renderer.AddLight(light)
+        light = vtkLight()
+        light.SetLightTypeToCameraLight()
+        light.SetPosition(0.65, -0.45, 1.0)
+        light.SetFocalPoint(0.0, 0.0, 0.0)
+        light.SetColor(1.0, 1.0, 1.0)
+        light.SetIntensity(1.0)
+        light.SetPositional(False)
+        light.SwitchOn()
+        renderer.AddLight(light)
     except (AttributeError, ImportError, RuntimeError, TypeError):
-        # The actor still uses its computed normals and whatever light the
-        # renderer provides; lighting setup must never block geometry display.
+        # Lighting setup must never block geometry display. The actor retains
+        # its normals and diffuse-only material settings as a safe fallback.
         return
 
 
