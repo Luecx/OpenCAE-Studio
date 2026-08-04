@@ -15,7 +15,15 @@ SELECTED_COLOR = "#3296e6"
 _BASE_COLORS = {}
 
 
-def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True):
+def add_geometry(
+    plotter,
+    snapshot,
+    instance=None,
+    *,
+    color_by_meshability=True,
+    hidden_faces=(),
+    hidden_cells=(),
+):
     """Add CAD actors with subtle diffuse-only normal shading.
 
     Face brightness depends only on the angle between the surface normal and one
@@ -23,11 +31,21 @@ def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True)
     surfaces close to their classification color, while a small diffuse term
     provides a restrained depth cue. Specular highlights and reflections are
     disabled.
+
+    ``hidden_faces`` and ``hidden_cells`` are display-only topology filters.
+    A shared interface remains visible while at least one adjacent cell is
+    visible; it disappears only when every adjacent cell is hidden.
     """
     _configure_geometry_light(plotter)
+    hidden_face_tags = {int(value) for value in hidden_faces}
+    hidden_cell_tags = {int(value) for value in hidden_cells}
     faces, edges, vertices = {}, {}, {}
     prefix = f"{instance.name}-" if instance else ""
+    visible_surface_count = 0
     for patch in snapshot.surfaces:
+        if _surface_hidden(snapshot, patch.tag, hidden_face_tags, hidden_cell_tags):
+            continue
+        visible_surface_count += 1
         points = transform_points(patch.points, instance) if instance else patch.points
         mesh = pv.PolyData(points, oriented_faces(snapshot, patch))
         try:
@@ -84,45 +102,49 @@ def add_geometry(plotter, snapshot, instance=None, *, color_by_meshability=True)
             patch.tag,
             instance.name if instance else "",
         )
-    for patch in snapshot.edges:
-        points = transform_points(patch.points, instance) if instance else patch.points
-        mesh = pv.PolyData(points)
-        mesh.lines = patch.lines
-        actor = plotter.add_mesh(
-            mesh,
-            color=EDGE_COLOR,
-            line_width=3.6,
-            lighting=False,
-            render_lines_as_tubes=True,
-            pickable=True,
-            name=f"{prefix}edge-{patch.tag}",
-            render=False,
-        )
-        _configure_edge_mapper(actor)
-        edges[actor] = ActorReference(
-            instance.id if instance else None,
-            1,
-            patch.tag,
-            instance.name if instance else "",
-        )
-    for patch in snapshot.vertices:
-        point = transform_points(np.asarray([patch.point]), instance)[0] if instance else patch.point
-        actor = plotter.add_mesh(
-            pv.PolyData([point]),
-            color=VERTEX_COLOR,
-            point_size=8.0,
-            render_points_as_spheres=True,
-            lighting=False,
-            pickable=True,
-            name=f"{prefix}vertex-{patch.tag}",
-            render=False,
-        )
-        vertices[actor] = ActorReference(
-            instance.id if instance else None,
-            0,
-            patch.tag,
-            instance.name if instance else "",
-        )
+    # Keep topology curves as context while only part of the solid is hidden.
+    # They are removed when no face remains, avoiding a misleading wire-only
+    # object after Hide All.
+    if visible_surface_count:
+        for patch in snapshot.edges:
+            points = transform_points(patch.points, instance) if instance else patch.points
+            mesh = pv.PolyData(points)
+            mesh.lines = patch.lines
+            actor = plotter.add_mesh(
+                mesh,
+                color=EDGE_COLOR,
+                line_width=3.6,
+                lighting=False,
+                render_lines_as_tubes=True,
+                pickable=True,
+                name=f"{prefix}edge-{patch.tag}",
+                render=False,
+            )
+            _configure_edge_mapper(actor)
+            edges[actor] = ActorReference(
+                instance.id if instance else None,
+                1,
+                patch.tag,
+                instance.name if instance else "",
+            )
+        for patch in snapshot.vertices:
+            point = transform_points(np.asarray([patch.point]), instance)[0] if instance else patch.point
+            actor = plotter.add_mesh(
+                pv.PolyData([point]),
+                color=VERTEX_COLOR,
+                point_size=8.0,
+                render_points_as_spheres=True,
+                lighting=False,
+                pickable=True,
+                name=f"{prefix}vertex-{patch.tag}",
+                render=False,
+            )
+            vertices[actor] = ActorReference(
+                instance.id if instance else None,
+                0,
+                patch.tag,
+                instance.name if instance else "",
+            )
     return faces, edges, vertices
 
 
@@ -145,6 +167,17 @@ def set_actor_selected(actor, selected: bool, kind: str = "face"):
         actor.GetProperty().SetPointSize(13.0 if selected else 8.0)
     if kind == "rp":
         actor.GetProperty().SetPointSize(20.0 if selected else 15.0)
+
+
+def _surface_hidden(snapshot, tag, hidden_faces, hidden_cells):
+    surface_tag = int(tag)
+    if surface_tag in hidden_faces:
+        return True
+    adjacent = {
+        int(value)
+        for value in getattr(snapshot, "surface_to_cells", {}).get(surface_tag, ())
+    }
+    return bool(adjacent and adjacent.issubset(hidden_cells))
 
 
 def _configure_geometry_light(plotter) -> None:
