@@ -22,5 +22,5 @@ class IconKind(str, Enum):
     CONSTRAINT_TIE="constraint_tie"; CONSTRAINT_RIGID="constraint_rigid"
     CONSTRAINT_EQUATION="constraint_equation"; CONSTRAINT_MPC="constraint_mpc"
     PROFILE_U="profile_u"; PROFILE_H="profile_h"; PROFILE_CIRCLE="profile_circle"
-    RESULT_STEP="result_step"; RESULT_FRAME="result_frame"; PREVIOUS_FRAME="previous_frame"; NEXT_FRAME="next_frame"
+    RESULT_STEP="result_step"; RESULT_FRAME="result_frame"; RESULT_FIELD="result_field"; PREVIOUS_FRAME="previous_frame"; NEXT_FRAME="next_frame"
     MESH_LINES="mesh_lines"; BOUNDARY_LINES="boundary_lines"; DEFORMATION="deformation"; SECTION_VIEW="section_view"; PICK="pick"
