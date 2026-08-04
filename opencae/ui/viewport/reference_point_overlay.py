@@ -1,5 +1,6 @@
 import numpy as np
 import pyvista as pv
+
 from opencae.model.selection import SelectableKind, ViewportHit
 from .instance_transform import transform_points
 from .safe_operations import remove_actor
@@ -42,7 +43,7 @@ class ReferencePointOverlay:
         actor_name = "reference-point-preview"
         label_name = "reference-point-preview-label"
         self._preview_names.extend((actor_name, label_name))
-        plotter.add_points(
+        actor = plotter.add_points(
             np.asarray([point]),
             color="#62d6a6",
             point_size=17,
@@ -52,6 +53,7 @@ class ReferencePointOverlay:
             name=actor_name,
             render=False,
         )
+        self._prefer_coincident_point(actor)
         plotter.add_point_labels(
             np.asarray([point]),
             [str(name)],
@@ -81,6 +83,7 @@ class ReferencePointOverlay:
             name=name,
             render=False,
         )
+        self._prefer_coincident_point(actor)
         label = f"{instance_name}.{point.name}" if instance_name else point.name
         scene.reference_actors[actor] = ViewportHit(
             kind=SelectableKind.REFERENCE_POINT,
@@ -105,3 +108,12 @@ class ReferencePointOverlay:
             always_visible=True,
             render=False,
         )
+
+    @staticmethod
+    def _prefer_coincident_point(actor):
+        try:
+            mapper = actor.GetMapper()
+            mapper.SetResolveCoincidentTopologyToPolygonOffset()
+            mapper.SetRelativeCoincidentTopologyPointOffsetParameter(-2.0)
+        except (AttributeError, RuntimeError, TypeError):
+            pass
