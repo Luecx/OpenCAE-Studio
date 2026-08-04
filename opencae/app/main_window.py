@@ -135,8 +135,9 @@ class MainWindow(QMainWindow):
 
     def delete_result(self, result):
         project = self.context.store.project
-        stored = project.try_resolve(getattr(result, "id", None))
-        if stored is None or stored not in project.results:
+        result_id = getattr(result, "id", None)
+        stored = next((item for item in project.results if item.id == result_id), None)
+        if stored is None:
             self.context.store.message.emit("The selected result no longer exists")
             return
         if QMessageBox.question(
