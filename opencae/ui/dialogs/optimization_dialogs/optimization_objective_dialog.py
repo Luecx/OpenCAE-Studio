@@ -1,4 +1,4 @@
-"""Edits the stiffness-energy response selected as topology objective."""
+"""Edits the compliance response used as the topology objective."""
 
 from copy import deepcopy
 
@@ -14,7 +14,7 @@ from opencae.ui.core.widgets import ReferenceSelector
 
 
 class OptimizationObjectiveDialog(NamedEntityDialog):
-    """Create or edit the single minimize objective of a topology setup."""
+    """Create or edit the single compliance-minimization objective."""
 
     def __init__(
         self,
@@ -25,7 +25,7 @@ class OptimizationObjectiveDialog(NamedEntityDialog):
         parent=None,
     ):
         entity = value or OptimizationObjective(
-            name="Minimize Stiffness Energy"
+            name="Minimize Compliance"
         )
         super().__init__(
             "Optimization Objective",
@@ -44,7 +44,7 @@ class OptimizationObjectiveDialog(NamedEntityDialog):
             self.value.response_ref.entity_id,
         )
         self.form.addRow("Response", self.response)
-        self.form.addRow("Sense", QLabel("Minimize"))
+        self.form.addRow("Sense", QLabel("Minimize Compliance / Maximize Stiffness"))
         self.finish()
 
     def result(self):
@@ -63,7 +63,7 @@ class OptimizationObjectiveDialog(NamedEntityDialog):
             QMessageBox.warning(
                 self,
                 "Missing objective response",
-                "Create and select a Stiffness Energy response first.",
+                "Create and select a Compliance response first.",
             )
             return False
         return True
