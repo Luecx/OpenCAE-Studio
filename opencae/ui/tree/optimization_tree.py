@@ -1,94 +1,68 @@
-"""Builds Optimization, response, constraint, run and iteration tree nodes."""
+"""Builds Study definitions and their type-specific setup branches."""
 
 from .tree_items import ensure_expandable, folder, item
 
 
-def append_optimizations(root, optimizations):
-    """Append all topology definitions and run histories to the project tree."""
+def append_studies(root, studies):
+    """Append Study definitions; concrete executions live only in Jobs."""
 
-    values = tuple(optimizations or ())
-    branch = folder("Optimization", "optimizations", count=len(values))
+    values = tuple(studies or ())
+    branch = folder("Studies", "studies", count=len(values))
     root.appendRow(branch)
-    for optimization in values:
-        node = item(
-            optimization.name,
-            optimization,
-            "topology_optimization",
-        )
+    for study in values:
+        label = f"{study.name}  [{getattr(study, 'study_type', type(study).__name__)}]"
+        node = item(label, study, "topology_optimization")
         branch.appendRow(node)
         _append_group(
             node,
             "Responses",
-            optimization.responses,
-            "optimization_responses",
+            study.responses,
+            "study_responses",
             "optimization_response",
         )
         _append_group(
             node,
             "Objectives",
-            optimization.objectives,
-            "optimization_objectives",
+            study.objectives,
+            "study_objectives",
             "optimization_objective",
         )
         _append_group(
             node,
             "Constraints",
-            optimization.constraints,
-            "optimization_constraints",
+            study.constraints,
+            "study_constraints",
             "optimization_constraint",
         )
         _append_group(
             node,
             "Filters",
-            optimization.filters,
-            "topology_filters",
+            study.filters,
+            "study_filters",
             "topology_filter_settings",
         )
         _append_group(
             node,
             "Symmetry Constraints",
-            optimization.symmetries,
-            "topology_symmetries",
+            study.symmetries,
+            "study_symmetries",
             "topology_symmetry",
         )
         _append_group(
             node,
             "Controls",
-            optimization.controls,
-            "topology_controls",
+            study.controls,
+            "study_controls",
             "topology_controls",
         )
-        runs = folder(
-            "Runs",
-            "optimization_runs",
-            count=len(optimization.runs),
-        )
-        node.appendRow(runs)
-        for run in optimization.runs:
-            suffix = f" — {run.status}" if run.status else ""
-            run_node = item(
-                f"{run.name}{suffix}",
-                run,
-                "optimization_run",
-            )
-            runs.appendRow(run_node)
-            for iteration in run.iterations:
-                label = (
-                    f"Iteration {iteration.number}  "
-                    f"f={iteration.objective_value:.6g}  "
-                    f"Δρ={iteration.maximum_density_change:.3g}"
-                )
-                run_node.appendRow(
-                    item(label, iteration, "optimization_iteration")
-                )
-            ensure_expandable(
-                run_node,
-                run.iterations,
-                "No iterations",
-            )
-        ensure_expandable(runs, optimization.runs, "No runs")
-    ensure_expandable(branch, values, "No topology optimizations")
+    ensure_expandable(branch, values, "No Studies")
     return branch
+
+
+def append_optimizations(root, optimizations):
+    """Compatibility wrapper for callers using the former name."""
+
+    return append_studies(root, optimizations)
 
 
 def _append_group(parent, title, values, folder_kind, child_kind):
