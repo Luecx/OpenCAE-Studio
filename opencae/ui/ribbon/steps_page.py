@@ -18,6 +18,6 @@ def groups():
         ),
         RibbonGroupSpec(
             "MANAGE",
-            (A.REORDER_STEPS, A.STEP_MATRIX, A.EDIT_SELECTED, A.DELETE_SELECTED),
+            (A.REORDER_STEPS, A.STEP_MATRIX),
         ),
     )
