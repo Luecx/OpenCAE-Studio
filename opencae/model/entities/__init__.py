@@ -8,6 +8,7 @@ from .fields import *
 from .jobs import *
 from .loads import *
 from .mesh import *
+from .optimization import *
 from .parts import *
 from .profiles import *
 from .project import Project

@@ -1,5 +1,6 @@
 from PyQt6.QtGui import QStandardItemModel
 from .analysis_tree import append_steps
+from .optimization_tree import append_optimizations
 from .part_tree import append_part
 from .resource_tree import append_fields, append_materials, append_profiles, append_sections
 from .tree_items import append_collection, ensure_expandable, folder
@@ -19,6 +20,7 @@ def build_model(project):
     append_collection(boundary, "Supports", project.supports, "supports")
     append_collection(boundary, "Loads", project.loads, "loads")
     append_steps(root, project.analyses)
+    append_optimizations(root, project.optimizations)
     return model
 
 

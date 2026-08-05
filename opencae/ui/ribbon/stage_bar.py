@@ -6,7 +6,7 @@ from opencae.ui.core.theme import PALETTE
 
 STAGES = (
     "MATERIALS", "SECTIONS", "PROFILES", "FIELDS", "PART", "ASSEMBLY",
-    "CONSTRAINTS", "BOUNDARY CONDITIONS", "ANALYSIS", "SOLVE", "RESULTS",
+    "CONSTRAINTS", "BOUNDARY CONDITIONS", "ANALYSIS", "OPTIMIZATION", "SOLVE", "RESULTS",
 )
 
 
@@ -14,7 +14,7 @@ class StageBar(QWidget):
     stage_changed = pyqtSignal(str)
 
     def __init__(self, parent=None):
-        super().__init__(parent); self.setObjectName("StageBar"); self.setFixedHeight(STAGE_BAR_HEIGHT)
+        super().__init__(); self.setObjectName("StageBar"); self.setFixedHeight(STAGE_BAR_HEIGHT)
         layout = QHBoxLayout(self); layout.setContentsMargins(8, 0, 8, 0); layout.setSpacing(1)
         self.group = QButtonGroup(self); self.group.setExclusive(True); self.buttons = {}
         for index, stage in enumerate(STAGES):
@@ -31,7 +31,7 @@ class StageBar(QWidget):
     def _button(stage):
         p = PALETTE; button = QToolButton(); button.setText(stage); button.setCheckable(True); button.setAutoExclusive(True)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
-        widths = {"BOUNDARY CONDITIONS": 158, "CONSTRAINTS": 108}
+        widths = {"BOUNDARY CONDITIONS": 158, "CONSTRAINTS": 108, "OPTIMIZATION": 112}
         button.setMinimumWidth(widths.get(stage, 82)); button.setFixedHeight(40)
         button.setStyleSheet(f"""
             QToolButton {{ border:none; border-bottom:3px solid transparent; padding:4px 10px;

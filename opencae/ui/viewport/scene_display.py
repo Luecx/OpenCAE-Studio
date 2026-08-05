@@ -4,7 +4,7 @@ from .solution_scene import show_result
 
 class SceneDisplayMixin:
     @staticmethod
-    def _assembly_stage(stage): return stage in {"ASSEMBLY", "CONSTRAINTS", "BOUNDARY CONDITIONS", "ANALYSIS", "SOLVE"}
+    def _assembly_stage(stage): return stage in {"ASSEMBLY", "CONSTRAINTS", "BOUNDARY CONDITIONS", "ANALYSIS", "OPTIMIZATION", "SOLVE"}
 
     def same_display_context(self, previous, current):
         return self._assembly_stage(previous) == self._assembly_stage(current) and current != "RESULTS" and previous != "RESULTS"

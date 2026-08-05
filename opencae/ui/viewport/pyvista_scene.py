@@ -82,14 +82,8 @@ class PyVistaScene(SceneDisplayMixin):
         self.owner.plotter.add_axes(color="#dce3e8"); self.owner.picker.configure()
 
     def _show_meshability_legend(self):
-        visible = (
-            self.owner.stage == "PART"
-            and self.owner.display_mode == "geometry"
-            and self.snapshot is not None
-        )
-        self.owner.canvas.meshability.setVisible(visible)
-        self.owner.canvas._position_overlays()
-
+        visible = self.owner.stage == "PART" and self.owner.display_mode == "geometry" and self.snapshot is not None
+        self.owner.canvas.meshability.setVisible(visible); self.owner.canvas._position_overlays()
     def _show_part_mesh(self, part):
         snapshot = CACHE.mesh(part.id) or snapshot_from_part(part)
         if snapshot is None and part.mesh.status == "Current":
@@ -97,17 +91,12 @@ class PyVistaScene(SceneDisplayMixin):
             except GeometryError as exc: self.owner.message.emit(str(exc))
         if snapshot is None:
             if self.snapshot is not None: self._merge_actors(add_geometry(
-                self.owner.plotter,
-                self.snapshot,
-                color_by_meshability=True,
-                hidden_faces=self._hidden(part.id, "faces"),
-                hidden_cells=self._hidden(part.id, "cells"),
+                self.owner.plotter, self.snapshot, color_by_meshability=True,
+                hidden_faces=self._hidden(part.id, "faces"), hidden_cells=self._hidden(part.id, "cells"),
             ))
             self.owner.message.emit("No generated mesh"); return
         self.mesh_snapshot = snapshot; self.mesh_actor, self.mesh_grid = add_mesh(
-            self.owner.plotter,
-            snapshot,
-            hidden_elements=self._hidden(part.id, "elements"),
+            self.owner.plotter, snapshot, hidden_elements=self._hidden(part.id, "elements"),
         )
     def _show_instance_mesh(self, part, instance):
         snapshot = CACHE.mesh(part.id) or snapshot_from_part(part)
@@ -125,11 +114,9 @@ class PyVistaScene(SceneDisplayMixin):
         visibility = getattr(self.owner, "visibility", None)
         return visibility.hidden_topology(owner_id, kind) if visibility is not None else ()
     def snapshot_for(self, instance_key):
-        if not instance_key:
-            return self.snapshot
+        if not instance_key: return self.snapshot
         return self.assembly_snapshots.get(instance_key)
     def instance_for(self, instance_key):
-        if not instance_key:
-            return None
+        if not instance_key: return None
         return self.assembly_instances.get(instance_key)
-    def _uses_assembly(self): return self.owner.stage in {"ASSEMBLY", "CONSTRAINTS", "BOUNDARY CONDITIONS", "ANALYSIS", "SOLVE"}
+    def _uses_assembly(self): return self.owner.stage in {"ASSEMBLY", "CONSTRAINTS", "BOUNDARY CONDITIONS", "ANALYSIS", "OPTIMIZATION", "SOLVE"}

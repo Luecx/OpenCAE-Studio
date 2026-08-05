@@ -1,6 +1,7 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
+
 from opencae.core.ids import new_id
 from ..core import DeckWriter, Entity, ExportContext, ProjectIndex, SolverName, register_model_type
 from .analysis.analysis import Analysis
@@ -8,6 +9,7 @@ from .assembly.assembly import Assembly
 from .jobs.job import Job
 from .jobs.result_set import ResultSet
 from .loads.base import Load
+from .optimization import TopologyOptimization
 from .parts.part import Part
 from .profiles.base import Profile
 from .resources.material import Material
@@ -32,6 +34,7 @@ class Project(Entity):
     profiles: list[Profile] = field(default_factory=list)
     fields: list[FieldDefinition] = field(default_factory=list)
     analyses: list[Analysis] = field(default_factory=list)
+    optimizations: list[TopologyOptimization] = field(default_factory=list)
     jobs: list[Job] = field(default_factory=list)
     results: list[ResultSet] = field(default_factory=list)
     _index: ProjectIndex | None = field(init=False, default=None, repr=False, compare=False)
@@ -42,9 +45,12 @@ class Project(Entity):
         for material in self.materials:
             for item in getattr(material, "fields", ()):
                 if item.name not in known:
-                    self.fields.append(item); known.add(item.name)
-            if hasattr(material, "fields"): material.fields.clear()
-        self._flatten_steps(); self.rebuild_index()
+                    self.fields.append(item)
+                    known.add(item.name)
+            if hasattr(material, "fields"):
+                material.fields.clear()
+        self._flatten_steps()
+        self.rebuild_index()
 
     def _flatten_steps(self):
         flattened = []
@@ -61,28 +67,36 @@ class Project(Entity):
                 flattened.append(clone)
         self.analyses = flattened
 
-
     @property
     def index(self) -> ProjectIndex:
-        if self._index is None: self.rebuild_index()
+        if self._index is None:
+            self.rebuild_index()
         return self._index
 
     def rebuild_index(self, strict: bool = False) -> ProjectIndex:
         from ..core.reference_binding import validate_project_references
+
         self._index = ProjectIndex(self)
         self.reference_errors = validate_project_references(self, self._index, strict)
         return self._index
 
     def ensure_references(self, strict: bool = False) -> list[str]:
-        self.rebuild_index(strict); return list(self.reference_errors)
+        self.rebuild_index(strict)
+        return list(self.reference_errors)
 
-    def resolve(self, ref, expected_type=None): return self.index.resolve(ref, expected_type)
-    def try_resolve(self, ref, expected_type=None): return self.index.try_resolve(ref, expected_type)
+    def resolve(self, ref, expected_type=None):
+        return self.index.resolve(ref, expected_type)
+
+    def try_resolve(self, ref, expected_type=None):
+        return self.index.try_resolve(ref, expected_type)
+
     def references_to(self, entity_or_id):
-        entity_id = getattr(entity_or_id, "id", entity_or_id); return self.index.references_to(str(entity_id))
+        entity_id = getattr(entity_or_id, "id", entity_or_id)
+        return self.index.references_to(str(entity_id))
 
     def render_deck(self, solver: SolverName | str, analysis: Analysis | None = None) -> str:
         from opencae.exporting import render_deck
+
         return render_deck(self, solver, analysis)
 
     def write_abaqus(self, writer, context) -> None:
@@ -99,7 +113,13 @@ class Project(Entity):
         self._write_contents(SolverName.GENERIC, writer, context)
 
     def _write_contents(self, solver, writer, context) -> None:
-        for entity in (*self.materials, *self.profiles, *self.sections, *self.fields, *self.parts):
+        for entity in (
+            *self.materials,
+            *self.profiles,
+            *self.sections,
+            *self.fields,
+            *self.parts,
+        ):
             entity.write_solver(solver, writer, context)
         self.assembly.write_solver(solver, writer, context)
         for entity in (*self.supports, *self.loads):
@@ -107,4 +127,5 @@ class Project(Entity):
         if context.analysis:
             context.analysis.write_solver(solver, writer, context)
         else:
-            for analysis in self.analyses:analysis.write_solver(solver,writer,context)
+            for analysis in self.analyses:
+                analysis.write_solver(solver, writer, context)
