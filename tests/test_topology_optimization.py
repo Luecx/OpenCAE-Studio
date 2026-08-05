@@ -249,11 +249,12 @@ def test_optimization_modules_have_headers_and_at_most_one_class():
             "opencae/ui/core/named_entity_dialog.py",
             "opencae/ui/core/widgets/automatic_manual_value_editor.py",
             "opencae/ui/dialogs/optimization.py",
-            "opencae/ui/dialogs/topology_run.py",
             "opencae/ui/actions/catalog/optimization_actions.py",
-            "opencae/ui/ribbon/optimization_page.py",
-            "opencae/ui/tree/optimization_tree.py",
+            "opencae/ui/ribbon/studies_page.py",
+            "opencae/ui/tree/studies_tree.py",
+            "opencae/ui/monitors/topology_job_monitor.py",
             "opencae/ui/viewport/topology_overlay.py",
+            "opencae/ui/viewport/topology_presentation.py",
         )
     )
 
