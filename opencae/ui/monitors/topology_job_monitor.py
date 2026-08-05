@@ -1,6 +1,6 @@
 """Live density and convergence window for a topology Study job."""
 
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import QDialog, QLabel, QProgressBar, QVBoxLayout
 
 from opencae.ui.viewport.topology_overlay import TopologyDensityOverlay
@@ -8,25 +8,30 @@ from opencae.ui.viewport.viewport_factory import create_viewport
 
 
 class TopologyJobMonitor(QDialog):
-    """Show only the latest topology state while the job is running."""
+    """Show only the latest topology state while preserving all frames on disk."""
 
     def __init__(self, store, job_id, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.store = store
         self.job_id = str(job_id)
         self._pending = None
         self.overlay = TopologyDensityOverlay()
         job = store.project.try_resolve(self.job_id)
-        self.setWindowTitle(f"Topology Monitor - {getattr(job, 'name', 'Job')}")
+        self.setWindowTitle(
+            f"Topology Monitor - {getattr(job, 'name', 'Job')}"
+        )
         self.resize(980, 720)
         layout = QVBoxLayout(self)
         self.phase = QLabel(getattr(job, "progress_label", "Prepared"))
+        self.metrics = QLabel("Waiting for the first optimization iteration")
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
-        self.viewport = create_viewport(store)
+        self.viewport = create_viewport(store, self)
         self.viewport.set_stage("STUDIES")
         self.viewport.set_display_mode("mesh")
         layout.addWidget(self.phase)
+        layout.addWidget(self.metrics)
         layout.addWidget(self.progress)
         layout.addWidget(self.viewport, 1)
         self.viewport.request_refresh(fit=True)
@@ -40,11 +45,22 @@ class TopologyJobMonitor(QDialog):
         if str(job_id) != self.job_id:
             return
         self.phase.setText(str(label))
-        self.progress.setValue(round(min(max(float(value), 0.0), 1.0) * 1000))
+        self.progress.setValue(
+            round(min(max(float(value), 0.0), 1.0) * 1000)
+        )
 
     def show_frame(self, job_id, run, iteration, mesh_index, density):
         if str(job_id) != self.job_id:
             return
+        constraints = ", ".join(
+            f"{value:.6g}"
+            for value in dict(iteration.constraint_values).values()
+        ) or "n/a"
+        self.metrics.setText(
+            f"Objective {iteration.objective_value:.6g}   "
+            f"Constraint {constraints}   "
+            f"max Δρ {iteration.maximum_density_change:.3g}"
+        )
         self._pending = (run, iteration, mesh_index, density)
         QTimer.singleShot(0, self._present_pending)
 
