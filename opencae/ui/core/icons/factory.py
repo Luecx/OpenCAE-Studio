@@ -1,4 +1,6 @@
 from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import QApplication, QStyle
+
 from .kinds import IconKind
 from .legacy import IconKind as LegacyKind
 from .legacy import make_icon as make_legacy_icon
@@ -22,7 +24,7 @@ _ICON_MAP = {
     IconKind.PRESSURE_LOAD:LegacyKind.PRESSURE, IconKind.VOLUME_LOAD:LegacyKind.VOLUME, IconKind.INERTIA_LOAD:LegacyKind.INERTIA,
     IconKind.TEMPERATURE_LOAD:LegacyKind.TEMPERATURE, IconKind.ANALYSIS:LegacyKind.ANALYSIS, IconKind.SETTINGS:LegacyKind.CONTROLS,
     IconKind.VALIDATE:LegacyKind.VALIDATE, IconKind.DECK:LegacyKind.OUTPUT, IconKind.RUN:LegacyKind.RUN,
-    IconKind.RESULTS:LegacyKind.CONTOUR, IconKind.DELETE:LegacyKind.FIXED, IconKind.EDIT:LegacyKind.REPAIR,
+    IconKind.RESULTS:LegacyKind.CONTOUR, IconKind.EDIT:LegacyKind.REPAIR,
     IconKind.DUPLICATE:LegacyKind.CREATE, IconKind.INFO:LegacyKind.OUTPUT, IconKind.ELASTICITY:LegacyKind.ELASTICITY,
     IconKind.DENSITY:LegacyKind.DENSITY, IconKind.PLASTICITY:LegacyKind.PLASTICITY, IconKind.THERMAL:LegacyKind.THERMAL,
     IconKind.FIELD:LegacyKind.FIELD, IconKind.SECTION_SOLID:LegacyKind.SECTION_SOLID, IconKind.SECTION_SHELL:LegacyKind.SECTION_SHELL,
@@ -45,4 +47,8 @@ _ICON_MAP = {
 
 
 def make_icon(kind: IconKind, size: int = 40, accent: str | None = None) -> QIcon:
+    if kind == IconKind.DELETE:
+        app = QApplication.instance()
+        style = app.style() if app is not None else QApplication.style()
+        return style.standardIcon(QStyle.StandardPixmap.SP_TrashIcon)
     return make_legacy_icon(_ICON_MAP[kind], size, accent)
