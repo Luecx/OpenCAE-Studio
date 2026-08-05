@@ -1,11 +1,19 @@
+"""Project-wide reference, region, Step, Analysis and Job validation."""
+
 from __future__ import annotations
 
 from dataclasses import fields, is_dataclass
 
 from opencae.geometry.section_filter import region_families
 from opencae.model.core import EntityRef
+from opencae.model.entities.analysis import AnalysisStep
+from opencae.model.entities.jobs import Job
 from opencae.model.entities.loads import TemperatureLoad
-from opencae.model.selection import RegionProjection, RegionRequirement, validate_region_definition
+from opencae.model.selection import (
+    RegionProjection,
+    RegionRequirement,
+    validate_region_definition,
+)
 
 
 def section_assignment_errors(project):
@@ -15,12 +23,18 @@ def section_assignment_errors(project):
         for assignment in part.section_assignments:
             section = project.try_resolve(assignment.section_ref)
             if section is None:
-                errors.append(f"{part.name}/{assignment.name}: referenced section does not exist")
+                errors.append(
+                    f"{part.name}/{assignment.name}: referenced section does not exist"
+                )
                 continue
             diagnostics = validate_region_definition(
                 project,
                 assignment.target,
-                RegionRequirement(RegionProjection.ELEMENTS, (1, 2, 3), 1),
+                RegionRequirement(
+                    RegionProjection.ELEMENTS,
+                    (1, 2, 3),
+                    1,
+                ),
                 allow_part_local=True,
             )
             errors.extend(
@@ -31,7 +45,10 @@ def section_assignment_errors(project):
             families = region_families(project, part, assignment.target)
             if families and section.section_type not in families:
                 actual = ", ".join(sorted(families))
-                errors.append(f"{part.name}/{assignment.name}: {section.section_type} section cannot be assigned to {actual} elements")
+                errors.append(
+                    f"{part.name}/{assignment.name}: {section.section_type} "
+                    f"section cannot be assigned to {actual} elements"
+                )
     return _unique(errors)
 
 
@@ -47,7 +64,7 @@ def validate_project(project):
     errors.extend(_reference_errors(project))
     errors.extend(section_assignment_errors(project))
     errors.extend(_region_consumer_errors(project))
-    errors.extend(_step_errors(project))
+    errors.extend(_workflow_errors(project))
     return _unique(errors)
 
 
@@ -58,20 +75,35 @@ def _reference_errors(project):
         if isinstance(value, EntityRef):
             if not value.entity_id:
                 if value.legacy_name:
-                    errors.append(f"{source.name}.{path}: unresolved reference '{value.legacy_name}'")
+                    errors.append(
+                        f"{source.name}.{path}: unresolved reference "
+                        f"'{value.legacy_name}'"
+                    )
                 return
             target = project.try_resolve(value)
             if target is None:
-                errors.append(f"{source.name}.{path}: target '{value.entity_id}' does not exist")
+                errors.append(
+                    f"{source.name}.{path}: target '{value.entity_id}' does not exist"
+                )
                 return
-            if value.expected_type and not _matches_expected(target, value.expected_type):
-                errors.append(f"{source.name}.{path}: expected {value.expected_type}, got {type(target).__name__}")
+            if value.expected_type and not _matches_expected(
+                target,
+                value.expected_type,
+            ):
+                errors.append(
+                    f"{source.name}.{path}: expected {value.expected_type}, "
+                    f"got {type(target).__name__}"
+                )
             return
         if hasattr(value, "id") and is_dataclass(value):
             return
         if is_dataclass(value):
             for field_info in fields(value):
-                walk(getattr(value, field_info.name), source, f"{path}.{field_info.name}" if path else field_info.name)
+                walk(
+                    getattr(value, field_info.name),
+                    source,
+                    f"{path}.{field_info.name}" if path else field_info.name,
+                )
         elif isinstance(value, (list, tuple)):
             for index, item in enumerate(value):
                 walk(item, source, f"{path}[{index}]")
@@ -86,19 +118,23 @@ def _reference_errors(project):
 
 
 def _region_consumer_errors(project):
-    # Reference binding already performs the canonical region checks. Keep this
-    # entry point for callers of validate_project and add domain-specific fields.
     errors = []
     for load in project.loads:
         if isinstance(load, TemperatureLoad):
-            if load.temperature_field_ref is None or project.try_resolve(load.temperature_field_ref) is None:
+            if (
+                load.temperature_field_ref is None
+                or project.try_resolve(load.temperature_field_ref) is None
+            ):
                 errors.append(f"{load.name}: temperature field is missing")
     return errors
 
 
 def _matches_expected(entity, expected):
     normalized = expected.replace(" ", "").casefold()
-    names = {cls.__name__.replace(" ", "").casefold() for cls in type(entity).mro()}
+    names = {
+        cls.__name__.replace(" ", "").casefold()
+        for cls in type(entity).mro()
+    }
     if normalized in names:
         return True
     aliases = {
@@ -106,25 +142,49 @@ def _matches_expected(entity, expected):
         "nodeset": {"region", "nodeset"},
         "elementset": {"region", "elementset"},
         "surface": {"region", "surface"},
-        "load": {"load", "concentratedload", "distributedload", "pressureload", "volumeload", "temperatureload", "inertiaload"},
-        "support": {"support", "fixedsupport", "displacementsupport", "symmetrysupport", "remotedisplacementsupport", "temperaturesupport"},
+        "study": {"study", "topologyoptimization"},
+        "load": {
+            "load", "concentratedload", "distributedload", "pressureload",
+            "volumeload", "temperatureload", "inertiaload",
+        },
+        "support": {
+            "support", "fixedsupport", "displacementsupport",
+            "symmetrysupport", "remotedisplacementsupport",
+            "temperaturesupport",
+        },
     }
     return bool(names & aliases.get(normalized, set()))
 
 
-def _step_errors(project):
+def _workflow_errors(project):
     errors = []
+    for step in project.steps:
+        if not isinstance(step, AnalysisStep):
+            errors.append("Project Steps contains an invalid entity")
+            continue
+        for ref in step.load_refs:
+            if project.try_resolve(ref) not in project.loads:
+                errors.append(f"{step.name}: referenced load does not exist")
+        for ref in step.support_refs:
+            if project.try_resolve(ref) not in project.supports:
+                errors.append(f"{step.name}: referenced support does not exist")
     for analysis in project.analyses:
-        for step in analysis.steps:
-            for ref in step.load_refs:
-                if project.try_resolve(ref) not in project.loads:
-                    errors.append(f"{step.name}: referenced load does not exist")
-            for ref in step.support_refs:
-                if project.try_resolve(ref) not in project.supports:
-                    errors.append(f"{step.name}: referenced support does not exist")
+        steps = analysis.resolved_steps(project)
+        if not steps:
+            errors.append(f"{analysis.name}: no valid Steps are referenced")
+        for ref in analysis.step_refs:
+            if not isinstance(project.try_resolve(ref), AnalysisStep):
+                errors.append(
+                    f"{analysis.name}: referenced Step does not exist"
+                )
     for job in project.jobs:
-        if job.analysis_ref and project.try_resolve(job.analysis_ref) not in project.analyses:
-            errors.append(f"{job.name}: referenced analysis does not exist")
+        if not isinstance(job, Job):
+            continue
+        if job.source_ref and project.try_resolve(job.source_ref) is None:
+            errors.append(f"{job.name}: referenced source does not exist")
+    for result in project.results:
+        if not result.job_ref or not isinstance(project.try_resolve(result.job_ref), Job):
+            errors.append(f"{result.name}: generating Job does not exist")
     return errors
 
 
