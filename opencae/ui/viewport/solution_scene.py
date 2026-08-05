@@ -98,6 +98,7 @@ def _show_topology_result(scene, result, options):
         mesh_index,
         density,
         threshold=0.0,
+        options=options,
     )
     if camera is None:
         scene.owner.plotter.view_isometric()
