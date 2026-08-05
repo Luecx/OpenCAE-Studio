@@ -8,9 +8,9 @@ from opencae.model.entities.analysis import Analysis, AnalysisStep
 from opencae.model.entities.jobs import Job, ResultSet
 from opencae.model.entities.optimization import TopologyOptimization
 from opencae.model.entities.project import Project
-from opencae.ui.actions.ids import A
-from opencae.ui.ribbon.stage_bar import STAGES
-from opencae.ui.tree.context_menu import MAP
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_legacy_analysis_owned_steps_migrate_to_shared_project_steps():
@@ -105,36 +105,59 @@ def test_results_are_bound_to_the_job_that_created_them():
 
 
 def test_workflow_stages_remove_solve_and_optimization():
-    assert "STEPS" in STAGES
-    assert "ANALYSIS" in STAGES
-    assert "STUDIES" in STAGES
-    assert "SOLVE" not in STAGES
-    assert "OPTIMIZATION" not in STAGES
+    source = (ROOT / "opencae/ui/ribbon/stage_bar.py").read_text(
+        encoding="utf-8"
+    )
+    module = ast.parse(source)
+    assignment = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "STAGES"
+            for target in node.targets
+        )
+    )
+    stages = tuple(ast.literal_eval(assignment.value))
+
+    assert "STEPS" in stages
+    assert "ANALYSIS" in stages
+    assert "STUDIES" in stages
+    assert "SOLVE" not in stages
+    assert "OPTIMIZATION" not in stages
 
 
 def test_tree_context_menus_reuse_ribbon_actions_and_delete():
-    assert A.CONSTRAINT_KINEMATIC in MAP["constraints"]
-    assert A.OPT_RESPONSE in MAP["study"]
-    assert A.OPT_OBJECTIVE in MAP["study"]
-    assert A.OPT_CONSTRAINT in MAP["study"]
-    assert A.STUDY_RUN in MAP["study"]
-    assert A.DELETE_SELECTED in MAP["study"]
-    assert MAP["study_responses"] == (A.OPT_RESPONSE,)
-    assert MAP["study_objectives"] == (A.OPT_OBJECTIVE,)
-    assert MAP["study_constraints"] == (A.OPT_CONSTRAINT,)
-    assert MAP["study_filters"] == (A.OPT_FILTER,)
-    assert MAP["study_symmetries"] == (A.OPT_SYMMETRY,)
-    assert MAP["study_controls"] == (A.OPT_CONTROLS,)
-    assert A.DELETE_SELECTED in MAP["study_response"]
-    assert A.DELETE_SELECTED in MAP["study_objective"]
-    assert A.DELETE_SELECTED in MAP["study_constraint"]
-    assert A.ANALYSIS_RUN in MAP["analysis"]
-    assert A.DELETE_SELECTED in MAP["analysis"]
-    assert A.DELETE_SELECTED in MAP["analysis_step"]
+    source = (ROOT / "opencae/ui/tree/context_menu.py").read_text(
+        encoding="utf-8"
+    )
+    expected = (
+        '"constraints": (',
+        "A.CONSTRAINT_KINEMATIC",
+        '"study": (',
+        "A.OPT_RESPONSE",
+        "A.OPT_OBJECTIVE",
+        "A.OPT_CONSTRAINT",
+        "A.STUDY_RUN",
+        "A.DELETE_SELECTED",
+        '"study_responses": (A.OPT_RESPONSE,)',
+        '"study_objectives": (A.OPT_OBJECTIVE,)',
+        '"study_constraints": (A.OPT_CONSTRAINT,)',
+        '"study_filters": (A.OPT_FILTER,)',
+        '"study_symmetries": (A.OPT_SYMMETRY,)',
+        '"study_controls": (A.OPT_CONTROLS,)',
+        '"study_response": (A.EDIT_SELECTED, A.DELETE_SELECTED)',
+        '"study_objective": (A.EDIT_SELECTED, A.DELETE_SELECTED)',
+        '"study_constraint": (A.EDIT_SELECTED, A.DELETE_SELECTED)',
+        '"analysis": (',
+        "A.ANALYSIS_RUN",
+        '"analysis_step": (A.EDIT_SELECTED, A.DELETE_SELECTED)',
+    )
+    for token in expected:
+        assert token in source
 
 
 def test_new_workflow_modules_keep_one_class_per_file():
-    repository = Path(__file__).resolve().parents[1]
     files = (
         "opencae/controllers/job_manager.py",
         "opencae/jobs/analysis_job_runner.py",
@@ -149,7 +172,7 @@ def test_new_workflow_modules_keep_one_class_per_file():
         "opencae/ui/ribbon/studies_page.py",
     )
     for relative in files:
-        path = repository / relative
+        path = ROOT / relative
         module = ast.parse(path.read_text(encoding="utf-8"))
         assert ast.get_docstring(module), f"Missing module header: {relative}"
         classes = [node for node in module.body if isinstance(node, ast.ClassDef)]
