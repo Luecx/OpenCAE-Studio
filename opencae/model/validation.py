@@ -58,13 +58,15 @@ def validate_section_assignments(project):
         raise ValueError("Invalid section assignments:\n" + "\n".join(errors))
 
 
-def validate_project(project):
+def validate_project(project, analysis=None):
+    """Validate the project or the workflow relevant to one selected Analysis."""
+
     project.ensure_references(False)
     errors = list(project.reference_errors)
     errors.extend(_reference_errors(project))
     errors.extend(section_assignment_errors(project))
     errors.extend(_region_consumer_errors(project))
-    errors.extend(_workflow_errors(project))
+    errors.extend(_workflow_errors(project, analysis))
     return _unique(errors)
 
 
@@ -156,9 +158,14 @@ def _matches_expected(entity, expected):
     return bool(names & aliases.get(normalized, set()))
 
 
-def _workflow_errors(project):
+def _workflow_errors(project, analysis=None):
     errors = []
-    for step in project.steps:
+    analyses = (analysis,) if analysis is not None else tuple(project.analyses)
+    if analysis is not None:
+        steps = tuple(analysis.resolved_steps(project))
+    else:
+        steps = tuple(project.steps)
+    for step in steps:
         if not isinstance(step, AnalysisStep):
             errors.append("Project Steps contains an invalid entity")
             continue
@@ -168,23 +175,27 @@ def _workflow_errors(project):
         for ref in step.support_refs:
             if project.try_resolve(ref) not in project.supports:
                 errors.append(f"{step.name}: referenced support does not exist")
-    for analysis in project.analyses:
-        steps = analysis.resolved_steps(project)
-        if not steps:
-            errors.append(f"{analysis.name}: no valid Steps are referenced")
-        for ref in analysis.step_refs:
+    for selected in analyses:
+        resolved = selected.resolved_steps(project)
+        if not resolved:
+            errors.append(f"{selected.name}: no valid Steps are referenced")
+        for ref in selected.step_refs:
             if not isinstance(project.try_resolve(ref), AnalysisStep):
                 errors.append(
-                    f"{analysis.name}: referenced Step does not exist"
+                    f"{selected.name}: referenced Step does not exist"
                 )
-    for job in project.jobs:
-        if not isinstance(job, Job):
-            continue
-        if job.source_ref and project.try_resolve(job.source_ref) is None:
-            errors.append(f"{job.name}: referenced source does not exist")
-    for result in project.results:
-        if not result.job_ref or not isinstance(project.try_resolve(result.job_ref), Job):
-            errors.append(f"{result.name}: generating Job does not exist")
+    if analysis is None:
+        for job in project.jobs:
+            if not isinstance(job, Job):
+                continue
+            if job.source_ref and project.try_resolve(job.source_ref) is None:
+                errors.append(f"{job.name}: referenced source does not exist")
+        for result in project.results:
+            if not result.job_ref or not isinstance(
+                project.try_resolve(result.job_ref),
+                Job,
+            ):
+                errors.append(f"{result.name}: generating Job does not exist")
     return errors
 
 
