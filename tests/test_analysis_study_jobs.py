@@ -43,7 +43,10 @@ def test_shared_steps_and_studies_survive_model_roundtrip():
     restored = decode_model(encode_model(project))
 
     assert [value.name for value in restored.steps] == ["Static"]
-    assert restored.analyses[0].resolved_steps(restored)[0].id == restored.steps[0].id
+    assert (
+        restored.analyses[0].resolved_steps(restored)[0].id
+        == restored.steps[0].id
+    )
     assert restored.studies[0].name == "Topology-1"
     assert restored.optimizations is restored.studies
 
@@ -55,6 +58,9 @@ def test_legacy_optimizations_collection_migrates_to_studies():
 
     assert project.studies == [study]
     assert project.optimizations is project.studies
+    payload = project.to_dict()
+    assert "studies" in payload
+    assert "optimizations" not in payload
 
 
 def test_results_are_bound_to_the_job_that_created_them():
@@ -69,7 +75,19 @@ def test_results_are_bound_to_the_job_that_created_them():
         name="Job-1",
         job_ref=EntityRef.of(job, "Job"),
         status="Available",
-        metadata={"result_kind": "topology_density", "frames": []},
+        metadata={
+            "result_kind": "topology_density",
+            "frames": [
+                {
+                    "number": 1,
+                    "density_file": "iteration-0001/density.npz",
+                },
+                {
+                    "number": 2,
+                    "density_file": "iteration-0002/density.npz",
+                },
+            ],
+        },
     )
     job.result_refs = [EntityRef.of(result, "ResultSet")]
 
@@ -83,6 +101,7 @@ def test_results_are_bound_to_the_job_that_created_them():
     assert project.resolve(result.job_ref) is job
     assert project.resolve(job.result_refs[0]) is result
     assert project.resolve(job.source_ref) is study
+    assert [frame["number"] for frame in result.metadata["frames"]] == [1, 2]
 
 
 def test_workflow_stages_remove_solve_and_optimization():
@@ -100,7 +119,14 @@ def test_tree_context_menus_reuse_ribbon_actions_and_delete():
     assert A.OPT_CONSTRAINT in MAP["study"]
     assert A.STUDY_RUN in MAP["study"]
     assert A.DELETE_SELECTED in MAP["study"]
+    assert MAP["study_responses"] == (A.OPT_RESPONSE,)
+    assert MAP["study_objectives"] == (A.OPT_OBJECTIVE,)
     assert MAP["study_constraints"] == (A.OPT_CONSTRAINT,)
+    assert MAP["study_filters"] == (A.OPT_FILTER,)
+    assert MAP["study_symmetries"] == (A.OPT_SYMMETRY,)
+    assert MAP["study_controls"] == (A.OPT_CONTROLS,)
+    assert A.DELETE_SELECTED in MAP["study_response"]
+    assert A.DELETE_SELECTED in MAP["study_objective"]
     assert A.DELETE_SELECTED in MAP["study_constraint"]
     assert A.ANALYSIS_RUN in MAP["analysis"]
     assert A.DELETE_SELECTED in MAP["analysis"]
