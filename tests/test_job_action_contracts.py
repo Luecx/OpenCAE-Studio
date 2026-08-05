@@ -17,5 +17,5 @@ def test_job_action_catalog_uses_public_job_manager_methods():
 
     assert len(specs) == 3
     for spec in specs:
-        spec.callback()
+        spec.handler()
     assert calls == ["stop", "monitor", "results"]
