@@ -1,4 +1,4 @@
-"""Defines the aggregate entity containing one topology optimization setup."""
+"""Defines the aggregate study containing one topology optimization setup."""
 
 from dataclasses import dataclass, field
 
@@ -8,7 +8,8 @@ from opencae.model.selection import (
     WholeModelOperand,
 )
 
-from ...core import Entity, EntityRef, register_model_type
+from ...core import EntityRef, register_model_type
+from ..studies import Study
 from .optimization_constraint import OptimizationConstraint
 from .optimization_objective import OptimizationObjective
 from .optimization_response import OptimizationResponse
@@ -20,9 +21,10 @@ from .topology_symmetry import TopologySymmetry
 
 @register_model_type("topology_optimization")
 @dataclass
-class TopologyOptimization(Entity):
-    """Topology definition, regularization settings, controls and run history."""
+class TopologyOptimization(Study):
+    """Topology study definition, regularization, controls and run history."""
 
+    study_type: str = field(init=False, default="Topology Optimization")
     analysis_ref: EntityRef = field(
         default_factory=lambda: EntityRef(expected_type="Analysis")
     )
