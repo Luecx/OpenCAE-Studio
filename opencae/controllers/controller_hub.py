@@ -14,6 +14,8 @@ from .solver_controller import SolverController
 
 class ControllerHub:
     def __init__(self, store, parent, settings, solvers):
+        self.store = store
+        self.parent = parent
         self.project = ProjectController(store, parent, settings)
         self.part = PartController(store, parent)
         self.resources = ResourceController(store, parent)
@@ -90,7 +92,9 @@ class ControllerHub:
             if isinstance(entity, OptimizationRun) and entity.job_ref:
                 job = store.project.try_resolve(entity.job_ref)
                 if job is not None and job.id in self.jobs._runners:
-                    store.message.emit("Stop the job before deleting its topology state")
+                    store.message.emit(
+                        "Stop the job before deleting its topology state"
+                    )
                     return
             if isinstance(entity, TopologyOptimization):
                 running = any(
@@ -100,7 +104,9 @@ class ControllerHub:
                     for job in store.project.jobs
                 )
                 if running:
-                    store.message.emit("Stop active Study jobs before deleting the Study")
+                    store.message.emit(
+                        "Stop active Study jobs before deleting the Study"
+                    )
                     return
             if isinstance(entity, (TopologyControls, TopologyFilterSettings)):
                 parent_entity = store.project.try_resolve(
@@ -121,3 +127,32 @@ class ControllerHub:
 
         self.selection.edit_selected = edit_selected
         self.selection.delete_selected = delete_selected
+        store.selection_changed.connect(self._sync_active_definition)
+
+    def _sync_active_definition(self, entity):
+        """Keep tree selection and ribbon selectors on the same definition."""
+
+        from opencae.model.entities.analysis import Analysis
+        from opencae.model.entities.optimization import TopologyOptimization
+
+        if isinstance(entity, Analysis):
+            self.analysis.active_analysis_id = entity.id
+        study = entity if isinstance(entity, TopologyOptimization) else None
+        current = entity
+        project = self.store.project
+        while study is None and current is not None:
+            parent_id = project.index.parent_id.get(getattr(current, "id", ""))
+            current = project.try_resolve(parent_id) if parent_id else None
+            if isinstance(current, TopologyOptimization):
+                study = current
+        if study is not None:
+            self.studies.active_study_id = study.id
+
+        ribbon = getattr(self.parent, "ribbon", None)
+        if ribbon is None:
+            return
+        if isinstance(entity, Analysis) and ribbon.analysis_page is not None:
+            ribbon.analysis_page.selector_bar.refresh()
+        if study is not None and ribbon.studies_page is not None:
+            ribbon.studies_page.selector_bar.refresh()
+        ribbon.refresh_context()
