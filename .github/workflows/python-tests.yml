@@ -36,4 +36,5 @@ jobs:
             tests/test_topology_optimization.py \
             tests/test_topology_density_regressions.py \
             tests/test_optimization_public_api.py \
-            tests/test_job_action_contracts.py
+            tests/test_job_action_contracts.py \
+            tests/test_workflow_ui_regressions.py
