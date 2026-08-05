@@ -5,9 +5,20 @@ from PyQt6.QtWidgets import QLabel, QStackedWidget, QVBoxLayout, QWidget
 
 from opencae.ui.core.metrics import CONTEXT_BAR_HEIGHT, RIBBON_PAGE_HEIGHT
 from opencae.ui.core.theme import PALETTE
-from . import analysis_run_page, assembly_page, bc_page, constraints_page, fields_page
-from . import materials_page, part_page, profiles_page, results_page, sections_page
-from . import steps_page, studies_page
+from . import (
+    analysis_page,
+    assembly_page,
+    bc_page,
+    constraints_page,
+    fields_page,
+    materials_page,
+    part_page,
+    profiles_page,
+    results_page,
+    sections_page,
+    steps_page,
+    studies_page,
+)
 from .ribbon_page import RibbonPage
 from .stage_bar import STAGES, StageBar
 
@@ -21,7 +32,7 @@ _PAGES = (
     constraints_page,
     bc_page,
     steps_page,
-    analysis_run_page,
+    analysis_page,
     studies_page,
     results_page,
 )
@@ -72,20 +83,22 @@ class Ribbon(QWidget):
             if module is part_page:
                 self.part_page = module.create(actions, store)
                 page = self.part_page
-            elif module is analysis_run_page:
-                if controllers is None:
-                    page = QWidget()
-                else:
-                    self.analysis_page = module.create(actions, store, controllers)
-                    page = self.analysis_page
+            elif module is analysis_page:
+                self.analysis_page = (
+                    module.create(actions, store, controllers)
+                    if controllers is not None
+                    else QWidget()
+                )
+                page = self.analysis_page
             elif module is studies_page:
-                if controllers is None:
-                    page = QWidget()
-                else:
-                    self.studies_page = module.create(actions, store, controllers)
-                    page = self.studies_page
+                self.studies_page = (
+                    module.create(actions, store, controllers)
+                    if controllers is not None
+                    else QWidget()
+                )
+                page = self.studies_page
             elif module is results_page:
-                self.results_page = module.create(actions)
+                self.results_page = module.create(actions, store)
                 self.results_page.result_requested.connect(self.result_requested)
                 page = self.results_page
             else:
@@ -157,7 +170,8 @@ class Ribbon(QWidget):
             active = self.controllers.analysis.active_analysis() if self.controllers else None
             count = len(active.resolved_steps(project)) if active else 0
             text = (
-                f"  Active Analysis: {active.name}     Steps: {count}     Solver: {active.solver}"
+                f"  Active Analysis: {active.name}     Steps: {count}     "
+                f"Solver: {active.solver}"
                 if active
                 else "  No Analysis selected"
             )
@@ -168,7 +182,8 @@ class Ribbon(QWidget):
                 else None
             )
             text = (
-                f"  Active Study: {active.name}     Type: {type(active).__name__}"
+                f"  Active Study: {active.name}     Type: "
+                f"{getattr(active, 'study_type', type(active).__name__)}"
                 if active
                 else "  No Study selected"
             )
@@ -178,7 +193,7 @@ class Ribbon(QWidget):
 
     def refresh_solvers(self):
         if self.analysis_page is not None:
-            self.analysis_page.refresh()
+            self.analysis_page.selector_bar.refresh()
         self.refresh_context()
 
     def _solver_changed(self):
