@@ -17,20 +17,29 @@ class AnalysisPage(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(5, 0, 0, 0)
         layout.setSpacing(0)
+
         self.selector_bar = EntitySelectorBar(
             "Active Analysis",
             store,
-            actions,
             lambda: store.project.analyses,
             lambda: controllers.analysis.active_analysis_id,
             controllers.analysis.set_active_analysis,
-            (
-                A.ANALYSIS_NEW,
-                A.ANALYSIS_EDIT,
-                A.ANALYSIS_RUN,
-            ),
         )
         layout.addWidget(self.selector_bar)
+
+        layout.addWidget(
+            RibbonGroup(
+                RibbonGroupSpec(
+                    "DEFINITION",
+                    (
+                        A.ANALYSIS_NEW,
+                        A.ANALYSIS_EDIT,
+                        A.DELETE_SELECTED,
+                    ),
+                ),
+                actions,
+            )
+        )
         layout.addWidget(
             RibbonGroup(
                 RibbonGroupSpec(
@@ -40,7 +49,7 @@ class AnalysisPage(QWidget):
                         A.PREVIEW_DECK,
                         A.WRITE_DECK,
                         A.SOLVER_SETTINGS,
-                        A.DELETE_SELECTED,
+                        A.ANALYSIS_RUN,
                     ),
                 ),
                 actions,
