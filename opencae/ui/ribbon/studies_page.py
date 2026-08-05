@@ -17,20 +17,29 @@ class StudiesPage(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(5, 0, 0, 0)
         layout.setSpacing(0)
+
         self.selector_bar = EntitySelectorBar(
             "Active Study",
             store,
-            actions,
             lambda: store.project.studies,
             lambda: controllers.studies.active_study_id,
             controllers.studies.set_active_study,
-            (
-                A.STUDY_NEW_TOPOLOGY,
-                A.STUDY_EDIT,
-                A.STUDY_RUN,
-            ),
         )
         layout.addWidget(self.selector_bar)
+
+        layout.addWidget(
+            RibbonGroup(
+                RibbonGroupSpec(
+                    "DEFINITION",
+                    (
+                        A.STUDY_NEW_TOPOLOGY,
+                        A.STUDY_EDIT,
+                        A.DELETE_SELECTED,
+                    ),
+                ),
+                actions,
+            )
+        )
         layout.addWidget(
             RibbonGroup(
                 RibbonGroupSpec(
@@ -51,7 +60,10 @@ class StudiesPage(QWidget):
             RibbonGroup(
                 RibbonGroupSpec(
                     "STUDY",
-                    (A.STUDY_VALIDATE, A.DELETE_SELECTED),
+                    (
+                        A.STUDY_VALIDATE,
+                        A.STUDY_RUN,
+                    ),
                 ),
                 actions,
             )
