@@ -1,11 +1,13 @@
-from copy import deepcopy
+"""Defines the persistent OpenCAE project aggregate and migration hooks."""
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from opencae.core.ids import new_id
 from ..core import DeckWriter, Entity, ExportContext, ProjectIndex, SolverName, register_model_type
 from .analysis.analysis import Analysis
+from .analysis.step import AnalysisStep
 from .assembly.assembly import Assembly
+from .fields import FieldDefinition
 from .jobs.job import Job
 from .jobs.result_set import ResultSet
 from .loads.base import Load
@@ -13,15 +15,15 @@ from .optimization import TopologyOptimization
 from .parts.part import Part
 from .profiles.base import Profile
 from .resources.material import Material
-from .fields import FieldDefinition
 from .sections.base import Section
+from .studies import Study
 from .supports.base import Support
 
 
 @register_model_type("project")
 @dataclass
 class Project(Entity):
-    schema_version: int = 20
+    schema_version: int = 21
     name: str = "Untitled"
     unit_system: str = "mm-N-s-°C"
     path: Path | None = None
@@ -33,8 +35,15 @@ class Project(Entity):
     sections: list[Section] = field(default_factory=list)
     profiles: list[Profile] = field(default_factory=list)
     fields: list[FieldDefinition] = field(default_factory=list)
+    steps: list[AnalysisStep] = field(default_factory=list)
     analyses: list[Analysis] = field(default_factory=list)
-    optimizations: list[TopologyOptimization] = field(default_factory=list)
+    studies: list[Study] = field(default_factory=list)
+    # Legacy import field. It is rebound to studies in __post_init__ and is not
+    # written again, so new project files have one canonical study collection.
+    optimizations: list[TopologyOptimization] = field(
+        default_factory=list,
+        metadata={"serialize": False},
+    )
     jobs: list[Job] = field(default_factory=list)
     results: list[ResultSet] = field(default_factory=list)
     _index: ProjectIndex | None = field(init=False, default=None, repr=False, compare=False)
@@ -49,23 +58,37 @@ class Project(Entity):
                     known.add(item.name)
             if hasattr(material, "fields"):
                 material.fields.clear()
-        self._flatten_steps()
+        self._migrate_shared_steps()
+        self._migrate_studies()
         self.rebuild_index()
 
-    def _flatten_steps(self):
-        flattened = []
+    def _migrate_shared_steps(self):
+        """Move legacy analysis-owned steps into the project-level collection."""
+
+        by_id = {step.id: step for step in self.steps}
         for analysis in self.analyses:
-            if len(analysis.steps) <= 1:
-                flattened.append(analysis)
-                continue
-            for index, step in enumerate(analysis.steps):
-                clone = deepcopy(analysis)
-                if index:
-                    object.__setattr__(clone, "id", new_id("entity"))
-                clone.name = step.name
-                clone.steps = [deepcopy(step)]
-                flattened.append(clone)
-        self.analyses = flattened
+            if not analysis.step_refs:
+                ordered = []
+                for step in tuple(analysis.steps):
+                    stored = by_id.get(step.id)
+                    if stored is None:
+                        self.steps.append(step)
+                        by_id[step.id] = step
+                        stored = step
+                    ordered.append(stored)
+                if ordered:
+                    analysis.bind_steps(ordered)
+            analysis.steps = []
+
+    def _migrate_studies(self):
+        """Import the former optimizations collection and expose a live alias."""
+
+        known = {item.id for item in self.studies}
+        for study in tuple(self.optimizations):
+            if study.id not in known:
+                self.studies.append(study)
+                known.add(study.id)
+        self.optimizations = self.studies
 
     @property
     def index(self) -> ProjectIndex:
