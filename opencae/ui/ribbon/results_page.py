@@ -50,10 +50,16 @@ class ResultsPage(QWidget):
             else None
         )
         self.save = self._save_button()
-        file_widgets = tuple(
-            widget for widget in (open_button, self.save) if widget is not None
+        layout.addWidget(
+            ResultRibbonGroup(
+                "FILE",
+                tuple(
+                    widget
+                    for widget in (open_button, self.save)
+                    if widget is not None
+                ),
+            )
         )
-        layout.addWidget(ResultRibbonGroup("FILE", file_widgets))
 
         self.mesh_lines = ribbon_button(
             "Mesh Lines",
@@ -102,7 +108,9 @@ class ResultsPage(QWidget):
             None,
             72,
         )
-        self.previous_frame.setToolTip("Previous result frame or Study iteration")
+        self.previous_frame.setToolTip(
+            "Previous result frame or Study iteration"
+        )
         self.next_frame.setToolTip("Next result frame or Study iteration")
         self.previous_frame.setEnabled(False)
         self.next_frame.setEnabled(False)
@@ -188,12 +196,27 @@ class ResultsPage(QWidget):
         if getattr(result, "id", None) != getattr(self.result, "id", None):
             self.section.reset_for_result()
         self.result = result
-        metadata = dict(getattr(result, "metadata", {}) or {}) if result else {}
-        self._topology_frames = list(metadata.get("frames", ())) if (
-            metadata.get("result_kind") == "topology_density"
-        ) else []
+        metadata = (
+            dict(getattr(result, "metadata", {}) or {})
+            if result
+            else {}
+        )
+        self._topology_frames = (
+            list(metadata.get("frames", ()))
+            if metadata.get("result_kind") == "topology_density"
+            else []
+        )
         if self._topology_frames:
-            self._topology_index = len(self._topology_frames) - 1
+            preferred = (
+                int(field.get("topology_frame_index", -1))
+                if isinstance(field, dict)
+                else -1
+            )
+            self._topology_index = (
+                min(max(preferred, 0), len(self._topology_frames) - 1)
+                if preferred >= 0
+                else len(self._topology_frames) - 1
+            )
             self.choose.set_solution(result, [], None)
             self.choose.setText(
                 f"Iteration {self._topology_frames[self._topology_index]['number']}"
