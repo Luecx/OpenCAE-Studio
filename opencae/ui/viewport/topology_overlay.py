@@ -41,6 +41,7 @@ class TopologyDensityOverlay:
         density,
         *,
         threshold=0.30,
+        options=None,
     ):
         self.clear(viewport, render=False)
         scene = viewport.scene
@@ -52,6 +53,11 @@ class TopologyDensityOverlay:
                 self._hidden_base_actors.append(actor)
             except (AttributeError, RuntimeError):
                 pass
+        presentation_options = {
+            "mesh_lines": True,
+            "boundary_lines": True,
+            **dict(options or {}),
+        }
         _actor, _grid, _mesh, _boundary, names = add_topology_presentation(
             viewport.plotter,
             viewport.store.project,
@@ -60,8 +66,11 @@ class TopologyDensityOverlay:
             number=iteration.number,
             objective=iteration.objective_value,
             threshold=threshold,
-            options={"mesh_lines": True, "boundary_lines": True},
+            options=presentation_options,
             name_prefix="topology-live",
         )
         self._names.extend(names)
         viewport.plotter.render()
+
+
+__all__ = ["TopologyDensityOverlay", "visible_density_indices"]
