@@ -1,6 +1,9 @@
+"""Registers every centrally defined action exactly once."""
+
 from . import (
     analysis_actions,
     assembly_actions,
+    job_actions,
     load_actions,
     optimization_actions,
     part_actions,
@@ -19,6 +22,7 @@ def register_actions(registry, controllers, window, store):
         load_actions.specs(controllers),
         analysis_actions.specs(controllers),
         optimization_actions.specs(controllers),
+        job_actions.specs(controllers),
         view_actions.specs(window),
     )
     for specs in groups:
