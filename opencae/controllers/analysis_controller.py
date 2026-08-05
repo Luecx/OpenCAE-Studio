@@ -205,7 +205,7 @@ class AnalysisController:
             existing_names=[item.name for item in project.analyses],
             parent=self.parent,
         )
-        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.validate():
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         candidate = dialog.result()
         if current is None:
