@@ -3,6 +3,17 @@
 from types import SimpleNamespace
 
 
+def test_job_manager_exposes_action_handlers():
+    from opencae.controllers.job_manager import JobManager
+
+    for name in (
+        "stop_selected",
+        "open_selected_monitor",
+        "open_selected_results",
+    ):
+        assert hasattr(JobManager, name), name
+
+
 def test_job_action_catalog_uses_public_job_manager_methods():
     from opencae.ui.actions.catalog import job_actions
 
