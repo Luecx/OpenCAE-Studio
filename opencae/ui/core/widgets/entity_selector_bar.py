@@ -51,10 +51,12 @@ class EntitySelectorBar(QWidget):
         for entity in tuple(self.entities_provider() or ()):
             self.selector.addItem(entity.name, entity.id)
         index = self.selector.findData(active)
-        self.selector.setCurrentIndex(index if index >= 0 else (0 if self.selector.count() else -1))
+        selected_index = index if index >= 0 else (0 if self.selector.count() else -1)
+        self.selector.setCurrentIndex(selected_index)
         self.selector.blockSignals(False)
-        if self.selector.currentIndex() >= 0 and not active:
-            self._selected(self.selector.currentIndex())
+        selected_id = str(self.selector.currentData() or "")
+        if selected_id != active:
+            self._selected(selected_index)
 
     def _selected(self, _index):
         entity_id = str(self.selector.currentData() or "")
