@@ -1,5 +1,6 @@
 """Builds tree context menus exclusively from centrally registered actions."""
 
+from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QMenu
 
 from opencae.ui.actions.ids import A
@@ -123,14 +124,23 @@ MAP = {
 }
 
 
+def _menu_action(menu, source, enabled):
+    """Create a menu-local action without changing the shared QAction state."""
+
+    action = QAction(source.icon(), source.text(), menu)
+    action.setEnabled(bool(enabled and source.isEnabled()))
+    action.setToolTip(source.toolTip())
+    action.setStatusTip(source.statusTip())
+    action.triggered.connect(
+        lambda _checked=False, shared=source: shared.trigger()
+    )
+    return action
+
+
 def show_context_menu(view, pos, index, actions, store, visibility=None):
     kind = index.data(KIND_ROLE) if index.isValid() else None
     entity = index.data(ENTITY_ROLE) if index.isValid() else None
-    ids = [
-        action_id
-        for action_id in MAP.get(kind, ())
-        if available(action_id, store, kind)
-    ]
+    ids = tuple(MAP.get(kind, ()))
     can_toggle = bool(
         visibility is not None
         and entity is not None
@@ -156,5 +166,12 @@ def show_context_menu(view, pos, index, actions, store, visibility=None):
         if ids:
             menu.addSeparator()
     for action_id in ids:
-        menu.addAction(actions.get(action_id))
+        source = actions.get(action_id)
+        menu.addAction(
+            _menu_action(
+                menu,
+                source,
+                available(action_id, store, kind),
+            )
+        )
     menu.exec(view.viewport().mapToGlobal(pos))
