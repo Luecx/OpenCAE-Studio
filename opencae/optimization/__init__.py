@@ -8,6 +8,7 @@ from .filtering import (
     build_filter_operators,
     minimum_element_distance,
 )
+from .job_runner import TopologyOptimizationRunner
 from .mesh_index import TopologyMeshIndex, build_mesh_index
 from .oc import OcUpdate, optimality_criteria_update
 from .res_field import ResField
@@ -26,6 +27,7 @@ __all__ = [
     "ResFormatError",
     "ResponseEvaluation",
     "TopologyMeshIndex",
+    "TopologyOptimizationRunner",
     "build_density_constraint_matrix",
     "build_distance_matrix",
     "build_filter_operators",
