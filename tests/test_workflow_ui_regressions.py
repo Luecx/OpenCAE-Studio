@@ -1,5 +1,6 @@
 """Regression coverage for workflow ribbon, context menu and dialog behavior."""
 
+import ast
 from pathlib import Path
 
 from PyQt6.QtCore import QTimer
@@ -13,20 +14,84 @@ from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_executable_selector_matches_part_selector_layout_and_button_size():
+def _ribbon_groups(relative_path):
+    source = (ROOT / relative_path).read_text(encoding="utf-8")
+    module = ast.parse(source)
+    groups = []
+    for node in ast.walk(module):
+        if not isinstance(node, ast.Call):
+            continue
+        function = node.func
+        name = function.id if isinstance(function, ast.Name) else getattr(function, "attr", "")
+        if name != "RibbonGroupSpec" or len(node.args) < 2:
+            continue
+        title = ast.literal_eval(node.args[0])
+        actions = tuple(
+            item.attr
+            for item in node.args[1].elts
+            if isinstance(item, ast.Attribute)
+        )
+        groups.append((title, actions))
+    return groups
+
+
+def test_executable_selector_contains_only_dropdown_and_title():
     source = (
         ROOT / "opencae/ui/core/widgets/entity_selector_bar.py"
     ).read_text(encoding="utf-8")
 
-    assert "QVBoxLayout(selector_panel)" in source
+    assert "QVBoxLayout(self)" in source
     assert 'label.setObjectName("RibbonGroupTitle")' in source
-    assert "selector_layout.addWidget(self.selector)" in source
-    assert "selector_layout.addWidget(label)" in source
-    assert source.index("selector_layout.addWidget(self.selector)") < source.index(
-        "selector_layout.addWidget(label)"
+    assert "layout.addWidget(self.selector)" in source
+    assert "layout.addWidget(label)" in source
+    assert source.index("layout.addWidget(self.selector)") < source.index(
+        "layout.addWidget(label)"
     )
-    assert "action_button(actions.get(action_id))" in source
-    assert "QToolButton" not in source
+    assert "action_button" not in source
+    assert "action_ids" not in source
+
+
+def test_analysis_ribbon_separates_definition_and_execution_groups():
+    assert _ribbon_groups("opencae/ui/ribbon/analysis_page.py") == [
+        (
+            "DEFINITION",
+            ("ANALYSIS_NEW", "ANALYSIS_EDIT", "DELETE_SELECTED"),
+        ),
+        (
+            "ANALYSIS",
+            (
+                "VALIDATE",
+                "PREVIEW_DECK",
+                "WRITE_DECK",
+                "SOLVER_SETTINGS",
+                "ANALYSIS_RUN",
+            ),
+        ),
+    ]
+
+
+def test_studies_ribbon_separates_definition_setup_and_execution_groups():
+    assert _ribbon_groups("opencae/ui/ribbon/studies_page.py") == [
+        (
+            "DEFINITION",
+            ("STUDY_NEW_TOPOLOGY", "STUDY_EDIT", "DELETE_SELECTED"),
+        ),
+        (
+            "TOPOLOGY SETUP",
+            (
+                "OPT_RESPONSE",
+                "OPT_OBJECTIVE",
+                "OPT_CONSTRAINT",
+                "OPT_FILTER",
+                "OPT_SYMMETRY",
+                "OPT_CONTROLS",
+            ),
+        ),
+        (
+            "STUDY",
+            ("STUDY_VALIDATE", "STUDY_RUN"),
+        ),
+    ]
 
 
 def test_steps_ribbon_does_not_expose_selected_edit_or_delete():
@@ -51,13 +116,14 @@ def test_context_menu_keeps_unavailable_actions_visible_but_disabled():
     assert "if available(action_id, store, kind)" not in source
 
 
-def test_delete_uses_a_real_trash_icon():
+def test_delete_uses_a_simple_close_icon():
     source = (ROOT / "opencae/ui/core/icons/factory.py").read_text(
         encoding="utf-8"
     )
 
     assert "if kind == IconKind.DELETE" in source
-    assert "QStyle.StandardPixmap.SP_TrashIcon" in source
+    assert "QStyle.StandardPixmap.SP_DialogCloseButton" in source
+    assert "QStyle.StandardPixmap.SP_TrashIcon" not in source
     assert "IconKind.DELETE:LegacyKind.FIXED" not in source
 
 
