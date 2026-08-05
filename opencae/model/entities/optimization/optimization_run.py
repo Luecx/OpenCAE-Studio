@@ -1,4 +1,4 @@
-"""Stores one topology optimization run and its completed iterations."""
+"""Stores topology-specific state for one job-backed study execution."""
 
 from dataclasses import dataclass, field
 
@@ -9,11 +9,12 @@ from .optimization_iteration import OptimizationIteration
 @register_model_type("optimization_run")
 @dataclass
 class OptimizationRun(Entity):
-    """Persistent run status, resolved filter radii and iteration history."""
+    """Persistent topology state linked to the generic job that produced it."""
 
     optimization_ref: EntityRef = field(
         default_factory=lambda: EntityRef(expected_type="TopologyOptimization")
     )
+    job_ref: EntityRef | None = None
     status: str = "Prepared"
     directory: str = ""
     mesh_fingerprint: str = ""
