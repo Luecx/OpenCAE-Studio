@@ -1,13 +1,16 @@
+"""Controls shared Steps and executable Analysis definitions."""
+
 from __future__ import annotations
 
 from copy import deepcopy
 
 from PyQt6.QtWidgets import QDialog
 
-from opencae.model.analysis import AnalysisStep, create_analysis
 from opencae.model.core import EntityRef
+from opencae.model.entities.analysis import Analysis, AnalysisStep
 from opencae.model.naming import next_name_from_names
 from opencae.store.commands import UpdateFieldCommand
+from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
 from opencae.ui.dialogs.solver_settings import SolverSettingsDialog
 from opencae.ui.dialogs.step import StepDialog
 from opencae.ui.dialogs.step_collectors import StepCollectorsDialog
@@ -15,24 +18,65 @@ from opencae.ui.dialogs.step_reorder import StepReorderDialog
 
 
 class AnalysisController:
-    def __init__(self, store, parent, settings):
+    """Own the active Analysis UI state and all Step/Analysis mutations."""
+
+    def __init__(self, store, parent, settings, jobs=None):
         self.store = store
         self.parent = parent
         self.settings = settings
+        self.jobs = jobs
+        self.active_analysis_id = ""
+        store.changed.connect(self._repair_active_analysis)
+        self._repair_active_analysis()
 
-    def create_step(self, analysis_type):
+    def active_analysis(self):
         project = self.store.project
-        names = [analysis.steps[0].name for analysis in project.analyses if analysis.steps]
-        name = next_name_from_names(analysis_type, names)
+        current = project.try_resolve(self.active_analysis_id)
+        if isinstance(current, Analysis):
+            return current
+        return project.analyses[0] if project.analyses else None
+
+    def set_active_analysis(self, analysis_id):
+        value = self.store.project.try_resolve(str(analysis_id or ""))
+        self.active_analysis_id = value.id if isinstance(value, Analysis) else ""
+        if value is not None:
+            self.store.select(value)
+        self.parent.refresh_action_states()
+
+    def _repair_active_analysis(self, *_):
+        current = self.store.project.try_resolve(self.active_analysis_id)
+        if not isinstance(current, Analysis):
+            self.active_analysis_id = (
+                self.store.project.analyses[0].id
+                if self.store.project.analyses
+                else ""
+            )
+
+    def create_step(self, step_type):
+        project = self.store.project
+        name = next_name_from_names(
+            step_type,
+            [step.name for step in project.steps],
+        )
         step = AnalysisStep(
             name=name,
-            step_type=analysis_type,
-            load_refs=[] if analysis_type == "Eigenfrequency" else [EntityRef.of(item, "Load") for item in project.loads],
-            support_refs=[EntityRef.of(item, "Support") for item in project.supports],
+            step_type=step_type,
+            load_refs=(
+                []
+                if step_type == "Eigenfrequency"
+                else [EntityRef.of(item, "Load") for item in project.loads]
+            ),
+            support_refs=[
+                EntityRef.of(item, "Support") for item in project.supports
+            ],
             number_of_modes=10,
         )
-        analysis = create_analysis(analysis_type, name=name, steps=[step])
-        self.store.add_entity(f"Created step {name}", project.id, "analyses", analysis)
+        self.store.add_entity(
+            f"Created step {name}",
+            project.id,
+            "steps",
+            step,
+        )
         created = self.store.project.try_resolve(step.id)
         if created is not None:
             self.store.select(created)
@@ -40,72 +84,171 @@ class AnalysisController:
 
     def edit_step(self, step):
         project = self.store.project
-        analysis = self._analysis_for_id(step.id)
-        if analysis is None:
+        stored = project.try_resolve(step.id)
+        if not isinstance(stored, AnalysisStep):
             self.store.message.emit("The selected step no longer exists")
             return
-        stored_step = next(item for item in analysis.steps if item.id == step.id)
         dialog = StepDialog(
-            stored_step,
+            stored,
             project.loads,
             project.supports,
             self.parent,
-            [item.steps[0].name for item in project.analyses if item.steps],
+            [item.name for item in project.steps],
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         values = dialog.values()
-        replacement = deepcopy(analysis)
-        target = next(item for item in replacement.steps if item.id == step.id)
-        old_name = target.name
-        target.name = values["name"]
-        target.number_of_modes = values["number_of_modes"]
-        target.load_refs = [EntityRef(entity_id, "Load") for entity_id in values["load_ids"]]
-        target.support_refs = [EntityRef(entity_id, "Support") for entity_id in values["support_ids"]]
-        if replacement.name == old_name:
-            replacement.name = target.name
-        self.store.replace_entity(f"Edited step {old_name}", project.id, "analyses", replacement)
-        current = self.store.project.try_resolve(step.id)
-        if current is not None:
-            self.store.select(current)
+        replacement = deepcopy(stored)
+        old_name = replacement.name
+        replacement.name = values["name"]
+        replacement.number_of_modes = values["number_of_modes"]
+        replacement.load_refs = [
+            EntityRef(entity_id, "Load") for entity_id in values["load_ids"]
+        ]
+        replacement.support_refs = [
+            EntityRef(entity_id, "Support")
+            for entity_id in values["support_ids"]
+        ]
+        self.store.replace_entity(
+            f"Edited step {old_name}",
+            project.id,
+            "steps",
+            replacement,
+        )
+        self.store.select(self.store.project.try_resolve(replacement.id))
 
     def reorder_steps(self):
         project = self.store.project
-        analyses = project.analyses
-        if len(analyses) < 2:
+        if len(project.steps) < 2:
             return
-        dialog = StepReorderDialog([item.steps[0].name for item in analyses], self.parent)
+        dialog = StepReorderDialog(
+            [item.name for item in project.steps],
+            self.parent,
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        order = dialog.order()
-        rank = {name: index for index, name in enumerate(order)}
-        after = sorted(deepcopy(analyses), key=lambda item: rank[item.steps[0].name])
-        self.store.execute("Reordered steps", UpdateFieldCommand(project.id, "analyses", deepcopy(analyses), after))
+        rank = {name: index for index, name in enumerate(dialog.order())}
+        before = deepcopy(project.steps)
+        after = sorted(deepcopy(project.steps), key=lambda item: rank[item.name])
+        self.store.execute(
+            "Reordered steps",
+            UpdateFieldCommand(project.id, "steps", before, after),
+        )
 
     def manage_collectors(self):
         project = self.store.project
-        steps = [analysis.steps[0] for analysis in project.analyses if analysis.steps]
-        if not steps:
+        if not project.steps:
             return
-        dialog = StepCollectorsDialog(steps, project.loads, project.supports, self.parent)
+        dialog = StepCollectorsDialog(
+            project.steps,
+            project.loads,
+            project.supports,
+            self.parent,
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         values = dialog.values()
-        after = deepcopy(project.analyses)
-        by_id = {analysis.steps[0].id: analysis.steps[0] for analysis in after if analysis.steps}
+        after = deepcopy(project.steps)
+        by_id = {step.id: step for step in after}
         for step_id, collector_ids in values.items():
             target = by_id.get(step_id)
             if target is None:
                 continue
-            target.support_refs = [EntityRef(entity_id, "Support") for entity_id in collector_ids["support_ids"]]
-            target.load_refs = [EntityRef(entity_id, "Load") for entity_id in collector_ids["load_ids"]]
+            target.support_refs = [
+                EntityRef(entity_id, "Support")
+                for entity_id in collector_ids["support_ids"]
+            ]
+            target.load_refs = [
+                EntityRef(entity_id, "Load")
+                for entity_id in collector_ids["load_ids"]
+            ]
         self.store.execute(
             "Updated step collectors",
-            UpdateFieldCommand(project.id, "analyses", deepcopy(project.analyses), after),
+            UpdateFieldCommand(
+                project.id,
+                "steps",
+                deepcopy(project.steps),
+                after,
+            ),
         )
 
+    def new_analysis(self):
+        project = self.store.project
+        value = Analysis(
+            name=next_name_from_names(
+                "Analysis",
+                [item.name for item in project.analyses],
+            )
+        )
+        self._analysis_dialog(value, None)
+
+    def edit_active_analysis(self):
+        analysis = self.active_analysis()
+        if analysis is None:
+            self.store.message.emit("Create an Analysis first")
+            return
+        self.edit_analysis(analysis)
+
+    def edit_analysis(self, analysis):
+        stored = self.store.project.try_resolve(analysis.id)
+        if not isinstance(stored, Analysis):
+            self.store.message.emit("The selected Analysis no longer exists")
+            return
+        self._analysis_dialog(stored, stored)
+
+    def _analysis_dialog(self, value, current):
+        project = self.store.project
+        dialog = AnalysisDialog(
+            value,
+            project.steps,
+            self.settings.enabled_solvers() or ("FEMaster",),
+            existing_names=[item.name for item in project.analyses],
+            parent=self.parent,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.validate():
+            return
+        candidate = dialog.result()
+        if current is None:
+            self.store.add_entity(
+                f"Created Analysis {candidate.name}",
+                project.id,
+                "analyses",
+                candidate,
+            )
+        else:
+            self.store.replace_entity(
+                f"Edited Analysis {candidate.name}",
+                project.id,
+                "analyses",
+                candidate,
+            )
+        created = self.store.project.try_resolve(candidate.id)
+        self.active_analysis_id = candidate.id
+        self.store.select(created)
+
+    def run_active(self):
+        analysis = self.active_analysis()
+        if analysis is None:
+            self.store.message.emit("Create an Analysis first")
+            return
+        if self.jobs is None:
+            self.store.message.emit("The job manager is unavailable")
+            return
+        self.jobs.run_analysis(analysis.id)
+
+    def validate_active(self):
+        analysis = self.active_analysis()
+        if analysis is None:
+            self.store.message.emit("Create an Analysis first")
+            return
+        if self.jobs is not None:
+            self.jobs.validate_analysis(analysis.id)
+
     def settings_dialog(self):
-        dialog = SolverSettingsDialog(self.settings.solver_configs, self.parent)
+        dialog = SolverSettingsDialog(
+            self.settings.solver_configs,
+            self.parent,
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         self.settings.solver_configs = dialog.values()
@@ -117,15 +260,3 @@ class AnalysisController:
         if ribbon and hasattr(ribbon, "refresh_solvers"):
             ribbon.refresh_solvers()
         self.parent.refresh_action_states()
-
-    def validate(self):
-        from opencae.model.validation import validate_project
-
-        issues = validate_project(self.store.project)
-        self.store.message.emit("Model validation passed" if not issues else "Validation: " + ", ".join(issues))
-
-    def _analysis_for_id(self, step_id):
-        return next(
-            (analysis for analysis in self.store.project.analyses if any(item.id == step_id for item in analysis.steps)),
-            None,
-        )
