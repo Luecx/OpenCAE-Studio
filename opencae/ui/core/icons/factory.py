@@ -50,5 +50,5 @@ def make_icon(kind: IconKind, size: int = 40, accent: str | None = None) -> QIco
     if kind == IconKind.DELETE:
         app = QApplication.instance()
         style = app.style() if app is not None else QApplication.style()
-        return style.standardIcon(QStyle.StandardPixmap.SP_TrashIcon)
+        return style.standardIcon(QStyle.StandardPixmap.SP_DialogCloseButton)
     return make_legacy_icon(_ICON_MAP[kind], size, accent)
