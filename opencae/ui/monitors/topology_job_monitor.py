@@ -1,8 +1,13 @@
 """Live density and convergence window for a topology Study job."""
 
+from pathlib import Path
+
+import numpy as np
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import QDialog, QLabel, QProgressBar, QVBoxLayout
 
+from opencae.model.entities.optimization import OptimizationRun
+from opencae.optimization import build_mesh_index
 from opencae.ui.viewport.topology_overlay import TopologyDensityOverlay
 from opencae.ui.viewport.viewport_factory import create_viewport
 
@@ -40,6 +45,7 @@ class TopologyJobMonitor(QDialog):
             getattr(job, "progress", 0.0),
             getattr(job, "progress_label", "Prepared"),
         )
+        QTimer.singleShot(0, self._restore_latest_frame)
 
     def set_progress(self, job_id, value, label):
         if str(job_id) != self.job_id:
@@ -63,6 +69,42 @@ class TopologyJobMonitor(QDialog):
         )
         self._pending = (run, iteration, mesh_index, density)
         QTimer.singleShot(0, self._present_pending)
+
+    def _restore_latest_frame(self):
+        run = next(
+            (
+                value
+                for study in self.store.project.studies
+                for value in getattr(study, "runs", ())
+                if isinstance(value, OptimizationRun)
+                and value.job_ref
+                and value.job_ref.entity_id == self.job_id
+            ),
+            None,
+        )
+        if run is None or not run.iterations:
+            return
+        iteration = run.iterations[-1]
+        path = Path(iteration.density_file)
+        if not path.exists():
+            return
+        try:
+            with np.load(path, allow_pickle=False) as values:
+                density = np.asarray(values["physical"], dtype=float).copy()
+            mesh_index = build_mesh_index(self.store.project)
+        except Exception as exc:
+            self.phase.setText(f"Stored visualization failed: {exc}")
+            return
+        if run.mesh_fingerprint and run.mesh_fingerprint != mesh_index.fingerprint:
+            self.phase.setText("The mesh changed since this Study job")
+            return
+        self.show_frame(
+            self.job_id,
+            run,
+            iteration,
+            mesh_index,
+            density,
+        )
 
     def _present_pending(self):
         if self._pending is None:
