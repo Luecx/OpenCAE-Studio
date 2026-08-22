@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QWidget
 from opencae.ui.actions.ids import A
 from .part_selector import PartSelector
 from .ribbon_group import RibbonGroup
-from .specs import RibbonGroupSpec
+from .specs import RibbonGroupSpec, RibbonMenuSpec
 
 
 def create(actions, store):
@@ -28,21 +28,28 @@ def create(actions, store):
                 A.SUPPRESS_FEATURE,
             ),
             (
-                A.NEW_PART,
-                A.IMPORT_GEOMETRY,
+                RibbonMenuSpec(
+                    "New Part",
+                    A.NEW_PART,
+                    (A.NEW_PART, A.DUPLICATE_PART),
+                ),
+                RibbonMenuSpec(
+                    "Import",
+                    A.IMPORT_GEOMETRY,
+                    (A.IMPORT_GEOMETRY, A.IMPORT_MESH),
+                ),
                 A.PARTITION,
-                (A.DUPLICATE_PART, A.SUPPRESS_FEATURE),
-                (A.IMPORT_MESH, A.REBUILD_GEOMETRY),
+                RibbonMenuSpec(
+                    "Rebuild",
+                    A.REBUILD_GEOMETRY,
+                    (A.REBUILD_GEOMETRY, A.SUPPRESS_FEATURE),
+                ),
             ),
         ),
         RibbonGroupSpec("DISPLAY", (A.VISIBILITY,)),
         RibbonGroupSpec(
             "DATUM",
             (A.DATUM_POINT, A.DATUM_VECTOR, A.DATUM_PLANE),
-            (
-                A.DATUM_PLANE,
-                (A.DATUM_POINT, A.DATUM_VECTOR),
-            ),
         ),
         RibbonGroupSpec(
             "MESH",
@@ -55,10 +62,18 @@ def create(actions, store):
                 A.CLEAR_MESH,
             ),
             (
+                RibbonMenuSpec(
+                    "Seed",
+                    A.DEFAULT_SEED,
+                    (A.DEFAULT_SEED, A.EDGE_SEED),
+                ),
+                A.ELEMENT_CONTROLS,
                 A.MESH_SETTINGS,
-                A.GENERATE_MESH,
-                (A.DEFAULT_SEED, A.EDGE_SEED),
-                (A.ELEMENT_CONTROLS, A.CLEAR_MESH),
+                RibbonMenuSpec(
+                    "Generate",
+                    A.GENERATE_MESH,
+                    (A.GENERATE_MESH, A.CLEAR_MESH),
+                ),
             ),
         ),
         RibbonGroupSpec(
@@ -74,7 +89,11 @@ def create(actions, store):
                 A.NODE_SET,
                 A.ELEMENT_SET,
                 A.SURFACE,
-                (A.PART_RP, A.PART_CSYS),
+                RibbonMenuSpec(
+                    "Reference",
+                    A.PART_RP,
+                    (A.PART_RP, A.PART_CSYS),
+                ),
             ),
         ),
         RibbonGroupSpec("PROPERTIES", (A.SECTION_ASSIGNMENT,)),
