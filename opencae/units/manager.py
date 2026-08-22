@@ -15,7 +15,7 @@ class UnitManager:
 
     @property
     def system(self):
-        return self.settings.get_unit_system(self.store.project.unit_system)
+        return self.settings.unit_system(self.store.project.unit_system)
 
     def symbol(self, quantity: str) -> str:
         return self.system.symbol(quantity)
