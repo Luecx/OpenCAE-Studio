@@ -32,6 +32,7 @@ class PartDatums:
             [item.name for item in part.datums],
             part.coordinate_systems,
             parent=self.ctx.parent,
+            units=self.ctx.units,
         )
         state = {"target_id": None}
         self._dialogs.append(dialog)
