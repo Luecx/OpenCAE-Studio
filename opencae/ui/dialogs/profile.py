@@ -38,6 +38,16 @@ PROFILE_TYPES = (
     "Graph profile",
 )
 
+_PROPERTY_QUANTITIES = {
+    "Area": "area",
+    "Centroid y": "length",
+    "Centroid z": "length",
+    "Iyy": "section_inertia",
+    "Izz": "section_inertia",
+    "Iyz": "section_inertia",
+    "Torsion constant": "section_inertia",
+}
+
 
 class ProfileDialog(ApplyDialog):
     def __init__(
@@ -47,9 +57,11 @@ class ProfileDialog(ApplyDialog):
         parent=None,
         initial_type=None,
         default_name="Profile-1",
+        units=None,
     ):
         super().__init__(parent)
         self.profile = profile
+        self.units = units
         self.existing_names = {name.casefold() for name in existing_names}
         self._editors = {}
 
@@ -104,6 +116,9 @@ class ProfileDialog(ApplyDialog):
         self.kind.currentTextChanged.connect(self._rebuild)
         self._rebuild()
 
+    def _symbol(self, quantity):
+        return self.units.symbol(quantity) if self.units is not None else ""
+
     def _rebuild(self):
         while self.form.rowCount():
             self.form.removeRow(0)
@@ -123,10 +138,12 @@ class ProfileDialog(ApplyDialog):
             self._editors["graph"] = editor
             self.form.addRow(editor)
         else:
+            length_suffix = self.units.suffix("length") if self.units is not None else ""
             for key, label, default in profile_parameters(self.kind.currentText()):
                 editor = QDoubleSpinBox()
                 editor.setRange(-1e30, 1e30)
                 editor.setDecimals(6)
+                editor.setSuffix(length_suffix)
                 editor.setValue(float(current.get(key, default)))
                 editor.valueChanged.connect(self._update_properties)
                 self._editors[key] = editor
@@ -141,19 +158,12 @@ class ProfileDialog(ApplyDialog):
     def _update_properties(self):
         data = profile_properties(self.kind.currentText(), self._dimensions())
         self.properties.setRowCount(len(data))
-        units = {
-            "Area": "mm²",
-            "Centroid y": "mm",
-            "Centroid z": "mm",
-            "Iyy": "mm⁴",
-            "Izz": "mm⁴",
-            "Iyz": "mm⁴",
-            "Torsion constant": "mm⁴",
-        }
         for row, (name, value) in enumerate(data.items()):
+            quantity = _PROPERTY_QUANTITIES.get(name)
+            unit = self._symbol(quantity) if quantity else ""
             self.properties.setItem(row, 0, QTableWidgetItem(name))
             self.properties.setItem(row, 1, QTableWidgetItem(f"{value:.8g}"))
-            self.properties.setItem(row, 2, QTableWidgetItem(units.get(name, "")))
+            self.properties.setItem(row, 2, QTableWidgetItem(unit))
 
     def validate(self):
         name = self.name.text().strip()
