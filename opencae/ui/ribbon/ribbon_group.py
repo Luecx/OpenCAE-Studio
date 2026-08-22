@@ -1,8 +1,9 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
-from opencae.ui.core.controls import action_button
+from opencae.ui.core.controls import action_button, action_menu_button
 from opencae.ui.core.theme import PALETTE
+from .specs import RibbonMenuSpec
 
 
 class RibbonGroup(QFrame):
@@ -27,15 +28,17 @@ class RibbonGroup(QFrame):
 
         items = spec.layout_items or spec.action_ids
         for item in items:
-            if isinstance(item, tuple):
-                column = QVBoxLayout()
-                column.setContentsMargins(0, 0, 0, 0)
-                column.setSpacing(2)
-                for action_id in item:
-                    column.addWidget(
-                        action_button(actions.get(action_id), large=False)
+            if isinstance(item, RibbonMenuSpec):
+                menu_actions = tuple(
+                    actions.get(action_id) for action_id in item.action_ids
+                )
+                row.addWidget(
+                    action_menu_button(
+                        actions.get(item.primary_action_id),
+                        menu_actions,
+                        item.label,
                     )
-                row.addLayout(column)
+                )
             else:
                 row.addWidget(action_button(actions.get(item)))
 
