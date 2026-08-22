@@ -11,11 +11,12 @@ from opencae.model.selection import SelectableKind, SelectionOperation, Viewport
 
 
 _POINT_PICK_TOLERANCE = 0.012
-_EDGE_PICK_TOLERANCE = 0.018
+_ELEMENT_PICK_TOLERANCE = 0.018
 _POINT_SNAP_PIXELS = 11.0
 _EDGE_SNAP_PIXELS = 15.0
 _POINT_EDGE_BIAS_PIXELS = 2.0
 _DEPTH_EPSILON = 0.008
+_DEPTH_PICK_TOLERANCE = 0.0025
 
 
 _POINT_KINDS = {
@@ -43,8 +44,6 @@ class PyVistaPicker:
             self.owner.message.emit(f"Could not reset viewport picker: {exc}")
 
         mode = self.owner.selection_mode
-        # VTK pickers may snapshot their pick list when enabled. Configure the
-        # exact actor set for the selected topology mode first.
         self.update_pickability()
         if (
             self.owner.stage == "RESULTS"
@@ -55,9 +54,6 @@ class PyVistaPicker:
 
         try:
             if mode == "point" and self.owner.display_mode == "mesh":
-                # Mesh nodes are genuine mesh points, so the VTK point picker is
-                # appropriate here. CAD/reference/datum points use the common
-                # screen-space geometry path below instead.
                 self.owner.plotter.enable_point_picking(
                     callback=self.points.picked,
                     tolerance=_POINT_PICK_TOLERANCE,
@@ -76,32 +72,20 @@ class PyVistaPicker:
             ):
                 self.owner.plotter.enable_surface_point_picking(
                     callback=self.elements.picked,
-                    tolerance=_EDGE_PICK_TOLERANCE,
+                    tolerance=_ELEMENT_PICK_TOLERANCE,
                     left_clicking=True,
                     show_message=False,
                     show_point=False,
                     picker="cell",
                     pickable_window=False,
                 )
-            elif self.owner.display_mode == "geometry" and mode in {
-                "point",
-                "edge",
-                "auto",
-            }:
-                # The cell picker supplies only cursor/depth information. The
-                # selected CAD point/edge is chosen deterministically below by
-                # measuring every allowed visible candidate in screen pixels.
-                self.owner.plotter.enable_surface_point_picking(
-                    callback=self.picked_geometry,
-                    tolerance=_EDGE_PICK_TOLERANCE,
-                    left_clicking=True,
-                    show_message=False,
-                    show_point=False,
-                    picker="cell",
-                    use_picker=True,
-                    pickable_window=True,
-                    clear_on_no_selection=False,
-                )
+            elif self.handles_direct_click():
+                # CAD point/edge picking is intentionally not installed through
+                # PyVista.  PyVista only invokes its callback when VTK reports a
+                # hit first, which made a nominal 15 px edge snap behave like an
+                # exact-line picker.  The viewport forwards ordinary mouse
+                # clicks to pick_display_position() instead.
+                return
             else:
                 self.owner.plotter.enable_mesh_picking(
                     callback=self.picked_actor,
@@ -113,6 +97,81 @@ class PyVistaPicker:
                 )
         except Exception as exc:
             self.owner.message.emit(f"Could not configure {mode} picking: {exc}")
+
+    def handles_direct_click(self):
+        return bool(
+            self.owner.stage != "RESULTS"
+            and self.owner.context_pick.active
+            and self.owner.display_mode == "geometry"
+            and self.owner.selection_mode in {"point", "edge", "auto"}
+        )
+
+    def pick_display_position(self, cursor):
+        """Pick CAD topology from an unconditional VTK display-coordinate click."""
+        if not self.handles_direct_click():
+            return False
+        cursor = np.asarray(cursor, dtype=float).reshape(-1)
+        if len(cursor) < 2 or not np.all(np.isfinite(cursor[:2])):
+            return False
+        cursor = cursor[:2]
+
+        picked_actor, picked_depth = self._depth_pick(cursor)
+        mode = self.owner.selection_mode
+        actor = None
+        if mode == "point":
+            actor, _distance = self._nearest_point_actor(
+                cursor,
+                _POINT_SNAP_PIXELS,
+                picked_depth,
+            )
+        elif mode == "edge":
+            actor, _distance = self._nearest_edge_actor_at(
+                cursor,
+                _EDGE_SNAP_PIXELS,
+                picked_depth,
+            )
+        elif mode == "auto":
+            actor = self._preferred_auto_actor_at(
+                cursor,
+                picked_actor,
+                picked_depth,
+            )
+
+        if actor is None:
+            return False
+        self.picked_actor(actor)
+        return True
+
+    def _depth_pick(self, cursor):
+        """Return the frontmost actor/depth under the cursor when one exists.
+
+        A miss is valid: near a silhouette the cursor may be outside the solid,
+        but a nearby visible edge should still be selectable by screen distance.
+        """
+        try:
+            from vtkmodules.vtkRenderingCore import vtkCellPicker
+
+            picker = vtkCellPicker()
+            picker.SetTolerance(_DEPTH_PICK_TOLERANCE)
+            hit = bool(
+                picker.Pick(
+                    float(cursor[0]),
+                    float(cursor[1]),
+                    0.0,
+                    self.owner.plotter.renderer,
+                )
+            )
+            if not hit:
+                return None, None
+            actor = picker.GetActor()
+            display = _world_to_display(
+                self.owner.plotter.renderer,
+                picker.GetPickPosition(),
+            )
+            depth = None if display is None else float(display[2])
+            return actor, depth
+        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError):
+            return None, None
 
     def clear(self, emit=True, render=True):
         for actor in tuple(self.selected_actors):
@@ -135,68 +194,19 @@ class PyVistaPicker:
         self.points.clear()
         self.elements.clear()
 
-    def picked_geometry(self, _point, picker=None):
-        mode = self.owner.selection_mode
-        picked_actor = _picker_actor(picker)
-        cursor = _selection_point(picker)
-        picked_depth = _picked_depth(self.owner.plotter.renderer, picker)
-
-        actor = None
-        if mode == "point":
-            if cursor is not None:
-                actor, _distance = self._nearest_point_actor(
-                    cursor,
-                    _POINT_SNAP_PIXELS,
-                    picked_depth,
-                )
-            elif self._actor_is_accepted(picked_actor):
-                actor = picked_actor
-        elif mode == "edge":
-            actor, _distance = self._nearest_edge_actor(
-                picker,
-                _EDGE_SNAP_PIXELS,
-                picked_depth,
-            )
-        elif mode == "auto":
-            actor = self._preferred_auto_actor(
-                picker,
-                picked_actor,
-                cursor=cursor,
-                picked_depth=picked_depth,
-            )
-
-        if actor is not None:
-            self.picked_actor(actor)
-
-    def _preferred_auto_actor(
-        self,
-        picker,
-        picked_actor,
-        *,
-        cursor=None,
-        picked_depth=None,
-    ):
-        cursor = _selection_point(picker) if cursor is None else cursor
-        if cursor is None:
-            return picked_actor if self._actor_is_accepted(picked_actor) else None
-
-        if picked_depth is None:
-            picked_depth = _picked_depth(self.owner.plotter.renderer, picker)
+    def _preferred_auto_actor_at(self, cursor, picked_actor, picked_depth=None):
         point_actor, point_distance = self._nearest_point_actor(
             cursor,
             _POINT_SNAP_PIXELS,
             picked_depth,
         )
-        edge_actor, edge_distance = self._nearest_edge_actor(
-            picker,
+        edge_actor, edge_distance = self._nearest_edge_actor_at(
+            cursor,
             _EDGE_SNAP_PIXELS,
             picked_depth,
         )
 
         if point_actor is not None and edge_actor is not None:
-            # Standalone point markers are visually small. Give a point a tiny
-            # bias when it is essentially as close as an edge, while still
-            # letting an obviously nearer edge win.
             return (
                 point_actor
                 if point_distance <= edge_distance + _POINT_EDGE_BIAS_PIXELS
@@ -240,8 +250,8 @@ class PyVistaPicker:
             distance = float(np.linalg.norm(display[:2] - cursor))
             if distance > maximum:
                 continue
-            # If two markers are effectively coincident, prefer an explicit
-            # datum/reference marker over a generated CAD vertex.
+            # At effectively coincident positions an explicit datum/reference
+            # marker is more intentional than an underlying generated vertex.
             kind_priority = (
                 1 if hit.kind == SelectableKind.GEOMETRY_VERTEX else 0
             )
@@ -254,13 +264,7 @@ class PyVistaPicker:
         )
         return actor, distance
 
-    def _nearest_edge_actor(self, picker, maximum, picked_depth=None):
-        cursor = _selection_point(picker)
-        if cursor is None:
-            return None, float("inf")
-        if picked_depth is None:
-            picked_depth = _picked_depth(self.owner.plotter.renderer, picker)
-
+    def _nearest_edge_actor_at(self, cursor, maximum, picked_depth=None):
         candidates = []
         for actor in self.owner.scene.edge_actors:
             if not _actor_enabled(actor):
@@ -282,7 +286,9 @@ class PyVistaPicker:
                 and depth > picked_depth + _DEPTH_EPSILON
             ):
                 continue
-            candidates.append((distance, depth if depth is not None else 1.0, actor))
+            candidates.append(
+                (distance, depth if depth is not None else 1.0, actor)
+            )
         if not candidates:
             return None, float("inf")
         distance, _depth, actor = min(
@@ -323,7 +329,6 @@ class PyVistaPicker:
         if hit is None:
             return
         if self.owner.context_pick.active:
-            # Dialog-owned region previews are the sole visual source of truth.
             self.emit_entities((), (hit.with_operation(operation),))
             return
         if operation == SelectionOperation.REPLACE:
@@ -413,9 +418,9 @@ class PyVistaPicker:
                 and SelectableKind.GEOMETRY_CELL in kinds
             )
 
-            # In CAD point/edge modes faces remain pickable only so vtkCellPicker
-            # can tell us the visible surface depth under the mouse. They are not
-            # emitted unless the policy actually accepts a face.
+            # In CAD point/edge modes faces remain pickable only as a depth
+            # source for the manual screen-space picker. They are never emitted
+            # unless the active selection policy actually accepts a face.
             depth_surface = (
                 self.owner.display_mode == "geometry"
                 and mode in {"point", "edge", "auto"}
@@ -479,7 +484,6 @@ class PyVistaPicker:
                 actor.SetPickable(mesh_pickable)
             return
 
-        # No free-form viewport selection exists outside a dialog-owned session.
         for actor in scene.face_actors:
             actor.SetPickable(False)
         for actor in scene.edge_actors:
@@ -497,42 +501,6 @@ class PyVistaPicker:
             scene.mesh_actor.SetPickable(False)
         for actor in scene.mesh_actors:
             actor.SetPickable(False)
-
-
-def _picker_actor(picker):
-    if picker is None:
-        return None
-    try:
-        return picker.GetActor()
-    except (AttributeError, RuntimeError):
-        return None
-
-
-def _selection_point(picker):
-    if picker is None:
-        return None
-    try:
-        point = np.asarray(
-            picker.GetSelectionPoint(),
-            dtype=float,
-        ).reshape(-1)
-        return (
-            point[:2]
-            if len(point) >= 2 and np.all(np.isfinite(point[:2]))
-            else None
-        )
-    except (AttributeError, TypeError, ValueError, RuntimeError):
-        return None
-
-
-def _picked_depth(renderer, picker):
-    if _picker_actor(picker) is None:
-        return None
-    try:
-        display = _world_to_display(renderer, picker.GetPickPosition())
-        return None if display is None else float(display[2])
-    except (AttributeError, TypeError, ValueError, RuntimeError):
-        return None
 
 
 def _world_to_display(renderer, point):
