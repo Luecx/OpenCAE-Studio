@@ -1,5 +1,7 @@
-from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QApplication, QStyle
+from PyQt6.QtCore import QPointF, QSize, Qt
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+
+from opencae.ui.core.theme import PALETTE
 
 from .kinds import IconKind
 from .legacy import IconKind as LegacyKind
@@ -45,12 +47,32 @@ _ICON_MAP = {
 }
 
 
+def _x_icon(size: int, accent: str | None = None) -> QIcon:
+    pixmap = QPixmap(QSize(size, size))
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    color = QColor(accent or PALETTE["accent"])
+    painter.setPen(
+        QPen(
+            color,
+            max(2.2, size / 12.5),
+            Qt.PenStyle.SolidLine,
+            Qt.PenCapStyle.RoundCap,
+            Qt.PenJoinStyle.RoundJoin,
+        )
+    )
+    inset = size * .25
+    painter.drawLine(QPointF(inset, inset), QPointF(size - inset, size - inset))
+    painter.drawLine(QPointF(size - inset, inset), QPointF(inset, size - inset))
+    painter.end()
+    return QIcon(pixmap)
+
+
 def make_icon(kind: IconKind, size: int = 40, accent: str | None = None) -> QIcon:
+    if kind in {IconKind.DELETE, IconKind.SUPPRESS}:
+        return _x_icon(size, accent)
     modern = make_modern_icon(kind, size, accent)
     if modern is not None:
         return modern
-    if kind == IconKind.DELETE:
-        app = QApplication.instance()
-        style = app.style() if app is not None else QApplication.style()
-        return style.standardIcon(QStyle.StandardPixmap.SP_DialogCloseButton)
     return make_legacy_icon(_ICON_MAP[kind], size, accent)
