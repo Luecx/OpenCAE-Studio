@@ -28,6 +28,7 @@ class EdgeSeedDialog(QDialog):
         pick_callback=None,
         seed=None,
         parent=None,
+        units=None,
     ):
         super().__init__(parent)
         self.setWindowTitle("Seed Edges")
@@ -64,6 +65,7 @@ class EdgeSeedDialog(QDialog):
         self.size = QDoubleSpinBox()
         self.size.setRange(1e-12, 1e30)
         self.size.setDecimals(9)
+        self.size.setSuffix(units.suffix("length") if units is not None else "")
         self.size.setValue(seed.size if seed else 1.0)
 
         self.divisions = QSpinBox()
