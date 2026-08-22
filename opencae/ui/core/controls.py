@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QDialogButtonBox, QMenu, QPushButton, QToolButton
+from PyQt6.QtWidgets import (
+    QDialogButtonBox,
+    QHBoxLayout,
+    QMenu,
+    QPushButton,
+    QToolButton,
+    QWidget,
+    QWidgetAction,
+)
 
 from .metrics import RIBBON_BUTTON_HEIGHT, RIBBON_BUTTON_WIDTH, RIBBON_ICON_SIZE
 
@@ -51,19 +59,36 @@ def action_button(action: QAction, large: bool = True) -> QToolButton:
     return button
 
 
-def action_menu_button(
-    primary_action: QAction,
+def action_group_button(
+    text: str,
+    icon_action: QAction,
     menu_actions: tuple[QAction, ...],
-    text: str | None = None,
 ) -> QToolButton:
-    """Create a large split ribbon button with a primary click and variants menu."""
-    button = action_button(primary_action)
-    if text:
-        button.setText(_ribbon_text(text))
+    """Create one large ribbon button that expands a row of full-size actions."""
+    button = QToolButton()
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+    button.setIcon(icon_action.icon())
+    button.setIconSize(QSize(RIBBON_ICON_SIZE, RIBBON_ICON_SIZE))
+    button.setFixedSize(RIBBON_BUTTON_WIDTH, RIBBON_BUTTON_HEIGHT)
+    button.setText(_ribbon_text(text))
+    button.setProperty("ribbonButton", True)
 
     menu = QMenu(button)
+    panel = QWidget(menu)
+    row = QHBoxLayout(panel)
+    row.setContentsMargins(6, 6, 6, 6)
+    row.setSpacing(2)
+
     for action in menu_actions:
-        menu.addAction(action)
+        action_widget = action_button(action)
+        action_widget.clicked.connect(menu.close)
+        row.addWidget(action_widget)
+
+    widget_action = QWidgetAction(menu)
+    widget_action.setDefaultWidget(panel)
+    menu.addAction(widget_action)
+
     button.setMenu(menu)
-    button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+    button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
     return button
