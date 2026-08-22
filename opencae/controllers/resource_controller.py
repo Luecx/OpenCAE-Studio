@@ -16,9 +16,10 @@ from opencae.ui.dialogs.section import SectionDialog
 
 
 class ResourceController:
-    def __init__(self, store, parent):
+    def __init__(self, store, parent, units):
         self.store = store
         self.parent = parent
+        self.units = units
 
     def material(self): return self._material_dialog()
     def profile(self, kind=None): return self._profile_dialog(initial_type=kind)
@@ -35,7 +36,7 @@ class ResourceController:
             QMessageBox.information(self.parent, "No material", "Create or select a material first.")
             return
         current = next((item for item in material.behaviors if item.category == category), None)
-        dialog = MaterialPropertyDialog(current, self.parent, category)
+        dialog = MaterialPropertyDialog(current, self.parent, category, self.units)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         behavior = dialog.behavior_value()
@@ -75,7 +76,14 @@ class ResourceController:
 
     def _profile_dialog(self, profile=None, initial_type=None, parent=None):
         project = self.store.project
-        dialog = ProfileDialog(profile, [item.name for item in project.profiles], parent or self.parent, initial_type, next_name("Profile", project.profiles))
+        dialog = ProfileDialog(
+            profile,
+            [item.name for item in project.profiles],
+            parent or self.parent,
+            initial_type,
+            next_name("Profile", project.profiles),
+            self.units,
+        )
         state = {"existing": profile}
 
         def commit():
@@ -105,6 +113,7 @@ class ResourceController:
         dialog = SectionDialog(
             project.materials, project.profiles, create_material, create_profile, section,
             [item.name for item in project.sections], owner, initial_type, next_name("Section", project.sections),
+            self.units,
         )
         state = {"existing": section}
 
