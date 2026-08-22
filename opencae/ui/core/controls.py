@@ -15,6 +15,14 @@ from PyQt6.QtWidgets import (
 from .metrics import RIBBON_BUTTON_HEIGHT, RIBBON_BUTTON_WIDTH, RIBBON_ICON_SIZE
 
 
+_RIBBON_LABELS = {
+    "Node Set": "NodeSet",
+    "Element Set": "ElementSet",
+    "Coordinate System": "CSYS",
+    "Reference Point": "Ref Point",
+}
+
+
 def primary_button(text: str) -> QPushButton:
     button = QPushButton(text)
     button.setObjectName("PrimaryButton")
@@ -42,15 +50,28 @@ def _ribbon_text(text: str) -> str:
     return " ".join(words[:midpoint]) + "\n" + " ".join(words[midpoint:])
 
 
+def _ribbon_label(text: str) -> tuple[str, bool]:
+    """Return a contextual ribbon label and whether it may wrap."""
+    clean = text.replace("…", "").strip()
+    if clean.startswith("New "):
+        return "New", False
+    if clean.startswith("Duplicate "):
+        return "Duplicate", False
+    if clean in _RIBBON_LABELS:
+        return _RIBBON_LABELS[clean], False
+    return clean, True
+
+
 def action_button(action: QAction, large: bool = True) -> QToolButton:
     button = QToolButton()
     button.setDefaultAction(action)
     button.setCursor(Qt.CursorShape.PointingHandCursor)
     if large:
+        label, may_wrap = _ribbon_label(action.text())
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         button.setIconSize(QSize(RIBBON_ICON_SIZE, RIBBON_ICON_SIZE))
         button.setFixedSize(RIBBON_BUTTON_WIDTH, RIBBON_BUTTON_HEIGHT)
-        button.setText(_ribbon_text(action.text()))
+        button.setText(_ribbon_text(label) if may_wrap else label)
         button.setProperty("ribbonButton", True)
     else:
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
