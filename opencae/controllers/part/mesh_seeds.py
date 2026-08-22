@@ -184,9 +184,16 @@ class PartMeshSeeds:
             return
         current = self.ctx.store.project.try_resolve(seed_id) if seed_id else None
         kwargs = {
-            "name": values["name"], "target": target, "method": values["method"],
-            "size": values["size"], "divisions": values["divisions"],
-            "bias": values["bias"], "bias_factor": values["bias_factor"],
+            "name": values["name"],
+            "target": target,
+            "method": values["method"],
+            "size": values["size"],
+            "divisions": values["divisions"],
+            # Edge seeding intentionally exposes only sizing/division control.
+            # Keep the model fields at their neutral values for compatibility
+            # with existing projects and the current meshing backend.
+            "bias": "None",
+            "bias_factor": 1.0,
         }
         replacement = EdgeSeed(id=current.id, **kwargs) if current else EdgeSeed(**kwargs)
         mutation = make_replace_command(self.ctx.store.project, part_id, "mesh.seeds", replacement) if current else make_add_command(self.ctx.store.project, part_id, "mesh.seeds", replacement)
