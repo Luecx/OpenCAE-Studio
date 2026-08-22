@@ -14,7 +14,7 @@ class XYZPicker(QWidget):
     cancel_requested = pyqtSignal()
     changed = pyqtSignal()
 
-    def __init__(self, values=(0.0, 0.0, 0.0), *, allowed=(), value_kind="point", parent=None):
+    def __init__(self, values=(0.0, 0.0, 0.0), *, allowed=(), value_kind="point", suffix="", parent=None):
         super().__init__(parent)
         self.allowed = tuple(allowed)
         self.value_kind = str(value_kind)
@@ -34,6 +34,7 @@ class XYZPicker(QWidget):
             editor.setDecimals(8)
             editor.setValue(float(value))
             editor.setPrefix(f"{axis}: ")
+            editor.setSuffix(str(suffix or ""))
             editor.setMinimumWidth(78)
             editor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             editor.valueChanged.connect(lambda _value: self.changed.emit())
