@@ -8,7 +8,7 @@ class PartPage(ResponsiveRibbonPage):
     """Part ribbon with width-driven group collapsing."""
 
     def __init__(self, actions, store, parent=None):
-        self._part_selector = PartSelector(store)
+        part_selector = PartSelector(store)
         specs = (
             RibbonGroupSpec(
                 "GEOMETRY",
@@ -56,10 +56,10 @@ class PartPage(ResponsiveRibbonPage):
         super().__init__(
             specs,
             actions,
-            leading_widgets=(self._part_selector,),
+            leading_widgets=(part_selector,),
             parent=parent,
         )
-        self.part_selector = self._part_selector
+        self.part_selector = part_selector
 
 
 def create(actions, store):
