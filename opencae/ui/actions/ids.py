@@ -9,7 +9,7 @@ class A:
     UNDO = "edit.undo"; REDO = "edit.redo"
     EDIT_SELECTED = "edit.selected"; DELETE_SELECTED = "delete.selected"
     FIT_VIEW = "view.fit"; TOGGLE_MESH = "view.toggle_mesh"
-    SHOW_PROJECT = "view.show_project"; SHOW_PROPERTIES = "view.show_properties"
+    SHOW_PROJECT = "view.show_project"
     SHOW_OUTPUT = "view.show_output"; RESET_LAYOUT = "window.reset_layout"
     MATERIAL = "resource.material"; SET_ELASTICITY = "material.elasticity"
     SET_DENSITY = "material.density"; SET_PLASTICITY = "material.plasticity"
