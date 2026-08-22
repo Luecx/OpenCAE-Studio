@@ -15,7 +15,7 @@ class ReferencePointDialog(QDialog):
     pick_requested = pyqtSignal(object, object, object)
     cancel_pick_requested = pyqtSignal()
 
-    def __init__(self, default_name="RP-1", existing_names=(), parent=None):
+    def __init__(self, default_name="RP-1", existing_names=(), parent=None, units=None):
         super().__init__(parent)
         self.existing_names = tuple(existing_names)
         self.setWindowTitle("Create Reference Point")
@@ -36,7 +36,11 @@ class ReferencePointDialog(QDialog):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.name = QLineEdit(default_name)
-        self.position = XYZPicker(allowed=_POINT_KINDS, value_kind="point")
+        self.position = XYZPicker(
+            allowed=_POINT_KINDS,
+            value_kind="point",
+            suffix=units.suffix("length") if units is not None else "",
+        )
         self.position.pick_requested.connect(self.pick_requested)
         self.position.cancel_requested.connect(self.cancel_pick_requested)
         self.position.changed.connect(self._preview)
