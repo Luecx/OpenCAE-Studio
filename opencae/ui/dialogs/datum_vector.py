@@ -19,7 +19,7 @@ class DatumVectorDialog(DatumDialogBase):
         "Coordinate-System Axis",
     )
 
-    def __init__(self, default_name, existing_names=(), coordinate_systems=(), parent=None):
+    def __init__(self, default_name, existing_names=(), coordinate_systems=(), parent=None, units=None):
         super().__init__(
             "Create Datum Vector",
             self.METHODS,
@@ -28,7 +28,11 @@ class DatumVectorDialog(DatumDialogBase):
             parent,
         )
 
-        self.origin = XYZPicker(allowed=_POINT_KINDS, value_kind="point")
+        self.origin = XYZPicker(
+            allowed=_POINT_KINDS,
+            value_kind="point",
+            suffix=units.suffix("length") if units is not None else "",
+        )
         self.direction = XYZPicker(
             (1.0, 0.0, 0.0),
             allowed=_DIRECTION_KINDS,
