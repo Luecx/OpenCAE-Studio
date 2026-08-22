@@ -98,7 +98,11 @@ class RegionSelectionWidget(QWidget):
 
         self.set_named_region_controls_visible(show_named_regions)
         self._refresh()
-        self.destroyed.connect(lambda *_: self.finish_selection())
+        # Do not call instance methods from QObject.destroyed.  At that point
+        # the C++ QWidget has already been destroyed and emitting Qt signals
+        # from finish_selection() raises "wrapped C/C++ object ... deleted".
+        # Dialog owners end active selection sessions from their finished
+        # signal, before their child widgets are destroyed.
 
     def definition(self) -> RegionDefinition:
         return self._definition
