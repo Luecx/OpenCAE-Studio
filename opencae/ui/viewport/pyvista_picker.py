@@ -12,7 +12,7 @@ from opencae.model.selection import SelectableKind, SelectionOperation, Viewport
 
 _POINT_PICK_TOLERANCE = 0.012
 _EDGE_PICK_TOLERANCE = 0.018
-_EDGE_SNAP_PIXELS = 11.0
+_EDGE_SNAP_PIXELS = 13.0
 _VERTEX_SNAP_PIXELS = 7.0
 _VERTEX_PRIORITY_PIXELS = 4.5
 _DEPTH_EPSILON = 0.004
