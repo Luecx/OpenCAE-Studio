@@ -61,6 +61,6 @@ def editor_value(widget: QWidget):
     if isinstance(widget, QSpinBox): return widget.value()
     if isinstance(widget, QDoubleSpinBox): return widget.value()
     if isinstance(widget, QCheckBox): return widget.isChecked()
-    if isinstance(widget, FilePathEditor): return widget.text().strip()
+    if isinstance(widget, FilePathEditor): return widget.text()
     if isinstance(widget, QLineEdit): return widget.text().strip()
     return None
