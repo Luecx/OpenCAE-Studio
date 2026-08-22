@@ -29,10 +29,10 @@ def create(actions, store):
             ),
             (
                 A.NEW_PART,
-                (A.DUPLICATE_PART, A.SUPPRESS_FEATURE),
                 A.IMPORT_GEOMETRY,
-                (A.IMPORT_MESH, A.REBUILD_GEOMETRY),
                 A.PARTITION,
+                (A.DUPLICATE_PART, A.SUPPRESS_FEATURE),
+                (A.IMPORT_MESH, A.REBUILD_GEOMETRY),
             ),
         ),
         RibbonGroupSpec("DISPLAY", (A.VISIBILITY,)),
@@ -40,8 +40,8 @@ def create(actions, store):
             "DATUM",
             (A.DATUM_POINT, A.DATUM_VECTOR, A.DATUM_PLANE),
             (
-                (A.DATUM_POINT, A.DATUM_VECTOR),
                 A.DATUM_PLANE,
+                (A.DATUM_POINT, A.DATUM_VECTOR),
             ),
         ),
         RibbonGroupSpec(
@@ -55,10 +55,10 @@ def create(actions, store):
                 A.CLEAR_MESH,
             ),
             (
-                (A.DEFAULT_SEED, A.EDGE_SEED),
-                (A.ELEMENT_CONTROLS, A.CLEAR_MESH),
                 A.MESH_SETTINGS,
                 A.GENERATE_MESH,
+                (A.DEFAULT_SEED, A.EDGE_SEED),
+                (A.ELEMENT_CONTROLS, A.CLEAR_MESH),
             ),
         ),
         RibbonGroupSpec(

@@ -6,8 +6,7 @@ from PyQt6.QtWidgets import QDialogButtonBox, QPushButton, QToolButton
 
 from .metrics import RIBBON_BUTTON_HEIGHT, RIBBON_BUTTON_WIDTH, RIBBON_ICON_SIZE
 
-RIBBON_COMPACT_BUTTON_WIDTH = 112
-RIBBON_COMPACT_BUTTON_HEIGHT = 37
+RIBBON_COMPACT_BUTTON_SIZE = 37
 RIBBON_COMPACT_ICON_SIZE = 20
 
 
@@ -49,14 +48,14 @@ def action_button(action: QAction, large: bool = True) -> QToolButton:
         button.setFixedSize(RIBBON_BUTTON_WIDTH, RIBBON_BUTTON_HEIGHT)
         button.setText(_ribbon_text(action.text()))
     else:
-        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         button.setIconSize(
             QSize(RIBBON_COMPACT_ICON_SIZE, RIBBON_COMPACT_ICON_SIZE)
         )
         button.setFixedSize(
-            RIBBON_COMPACT_BUTTON_WIDTH,
-            RIBBON_COMPACT_BUTTON_HEIGHT,
+            RIBBON_COMPACT_BUTTON_SIZE,
+            RIBBON_COMPACT_BUTTON_SIZE,
         )
-        button.setText(action.text().replace("…", ""))
+        button.setToolTip(action.text().replace("…", ""))
         button.setProperty("compactRibbonButton", True)
     return button
