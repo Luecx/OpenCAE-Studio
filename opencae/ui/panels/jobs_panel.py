@@ -1,23 +1,20 @@
-"""Synchronized job selection, actions and monospace output panel."""
+"""Synchronized job selection and full-width solver output panel."""
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QHBoxLayout,
     QHeaderView,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from opencae.ui.actions.ids import A
 from opencae.ui.core.widgets import MonospaceOutputView
 
 
 class JobsPanel(QWidget):
-    """Display all jobs and exactly the output of the selected job."""
+    """Display all jobs above exactly the output of the selected job."""
 
     def __init__(self, store, jobs, actions, parent=None):
         super().__init__(parent)
@@ -28,32 +25,24 @@ class JobsPanel(QWidget):
         root.setContentsMargins(4, 4, 4, 4)
         root.setSpacing(4)
 
-        toolbar = QHBoxLayout()
-        toolbar.setContentsMargins(0, 0, 0, 0)
-        for action_id in (A.JOB_STOP, A.JOB_MONITOR, A.JOB_OPEN_RESULTS):
-            button = QToolButton()
-            button.setDefaultAction(actions.get(action_id))
-            toolbar.addWidget(button)
-        toolbar.addStretch(1)
-        root.addLayout(toolbar)
-
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Vertical)
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
             ["Job", "Source", "Kind", "Solver", "Status"]
         )
         self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents
+            QHeaderView.ResizeMode.Stretch
         )
-        self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.itemSelectionChanged.connect(self._selection_changed)
+
         self.output = MonospaceOutputView()
         splitter.addWidget(self.table)
         splitter.addWidget(self.output)
         splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 3)
+        splitter.setStretchFactor(1, 2)
+        splitter.setSizes([90, 140])
         root.addWidget(splitter, 1)
 
         store.changed.connect(self.refresh)
