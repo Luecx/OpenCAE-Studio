@@ -1,41 +1,17 @@
 from __future__ import annotations
 
-from PyQt6.QtWidgets import (
-    QAbstractItemView,
-    QDoubleSpinBox,
-    QFormLayout,
-    QHeaderView,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QMessageBox,
-    QTableWidget,
-    QTableWidgetItem,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QLineEdit, QMessageBox, QTableWidgetItem, QWidget
 
-from opencae.model.entities.profiles.calculations import (
-    profile_parameters,
-    profile_properties,
-)
+from opencae.model.entities.profiles.calculations import profile_parameters, profile_properties
 from opencae.ui.core.apply_dialog import ApplyDialog
-from opencae.ui.core.controls import dialog_buttons
 from opencae.ui.core.widgets import ChevronComboBox
+from opencae.ui.templates import dialog_buttons, form_layout, read_only_table, scaffold_dialog
 from .profile_graph_editor import GraphProfileEditor
 
 
 PROFILE_TYPES = (
-    "Rectangle",
-    "Box",
-    "Pipe",
-    "Circle",
-    "I-profile",
-    "H-profile",
-    "C-profile",
-    "U-profile",
-    "General",
-    "Graph profile",
+    "Rectangle", "Box", "Pipe", "Circle", "I-profile", "H-profile",
+    "C-profile", "U-profile", "General", "Graph profile",
 )
 
 _PROPERTY_QUANTITIES = {
@@ -50,69 +26,37 @@ _PROPERTY_QUANTITIES = {
 
 
 class ProfileDialog(ApplyDialog):
-    def __init__(
-        self,
-        profile=None,
-        existing_names=(),
-        parent=None,
-        initial_type=None,
-        default_name="Profile-1",
-        units=None,
-    ):
+    def __init__(self, profile=None, existing_names=(), parent=None, initial_type=None, default_name="Profile-1", units=None):
         super().__init__(parent)
         self.profile = profile
         self.units = units
         self.existing_names = {name.casefold() for name in existing_names}
         self._editors = {}
 
-        self.setWindowTitle("Edit Profile" if profile else "Create Profile")
-        self.setMinimumSize(880, 520)
+        title = "Edit Profile" if profile else "Create Profile"
+        scaffold = scaffold_dialog(self, title, width=880)
+        self.setMinimumHeight(520)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(18, 16, 18, 14)
-        root.setSpacing(12)
-
-        title = QLabel(self.windowTitle())
-        title.setObjectName("PanelTitle")
-        root.addWidget(title)
-
-        top = QFormLayout()
         self.name = QLineEdit(profile.name if profile else default_name)
         self.kind = ChevronComboBox()
         self.kind.addItems(PROFILE_TYPES)
-        self.kind.setCurrentText(
-            profile.profile_type if profile else (initial_type or "Box")
-        )
-        top.addRow("Name", self.name)
-        top.addRow("Profile type", self.kind)
-        root.addLayout(top)
+        self.kind.setCurrentText(profile.profile_type if profile else (initial_type or "Box"))
+        scaffold.form.addRow("Name", self.name)
+        scaffold.form.addRow("Profile type", self.kind)
 
         body = QHBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(16)
-
         self.form_host = QWidget()
-        self.form = QFormLayout(self.form_host)
+        self.form = form_layout(self.form_host)
         body.addWidget(self.form_host, 1)
-
-        self.properties = QTableWidget(0, 3)
-        self.properties.setHorizontalHeaderLabels(("Property", "Value", "Unit"))
-        self.properties.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.properties.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        self.properties.verticalHeader().hide()
-        header = self.properties.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.properties = read_only_table(("Property", "Value", "Unit"), stretch_columns=(0, 1))
         body.addWidget(self.properties, 1)
-
-        root.addLayout(body, 1)
+        scaffold.root.addLayout(body, 1)
 
         buttons = dialog_buttons(include_apply=True)
         self.bind_buttons(buttons, True)
-        root.addWidget(buttons)
-
+        scaffold.root.addWidget(buttons)
         self.kind.currentTextChanged.connect(self._rebuild)
         self._rebuild()
 
@@ -123,31 +67,23 @@ class ProfileDialog(ApplyDialog):
         while self.form.rowCount():
             self.form.removeRow(0)
         self._editors = {}
-        current = (
-            self.profile.dimensions
-            if self.profile and self.kind.currentText() == self.profile.profile_type
-            else {}
-        )
-
+        current = self.profile.dimensions if self.profile and self.kind.currentText() == self.profile.profile_type else {}
         if self.kind.currentText() == "Graph profile":
-            editor = GraphProfileEditor(
-                current.get("nodes", "1,-20,0\n2,20,0"),
-                current.get("segments", "1,2,2.0"),
-            )
+            editor = GraphProfileEditor(current.get("nodes", "1,-20,0\n2,20,0"), current.get("segments", "1,2,2.0"))
             editor.connect_changed(self._update_properties)
             self._editors["graph"] = editor
             self.form.addRow(editor)
         else:
-            length_suffix = self.units.suffix("length") if self.units is not None else ""
-            for key, label, default in profile_parameters(self.kind.currentText()):
+            suffix = self.units.suffix("length") if self.units is not None else ""
+            for key, text, default in profile_parameters(self.kind.currentText()):
                 editor = QDoubleSpinBox()
                 editor.setRange(-1e30, 1e30)
                 editor.setDecimals(6)
-                editor.setSuffix(length_suffix)
+                editor.setSuffix(suffix)
                 editor.setValue(float(current.get(key, default)))
                 editor.valueChanged.connect(self._update_properties)
                 self._editors[key] = editor
-                self.form.addRow(label, editor)
+                self.form.addRow(text, editor)
         self._update_properties()
 
     def _dimensions(self):
@@ -170,23 +106,13 @@ class ProfileDialog(ApplyDialog):
         if not name:
             QMessageBox.warning(self, "Invalid profile", "Enter a profile name.")
             return False
-        if name.casefold() in self.existing_names and (
-            self.profile is None or name.casefold() != self.profile.name.casefold()
-        ):
-            QMessageBox.warning(
-                self,
-                "Duplicate name",
-                f"A profile named '{name}' already exists.",
-            )
+        if name.casefold() in self.existing_names and (self.profile is None or name.casefold() != self.profile.name.casefold()):
+            QMessageBox.warning(self, "Duplicate name", f"A profile named '{name}' already exists.")
             return False
         return True
 
     def values(self):
-        return {
-            "name": self.name.text().strip(),
-            "profile_type": self.kind.currentText(),
-            "dimensions": self._dimensions(),
-        }
+        return {"name": self.name.text().strip(), "profile_type": self.kind.currentText(), "dimensions": self._dimensions()}
 
     def prepare_new(self, default_name, existing_names):
         self.profile = None
