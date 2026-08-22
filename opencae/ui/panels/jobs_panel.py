@@ -3,7 +3,7 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QHeaderView,
-    QSplitter,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -14,6 +14,7 @@ from opencae.ui.core.widgets import MonospaceOutputView
 
 
 _COLUMN_WEIGHTS = (0.17, 0.23, 0.11, 0.15, 0.34)
+_MAX_VISIBLE_JOB_ROWS = 3
 
 
 class JobsPanel(QWidget):
@@ -28,9 +29,6 @@ class JobsPanel(QWidget):
         root.setContentsMargins(4, 4, 4, 4)
         root.setSpacing(4)
 
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.setChildrenCollapsible(False)
-
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
             ["Job", "Source", "Kind", "Solver", "Status"]
@@ -39,27 +37,19 @@ class JobsPanel(QWidget):
         header.setMinimumSectionSize(60)
         header.setStretchLastSection(False)
         for column in range(5):
-            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
         self.table.verticalHeader().hide()
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.table.itemSelectionChanged.connect(self._selection_changed)
-
-        minimum_table_height = (
-            header.sizeHint().height()
-            + self.table.verticalHeader().defaultSectionSize()
-            + 8
+        self.table.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
         )
-        self.table.setMinimumHeight(minimum_table_height)
+        self.table.itemSelectionChanged.connect(self._selection_changed)
+        root.addWidget(self.table)
 
         self.output = MonospaceOutputView()
-        splitter.addWidget(self.table)
-        splitter.addWidget(self.output)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
-        splitter.setCollapsible(0, False)
-        splitter.setSizes([95, 140])
-        root.addWidget(splitter, 1)
+        root.addWidget(self.output, 1)
 
         store.changed.connect(self.refresh)
         jobs.selection_changed.connect(self._manager_selection_changed)
@@ -81,6 +71,15 @@ class JobsPanel(QWidget):
             self.table.setColumnWidth(column, width)
             used += width
         self.table.setColumnWidth(4, max(60, available - used))
+
+    def _update_table_height(self):
+        header_height = self.table.horizontalHeader().sizeHint().height()
+        row_height = self.table.verticalHeader().defaultSectionSize()
+        visible_rows = min(max(self.table.rowCount(), 1), _MAX_VISIBLE_JOB_ROWS)
+        frame = self.table.frameWidth() * 2
+        self.table.setFixedHeight(
+            header_height + visible_rows * row_height + frame + 2
+        )
 
     def refresh(self, *_):
         selected = self.jobs.selected_job_id
@@ -108,6 +107,8 @@ class JobsPanel(QWidget):
         if selected_row >= 0:
             self.table.selectRow(selected_row)
         self.table.blockSignals(False)
+        self._update_table_height()
+        self._resize_columns()
         if selected_row >= 0:
             job_id = str(
                 self.table.item(selected_row, 0).data(Qt.ItemDataRole.UserRole)
