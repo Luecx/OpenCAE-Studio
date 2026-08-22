@@ -1,4 +1,4 @@
-"""Provides the standard modeless form shell for named create/edit dialogs."""
+"""Provides the standard form shell for named create/edit dialogs."""
 
 from __future__ import annotations
 
@@ -31,7 +31,6 @@ class NamedEntityDialog(ApplyDialog):
         self._current_name = str(getattr(value, "name", ""))
         self.setWindowTitle(title)
         self.setModal(False)
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
         self.setMinimumWidth(int(width))
 

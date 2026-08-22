@@ -1,10 +1,12 @@
-"""Public exports for reusable OpenCAE form and viewport-selection widgets."""
+"""Public exports for reusable OpenCAE form, selector and output widgets."""
 
 from .automatic_manual_value_editor import AutomaticManualValueEditor
 from .chevron_combo import ChevronComboBox
 from .compact_region_selector import CompactRegionSelector, ExtendedRegionDialog
 from .components import ComponentsWidget
+from .entity_selector_bar import EntitySelectorBar
 from .matrix_editor import MatrixEditor
+from .monospace_output_view import MonospaceOutputView
 from .pick_reference import PickReference
 from .point_selection import PointSelectionWidget
 from .reference_selector import ReferenceSelector
@@ -16,8 +18,10 @@ __all__ = [
     "ChevronComboBox",
     "CompactRegionSelector",
     "ComponentsWidget",
+    "EntitySelectorBar",
     "ExtendedRegionDialog",
     "MatrixEditor",
+    "MonospaceOutputView",
     "PickReference",
     "PointSelectionWidget",
     "ReferenceSelector",

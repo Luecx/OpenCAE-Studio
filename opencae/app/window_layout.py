@@ -1,3 +1,5 @@
+"""Builds the main window ribbon, viewport, docks and status widgets."""
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QSizePolicy, QToolBar
 
@@ -15,7 +17,15 @@ def build_ribbon(window):
     window.ribbon_host.setMovable(False)
     window.ribbon_host.setFloatable(False)
     window.ribbon_host.setAllowedAreas(Qt.ToolBarArea.TopToolBarArea)
-    window.ribbon = Ribbon(window.actions, window.context.store, window.context.settings, window.context.solvers, window.refresh_action_states)
+    window.ribbon = Ribbon(
+        window.actions,
+        window.context.store,
+        window.context.settings,
+        window.context.solvers,
+        window.refresh_action_states,
+        controllers=window.controllers,
+        parent=window,
+    )
     window.ribbon.setSizePolicy(
         QSizePolicy.Policy.Expanding,
         QSizePolicy.Policy.Fixed,
@@ -49,8 +59,12 @@ def build_docks(window):
         parent=window,
     )
     window.properties_dock = PropertiesDock(store, window)
-    window.output_dock = OutputDock(store, window)
-    window.output_dock.tabs.jobs.job_requested.connect(window.controllers.solver.show_job)
+    window.output_dock = OutputDock(
+        store,
+        window.controllers.jobs,
+        window.actions,
+        window,
+    )
     window.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, window.project_dock)
     window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, window.properties_dock)
     window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, window.output_dock)
@@ -60,8 +74,14 @@ def build_docks(window):
     window.project_dock.panel.browser_requested.connect(window.ribbon.set_browser)
     window.ribbon.result_requested.connect(window.viewport.show_solution)
     if window.ribbon.results_page is not None:
-        window.viewport.section_changed.connect(window.ribbon.results_page.set_section_state)
-    window.ribbon.stage_changed.connect(lambda stage: window.project_dock.panel.set_browser("solution" if stage == "RESULTS" else "project"))
+        window.viewport.section_changed.connect(
+            window.ribbon.results_page.set_section_state
+        )
+    window.ribbon.stage_changed.connect(
+        lambda stage: window.project_dock.panel.set_browser(
+            "solution" if stage == "RESULTS" else "project"
+        )
+    )
     window.ribbon.stage_changed.connect(window.project_dock.tree.set_stage_focus)
     window.ribbon.stage_changed.connect(window.viewport.set_stage)
     window.resizeDocks(

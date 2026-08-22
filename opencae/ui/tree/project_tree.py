@@ -1,6 +1,15 @@
+"""Project definition tree with stage focus and centralized context actions."""
+
 import re
 
-from PyQt6.QtCore import QModelIndex, QSignalBlocker, QSortFilterProxyModel, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import (
+    QModelIndex,
+    QSignalBlocker,
+    QSortFilterProxyModel,
+    QSize,
+    Qt,
+    pyqtSignal,
+)
 from PyQt6.QtGui import QBrush, QColor, QFont
 from PyQt6.QtWidgets import QTreeView
 
@@ -12,9 +21,17 @@ from .tree_builder import build_model
 from .tree_roles import ENTITY_ROLE, KIND_ROLE, PART_ROLE
 
 _FOCUS = {
-    "MATERIALS": {"materials"}, "SECTIONS": {"sections"}, "PROFILES": {"profiles"}, "FIELDS": {"fields"},
-    "PART": {"parts"}, "ASSEMBLY": {"assembly"}, "CONSTRAINTS": {"constraints"},
-    "BOUNDARY CONDITIONS": {"boundary_conditions"}, "ANALYSIS": {"steps"},
+    "MATERIALS": {"materials"},
+    "SECTIONS": {"sections"},
+    "PROFILES": {"profiles"},
+    "FIELDS": {"fields"},
+    "PART": {"parts"},
+    "ASSEMBLY": {"assembly"},
+    "CONSTRAINTS": {"constraints"},
+    "BOUNDARY CONDITIONS": {"boundary_conditions"},
+    "STEPS": {"steps"},
+    "ANALYSIS": {"analyses"},
+    "STUDIES": {"studies"},
 }
 _HIDDEN_COLOR = "#59616b"
 
@@ -59,9 +76,6 @@ class ProjectTree(QTreeView):
     def rebuild(self, *_):
         expanded = self._expanded_paths()
         current = self._index_path(self.currentIndex())
-        # A proxy source-model reset otherwise emits a transient empty tree
-        # selection. That used to clear the selected model entity and, with it,
-        # persistent coupling/region highlighting while the tree was rebuilding.
         blocker = QSignalBlocker(self.selectionModel())
         try:
             self.proxy.setSourceModel(build_model(self.store.project))
@@ -106,10 +120,15 @@ class ProjectTree(QTreeView):
             entity_id = str(getattr(entity, "id", "") or "")
             kind = str(current.data(KIND_ROLE) or "")
             part_id = str(current.data(PART_ROLE) or "")
-            if entity_id:
-                token = (kind, entity_id)
-            else:
-                token = (kind, part_id, _stable_label(current.data(Qt.ItemDataRole.DisplayRole)))
+            token = (
+                (kind, entity_id)
+                if entity_id
+                else (
+                    kind,
+                    part_id,
+                    _stable_label(current.data(Qt.ItemDataRole.DisplayRole)),
+                )
+            )
             values.append(token)
             current = current.parent()
         return tuple(reversed(values))
@@ -128,8 +147,14 @@ class ProjectTree(QTreeView):
                 part_id = str(candidate.data(PART_ROLE) or "")
                 candidate_token = (
                     (kind, entity_id)
-                    if entity_id else
-                    (kind, part_id, _stable_label(candidate.data(Qt.ItemDataRole.DisplayRole)))
+                    if entity_id
+                    else (
+                        kind,
+                        part_id,
+                        _stable_label(
+                            candidate.data(Qt.ItemDataRole.DisplayRole)
+                        ),
+                    )
                 )
                 if candidate_token == token:
                     match = candidate
@@ -189,7 +214,13 @@ class ProjectTree(QTreeView):
         font.setBold(bool(selected and not hidden))
         font.setItalic(hidden)
         node.setFont(font)
-        color = _HIDDEN_COLOR if hidden else PALETTE["text"] if selected else PALETTE["muted"]
+        color = (
+            _HIDDEN_COLOR
+            if hidden
+            else PALETTE["text"]
+            if selected
+            else PALETTE["muted"]
+        )
         node.setForeground(QBrush(QColor(color)))
 
     def _visibility_changed(self, *_):
@@ -243,7 +274,9 @@ class ProjectTree(QTreeView):
         if part_id:
             self.store.set_active_part(part_id)
         self.store.select(entity)
-        stage = stage_for_kind(index.data(KIND_ROLE) if index.isValid() else None)
+        stage = stage_for_kind(
+            index.data(KIND_ROLE) if index.isValid() else None
+        )
         if stage:
             self.stage_requested.emit(stage)
 
@@ -251,6 +284,7 @@ class ProjectTree(QTreeView):
         if index.data(ENTITY_ROLE) is None:
             return
         from opencae.ui.actions.ids import A
+
         self.actions.get(A.EDIT_SELECTED).trigger()
 
     def _menu(self, pos):

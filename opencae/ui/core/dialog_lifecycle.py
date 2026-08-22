@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QDialog, QWidget
 
 
 def show_modeless_dialog(dialog: QDialog) -> None:
     """Show a top-level dialog and bind deterministic viewport cleanup."""
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
     _bind_viewport_cleanup(dialog)
     dialog.show()
     activate_dialog(dialog)

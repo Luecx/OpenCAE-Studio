@@ -34,16 +34,16 @@ def render_topology_deck(project, optimization, mesh_index, density: np.ndarray)
     project.ensure_references(strict=True)
     analysis = project.try_resolve(optimization.analysis_ref)
     if analysis is None:
-        raise ValueError("Topology optimization references a missing analysis")
-    steps = tuple(getattr(analysis, "steps", ()) or ())
+        raise ValueError("Topology Optimization Study references a missing Analysis")
+    steps = analysis.resolved_steps(project)
     if len(steps) != 1:
         raise ValueError(
-            "Topology optimization currently requires exactly one analysis step"
+            "Topology Optimization currently requires exactly one Analysis Step"
         )
     step = steps[0]
     if step.step_type != "Linear Static":
         raise ValueError(
-            "Topology optimization currently requires a Linear Static analysis"
+            "Topology Optimization currently requires a Linear Static Analysis"
         )
 
     values = np.asarray(density, dtype=float).ravel()

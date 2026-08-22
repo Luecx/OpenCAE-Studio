@@ -1,3 +1,5 @@
+"""Declares shared Step and Analysis actions."""
+
 from opencae.ui.actions.ids import A
 from opencae.ui.actions.spec import ActionSpec
 from opencae.ui.core.icon_factory import IconKind as I
@@ -12,10 +14,11 @@ def specs(c):
         ActionSpec(A.STEP_TRANSIENT, "Transient", I.STEP_TRANSIENT, lambda: c.analysis.create_step("Transient")),
         ActionSpec(A.REORDER_STEPS, "Reorder", I.REORDER, c.analysis.reorder_steps),
         ActionSpec(A.STEP_MATRIX, "Collectors", I.MATRIX, c.analysis.manage_collectors),
+        ActionSpec(A.ANALYSIS_NEW, "New Analysis", I.STEP_LINEAR, c.analysis.new_analysis),
+        ActionSpec(A.ANALYSIS_EDIT, "Edit Analysis", I.EDIT, c.analysis.edit_active_analysis),
         ActionSpec(A.SOLVER_SETTINGS, "Solver Settings", I.SETTINGS, c.analysis.settings_dialog),
-        ActionSpec(A.VALIDATE, "Validate", I.VALIDATE, c.solver.validate, "F7"),
+        ActionSpec(A.VALIDATE, "Validate", I.VALIDATE, c.analysis.validate_active, "F7"),
         ActionSpec(A.PREVIEW_DECK, "Preview Deck", I.DECK, c.solver.preview),
         ActionSpec(A.WRITE_DECK, "Write Deck", I.DECK, c.solver.write),
-        ActionSpec(A.RUN, "Run", I.RUN, c.solver.run, "F5"),
-        ActionSpec(A.RESULTS, "Open Results", I.RESULTS, c.solver.result_placeholder),
+        ActionSpec(A.ANALYSIS_RUN, "Run Analysis", I.RUN, c.analysis.run_active, "F5"),
     )

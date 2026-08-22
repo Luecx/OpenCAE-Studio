@@ -1,4 +1,4 @@
-"""Validates topology definitions, regions, controls, filters and symmetries."""
+"""Validates topology Study definitions, regions, controls and symmetries."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def validate_topology_optimization(
     *,
     build_operators=False,
 ):
-    """Return validation errors and optionally the immutable run initialization data."""
+    """Return errors and optionally immutable run initialization data."""
 
     errors: list[str] = []
     index = None
@@ -40,12 +40,13 @@ def validate_topology_optimization(
 
     analysis = project.try_resolve(optimization.analysis_ref)
     if analysis is None:
-        errors.append("Select a Linear Static analysis")
+        errors.append("Select a Linear Static Analysis")
     else:
-        steps = tuple(getattr(analysis, "steps", ()) or ())
+        steps = analysis.resolved_steps(project)
         if len(steps) != 1 or steps[0].step_type != "Linear Static":
             errors.append(
-                "Topology optimization requires exactly one Linear Static step"
+                "Topology Optimization requires an Analysis referencing exactly "
+                "one Linear Static Step"
             )
 
     for label, definition in (
@@ -91,11 +92,11 @@ def validate_topology_optimization(
         errors.append("Create exactly one optimization objective")
     if len(optimization.filters) != 1:
         errors.append(
-            "Topology optimization requires exactly one filter definition"
+            "Topology Optimization requires exactly one filter definition"
         )
     if len(optimization.controls) != 1:
         errors.append(
-            "Topology optimization requires exactly one controls definition"
+            "Topology Optimization requires exactly one controls definition"
         )
 
     objective = optimization.objective
@@ -105,11 +106,11 @@ def validate_topology_optimization(
         objective_response = project.try_resolve(objective.response_ref)
         if objective_response not in optimization.responses:
             errors.append(
-                "The objective references a response outside this optimization"
+                "The objective references a response outside this Study"
             )
         elif objective_response.response_type != ResponseType.STIFFNESS_ENERGY:
             errors.append(
-                "The current OC optimizer requires a Stiffness Energy objective"
+                "The current OC optimizer requires a Compliance objective"
             )
         else:
             try:
@@ -120,8 +121,8 @@ def validate_topology_optimization(
                 masks[objective_response.id] = objective_mask
                 if not np.all(objective_mask):
                     errors.append(
-                        "Stiffness Energy currently requires the complete "
-                        "exported model region"
+                        "Compliance currently requires the complete exported "
+                        "model region"
                     )
             except Exception as exc:
                 errors.append(f"Objective response: {exc}")
@@ -131,20 +132,20 @@ def validate_topology_optimization(
     ]
     if len(active_constraints) != 1:
         errors.append(
-            "The OC optimizer currently requires exactly one active "
-            "resource constraint"
+            "The OC optimizer currently requires exactly one active resource "
+            "constraint"
         )
     else:
         constraint = active_constraints[0]
         response = project.try_resolve(constraint.response_ref)
         if response not in optimization.responses:
             errors.append(
-                "The active constraint references a response outside this optimization"
+                "The active constraint references a response outside this Study"
             )
         elif response.response_type not in _RESOURCE_TYPES:
             errors.append(
-                "The active constraint must use Volume, Volume Fraction, "
-                "Mass or Mass Fraction"
+                "The active constraint must use Volume, Volume Fraction, Mass "
+                "or Mass Fraction"
             )
         else:
             try:
@@ -165,8 +166,8 @@ def validate_topology_optimization(
                 )
                 if np.any(selected & invalid_density):
                     errors.append(
-                        "Mass responses require positive material density "
-                        "on every selected element"
+                        "Mass responses require positive material density on "
+                        "every selected element"
                     )
         if constraint.operator != ConstraintOperator.LESS_EQUAL:
             errors.append(
@@ -198,16 +199,16 @@ def validate_topology_optimization(
         if symmetry.symmetry_type == SymmetryType.PLANAR:
             if kind not in {"face", "datum_plane"}:
                 errors.append(
-                    f"{symmetry.name}: planar symmetry requires a face "
-                    "or Datum Plane"
+                    f"{symmetry.name}: planar symmetry requires a face or "
+                    "Datum Plane"
                 )
             else:
                 _validate_planar_reference(symmetry, errors)
         if symmetry.symmetry_type == SymmetryType.ROTATIONAL:
             if kind not in {"edge", "datum_vector"}:
                 errors.append(
-                    f"{symmetry.name}: rotational symmetry requires an edge "
-                    "or Datum Vector"
+                    f"{symmetry.name}: rotational symmetry requires an edge or "
+                    "Datum Vector"
                 )
             else:
                 _validate_axis_reference(symmetry, errors)

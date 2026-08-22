@@ -1,4 +1,4 @@
-"""Coordinates creation, editing, validation and picking for topology setup entities."""
+"""Coordinates topology Study creation, editing, validation and picking."""
 
 from __future__ import annotations
 
@@ -36,11 +36,14 @@ from opencae.ui.dialogs.optimization import (
 
 
 class OptimizationSetupMixin:
-    """Provides topology setup actions shared by the optimization controller."""
+    """Provide topology setup actions shared by the Studies controller."""
 
     def new_topology(self):
         selected = self.store.selection
         current = selected if isinstance(selected, TopologyOptimization) else None
+        if current is None:
+            active = self.store.project.try_resolve(self.active_study_id)
+            current = active if isinstance(active, TopologyOptimization) else None
         project = self.store.project
         options = region_options(
             project,
@@ -48,21 +51,21 @@ class OptimizationSetupMixin:
             include_reference_points=False,
         )
         value = current or TopologyOptimization(
-            name=f"Topology Optimization-{len(project.optimizations) + 1}"
+            name=f"Topology Optimization-{len(project.studies) + 1}"
         )
         dialog = TopologyOptimizationDialog(
             project,
             value,
             pick_callback=self._region_pick,
             options=options,
-            existing_names=[item.name for item in project.optimizations],
+            existing_names=[item.name for item in project.studies],
             parent=self.parent,
         )
         self._show(dialog, lambda: self._save_topology(dialog.result(), current))
 
     def response(self):
-        optimization = self._optimization()
-        if optimization is None:
+        study = self._optimization()
+        if study is None:
             return self._need_optimization()
         selected = self.store.selection
         current = selected if isinstance(selected, OptimizationResponse) else None
@@ -72,145 +75,147 @@ class OptimizationSetupMixin:
             include_reference_points=False,
         )
         value = current or OptimizationResponse(
-            name=f"Response-{len(optimization.responses) + 1}"
+            name=f"Response-{len(study.responses) + 1}"
         )
         dialog = OptimizationResponseDialog(
             self.store.project,
             value,
             pick_callback=self._region_pick,
             options=options,
-            existing_names=[item.name for item in optimization.responses],
+            existing_names=[item.name for item in study.responses],
             parent=self.parent,
         )
+        study_id = study.id
+        current_id = getattr(current, "id", "")
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id,
+                study_id,
                 "responses",
                 dialog.result(),
-                current,
+                current_id,
             ),
         )
 
     def objective(self):
-        optimization = self._optimization()
-        if optimization is None:
+        study = self._optimization()
+        if study is None:
             return self._need_optimization()
-        current = optimization.objective
+        current = study.objective
         dialog = OptimizationObjectiveDialog(
-            optimization,
+            study,
             current,
-            existing_names=[item.name for item in optimization.objectives],
+            existing_names=[item.name for item in study.objectives],
             parent=self.parent,
         )
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id,
+                study.id,
                 "objectives",
                 dialog.result(),
-                current,
+                getattr(current, "id", ""),
             ),
         )
 
     def constraint(self):
-        optimization = self._optimization()
-        if optimization is None:
+        study = self._optimization()
+        if study is None:
             return self._need_optimization()
         selected = self.store.selection
         current = selected if isinstance(selected, OptimizationConstraint) else None
         value = current or OptimizationConstraint(
-            name=f"Constraint-{len(optimization.constraints) + 1}"
+            name=f"Constraint-{len(study.constraints) + 1}"
         )
         dialog = OptimizationConstraintDialog(
-            optimization,
+            study,
             value,
-            existing_names=[item.name for item in optimization.constraints],
+            existing_names=[item.name for item in study.constraints],
             parent=self.parent,
         )
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id,
+                study.id,
                 "constraints",
                 dialog.result(),
-                current,
+                getattr(current, "id", ""),
             ),
         )
 
     def filter_settings(self):
-        optimization = self._optimization()
-        if optimization is None:
+        study = self._optimization()
+        if study is None:
             return self._need_optimization()
-        current = optimization.filter_settings
+        current = study.filter_settings
         dialog = TopologyFilterDialog(
             current,
-            existing_names=[item.name for item in optimization.filters],
+            existing_names=[item.name for item in study.filters],
             parent=self.parent,
         )
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id,
+                study.id,
                 "filters",
                 dialog.result(),
-                current,
+                current.id,
             ),
         )
 
     def symmetry(self):
-        optimization = self._optimization()
-        if optimization is None:
+        study = self._optimization()
+        if study is None:
             return self._need_optimization()
         selected = self.store.selection
         current = selected if isinstance(selected, TopologySymmetry) else None
         value = current or TopologySymmetry(
-            name=f"Symmetry-{len(optimization.symmetries) + 1}"
+            name=f"Symmetry-{len(study.symmetries) + 1}"
         )
         dialog = TopologySymmetryDialog(
             value,
             pick_reference=self._begin_symmetry_pick,
             clear_preview=self.parent.viewport.clear_datum_reference_preview,
-            existing_names=[item.name for item in optimization.symmetries],
+            existing_names=[item.name for item in study.symmetries],
             parent=self.parent,
         )
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id,
+                study.id,
                 "symmetries",
                 dialog.result(),
-                current,
+                getattr(current, "id", ""),
             ),
         )
 
     def controls(self):
-        optimization = self._optimization()
-        if optimization is None:
+        study = self._optimization()
+        if study is None:
             return self._need_optimization()
-        current = optimization.control_settings
+        current = study.control_settings
         dialog = TopologyControlsDialog(
             current,
-            existing_names=[item.name for item in optimization.controls],
+            existing_names=[item.name for item in study.controls],
             parent=self.parent,
         )
         self._show(
             dialog,
             lambda: self._save_nested(
-                optimization.id,
+                study.id,
                 "controls",
                 dialog.result(),
-                current,
+                current.id,
             ),
         )
 
     def validate(self):
-        optimization = self._optimization()
-        if optimization is None:
+        study = self._optimization()
+        if study is None:
             return self._need_optimization()
         errors, _index, _masks, operators = validate_topology_optimization(
             self.store.project,
-            optimization,
+            study,
             build_operators=True,
         )
         if errors:
@@ -223,7 +228,7 @@ class OptimizationSetupMixin:
         QMessageBox.information(
             self.parent,
             "Topology validation",
-            "Topology optimization is valid.\n\n"
+            "Topology Optimization Study is valid.\n\n"
             f"Density/constraint radius: {operators.density_constraint_radius:.6g}\n"
             f"Sensitivity radius: {operators.sensitivity_radius:.6g}",
         )
@@ -246,14 +251,10 @@ class OptimizationSetupMixin:
         for cls, handler in handlers.items():
             if isinstance(entity, cls):
                 self.store.select(entity)
+                if isinstance(entity, TopologyOptimization):
+                    self.active_study_id = entity.id
                 return handler()
-        if isinstance(entity, OptimizationRun):
-            dialog = self._run_dialogs.get(entity.id)
-            if dialog is not None:
-                return dialog.reopen()
-            self.store.select(entity)
-            return self._show_selected_iteration()
-        if isinstance(entity, OptimizationIteration):
+        if isinstance(entity, (OptimizationRun, OptimizationIteration)):
             self.store.select(entity)
             return self._show_selected_iteration()
         return None
@@ -267,11 +268,7 @@ class OptimizationSetupMixin:
             try:
                 accepted()
             except Exception as exc:
-                QMessageBox.warning(
-                    dialog,
-                    "Optimization definition",
-                    str(exc),
-                )
+                QMessageBox.warning(dialog, "Study definition", str(exc))
                 return
             dialog.close()
 
@@ -294,42 +291,49 @@ class OptimizationSetupMixin:
     def _save_topology(self, candidate, current):
         project = self.store.project
         if not candidate.analysis_ref.entity_id:
-            raise ValueError("Select a Linear Static analysis")
-        if current is None:
+            raise ValueError("Select an Analysis")
+        current_id = getattr(current, "id", "")
+        if not current_id:
             self.store.add_entity(
-                f"Created {candidate.name}",
+                f"Created Study {candidate.name}",
                 project.id,
-                "optimizations",
+                "studies",
                 candidate,
             )
         else:
+            candidate.id = current_id
             self.store.replace_entity(
-                f"Edited {candidate.name}",
+                f"Edited Study {candidate.name}",
                 project.id,
-                "optimizations",
+                "studies",
                 candidate,
             )
-        self.store.select(candidate)
+        self.active_study_id = candidate.id
+        self.store.select(self.store.project.try_resolve(candidate.id))
 
-    def _save_nested(self, optimization_id, attribute, candidate, current):
-        optimization = self.store.project.try_resolve(optimization_id)
-        if optimization is None:
-            raise ValueError("The topology optimization no longer exists")
-        if current is None:
+    def _save_nested(self, study_id, attribute, candidate, current_id=""):
+        study = self.store.project.try_resolve(study_id)
+        if not isinstance(study, TopologyOptimization):
+            raise ValueError("The Topology Optimization Study no longer exists")
+        if not current_id:
             self.store.add_entity(
                 f"Created {candidate.name}",
-                optimization.id,
+                study.id,
                 attribute,
                 candidate,
             )
         else:
+            candidate.id = current_id
             self.store.replace_entity(
                 f"Edited {candidate.name}",
-                optimization.id,
+                study.id,
                 attribute,
                 candidate,
             )
-        self.store.select(candidate)
+        resolved = self.store.project.try_resolve(candidate.id)
+        if resolved is None:
+            raise ValueError("The saved Study entity could not be resolved")
+        self.store.select(resolved)
 
     def _region_pick(self, _selector, done, finished):
         policy = policy_for_projection(
@@ -345,16 +349,11 @@ class OptimizationSetupMixin:
         )
 
     def _begin_symmetry_pick(self, symmetry_type, callback, finished):
-        if symmetry_type == SymmetryType.PLANAR:
-            allowed = {
-                SelectableKind.GEOMETRY_FACE,
-                SelectableKind.DATUM_PLANE,
-            }
-        else:
-            allowed = {
-                SelectableKind.GEOMETRY_EDGE,
-                SelectableKind.DATUM_VECTOR,
-            }
+        allowed = (
+            {SelectableKind.GEOMETRY_FACE, SelectableKind.DATUM_PLANE}
+            if symmetry_type == SymmetryType.PLANAR
+            else {SelectableKind.GEOMETRY_EDGE, SelectableKind.DATUM_VECTOR}
+        )
 
         def selected(reference):
             callback(reference)
@@ -368,15 +367,19 @@ class OptimizationSetupMixin:
 
     def _optimization(self):
         project = self.store.project
+        active = project.try_resolve(getattr(self, "active_study_id", ""))
+        if isinstance(active, TopologyOptimization):
+            return active
         entity = self.store.selection
         while entity is not None:
             if isinstance(entity, TopologyOptimization):
+                self.active_study_id = entity.id
                 return project.try_resolve(entity.id)
             parent_id = project.index.parent_id.get(getattr(entity, "id", ""))
             entity = project.try_resolve(parent_id) if parent_id else None
-        return project.optimizations[0] if project.optimizations else None
+        return project.studies[0] if project.studies else None
 
     def _need_optimization(self):
         self.store.message.emit(
-            "Create or select a topology optimization first"
+            "Create or select a Topology Optimization Study first"
         )

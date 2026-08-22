@@ -1,3 +1,6 @@
+"""Stable identifiers for centrally registered UI actions."""
+
+
 class A:
     NEW_PROJECT = "project.new"; OPEN_PROJECT = "project.open"
     OPEN_RESULTS = "results.open_file"; SAVE_PROJECT = "project.save"
@@ -42,29 +45,49 @@ class A:
     SYMMETRY = "bc.symmetry"; CLOAD = "load.concentrated"
     DLOAD = "load.distributed"; PRESSURE = "load.pressure"
     VLOAD = "load.volume"; INERTIA_LOAD = "load.inertia"
-    TEMPERATURE = "load.temperature"; STEP_LINEAR = "step.linear"
-    STEP_NONLINEAR = "step.nonlinear"; STEP_MODAL = "step.modal"
-    STEP_BUCKLING = "step.buckling"; STEP_TRANSIENT = "step.transient"
-    REORDER_STEPS = "step.reorder"; STEP_MATRIX = "step.matrix"
-    SOLVER_SETTINGS = "analysis.solver_settings"; VALIDATE = "analysis.validate"
-    PREVIEW_DECK = "solver.preview_deck"; WRITE_DECK = "solver.write_deck"
-    RUN = "solver.run"; RESULTS = "results.open"
-    RESULT_MESH_LINES = "results.mesh_lines"; RESULT_BOUNDARY_LINES = "results.boundary_lines"
+    TEMPERATURE = "load.temperature"
+
+    STEP_LINEAR = "step.linear"; STEP_NONLINEAR = "step.nonlinear"
+    STEP_MODAL = "step.modal"; STEP_BUCKLING = "step.buckling"
+    STEP_TRANSIENT = "step.transient"; REORDER_STEPS = "step.reorder"
+    STEP_MATRIX = "step.matrix"
+
+    ANALYSIS_NEW = "analysis.new"
+    ANALYSIS_EDIT = "analysis.edit"
+    ANALYSIS_RUN = "analysis.run"
+    SOLVER_SETTINGS = "analysis.solver_settings"
+    VALIDATE = "analysis.validate"
+    PREVIEW_DECK = "analysis.preview_deck"
+    WRITE_DECK = "analysis.write_deck"
+
+    STUDY_NEW_TOPOLOGY = "study.new_topology"
+    STUDY_EDIT = "study.edit"
+    STUDY_RUN = "study.run"
+    STUDY_VALIDATE = "study.validate"
+    OPT_RESPONSE = "study.topology.response"
+    OPT_OBJECTIVE = "study.topology.objective"
+    OPT_CONSTRAINT = "study.topology.constraint"
+    OPT_FILTER = "study.topology.filter"
+    OPT_SYMMETRY = "study.topology.symmetry"
+    OPT_CONTROLS = "study.topology.controls"
+    OPT_PREVIOUS = "study.topology.previous_iteration"
+    OPT_NEXT = "study.topology.next_iteration"
+    OPT_THRESHOLD = "study.topology.threshold"
+
+    JOB_STOP = "job.stop"
+    JOB_MONITOR = "job.monitor"
+    JOB_OPEN_RESULTS = "job.open_results"
+
+    # Compatibility aliases for plugins or saved UI state using the old IDs.
+    OPT_NEW = STUDY_NEW_TOPOLOGY
+    OPT_VALIDATE = STUDY_VALIDATE
+    OPT_RUN = STUDY_RUN
+    OPT_STOP = JOB_STOP
+    RUN = ANALYSIS_RUN
+    RESULTS = JOB_OPEN_RESULTS
+
+    RESULT_MESH_LINES = "results.mesh_lines"
+    RESULT_BOUNDARY_LINES = "results.boundary_lines"
     RESULT_DEFORM = "results.deform"
-
-    OPT_NEW = "optimization.new_topology"
-    OPT_RESPONSE = "optimization.response"
-    OPT_OBJECTIVE = "optimization.objective"
-    OPT_CONSTRAINT = "optimization.constraint"
-    OPT_FILTER = "optimization.filter"
-    OPT_SYMMETRY = "optimization.symmetry"
-    OPT_CONTROLS = "optimization.controls"
-    OPT_VALIDATE = "optimization.validate"
-    OPT_RUN = "optimization.run"
-    OPT_STOP = "optimization.stop"
-    OPT_PREVIOUS = "optimization.previous_iteration"
-    OPT_NEXT = "optimization.next_iteration"
-    OPT_THRESHOLD = "optimization.threshold"
-
     DOCUMENTATION = "help.documentation"
     SHORTCUTS = "help.shortcuts"; ABOUT = "help.about"
