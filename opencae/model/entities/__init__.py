@@ -3,6 +3,7 @@ from .assembly import *
 from .constraints import *
 from .datums import *
 from .elements import *
+from .fem import *
 from .geometry import *
 from .fields import *
 from .jobs import *
