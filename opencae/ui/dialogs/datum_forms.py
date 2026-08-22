@@ -25,13 +25,6 @@ def number(value=0.0, minimum=-1e15, maximum=1e15):
     return control
 
 
-def xyz(prefix="", values=(0.0, 0.0, 0.0)):
-    return {
-        f"{prefix}{axis}": number(value)
-        for axis, value in zip("xyz", values)
-    }
-
-
 def references(*allowed):
     expanded = []
     for value in allowed:
