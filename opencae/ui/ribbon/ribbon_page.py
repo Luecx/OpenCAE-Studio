@@ -1,7 +1,7 @@
 from dataclasses import replace
 
-from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QHBoxLayout, QWidget
+from PyQt6.QtCore import QSize, QTimer
+from PyQt6.QtWidgets import QHBoxLayout, QLayout, QSizePolicy, QWidget
 
 from opencae.ui.core.metrics import RIBBON_BUTTON_WIDTH
 from .ribbon_group import RibbonGroup
@@ -24,9 +24,20 @@ class ResponsiveRibbonPage(QWidget):
         self._collapsed_titles = frozenset()
         self._group_widgets = []
 
+        # The currently rendered expanded groups must never become a window
+        # minimum-size constraint. Otherwise Qt allows only one collapse step
+        # per separate resize gesture: after one group collapses the page gets
+        # a smaller minimum size and only then permits the next resize.
+        self.setMinimumWidth(0)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Preferred,
+        )
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(_PAGE_LEFT_MARGIN, 0, 0, 0)
         layout.setSpacing(0)
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
         self._page_layout = layout
 
         for widget in self._leading_widgets:
@@ -34,13 +45,23 @@ class ResponsiveRibbonPage(QWidget):
 
         self._groups_host = QWidget(self)
         self._groups_host.setMinimumWidth(0)
+        self._groups_host.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Preferred,
+        )
         self._groups_layout = QHBoxLayout(self._groups_host)
         self._groups_layout.setContentsMargins(0, 0, 0, 0)
         self._groups_layout.setSpacing(0)
+        self._groups_layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
         layout.addWidget(self._groups_host, 1)
 
         self._render_groups(self._collapsed_titles)
         QTimer.singleShot(0, self._refresh_responsive_layout)
+
+    def minimumSizeHint(self):
+        """Do not let the current expansion state block further shrinking."""
+        hint = super().minimumSizeHint()
+        return QSize(0, hint.height())
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -91,6 +112,9 @@ class ResponsiveRibbonPage(QWidget):
         if self._required_width(collapsed) <= available_width:
             return frozenset()
 
+        # Deliberately continue in this one call until the page fits. This is
+        # what allows Geometry -> Mesh -> Datum -> Regions to all collapse
+        # during a single continuous window resize when necessary.
         for spec in self._collapse_candidates():
             collapsed.add(spec.title)
             if self._required_width(collapsed) <= available_width:
@@ -122,6 +146,8 @@ class ResponsiveRibbonPage(QWidget):
             self._groups_layout.addWidget(group)
             self._group_widgets.append(group)
         self._groups_layout.addStretch(1)
+        self._groups_host.updateGeometry()
+        self.updateGeometry()
 
 
 class RibbonPage(ResponsiveRibbonPage):
