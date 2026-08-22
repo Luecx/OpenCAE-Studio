@@ -9,8 +9,9 @@ from opencae.ui.core.widgets import ComponentsWidget, ReferenceSelector, Compact
 
 class SupportDialog(ApplyDialog):
     def __init__(self, support_type, project, regions=(), coordinate_systems=(), create_region=None, pick_region=None,
-                 parent=None, default_name="", existing_names=(), support=None, target_validator=None, target_requirement=None):
+                 parent=None, default_name="", existing_names=(), support=None, target_validator=None, target_requirement=None, units=None):
         super().__init__(parent)
+        units = units or getattr(getattr(parent, "controllers", None), "units", None)
         self.support_type = support_type; self.support = support; self.existing_names = tuple(existing_names); self.target_validator = target_validator
         self.setWindowTitle(f"{'Edit' if support else 'Create'} {support_type}"); self.setMinimumWidth(720)
         root = QVBoxLayout(self); form = QFormLayout()
@@ -20,7 +21,8 @@ class SupportDialog(ApplyDialog):
         self.csys = ReferenceSelector((("Global", None), *coordinate_systems), csys)
         form.addRow("Name", self.name); form.addRow("Target region", self.region); form.addRow("Coordinate system", self.csys); root.addLayout(form)
         defaults = getattr(support, "components", ([0.0] * 6 if support_type == "Fixed" else [None] * 6))
-        self.components = ComponentsWidget(("Ux", "Uy", "Uz", "Rx", "Ry", "Rz"), defaults, checkable=True, editable=support_type != "Fixed")
+        length_suffix = units.suffix("length") if units is not None else ""
+        self.components = ComponentsWidget(("Ux", "Uy", "Uz", "Rx", "Ry", "Rz"), defaults, checkable=True, editable=support_type != "Fixed", suffixes=(length_suffix, length_suffix, length_suffix, "", "", ""))
         root.addWidget(self.components); buttons = dialog_buttons(include_apply=True); self.bind_buttons(buttons, True); root.addWidget(buttons)
 
     def validate(self):
