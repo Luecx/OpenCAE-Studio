@@ -8,7 +8,6 @@ def specs(window):
         ActionSpec(A.FIT_VIEW,"Fit View",I.RESULTS,window.fit_view,"F"),
         ActionSpec(A.TOGGLE_MESH,"Toggle Mesh Edges",I.MESH,window.toggle_mesh),
         ActionSpec(A.SHOW_PROJECT,"Project Tree",I.PART,lambda:window.project_dock.setVisible(not window.project_dock.isVisible())),
-        ActionSpec(A.SHOW_PROPERTIES,"Properties",I.SETTINGS,lambda:window.properties_dock.setVisible(not window.properties_dock.isVisible())),
         ActionSpec(A.SHOW_OUTPUT,"Output",I.INFO,lambda:window.output_dock.setVisible(not window.output_dock.isVisible())),
         ActionSpec(A.RESET_LAYOUT,"Reset Layout",I.SETTINGS,window.reset_layout),
         ActionSpec(A.DOCUMENTATION,"Documentation",I.INFO,window.show_documentation),
