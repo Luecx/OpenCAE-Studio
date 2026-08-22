@@ -17,10 +17,11 @@ def page(rows):
     return widget
 
 
-def number(value=0.0, minimum=-1e15, maximum=1e15):
+def number(value=0.0, minimum=-1e15, maximum=1e15, suffix=""):
     control = QDoubleSpinBox()
     control.setRange(minimum, maximum)
     control.setDecimals(8)
+    control.setSuffix(str(suffix or ""))
     control.setValue(value)
     return control
 
