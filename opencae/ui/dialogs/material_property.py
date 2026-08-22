@@ -13,7 +13,7 @@ _BY_CATEGORY = {
 
 _PROPERTY_SPECS = {
     "Isotropic elasticity": (("Young's modulus", 210000.0, "pressure"), ("Poisson ratio", 0.3, None)),
-    "Neo-Hooke": (("C10", 1.0, "pressure"), ("D1", 0.0, None)),
+    "Neo-Hooke": (("C10", 1.0, "pressure"), ("D1", 0.0, "compliance")),
     "Constant density": (("Density", 0.0, "density"),),
     "Isotropic expansion": (("Expansion coefficient", 0.0, "thermal_expansion"), ("Reference temperature", 20.0, "temperature")),
     "Bilinear isotropic hardening": (("Yield stress", 250.0, "pressure"), ("Tangent modulus", 0.0, "pressure")),
@@ -24,7 +24,7 @@ class MaterialPropertyDialog(QDialog):
     def __init__(self, behavior=None, parent=None, category=None, units=None):
         super().__init__(parent)
         self.behavior = behavior
-        self.units = units
+        self.units = units or getattr(getattr(parent, "controllers", None), "units", None)
         self.category = category or getattr(behavior, "category", "Elasticity")
         self.types = _BY_CATEGORY[self.category]
         self.setWindowTitle(self.category)
