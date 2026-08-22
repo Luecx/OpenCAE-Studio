@@ -1,4 +1,4 @@
-"""Hosts the lower log, job, deck and console area."""
+"""Hosts the lower jobs and application log area."""
 
 from PyQt6.QtWidgets import QDockWidget
 
