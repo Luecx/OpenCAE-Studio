@@ -5,7 +5,6 @@ from PyQt6.QtWidgets import QSizePolicy, QToolBar
 
 from opencae.ui.docks.output_dock import OutputDock
 from opencae.ui.docks.project_dock import ProjectDock
-from opencae.ui.docks.properties_dock import PropertiesDock
 from opencae.ui.ribbon.ribbon import Ribbon
 from opencae.ui.status_unit_system import UnitSystemStatus
 from opencae.ui.viewport.viewport_factory import create_viewport
@@ -58,7 +57,6 @@ def build_docks(window):
         visibility=window.visibility,
         parent=window,
     )
-    window.properties_dock = PropertiesDock(store, window)
     window.output_dock = OutputDock(
         store,
         window.controllers.jobs,
@@ -66,7 +64,6 @@ def build_docks(window):
         window,
     )
     window.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, window.project_dock)
-    window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, window.properties_dock)
     window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, window.output_dock)
     window.project_dock.tree.stage_requested.connect(window.ribbon.set_stage)
     window.project_dock.solution_tree.solution_requested.connect(window.show_solution)
@@ -85,8 +82,8 @@ def build_docks(window):
     window.ribbon.stage_changed.connect(window.project_dock.tree.set_stage_focus)
     window.ribbon.stage_changed.connect(window.viewport.set_stage)
     window.resizeDocks(
-        [window.project_dock, window.properties_dock],
-        [285, 330],
+        [window.project_dock],
+        [285],
         Qt.Orientation.Horizontal,
     )
     window.resizeDocks(
@@ -94,7 +91,6 @@ def build_docks(window):
         [205],
         Qt.Orientation.Vertical,
     )
-    window.properties_dock.hide()
 
 
 def build_status(window):
