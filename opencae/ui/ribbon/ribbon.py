@@ -1,7 +1,7 @@
 """Workflow ribbon with separate Steps, Analysis and Studies stages."""
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QLabel, QStackedWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QLabel, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 
 from opencae.ui.core.metrics import CONTEXT_BAR_HEIGHT, RIBBON_PAGE_HEIGHT
 from opencae.ui.core.theme import PALETTE
@@ -78,6 +78,11 @@ class Ribbon(QWidget):
         self.context = self._context_label()
         layout.addWidget(self.context)
         self.stack = QStackedWidget()
+        self.stack.setMinimumWidth(0)
+        self.stack.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Fixed,
+        )
         self.stack.setFixedHeight(RIBBON_PAGE_HEIGHT)
         for module in _PAGES:
             if module is part_page:
