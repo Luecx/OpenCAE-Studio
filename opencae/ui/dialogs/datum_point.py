@@ -10,7 +10,7 @@ _POINT_KINDS = ("geometry_vertex", "datum_point", "reference_point")
 class DatumPointDialog(DatumDialogBase):
     METHODS = ("Coordinates", "Between Two Points", "Along Edge")
 
-    def __init__(self, default_name, existing_names=(), coordinate_systems=(), parent=None):
+    def __init__(self, default_name, existing_names=(), coordinate_systems=(), parent=None, units=None):
         super().__init__(
             "Create Datum Point",
             self.METHODS,
@@ -18,8 +18,14 @@ class DatumPointDialog(DatumDialogBase):
             existing_names,
             parent,
         )
+        self.units = units
+        length_suffix = units.suffix("length") if units is not None else ""
 
-        self.coordinate = XYZPicker(allowed=_POINT_KINDS, value_kind="point")
+        self.coordinate = XYZPicker(
+            allowed=_POINT_KINDS,
+            value_kind="point",
+            suffix=length_suffix,
+        )
         self.csys = csys_choice(coordinate_systems)
         self.add_page(
             page(
@@ -48,6 +54,8 @@ class DatumPointDialog(DatumDialogBase):
             ("Normalized parameter", "Arc length from start", "Arc length from end")
         )
         self.position = number(.5, 0, 1e15)
+        self.definition.currentTextChanged.connect(self._sync_position_unit)
+        self._sync_position_unit(self.definition.currentText())
         self.add_page(
             page(
                 (
@@ -57,6 +65,12 @@ class DatumPointDialog(DatumDialogBase):
                 )
             )
         )
+
+    def _sync_position_unit(self, definition):
+        suffix = ""
+        if str(definition) != "Normalized parameter" and self.units is not None:
+            suffix = self.units.suffix("length")
+        self.position.setSuffix(suffix)
 
     def values(self):
         method = self.method.currentText()
