@@ -18,6 +18,7 @@ class CoordinateSystemDialog(QDialog):
 
     def __init__(self, default_name="CSYS-1", existing_names=(), parent=None, units=None):
         super().__init__(parent)
+        units = units or getattr(getattr(parent, "controllers", None), "units", None)
         self.existing_names = tuple(existing_names)
         self.setWindowTitle("Create Coordinate System")
         self.setModal(False)
