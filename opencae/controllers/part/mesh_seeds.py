@@ -56,7 +56,48 @@ class PartMeshSeeds:
         )
 
         def pick(_owner, done, finished):
-            return begin_region_pick(self.ctx.store.project, self._viewport(), policy, done, default_owner=part, finished=finished)
+            viewport = self._viewport()
+            if viewport is None:
+                return None
+
+            # Geometry edges are not selectable while the viewport is in mesh
+            # display mode: that mode only exposes mesh node/element pickers.
+            # End any previous context pick first so its own cleanup can finish,
+            # then temporarily enter geometry display for this edge session.
+            viewport.cancel_context_pick()
+            previous_display = viewport.display_mode
+            if previous_display != "geometry":
+                viewport.set_display_mode("geometry")
+
+            restored = False
+
+            def session_finished():
+                nonlocal restored
+                if restored:
+                    return
+                restored = True
+                if viewport.display_mode != previous_display:
+                    viewport.set_display_mode(previous_display)
+                if finished:
+                    finished()
+
+            begin_region_pick(
+                self.ctx.store.project,
+                viewport,
+                policy,
+                done,
+                default_owner=part,
+                finished=session_finished,
+            )
+
+            def cancel():
+                # ContextPickManager.cancel() normally calls session_finished.
+                # The explicit fallback keeps display restoration deterministic
+                # if the session has already been handed off or cancelled.
+                viewport.cancel_context_pick()
+                session_finished()
+
+            return cancel
 
         dialog = EdgeSeedDialog(
             self.ctx.store.project,
