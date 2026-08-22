@@ -3,6 +3,11 @@ from enum import Enum, auto
 
 class IconKind(Enum):
     FILE = auto(); SAVE = auto(); IMPORT = auto(); PART = auto(); PARTITION = auto()
+    NEW_PROJECT = auto(); OPEN_PROJECT = auto(); FIT_VIEW = auto(); UNDO = auto(); REDO = auto()
+    REBUILD = auto(); SUPPRESS = auto(); MESH_IMPORT = auto(); EDGE_SEED = auto()
+    DATUM_POINT = auto(); DATUM_VECTOR = auto(); DATUM_PLANE = auto()
+    PREVIEW_DECK = auto(); WRITE_DECK = auto(); NEW_ANALYSIS = auto(); TOPOLOGY = auto()
+    FILTER = auto(); THRESHOLD = auto(); JOB_MONITOR = auto()
     MESH = auto(); SEED = auto(); ELEMENT = auto(); ELEMENT_CONTROLS = auto(); NODE_SET = auto(); ELEMENT_SET = auto()
     SURFACE = auto(); CSYS = auto(); RP = auto(); MATERIAL = auto(); PROFILE = auto(); SECTION = auto()
     ASSIGN = auto(); INSTANCE = auto(); MOVE = auto(); ROTATE = auto(); PATTERN = auto(); CONSTRAINT = auto()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QTimer, pyqtSignal
+from PyQt6.QtCore import QEvent, QTimer, Qt, pyqtSignal
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from opencae.geometry import GeometryService
@@ -45,6 +45,7 @@ class PyVistaViewport(QWidget):
         self._region_previews = {}
         self._reference_point_preview = None
         self._datum_reference_preview = ()
+        self._direct_pick_press = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -377,5 +378,64 @@ class PyVistaViewport(QWidget):
         self.result_selection_panel.clear_selection()
         self.request_refresh(fit=True)
 
+    def _event_display_position(self, watched, event):
+        try:
+            position = event.position()
+            widget_width = max(1.0, float(watched.width()))
+            widget_height = max(1.0, float(watched.height()))
+            render_window = self.plotter.GetRenderWindow()
+            render_width, render_height = render_window.GetSize()
+            render_width = max(1.0, float(render_width))
+            render_height = max(1.0, float(render_height))
+        except (AttributeError, TypeError, ValueError, RuntimeError):
+            return None
+
+        # Qt uses a top-left origin and logical pixels. VTK uses a bottom-left
+        # origin and may render in device pixels. Scaling through the actual
+        # render-window size handles both HiDPI and ordinary displays.
+        x = float(position.x()) * render_width / widget_width
+        y = (
+            widget_height - 1.0 - float(position.y())
+        ) * render_height / widget_height
+        if x < 0.0 or y < 0.0 or x >= render_width or y >= render_height:
+            return None
+        return (x, y)
+
+    def _handle_direct_pick_event(self, watched, event):
+        if not self.picker.handles_direct_click():
+            self._direct_pick_press = None
+            return
+        try:
+            event_type = event.type()
+            button = event.button()
+        except (AttributeError, RuntimeError):
+            return
+        if button != Qt.MouseButton.LeftButton:
+            return
+
+        if event_type == QEvent.Type.MouseButtonPress:
+            cursor = self._event_display_position(watched, event)
+            if cursor is not None:
+                self._direct_pick_press = cursor
+            return
+
+        if event_type != QEvent.Type.MouseButtonRelease:
+            return
+        cursor = self._event_display_position(watched, event)
+        press = self._direct_pick_press
+        self._direct_pick_press = None
+        if cursor is None:
+            return
+        if press is not None:
+            dx = cursor[0] - press[0]
+            dy = cursor[1] - press[1]
+            # A click selects; a drag remains a camera gesture.
+            if dx * dx + dy * dy > 36.0:
+                return
+        self.picker.pick_display_position(cursor)
+
     def eventFilter(self, watched, event):
-        return True if handle_seed_label_event(self, watched, event) else super().eventFilter(watched, event)
+        if handle_seed_label_event(self, watched, event):
+            return True
+        self._handle_direct_pick_event(watched, event)
+        return super().eventFilter(watched, event)

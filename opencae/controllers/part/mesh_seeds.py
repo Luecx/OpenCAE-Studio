@@ -24,7 +24,7 @@ class PartMeshSeeds:
         if not self.ctx.require_geometry(part):
             return
         seed = next((item for item in part.mesh.seeds if item.seed_type == "Default"), None)
-        dialog = DefaultSeedDialog(seed, self.ctx.parent)
+        dialog = DefaultSeedDialog(seed, self.ctx.parent, self.ctx.units)
         dialog.apply_requested.connect(lambda values, part_id=part.id: self._apply_default(part_id, values))
         self._open(dialog, part, preview=True)
 
@@ -56,7 +56,41 @@ class PartMeshSeeds:
         )
 
         def pick(_owner, done, finished):
-            return begin_region_pick(self.ctx.store.project, self._viewport(), policy, done, default_owner=part, finished=finished)
+            viewport = self._viewport()
+            if viewport is None:
+                return None
+
+            viewport.cancel_context_pick()
+            previous_display = viewport.display_mode
+            if previous_display != "geometry":
+                viewport.set_display_mode("geometry")
+
+            restored = False
+
+            def session_finished():
+                nonlocal restored
+                if restored:
+                    return
+                restored = True
+                if viewport.display_mode != previous_display:
+                    viewport.set_display_mode(previous_display)
+                if finished:
+                    finished()
+
+            begin_region_pick(
+                self.ctx.store.project,
+                viewport,
+                policy,
+                done,
+                default_owner=part,
+                finished=session_finished,
+            )
+
+            def cancel():
+                viewport.cancel_context_pick()
+                session_finished()
+
+            return cancel
 
         dialog = EdgeSeedDialog(
             self.ctx.store.project,
@@ -68,6 +102,7 @@ class PartMeshSeeds:
             pick_callback=pick,
             seed=seed,
             parent=self.ctx.parent,
+            units=self.ctx.units,
         )
         dialog.target.set_requirement(policy.requirement, allow_part_local=True)
         preview_channel = f"edge-seed-dialog-{id(dialog)}"
@@ -143,9 +178,13 @@ class PartMeshSeeds:
             return
         current = self.ctx.store.project.try_resolve(seed_id) if seed_id else None
         kwargs = {
-            "name": values["name"], "target": target, "method": values["method"],
-            "size": values["size"], "divisions": values["divisions"],
-            "bias": values["bias"], "bias_factor": values["bias_factor"],
+            "name": values["name"],
+            "target": target,
+            "method": values["method"],
+            "size": values["size"],
+            "divisions": values["divisions"],
+            "bias": "None",
+            "bias_factor": 1.0,
         }
         replacement = EdgeSeed(id=current.id, **kwargs) if current else EdgeSeed(**kwargs)
         mutation = make_replace_command(self.ctx.store.project, part_id, "mesh.seeds", replacement) if current else make_add_command(self.ctx.store.project, part_id, "mesh.seeds", replacement)

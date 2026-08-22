@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 
 from opencae.model.naming import is_unique
 from opencae.ui.core.widgets.pick_reference import PickReference
+from opencae.ui.core.widgets.xyz_picker import XYZPicker
 
 
 class DatumDialogBase(QDialog):
@@ -37,6 +38,10 @@ class DatumDialogBase(QDialog):
         heading.setObjectName("PanelTitle")
         layout.addWidget(heading)
         form = QFormLayout()
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(9)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.name = QLineEdit(default_name)
         self.method = QComboBox()
         self.method.addItems(methods)
@@ -71,6 +76,10 @@ class DatumDialogBase(QDialog):
             child.pick_requested.connect(self.pick_requested)
             child.cancel_requested.connect(self.cancel_pick_requested)
             child.changed.connect(self._reference_changed)
+        for child in page.findChildren(XYZPicker):
+            child.pick_requested.connect(self.pick_requested)
+            child.cancel_requested.connect(self.cancel_pick_requested)
+            child.changed.connect(self.emit_preview)
 
     def _reference_changed(self, *_):
         self.emit_preview()
@@ -93,6 +102,8 @@ class DatumDialogBase(QDialog):
     def _cancel_reference_picks(self, *_):
         for child in self.findChildren(PickReference):
             child._pick_finished()
+        for child in self.findChildren(XYZPicker):
+            child.finish_pick()
         self.cancel_pick_requested.emit()
 
     def values(self):

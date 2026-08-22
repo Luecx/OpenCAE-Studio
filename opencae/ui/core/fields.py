@@ -26,6 +26,7 @@ class FieldSpec:
     create_callback: Callable[[QWidget, Callable[[object], None]], None] | None = None
     pick_callback: Callable | None = None
     read_only: bool = False
+    suffix: str = ""
 
 
 def create_editor(spec: FieldSpec) -> QWidget:
@@ -39,8 +40,10 @@ def create_editor(spec: FieldSpec) -> QWidget:
         upper = min(2_147_483_647, int(spec.maximum))
         widget.setRange(lower, upper)
         widget.setValue(max(lower, min(upper, int(spec.default))))
+        if spec.suffix: widget.setSuffix(spec.suffix)
     elif spec.kind == "float":
         widget = QDoubleSpinBox(); widget.setRange(spec.minimum, spec.maximum); widget.setDecimals(spec.decimals); widget.setValue(float(spec.default))
+        if spec.suffix: widget.setSuffix(spec.suffix)
     elif spec.kind == "bool":
         widget = QCheckBox(); widget.setChecked(bool(spec.default))
     elif spec.kind == "file":

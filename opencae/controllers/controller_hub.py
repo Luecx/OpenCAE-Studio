@@ -1,5 +1,7 @@
 """Constructs application controllers around one shared project and JobManager."""
 
+from opencae.units import UnitManager
+
 from .analysis_controller import AnalysisController
 from .assembly_controller import AssemblyController
 from .job_manager import JobManager
@@ -16,9 +18,10 @@ class ControllerHub:
     def __init__(self, store, parent, settings, solvers):
         self.store = store
         self.parent = parent
+        self.units = UnitManager(store, settings)
         self.project = ProjectController(store, parent, settings)
-        self.part = PartController(store, parent)
-        self.resources = ResourceController(store, parent)
+        self.part = PartController(store, parent, self.units)
+        self.resources = ResourceController(store, parent, self.units)
         self.assembly = AssemblyController(store, parent, self.part)
         self.loads = LoadController(store, parent, self.part, self.resources)
         self.jobs = JobManager(store, parent, settings, solvers)

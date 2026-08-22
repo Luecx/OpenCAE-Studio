@@ -11,7 +11,11 @@ from .safe_operations import remove_actor
 
 
 class DatumOverlay:
-    def __init__(self):
+    def __init__(self, namespace="model-datum"):
+        # Every overlay owner needs its own actor namespace.  Preview and model
+        # datums used to share names such as ``datum-point-part-0``; clearing a
+        # dialog preview could therefore remove the permanent scene actor.
+        self.namespace = str(namespace).strip() or "datum"
         self._names = []
 
     def clear(self, plotter):
@@ -34,6 +38,9 @@ class DatumOverlay:
                     if _visible(scene, datum):
                         self._draw(plotter, scene, datum, f"{instance_id}-{index}", instance, instance.name)
 
+    def _actor_name(self, kind, key):
+        return f"{self.namespace}-{kind}-{key}"
+
     def _draw(self, plotter, scene, datum, key, instance=None, instance_name=None):
         if isinstance(datum, DatumPoint):
             self._point(plotter, scene, datum, key, instance, instance_name)
@@ -44,7 +51,7 @@ class DatumOverlay:
 
     def _point(self, plotter, scene, datum, key, instance, instance_name):
         position = self._point_transform(datum.position, instance)
-        name = f"datum-point-{key}"
+        name = self._actor_name("point", key)
         self._names.append(name)
         actor = plotter.add_mesh(
             pv.PolyData([position]),
@@ -72,7 +79,7 @@ class DatumOverlay:
         origin = self._point_transform(datum.origin, instance)
         direction = self._vector_transform(datum.direction, instance)
         scale = world_size_for_pixels(plotter, origin, 55)
-        name = f"datum-vector-{key}"
+        name = self._actor_name("vector", key)
         self._names.append(name)
         actor = plotter.add_mesh(
             pv.Arrow(start=origin, direction=direction, scale=scale),
@@ -105,7 +112,7 @@ class DatumOverlay:
             for sx, sy in ((-1., -1.), (1., -1.), (1., 1.), (-1., 1.))
         ])
         mesh = pv.PolyData(points, np.asarray([4, 0, 1, 2, 3]))
-        name = f"datum-plane-{key}"
+        name = self._actor_name("plane", key)
         self._names.append(name)
         actor = plotter.add_mesh(
             mesh,

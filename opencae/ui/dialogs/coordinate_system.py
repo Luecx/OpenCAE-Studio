@@ -16,8 +16,9 @@ class CoordinateSystemDialog(QDialog):
     pick_requested = pyqtSignal(object, object, object)
     cancel_pick_requested = pyqtSignal()
 
-    def __init__(self, default_name="CSYS-1", existing_names=(), parent=None):
+    def __init__(self, default_name="CSYS-1", existing_names=(), parent=None, units=None):
         super().__init__(parent)
+        units = units or getattr(getattr(parent, "controllers", None), "units", None)
         self.existing_names = tuple(existing_names)
         self.setWindowTitle("Create Coordinate System")
         self.setModal(False)
@@ -33,10 +34,17 @@ class CoordinateSystemDialog(QDialog):
         self.form = QFormLayout()
         self.form.setHorizontalSpacing(16)
         self.form.setVerticalSpacing(9)
+        self.form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        self.form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         self.name = QLineEdit(default_name)
         self.kind = ChevronComboBox()
         self.kind.addItems(("Rectangular", "Cylindrical"))
-        self.origin = XYZPicker(allowed=_POINT_KINDS, value_kind="point")
+        self.origin = XYZPicker(
+            allowed=_POINT_KINDS,
+            value_kind="point",
+            suffix=units.suffix("length") if units is not None else "",
+        )
         self.axis_1 = XYZPicker((1.0, 0.0, 0.0), allowed=_DIRECTION_KINDS, value_kind="direction")
         self.axis_2 = XYZPicker((0.0, 1.0, 0.0), allowed=_DIRECTION_KINDS, value_kind="direction")
         for widget in (self.origin, self.axis_1, self.axis_2):

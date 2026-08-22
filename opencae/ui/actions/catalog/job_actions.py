@@ -12,7 +12,7 @@ def specs(controllers):
         ActionSpec(
             A.JOB_MONITOR,
             "Monitor",
-            I.RESULTS,
+            I.JOB_MONITOR,
             jobs.open_selected_monitor,
         ),
         ActionSpec(

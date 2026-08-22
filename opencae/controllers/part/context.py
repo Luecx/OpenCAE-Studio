@@ -13,9 +13,10 @@ from ..busy import busy_cursor
 
 
 class PartContext:
-    def __init__(self, store, parent):
+    def __init__(self, store, parent, units=None):
         self.store = store
         self.parent = parent
+        self.units = units
         self.service = GeometryService()
 
     def active_part(self):

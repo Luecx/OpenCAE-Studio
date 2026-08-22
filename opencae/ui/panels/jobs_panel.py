@@ -1,23 +1,24 @@
-"""Synchronized job selection, actions and monospace output panel."""
+"""Synchronized job selection and full-width solver output panel."""
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QHBoxLayout,
     QHeaderView,
-    QSplitter,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from opencae.ui.actions.ids import A
 from opencae.ui.core.widgets import MonospaceOutputView
 
 
+_COLUMN_WEIGHTS = (0.17, 0.23, 0.11, 0.15, 0.34)
+_MAX_VISIBLE_JOB_ROWS = 3
+
+
 class JobsPanel(QWidget):
-    """Display all jobs and exactly the output of the selected job."""
+    """Display all jobs above exactly the output of the selected job."""
 
     def __init__(self, store, jobs, actions, parent=None):
         super().__init__(parent)
@@ -28,38 +29,57 @@ class JobsPanel(QWidget):
         root.setContentsMargins(4, 4, 4, 4)
         root.setSpacing(4)
 
-        toolbar = QHBoxLayout()
-        toolbar.setContentsMargins(0, 0, 0, 0)
-        for action_id in (A.JOB_STOP, A.JOB_MONITOR, A.JOB_OPEN_RESULTS):
-            button = QToolButton()
-            button.setDefaultAction(actions.get(action_id))
-            toolbar.addWidget(button)
-        toolbar.addStretch(1)
-        root.addLayout(toolbar)
-
-        splitter = QSplitter(Qt.Orientation.Horizontal)
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
             ["Job", "Source", "Kind", "Solver", "Status"]
         )
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.table.horizontalHeader().setStretchLastSection(True)
+        header = self.table.horizontalHeader()
+        header.setMinimumSectionSize(60)
+        header.setStretchLastSection(False)
+        for column in range(5):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
+        self.table.verticalHeader().hide()
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.table.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
         self.table.itemSelectionChanged.connect(self._selection_changed)
+        root.addWidget(self.table)
+
         self.output = MonospaceOutputView()
-        splitter.addWidget(self.table)
-        splitter.addWidget(self.output)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 3)
-        root.addWidget(splitter, 1)
+        root.addWidget(self.output, 1)
 
         store.changed.connect(self.refresh)
         jobs.selection_changed.connect(self._manager_selection_changed)
         jobs.output_changed.connect(self._output_changed)
         self.refresh()
+        self._resize_columns()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._resize_columns()
+
+    def _resize_columns(self):
+        available = self.table.viewport().width()
+        if available <= 0:
+            return
+        used = 0
+        for column, weight in enumerate(_COLUMN_WEIGHTS[:-1]):
+            width = max(60, int(available * weight))
+            self.table.setColumnWidth(column, width)
+            used += width
+        self.table.setColumnWidth(4, max(60, available - used))
+
+    def _update_table_height(self):
+        header_height = self.table.horizontalHeader().sizeHint().height()
+        row_height = self.table.verticalHeader().defaultSectionSize()
+        visible_rows = min(max(self.table.rowCount(), 1), _MAX_VISIBLE_JOB_ROWS)
+        frame = self.table.frameWidth() * 2
+        self.table.setFixedHeight(
+            header_height + visible_rows * row_height + frame + 2
+        )
 
     def refresh(self, *_):
         selected = self.jobs.selected_job_id
@@ -87,6 +107,8 @@ class JobsPanel(QWidget):
         if selected_row >= 0:
             self.table.selectRow(selected_row)
         self.table.blockSignals(False)
+        self._update_table_height()
+        self._resize_columns()
         if selected_row >= 0:
             job_id = str(
                 self.table.item(selected_row, 0).data(Qt.ItemDataRole.UserRole)

@@ -9,6 +9,13 @@ def css(p):
         selection-color: {p['text']};
         outline: 0;
     }}
+    QTableView, QTableWidget {{
+        gridline-color: {p['border']};
+    }}
+    QTableView::item, QTableWidget::item {{
+        padding: 4px 6px;
+        border: none;
+    }}
     QTreeView::item, QTreeWidget::item {{
         min-height: 27px;
         padding-left: 3px;
@@ -24,11 +31,21 @@ def css(p):
     QFrame#MaterialBehaviorRow:hover {{ border-color: {p['border_light']}; }}
     QLabel#BehaviorCategory {{ font-weight: 600; color: {p['text']}; }}
     QLabel#BehaviorValue {{ color: {p['muted']}; }}
+    QHeaderView {{
+        background: {p['panel_alt']};
+    }}
     QHeaderView::section {{
         background: {p['panel_alt']};
+        color: {p['text']};
         border: none;
         border-right: 1px solid {p['border']};
         border-bottom: 1px solid {p['border']};
         padding: 6px;
+    }}
+    QTableCornerButton::section {{
+        background: {p['panel_alt']};
+        border: none;
+        border-right: 1px solid {p['border']};
+        border-bottom: 1px solid {p['border']};
     }}
     """

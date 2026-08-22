@@ -8,45 +8,53 @@ from opencae.ui.core.theme import PALETTE
 
 
 class XYZPicker(QWidget):
-    """Three compact editable coordinates with an optional viewport-pick action."""
+    """Shared segmented XYZ input with a viewport-pick action."""
 
     pick_requested = pyqtSignal(object, object, object)
     cancel_requested = pyqtSignal()
     changed = pyqtSignal()
 
-    def __init__(self, values=(0.0, 0.0, 0.0), *, allowed=(), value_kind="point", parent=None):
+    def __init__(self, values=(0.0, 0.0, 0.0), *, allowed=(), value_kind="point", suffix="", parent=None):
         super().__init__(parent)
         self.allowed = tuple(allowed)
         self.value_kind = str(value_kind)
+        self.setObjectName("XYZPicker")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(0)
+
         self.editors = []
-        for axis, value in zip("XYZ", values):
+        segment_names = ("XYZFirst", "XYZMiddle", "XYZLast")
+        for axis, value, object_name in zip("XYZ", values, segment_names):
             editor = QDoubleSpinBox()
+            editor.setObjectName(object_name)
             editor.setRange(-1.0e30, 1.0e30)
             editor.setDecimals(8)
             editor.setValue(float(value))
             editor.setPrefix(f"{axis}: ")
-            editor.setMinimumWidth(92)
-            editor.setMaximumWidth(112)
-            editor.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            editor.setSuffix(str(suffix or ""))
+            editor.setMinimumWidth(78)
+            editor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             editor.valueChanged.connect(lambda _value: self.changed.emit())
             self.editors.append(editor)
-            layout.addWidget(editor)
+            layout.addWidget(editor, 1)
+
         self.pick_button = QPushButton()
         self.pick_button.setIcon(make_icon(IconKind.PICK, 18, PALETTE["text"]))
         self.pick_button.setIconSize(QSize(18, 18))
-        self.pick_button.setFixedSize(30, 30)
+        self.pick_button.setFixedSize(34, 34)
         self.pick_button.setCheckable(True)
-        self.pick_button.setObjectName("InlinePickButton")
+        self.pick_button.setObjectName("XYZPickButton")
         self.pick_button.setAccessibleName("Pick in viewport")
         self.pick_button.setToolTip("Pick this value in the viewport")
         self.pick_button.toggled.connect(self._toggle_pick)
-        self.pick_button.setVisible(bool(self.allowed))
+        self.pick_button.setEnabled(bool(self.allowed))
         layout.addWidget(self.pick_button)
-        layout.addStretch(1)
-        self.setMaximumWidth(390)
+
+        self.setMinimumWidth(320)
+        self.setFocusProxy(self.editors[0])
 
     def value(self):
         return tuple(editor.value() for editor in self.editors)
@@ -70,6 +78,9 @@ class XYZPicker(QWidget):
     def _toggle_pick(self, active):
         if not active:
             self.cancel_requested.emit()
+            return
+        if not self.allowed:
+            self.finish_pick()
             return
         self.pick_requested.emit(self.allowed, self._apply_reference, self.finish_pick)
 

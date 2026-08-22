@@ -1,9 +1,9 @@
 """Workflow ribbon with separate Steps, Analysis and Studies stages."""
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QLabel, QStackedWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 
-from opencae.ui.core.metrics import CONTEXT_BAR_HEIGHT, RIBBON_PAGE_HEIGHT
+from opencae.ui.core.metrics import RIBBON_PAGE_HEIGHT
 from opencae.ui.core.theme import PALETTE
 from . import (
     analysis_page,
@@ -75,9 +75,12 @@ class Ribbon(QWidget):
         self.stage_bar = StageBar()
         self.stage_bar.stage_changed.connect(self.set_stage)
         layout.addWidget(self.stage_bar)
-        self.context = self._context_label()
-        layout.addWidget(self.context)
         self.stack = QStackedWidget()
+        self.stack.setMinimumWidth(0)
+        self.stack.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Fixed,
+        )
         self.stack.setFixedHeight(RIBBON_PAGE_HEIGHT)
         for module in _PAGES:
             if module is part_page:
@@ -105,19 +108,7 @@ class Ribbon(QWidget):
                 page = RibbonPage(module.groups(), actions)
             self.stack.addWidget(page)
         layout.addWidget(self.stack)
-        store.changed.connect(self.refresh_context)
-        store.active_part_changed.connect(self.refresh_context)
         self.set_stage("PART")
-
-    def _context_label(self):
-        label = QLabel()
-        label.setFixedHeight(CONTEXT_BAR_HEIGHT)
-        label.setStyleSheet(
-            f"background:{PALETTE['panel_alt']}; color:{PALETTE['muted']}; "
-            f"border-top:1px solid {PALETTE['border']}; "
-            f"border-bottom:1px solid {PALETTE['border']}; padding-left:8px;"
-        )
-        return label
 
     def set_stage(self, stage):
         if stage not in STAGES or stage == self.current_stage:
@@ -127,7 +118,6 @@ class Ribbon(QWidget):
         self.current_stage = stage
         self.stage_bar.set_stage(stage)
         self.stack.setCurrentIndex(STAGES.index(stage))
-        self.refresh_context()
         self.stage_changed.emit(stage)
 
     def set_browser(self, name):
@@ -137,65 +127,11 @@ class Ribbon(QWidget):
             self.set_stage(self.last_project_stage or "PART")
 
     def refresh_context(self, *_):
-        project = self.store.project
-        part = self.store.active_part()
-        stage = self.current_stage
-        if stage == "MATERIALS":
-            text = f"  Materials: {len(project.materials)}"
-        elif stage == "SECTIONS":
-            text = f"  Sections: {len(project.sections)}"
-        elif stage == "PROFILES":
-            text = f"  Profiles: {len(project.profiles)}"
-        elif stage == "FIELDS":
-            text = f"  Fields: {len(project.fields)}"
-        elif stage == "PART":
-            text = (
-                f"  Active Part: {part.name}     Geometry features: {len(part.geometry)}"
-                f"     Mesh: {part.mesh.status}"
-                if part
-                else "  No active part"
-            )
-        elif stage == "ASSEMBLY":
-            text = (
-                f"  Assembly: {project.assembly.name}     "
-                f"{len(project.assembly.instances)} instances"
-            )
-        elif stage == "CONSTRAINTS":
-            text = f"  Constraints: {len(project.assembly.constraints)}"
-        elif stage == "BOUNDARY CONDITIONS":
-            text = f"  Supports: {len(project.supports)}     Loads: {len(project.loads)}"
-        elif stage == "STEPS":
-            text = f"  Reusable Steps: {len(project.steps)}"
-        elif stage == "ANALYSIS":
-            active = self.controllers.analysis.active_analysis() if self.controllers else None
-            count = len(active.resolved_steps(project)) if active else 0
-            text = (
-                f"  Active Analysis: {active.name}     Steps: {count}     "
-                f"Solver: {active.solver}"
-                if active
-                else "  No Analysis selected"
-            )
-        elif stage == "STUDIES":
-            active = (
-                project.try_resolve(self.controllers.studies.active_study_id)
-                if self.controllers
-                else None
-            )
-            text = (
-                f"  Active Study: {active.name}     Type: "
-                f"{getattr(active, 'study_type', type(active).__name__)}"
-                if active
-                else "  No Study selected"
-            )
-        else:
-            text = f"  Available solutions: {len(project.results)}"
-        self.context.setText(text)
+        """Compatibility hook retained after removal of the context status row."""
 
     def refresh_solvers(self):
         if self.analysis_page is not None:
             self.analysis_page.selector_bar.refresh()
-        self.refresh_context()
 
     def _solver_changed(self):
         self.state_callback()
-        self.refresh_context()

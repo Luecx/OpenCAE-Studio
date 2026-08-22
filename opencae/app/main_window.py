@@ -271,15 +271,10 @@ class MainWindow(QMainWindow):
             self.project_dock,
         )
         self.addDockWidget(
-            Qt.DockWidgetArea.RightDockWidgetArea,
-            self.properties_dock,
-        )
-        self.addDockWidget(
             Qt.DockWidgetArea.BottomDockWidgetArea,
             self.output_dock,
         )
         self.project_dock.show()
-        self.properties_dock.show()
         self.output_dock.show()
         self.ribbon_host.show()
 
