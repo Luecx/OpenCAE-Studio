@@ -13,6 +13,9 @@ from PyQt6.QtWidgets import (
 from opencae.ui.core.widgets import MonospaceOutputView
 
 
+_COLUMN_WEIGHTS = (0.17, 0.23, 0.11, 0.15, 0.34)
+
+
 class JobsPanel(QWidget):
     """Display all jobs above exactly the output of the selected job."""
 
@@ -33,14 +36,11 @@ class JobsPanel(QWidget):
             ["Job", "Source", "Kind", "Solver", "Status"]
         )
         header = self.table.horizontalHeader()
-        header.setMinimumSectionSize(80)
-        for column in range(4):
+        header.setMinimumSectionSize(60)
+        header.setStretchLastSection(False)
+        for column in range(5):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
-        self.table.setColumnWidth(0, 180)
-        self.table.setColumnWidth(1, 260)
-        self.table.setColumnWidth(2, 120)
-        self.table.setColumnWidth(3, 150)
+        self.table.verticalHeader().hide()
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.itemSelectionChanged.connect(self._selection_changed)
@@ -65,6 +65,22 @@ class JobsPanel(QWidget):
         jobs.selection_changed.connect(self._manager_selection_changed)
         jobs.output_changed.connect(self._output_changed)
         self.refresh()
+        self._resize_columns()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._resize_columns()
+
+    def _resize_columns(self):
+        available = self.table.viewport().width()
+        if available <= 0:
+            return
+        used = 0
+        for column, weight in enumerate(_COLUMN_WEIGHTS[:-1]):
+            width = max(60, int(available * weight))
+            self.table.setColumnWidth(column, width)
+            used += width
+        self.table.setColumnWidth(4, max(60, available - used))
 
     def refresh(self, *_):
         selected = self.jobs.selected_job_id
