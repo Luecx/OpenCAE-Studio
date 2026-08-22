@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QApplication, QStyle
 from .kinds import IconKind
 from .legacy import IconKind as LegacyKind
 from .legacy import make_icon as make_legacy_icon
+from .modern_renderer import make_modern_icon
 
 _ICON_MAP = {
     IconKind.FILE:LegacyKind.OUTPUT, IconKind.SAVE:LegacyKind.EXPORT, IconKind.IMPORT:LegacyKind.IMPORT,
@@ -47,6 +48,9 @@ _ICON_MAP = {
 
 
 def make_icon(kind: IconKind, size: int = 40, accent: str | None = None) -> QIcon:
+    modern = make_modern_icon(kind, size, accent)
+    if modern is not None:
+        return modern
     if kind == IconKind.DELETE:
         app = QApplication.instance()
         style = app.style() if app is not None else QApplication.style()
