@@ -17,8 +17,8 @@ from .visibility import PartVisibility
 
 
 class PartController:
-    def __init__(self, store, parent):
-        self.context = PartContext(store, parent)
+    def __init__(self, store, parent, units=None):
+        self.context = PartContext(store, parent, units)
         self.service = self.context.service
         self.lifecycle = PartLifecycle(self.context)
         self.partitions = PartPartitions(self.context)
