@@ -20,7 +20,7 @@ class ControllerHub:
         self.parent = parent
         self.units = UnitManager(store, settings)
         self.project = ProjectController(store, parent, settings)
-        self.part = PartController(store, parent)
+        self.part = PartController(store, parent, self.units)
         self.resources = ResourceController(store, parent, self.units)
         self.assembly = AssemblyController(store, parent, self.part)
         self.loads = LoadController(store, parent, self.part, self.resources)
