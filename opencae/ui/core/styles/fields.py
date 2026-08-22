@@ -8,6 +8,22 @@ def css(p):
         min-height: 22px;
         min-width: 316px;
     }}
+    QSpinBox, QDoubleSpinBox {{
+        padding-right: 9px;
+    }}
+    QSpinBox::up-button, QSpinBox::down-button,
+    QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
+        width: 0px;
+        height: 0px;
+        border: none;
+        background: transparent;
+    }}
+    QSpinBox::up-arrow, QSpinBox::down-arrow,
+    QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow {{
+        width: 0px;
+        height: 0px;
+        image: none;
+    }}
 
     QComboBox#ReferenceCombo, QLineEdit#CompositeFieldEdit {{
         min-width: 0px;
