@@ -8,7 +8,7 @@ class GeometrySettingsDialog(FormDialog):
             "Geometry Settings",
             (
                 FieldSpec("heal_on_import", "Heal on import", "bool", settings.heal_on_import),
-                FieldSpec("tolerance", "OCC tolerance", "float", settings.tolerance, minimum=1e-12, decimals=10),
+                FieldSpec("tolerance", "OCC tolerance", "float", settings.tolerance, minimum=1e-12, decimals=10, quantity="length"),
                 FieldSpec("sew_faces", "Sew faces", "bool", settings.sew_faces),
                 FieldSpec("make_solids", "Make solids", "bool", settings.make_solids),
                 FieldSpec("remove_degenerate", "Repair degenerated entities", "bool", settings.remove_degenerate),

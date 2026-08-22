@@ -20,7 +20,7 @@ class SupportDialog(ApplyDialog):
         self.csys = ReferenceSelector((("Global", None), *coordinate_systems), csys)
         form.addRow("Name", self.name); form.addRow("Target region", self.region); form.addRow("Coordinate system", self.csys); root.addLayout(form)
         defaults = getattr(support, "components", ([0.0] * 6 if support_type == "Fixed" else [None] * 6))
-        self.components = ComponentsWidget(("Ux", "Uy", "Uz", "Rx", "Ry", "Rz"), defaults, checkable=True, editable=support_type != "Fixed")
+        self.components = ComponentsWidget(("Ux", "Uy", "Uz", "Rx", "Ry", "Rz"), defaults, checkable=True, editable=support_type != "Fixed", parent=self, quantities=("length", "length", "length", None, None, None))
         root.addWidget(self.components); buttons = dialog_buttons(include_apply=True); self.bind_buttons(buttons, True); root.addWidget(buttons)
 
     def validate(self):

@@ -14,6 +14,15 @@ def css(p):
     }}
     QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {{ border-color: #53606d; }}
     QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{ border-color: {p['accent']}; }}
+
+    QSpinBox::up-button, QSpinBox::down-button,
+    QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
+        width: 0px;
+        height: 0px;
+        border: none;
+        background: transparent;
+    }}
+
     QComboBox {{ padding-right: 30px; }}
     QComboBox::drop-down {{
         subcontrol-origin: padding;

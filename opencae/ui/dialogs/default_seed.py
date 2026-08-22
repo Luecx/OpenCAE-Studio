@@ -9,7 +9,7 @@ class DefaultSeedDialog(ApplyFormDialog):
             "Seed Part",
             (
                 FieldSpec("name", "Name", "text", seed.name if seed else "Default Seed"),
-                FieldSpec("size", "Approximate global size", "float", seed.size if seed else 5.0, minimum=1e-12),
+                FieldSpec("size", "Approximate global size", "float", seed.size if seed else 5.0, minimum=1e-12, quantity="length"),
                 FieldSpec("deviation", "Deviation factor", "float", metadata.get("deviation", 0.1), minimum=0.0),
                 FieldSpec("minimum", "Minimum size factor", "float", metadata.get("minimum", 0.1), minimum=0.0001, maximum=1.0),
             ),

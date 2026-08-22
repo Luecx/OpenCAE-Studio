@@ -1,21 +1,38 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QAbstractItemView, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox,  QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QAbstractItemView, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
 from opencae.model.entities.profiles.calculations import profile_parameters, profile_properties
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.controls import dialog_buttons
+from opencae.ui.core.unit_context import unit_system_for
 from opencae.ui.core.widgets import ChevronComboBox
 from .profile_graph_editor import GraphProfileEditor
 
 PROFILE_TYPES = ("Rectangle", "Box", "Pipe", "Circle", "I-profile", "H-profile", "C-profile", "U-profile", "General", "Graph profile")
+_PARAMETER_QUANTITIES = {
+    "area": "area",
+    "iyy": "section_inertia",
+    "izz": "section_inertia",
+    "iyz": "section_inertia",
+    "torsion_constant": "section_inertia",
+}
+_PROPERTY_QUANTITIES = {
+    "Area": "area",
+    "Centroid y": "length",
+    "Centroid z": "length",
+    "Iyy": "section_inertia",
+    "Izz": "section_inertia",
+    "Iyz": "section_inertia",
+    "Torsion constant": "section_inertia",
+}
 
 
 class ProfileDialog(ApplyDialog):
     def __init__(self, profile=None, existing_names=(), parent=None, initial_type=None, default_name="Profile-1"):
         super().__init__(parent)
         self.profile = profile; self.existing_names = {name.casefold() for name in existing_names}; self._editors = {}
+        self.unit_system = unit_system_for(self)
         self.setWindowTitle("Edit Profile" if profile else "Create Profile"); self.setMinimumSize(880, 520)
         root = QVBoxLayout(self); root.setContentsMargins(18,16,18,14); root.setSpacing(12)
         title=QLabel(self.windowTitle()); title.setObjectName("PanelTitle"); root.addWidget(title)
@@ -31,11 +48,12 @@ class ProfileDialog(ApplyDialog):
         while self.form.rowCount(): self.form.removeRow(0)
         self._editors={}; current=self.profile.dimensions if self.profile and self.kind.currentText()==self.profile.profile_type else {}
         if self.kind.currentText()=="Graph profile":
-            editor=GraphProfileEditor(current.get("nodes","1,-20,0\n2,20,0"),current.get("segments","1,2,2.0")); editor.connect_changed(self._update_properties)
+            editor=GraphProfileEditor(current.get("nodes","1,-20,0\n2,20,0"),current.get("segments","1,2,2.0"),self.unit_system.symbol("length")); editor.connect_changed(self._update_properties)
             self._editors["graph"]=editor; self.form.addRow(editor)
         else:
             for key,label,default in profile_parameters(self.kind.currentText()):
                 editor=QDoubleSpinBox(); editor.setRange(-1e30,1e30); editor.setDecimals(6); editor.setValue(float(current.get(key,default))); editor.valueChanged.connect(self._update_properties)
+                quantity=_PARAMETER_QUANTITIES.get(key,"length"); editor.setSuffix(f" {self.unit_system.symbol(quantity)}")
                 editor.setMinimumWidth(320); self._editors[key]=editor; self.form.addRow(label,editor)
         self._update_properties()
 
@@ -45,9 +63,9 @@ class ProfileDialog(ApplyDialog):
 
     def _update_properties(self):
         data=profile_properties(self.kind.currentText(),self._dimensions()); self.properties.setRowCount(len(data))
-        units={"Area":"mm²","Centroid y":"mm","Centroid z":"mm","Iyy":"mm⁴","Izz":"mm⁴","Iyz":"mm⁴","Torsion constant":"mm⁴"}
         for row,(name,value) in enumerate(data.items()):
-            self.properties.setItem(row,0,QTableWidgetItem(name)); self.properties.setItem(row,1,QTableWidgetItem(f"{value:.8g}")); self.properties.setItem(row,2,QTableWidgetItem(units.get(name,"")))
+            quantity=_PROPERTY_QUANTITIES.get(name); unit=self.unit_system.symbol(quantity) if quantity else ""
+            self.properties.setItem(row,0,QTableWidgetItem(name)); self.properties.setItem(row,1,QTableWidgetItem(f"{value:.8g}")); self.properties.setItem(row,2,QTableWidgetItem(unit))
 
     def validate(self):
         name=self.name.text().strip()

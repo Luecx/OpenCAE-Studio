@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QFormLayout, QLabel, QVBoxLayout, QWidget
 from .apply_dialog import ApplyDialog
 from .controls import dialog_buttons
 from .fields import FieldSpec, create_editor, editor_value
+from .unit_context import unit_system_for
 
 
 class FormDialog(ApplyDialog):
@@ -16,6 +17,7 @@ class FormDialog(ApplyDialog):
         self.setMinimumWidth(width)
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
         self._editors = {}
+        unit_system = unit_system_for(self)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 14)
         layout.setSpacing(14)
@@ -26,7 +28,7 @@ class FormDialog(ApplyDialog):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         for spec in fields:
-            editor = create_editor(spec)
+            editor = create_editor(spec, unit_system)
             self._editors[spec.key] = editor
             form.addRow(spec.label, editor)
         layout.addLayout(form)

@@ -6,6 +6,7 @@ from opencae.model.naming import is_unique
 from opencae.model.selection import RegionDefinition
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.controls import dialog_buttons
+from opencae.ui.core.unit_context import unit_system_for
 from opencae.ui.core.widgets import ChevronComboBox, CompactRegionSelector
 
 
@@ -40,7 +41,7 @@ class ConstraintDialog(ApplyDialog):
         for label, value in zip(("U1", "U2", "U3", "R1", "R2", "R3"), components):
             box = QCheckBox(); box.setChecked(bool(value)); self.components.append(box); form.addRow(label, box)
         self.adjust = QCheckBox(); self.adjust.setChecked(bool(getattr(constraint, "adjust", False)))
-        self.distance = QDoubleSpinBox(); self.distance.setRange(0.0, 1e300); self.distance.setDecimals(12); self.distance.setValue(float(getattr(constraint, "distance", 0.0) or 0.0))
+        self.distance = QDoubleSpinBox(); self.distance.setRange(0.0, 1e300); self.distance.setDecimals(12); self.distance.setValue(float(getattr(constraint, "distance", 0.0) or 0.0)); self.distance.setSuffix(f" {unit_system_for(self).symbol('length')}")
         form.addRow("Adjust tie", self.adjust); form.addRow("Tie distance", self.distance)
         root.addLayout(form); buttons = dialog_buttons(include_apply=True); self.bind_buttons(buttons, True); root.addWidget(buttons)
         self.kind.currentIndexChanged.connect(self._update_type)
@@ -57,8 +58,6 @@ class ConstraintDialog(ApplyDialog):
     def constraint_type(self): return ConstraintType.coerce(self.kind.currentData())
 
     def _update_type(self):
-        # A policy belongs to one concrete field/type.  Changing the constraint
-        # type ends any active viewport session before installing new policies.
         self.master.finish_pick(); self.slave.finish_pick()
         kind = self.constraint_type(); tie = kind == ConstraintType.TIE; coupling = kind in {ConstraintType.KINEMATIC, ConstraintType.DISTRIBUTING}
         self.master.set_requirement(constraint_region_requirement(kind, "master"))
@@ -73,9 +72,6 @@ class ConstraintDialog(ApplyDialog):
         self.form.labelForField(self.slave).setText(slave_label)
         self.form.labelForField(self.adjust).setVisible(tie); self.adjust.setVisible(tie)
         self.form.labelForField(self.distance).setVisible(tie); self.distance.setVisible(tie)
-        # Coupling and rigid-body control points are always direct visual point
-        # selections.  Named sets/regions are valid only for surface/body and
-        # coupled-region fields.
         self.master.set_extended_visible(tie)
         self.slave.set_extended_visible(True)
         if (coupling or kind == ConstraintType.RIGID_BODY) and not self.master.definition().empty:

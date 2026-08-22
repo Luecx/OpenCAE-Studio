@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QDoubleSpinBox,QFormLayout,QGroupBox,QLabel,QLineEdi
 from opencae.model.core import EntityRef
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.controls import dialog_buttons
+from opencae.ui.core.unit_context import unit_system_for
 from opencae.ui.core.widgets import ChevronComboBox,MatrixEditor,ReferenceSelector
 
 SECTION_TYPES=("Solid","Shell","Beam","Truss"); SHELL_TYPES=("Integrated shell section","ABD shell section")
@@ -12,7 +13,7 @@ SECTION_TYPES=("Solid","Shell","Beam","Truss"); SHELL_TYPES=("Integrated shell s
 
 class SectionDialog(ApplyDialog):
     def __init__(self,materials=(),profiles=(),create_material=None,create_profile=None,section=None,existing_names=(),parent=None,initial_type=None,default_name="Section-1"):
-        super().__init__(parent); self.section=section; self.existing_names={name.casefold() for name in existing_names}; self.setWindowTitle("Edit Section" if section else "Create Section"); self.setMinimumWidth(760)
+        super().__init__(parent); self.section=section; self.existing_names={name.casefold() for name in existing_names}; self.unit_system=unit_system_for(self); self.setWindowTitle("Edit Section" if section else "Create Section"); self.setMinimumWidth(760)
         root=QVBoxLayout(self); root.setContentsMargins(18,16,18,14); root.setSpacing(12); heading=QLabel(self.windowTitle()); heading.setObjectName("PanelTitle"); root.addWidget(heading)
         common=QFormLayout(); self.name=QLineEdit(section.name if section else default_name); self.kind=ChevronComboBox(); self.kind.addItems(SECTION_TYPES); self.kind.setCurrentText(section.section_type if section else (initial_type or "Solid")); common.addRow("Name",self.name); common.addRow("Section type",self.kind); root.addLayout(common)
         self.stack=QStackedWidget(); root.addWidget(self.stack,1); material_current=section.material_ref.entity_id if section and section.material_ref else ""; profile_current=section.profile_ref.entity_id if section and section.profile_ref else ""
@@ -26,14 +27,14 @@ class SectionDialog(ApplyDialog):
 
     def _shell_page(self,materials,current,callback):
         page=QWidget(); layout=QVBoxLayout(page); form=QFormLayout(); self.shell_definition=ChevronComboBox(); self.shell_definition.addItems(SHELL_TYPES); self.shell_definition.setCurrentText(getattr(self.section,"shell_definition",SHELL_TYPES[0])); form.addRow("Shell formulation",self.shell_definition); layout.addLayout(form)
-        self.shell_stack=QStackedWidget(); layout.addWidget(self.shell_stack); integrated=QWidget(); integrated_form=QFormLayout(integrated); self.shell_material=ReferenceSelector(materials,current,callback); self.shell_thickness=QDoubleSpinBox(); self.shell_thickness.setRange(1e-12,1e12); self.shell_thickness.setDecimals(6); self.shell_thickness.setValue(getattr(self.section,"thickness",1.0)); self.shell_points=QSpinBox(); self.shell_points.setRange(1,99); self.shell_points.setValue(getattr(self.section,"integration_points",5)); integrated_form.addRow("Material",self.shell_material); integrated_form.addRow("Thickness",self.shell_thickness); integrated_form.addRow("Integration points",self.shell_points); self.shell_stack.addWidget(integrated)
+        self.shell_stack=QStackedWidget(); layout.addWidget(self.shell_stack); integrated=QWidget(); integrated_form=QFormLayout(integrated); self.shell_material=ReferenceSelector(materials,current,callback); self.shell_thickness=QDoubleSpinBox(); self.shell_thickness.setRange(1e-12,1e12); self.shell_thickness.setDecimals(6); self.shell_thickness.setValue(getattr(self.section,"thickness",1.0)); self.shell_thickness.setSuffix(f" {self.unit_system.symbol('length')}"); self.shell_points=QSpinBox(); self.shell_points.setRange(1,99); self.shell_points.setValue(getattr(self.section,"integration_points",5)); integrated_form.addRow("Material",self.shell_material); integrated_form.addRow("Thickness",self.shell_thickness); integrated_form.addRow("Integration points",self.shell_points); self.shell_stack.addWidget(integrated)
         abd=QWidget(); abd_layout=QVBoxLayout(abd); abd_group=QGroupBox("6 × 6 generalized stiffness matrix"); abd_box=QVBoxLayout(abd_group); self.abd=MatrixEditor(6,6,getattr(self.section,"abd_matrix",None)); abd_box.addWidget(self.abd); shear_group=QGroupBox("2 × 2 transverse shear matrix"); shear_box=QVBoxLayout(shear_group); self.shear=MatrixEditor(2,2,getattr(self.section,"shear_matrix",None)); shear_box.addWidget(self.shear); abd_layout.addWidget(abd_group); abd_layout.addWidget(shear_group); self.shell_stack.addWidget(abd); self.shell_definition.currentIndexChanged.connect(self.shell_stack.setCurrentIndex); self.shell_stack.setCurrentIndex(SHELL_TYPES.index(self.shell_definition.currentText())); return page
 
     def _beam_page(self,materials,profiles,material,profile,cm,cp):
         page=QWidget(); form=QFormLayout(page); mat=ReferenceSelector(materials,material,cm); prof=ReferenceSelector(profiles,profile,cp); form.addRow("Material",mat); form.addRow("Profile",prof); return page,mat,prof
 
     def _truss_page(self,materials,material,callback):
-        page=QWidget(); form=QFormLayout(page); mat=ReferenceSelector(materials,material,callback); area=QDoubleSpinBox(); area.setRange(1e-12,1e30); area.setDecimals(6); area.setValue(getattr(self.section,"area",1.0)); form.addRow("Material",mat); form.addRow("Cross-sectional area",area); return page,mat,area
+        page=QWidget(); form=QFormLayout(page); mat=ReferenceSelector(materials,material,callback); area=QDoubleSpinBox(); area.setRange(1e-12,1e30); area.setDecimals(6); area.setValue(getattr(self.section,"area",1.0)); area.setSuffix(f" {self.unit_system.symbol('area')}"); form.addRow("Material",mat); form.addRow("Cross-sectional area",area); return page,mat,area
 
     def _resize(self):self.adjustSize()
 

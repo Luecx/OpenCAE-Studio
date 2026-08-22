@@ -11,7 +11,7 @@ class IconKind(Enum):
     SUPPORT = auto(); FIXED_SUPPORT = auto(); DISPLACEMENT_SUPPORT = auto(); SYMMETRY_SUPPORT = auto()
     LOAD = auto(); CONCENTRATED_LOAD = auto(); TRACTION_LOAD = auto(); PRESSURE_LOAD = auto()
     VOLUME_LOAD = auto(); INERTIA_LOAD = auto(); TEMPERATURE_LOAD = auto(); ANALYSIS = auto()
-    SETTINGS = auto(); VALIDATE = auto(); DECK = auto(); RUN = auto(); RESULTS = auto(); DELETE = auto()
+    SETTINGS = auto(); VALIDATE = auto(); DECK = auto(); RUN = auto(); RESULTS = auto(); DELETE = auto(); CLEAR = auto()
     EDIT = auto(); DUPLICATE = auto(); INFO = auto(); ELASTICITY = auto(); DENSITY = auto()
     PLASTICITY = auto(); THERMAL = auto(); FIELD = auto(); SECTION_SOLID = auto(); SECTION_SHELL = auto()
     SECTION_BEAM = auto(); SECTION_TRUSS = auto(); PROFILE_RECTANGLE = auto(); PROFILE_BOX = auto()

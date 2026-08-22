@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLabel, QVBoxLayout, QWidget
 
 from .fields import FieldSpec, create_editor, editor_value
+from .unit_context import unit_system_for
 
 
 class ApplyFormDialog(QDialog):
@@ -17,6 +18,7 @@ class ApplyFormDialog(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
         self._editors = {}
+        unit_system = unit_system_for(self)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 14)
         layout.setSpacing(14)
@@ -24,7 +26,7 @@ class ApplyFormDialog(QDialog):
         form = QFormLayout(); form.setHorizontalSpacing(18); form.setVerticalSpacing(10)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         for spec in fields:
-            editor = create_editor(spec); self._editors[spec.key] = editor
+            editor = create_editor(spec, unit_system); self._editors[spec.key] = editor
             form.addRow(spec.label, editor)
         layout.addLayout(form)
         buttons = QDialogButtonBox(

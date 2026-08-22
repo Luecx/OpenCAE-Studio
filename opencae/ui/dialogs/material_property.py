@@ -2,6 +2,7 @@ from PyQt6.QtWidgets import QDialog, QDoubleSpinBox, QFormLayout, QLabel, QStack
 
 from opencae.model.entities.resources.material_behaviors import DensityBehavior, IsotropicElasticity, IsotropicPlasticity, IsotropicThermalExpansion, NeoHookeElasticity
 from opencae.ui.core.controls import dialog_buttons
+from opencae.ui.core.unit_context import unit_system_for
 from opencae.ui.core.widgets import ChevronComboBox
 
 _BY_CATEGORY = {
@@ -14,7 +15,7 @@ _BY_CATEGORY = {
 
 class MaterialPropertyDialog(QDialog):
     def __init__(self, behavior=None, parent=None, category=None):
-        super().__init__(parent); self.behavior = behavior; self.category = category or getattr(behavior, "category", "Elasticity")
+        super().__init__(parent); self.behavior = behavior; self.category = category or getattr(behavior, "category", "Elasticity"); self.unit_system = unit_system_for(self)
         self.types = _BY_CATEGORY[self.category]; self.setWindowTitle(self.category); self.setMinimumWidth(520)
         root = QVBoxLayout(self); root.setContentsMargins(18, 16, 18, 14); title = QLabel(self.category); title.setObjectName("PanelTitle"); root.addWidget(title)
         form = QFormLayout(); self.kind = ChevronComboBox(); self.kind.addItems(self.types); self.kind.setCurrentText(getattr(behavior, "behavior_type", self.types[0])); form.addRow("Definition", self.kind); root.addLayout(form)
@@ -24,10 +25,18 @@ class MaterialPropertyDialog(QDialog):
         buttons = dialog_buttons(); buttons.accepted.connect(self.accept); buttons.rejected.connect(self.reject); root.addWidget(buttons)
 
     def _add_page(self, kind):
-        specs = {"Isotropic elasticity": (("Young's modulus", 210000.0), ("Poisson ratio", 0.3)), "Neo-Hooke": (("C10", 1.0), ("D1", 0.0)), "Constant density": (("Density", 0.0),), "Isotropic expansion": (("Expansion coefficient", 0.0), ("Reference temperature", 20.0)), "Bilinear isotropic hardening": (("Yield stress", 250.0), ("Tangent modulus", 0.0))}[kind]
+        specs = {
+            "Isotropic elasticity": (("Young's modulus", 210000.0, "pressure"), ("Poisson ratio", 0.3, None)),
+            "Neo-Hooke": (("C10", 1.0, "pressure"), ("D1", 0.0, "compliance")),
+            "Constant density": (("Density", 0.0, "density"),),
+            "Isotropic expansion": (("Expansion coefficient", 0.0, "thermal_expansion"), ("Reference temperature", 20.0, "temperature")),
+            "Bilinear isotropic hardening": (("Yield stress", 250.0, "pressure"), ("Tangent modulus", 0.0, "pressure")),
+        }[kind]
         page = QWidget(); form = QFormLayout(page); editors = []
-        for label, default in specs:
-            editor = QDoubleSpinBox(); editor.setRange(-1e30, 1e30); editor.setDecimals(8); editor.setValue(default); form.addRow(label, editor); editors.append(editor)
+        for label, default, quantity in specs:
+            editor = QDoubleSpinBox(); editor.setRange(-1e30, 1e30); editor.setDecimals(8); editor.setValue(default)
+            if quantity: editor.setSuffix(f" {self.unit_system.symbol(quantity)}")
+            form.addRow(label, editor); editors.append(editor)
         self._pages[kind] = editors; self.stack.addWidget(page)
 
     def _load(self):

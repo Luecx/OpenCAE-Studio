@@ -1,9 +1,12 @@
 from PyQt6.QtWidgets import QHBoxLayout,QHeaderView,QLabel,QPushButton,QTableWidget,QTableWidgetItem,QVBoxLayout,QWidget
 
+
 class GraphProfileEditor(QWidget):
-    def __init__(self,nodes="",segments="",parent=None):
+    def __init__(self,nodes="",segments="",length_unit="",parent=None):
         super().__init__(parent); root=QHBoxLayout(self); root.setContentsMargins(0,0,0,0); root.setSpacing(12)
-        self.nodes=self._table(("ID","y","z")); self.segments=self._table(("Node 1","Node 2","Thickness"))
+        y_header=f"y [{length_unit}]" if length_unit else "y"; z_header=f"z [{length_unit}]" if length_unit else "z"
+        thickness_header=f"Thickness [{length_unit}]" if length_unit else "Thickness"
+        self.nodes=self._table(("ID",y_header,z_header)); self.segments=self._table(("Node 1","Node 2",thickness_header))
         root.addWidget(self._pane("Local nodes",self.nodes,self._add_node)); root.addWidget(self._pane("Segments",self.segments,self._add_segment))
         self._load(self.nodes,nodes,3); self._load(self.segments,segments,3)
     @staticmethod

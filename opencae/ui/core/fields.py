@@ -26,9 +26,10 @@ class FieldSpec:
     create_callback: Callable[[QWidget, Callable[[object], None]], None] | None = None
     pick_callback: Callable | None = None
     read_only: bool = False
+    quantity: str | None = None
 
 
-def create_editor(spec: FieldSpec) -> QWidget:
+def create_editor(spec: FieldSpec, unit_system=None) -> QWidget:
     if spec.kind == "choice":
         widget = ChevronComboBox(); widget.addItems(spec.choices); widget.setCurrentText(str(spec.default))
     elif spec.kind == "reference":
@@ -47,6 +48,8 @@ def create_editor(spec: FieldSpec) -> QWidget:
         widget = FilePathEditor(str(spec.default), spec.file_filter)
     else:
         widget = QLineEdit(str(spec.default)); widget.setReadOnly(spec.read_only)
+    if spec.quantity and unit_system is not None and isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+        widget.setSuffix(f" {unit_system.symbol(spec.quantity)}")
     if not isinstance(widget, QCheckBox):
         widget.setMinimumWidth(FIELD_WIDTH)
     return widget

@@ -1,6 +1,8 @@
-from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QApplication, QStyle
 
+from opencae.ui.core.theme import PALETTE
 from .kinds import IconKind
 from .legacy import IconKind as LegacyKind
 from .legacy import make_icon as make_legacy_icon
@@ -46,7 +48,26 @@ _ICON_MAP = {
 }
 
 
+def _x_icon(size: int, color: str) -> QIcon:
+    canvas = max(16, int(size))
+    pixmap = QPixmap(canvas, canvas)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    pen = QPen(QColor(color))
+    pen.setWidthF(max(2.0, canvas * 0.075))
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    painter.setPen(pen)
+    margin = canvas * 0.29
+    painter.drawLine(QPointF(margin, margin), QPointF(canvas - margin, canvas - margin))
+    painter.drawLine(QPointF(canvas - margin, margin), QPointF(margin, canvas - margin))
+    painter.end()
+    return QIcon(pixmap)
+
+
 def make_icon(kind: IconKind, size: int = 40, accent: str | None = None) -> QIcon:
+    if kind == IconKind.CLEAR:
+        return _x_icon(size, accent or PALETTE["accent"])
     if kind == IconKind.DELETE:
         app = QApplication.instance()
         style = app.style() if app is not None else QApplication.style()

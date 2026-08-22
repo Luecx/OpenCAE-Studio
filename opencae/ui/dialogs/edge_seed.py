@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.model.selection import RegionDefinition
+from opencae.ui.core.unit_context import unit_system_for
 from opencae.ui.core.widgets import CompactRegionSelector
 
 
@@ -25,7 +26,7 @@ class EdgeSeedDialog(QDialog):
         form = QFormLayout(); form.setHorizontalSpacing(18); form.setVerticalSpacing(10)
         self.name = QLineEdit(seed.name if seed else "Edge Seed")
         self.method = QComboBox(); self.method.addItems(("Size", "Number of divisions")); self.method.setCurrentText(seed.method if seed else "Number of divisions")
-        self.size = QDoubleSpinBox(); self.size.setRange(1e-12, 1e30); self.size.setDecimals(9); self.size.setValue(seed.size if seed else 1.0)
+        self.size = QDoubleSpinBox(); self.size.setRange(1e-12, 1e30); self.size.setDecimals(9); self.size.setValue(seed.size if seed else 1.0); self.size.setSuffix(f" {unit_system_for(self).symbol('length')}")
         self.divisions = QSpinBox(); self.divisions.setRange(1, 1_000_000); self.divisions.setValue(seed.divisions if seed and seed.divisions else 10)
         self.bias = QComboBox(); self.bias.addItems(("None", "Single", "Double")); self.bias.setCurrentText(seed.bias if seed else "None")
         self.bias_factor = QDoubleSpinBox(); self.bias_factor.setRange(1.0, 1e12); self.bias_factor.setDecimals(6); self.bias_factor.setValue(seed.bias_factor if seed else 1.0)
