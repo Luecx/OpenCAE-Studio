@@ -17,6 +17,7 @@ class ReferencePointDialog(QDialog):
 
     def __init__(self, default_name="RP-1", existing_names=(), parent=None, units=None):
         super().__init__(parent)
+        units = units or getattr(getattr(parent, "controllers", None), "units", None)
         self.existing_names = tuple(existing_names)
         self.setWindowTitle("Create Reference Point")
         self.setModal(False)
