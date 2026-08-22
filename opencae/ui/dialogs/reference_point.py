@@ -21,7 +21,7 @@ class ReferencePointDialog(QDialog):
         self.setWindowTitle("Create Reference Point")
         self.setModal(False)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-        self.setMinimumWidth(430)
+        self.setMinimumWidth(520)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 16, 18, 14)
@@ -29,12 +29,14 @@ class ReferencePointDialog(QDialog):
         title = QLabel(self.windowTitle())
         title.setObjectName("PanelTitle")
         root.addWidget(title)
+
         form = QFormLayout()
         form.setHorizontalSpacing(16)
         form.setVerticalSpacing(9)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.name = QLineEdit(default_name)
         self.position = XYZPicker(allowed=_POINT_KINDS, value_kind="point")
-        self.position.setMaximumWidth(390)
         self.position.pick_requested.connect(self.pick_requested)
         self.position.cancel_requested.connect(self.cancel_pick_requested)
         self.position.changed.connect(self._preview)
@@ -53,7 +55,7 @@ class ReferencePointDialog(QDialog):
         buttons.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(lambda: self._commit(False))
         buttons.rejected.connect(self.close)
         root.addWidget(buttons)
-        self.resize(470, self.sizeHint().height())
+        self.resize(560, self.sizeHint().height())
 
     def values(self):
         return {"name": self.name.text().strip(), "position": self.position.value()}
