@@ -1,11 +1,9 @@
-"""Builds the lower output area around the central Jobs panel."""
+"""Build the lower output area around Jobs and application log output."""
 
 from PyQt6.QtWidgets import QTabWidget
 
-from .deck_panel import DeckPanel
 from .jobs_panel import JobsPanel
 from .log_panel import LogPanel
-from .python_console import PythonConsole
 
 
 class OutputTabs(QTabWidget):
@@ -15,10 +13,6 @@ class OutputTabs(QTabWidget):
         self.store = store
         self.log = LogPanel()
         self.jobs = JobsPanel(store, jobs, actions)
-        self.deck = DeckPanel()
-        self.console = PythonConsole()
         self.addTab(self.jobs, "Jobs")
         self.addTab(self.log, "Log")
-        self.addTab(self.deck, "Input Deck")
-        self.addTab(self.console, "Python Console")
         store.message.connect(self.log.append_message)
