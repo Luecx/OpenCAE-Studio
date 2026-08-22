@@ -5,7 +5,7 @@ from opencae.ui.core.icon_factory import IconKind as I
 
 def specs(window):
     return (
-        ActionSpec(A.FIT_VIEW,"Fit View",I.RESULTS,window.fit_view,"F"),
+        ActionSpec(A.FIT_VIEW,"Fit View",I.FIT_VIEW,window.fit_view,"F"),
         ActionSpec(A.TOGGLE_MESH,"Toggle Mesh Edges",I.MESH,window.toggle_mesh),
         ActionSpec(A.SHOW_PROJECT,"Project Tree",I.PART,lambda:window.project_dock.setVisible(not window.project_dock.isVisible())),
         ActionSpec(A.SHOW_OUTPUT,"Output",I.INFO,lambda:window.output_dock.setVisible(not window.output_dock.isVisible())),
