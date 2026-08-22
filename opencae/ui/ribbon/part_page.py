@@ -26,7 +26,14 @@ class PartPage(ResponsiveRibbonPage):
             RibbonGroupSpec("DISPLAY", (A.VISIBILITY,)),
             RibbonGroupSpec(
                 "DATUM",
-                (A.DATUM_POINT, A.DATUM_VECTOR, A.DATUM_PLANE),
+                (
+                    A.DATUM_POINT,
+                    A.DATUM_VECTOR,
+                    A.DATUM_PLANE,
+                    A.PART_RP,
+                    A.PART_CSYS,
+                ),
+                icon_action_id=A.DATUM_PLANE,
             ),
             RibbonGroupSpec(
                 "MESH",
@@ -46,8 +53,6 @@ class PartPage(ResponsiveRibbonPage):
                     A.NODE_SET,
                     A.ELEMENT_SET,
                     A.SURFACE,
-                    A.PART_RP,
-                    A.PART_CSYS,
                 ),
                 icon_action_id=A.NODE_SET,
             ),
