@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QWidget
 from opencae.ui.actions.ids import A
 from .part_selector import PartSelector
 from .ribbon_group import RibbonGroup
-from .specs import RibbonGroupSpec, RibbonMenuSpec
+from .specs import RibbonGroupSpec
 
 
 def create(actions, store):
@@ -27,24 +27,8 @@ def create(actions, store):
                 A.REBUILD_GEOMETRY,
                 A.SUPPRESS_FEATURE,
             ),
-            (
-                RibbonMenuSpec(
-                    "New Part",
-                    A.NEW_PART,
-                    (A.NEW_PART, A.DUPLICATE_PART),
-                ),
-                RibbonMenuSpec(
-                    "Import",
-                    A.IMPORT_GEOMETRY,
-                    (A.IMPORT_GEOMETRY, A.IMPORT_MESH),
-                ),
-                A.PARTITION,
-                RibbonMenuSpec(
-                    "Rebuild",
-                    A.REBUILD_GEOMETRY,
-                    (A.REBUILD_GEOMETRY, A.SUPPRESS_FEATURE),
-                ),
-            ),
+            collapsed=True,
+            icon_action_id=A.NEW_PART,
         ),
         RibbonGroupSpec("DISPLAY", (A.VISIBILITY,)),
         RibbonGroupSpec(
@@ -61,20 +45,8 @@ def create(actions, store):
                 A.GENERATE_MESH,
                 A.CLEAR_MESH,
             ),
-            (
-                RibbonMenuSpec(
-                    "Seed",
-                    A.DEFAULT_SEED,
-                    (A.DEFAULT_SEED, A.EDGE_SEED),
-                ),
-                A.ELEMENT_CONTROLS,
-                A.MESH_SETTINGS,
-                RibbonMenuSpec(
-                    "Generate",
-                    A.GENERATE_MESH,
-                    (A.GENERATE_MESH, A.CLEAR_MESH),
-                ),
-            ),
+            collapsed=True,
+            icon_action_id=A.GENERATE_MESH,
         ),
         RibbonGroupSpec(
             "REGIONS",
@@ -85,16 +57,8 @@ def create(actions, store):
                 A.PART_RP,
                 A.PART_CSYS,
             ),
-            (
-                A.NODE_SET,
-                A.ELEMENT_SET,
-                A.SURFACE,
-                RibbonMenuSpec(
-                    "Reference",
-                    A.PART_RP,
-                    (A.PART_RP, A.PART_CSYS),
-                ),
-            ),
+            collapsed=True,
+            icon_action_id=A.NODE_SET,
         ),
         RibbonGroupSpec("PROPERTIES", (A.SECTION_ASSIGNMENT,)),
     )
