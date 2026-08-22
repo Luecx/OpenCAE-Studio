@@ -3,7 +3,7 @@
 from pathlib import Path
 from shutil import copy2
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QFileDialog,
@@ -38,7 +38,60 @@ class ResultsPage(QWidget):
         self.loader = FrdLoader()
         self._topology_frames = []
         self._topology_index = -1
+        self._result_groups = []
+        self._collapsed_titles = frozenset()
         self._build()
+        QTimer.singleShot(0, self._refresh_responsive_layout)
+
+    def _add_group(self, layout, title, widgets):
+        group = ResultRibbonGroup(title, widgets)
+        self._result_groups.append(group)
+        layout.addWidget(group)
+        return group
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._refresh_responsive_layout(event.size().width())
+
+    def _required_width(self, collapsed_titles):
+        width = 5
+        for group in self._result_groups:
+            width += (
+                group.collapsed_width_hint()
+                if group.title in collapsed_titles
+                else group.expanded_width_hint()
+            )
+        return width
+
+    def _collapse_candidates(self):
+        candidates = [
+            (index, group)
+            for index, group in enumerate(self._result_groups)
+            if group.collapsed_width_hint() < group.expanded_width_hint()
+        ]
+        candidates.sort(
+            key=lambda item: (-item[1].expanded_width_hint(), item[0])
+        )
+        return tuple(group for _, group in candidates)
+
+    def _target_collapsed_groups(self, available_width):
+        collapsed = set()
+        if self._required_width(collapsed) <= available_width:
+            return frozenset()
+        for group in self._collapse_candidates():
+            collapsed.add(group.title)
+            if self._required_width(collapsed) <= available_width:
+                break
+        return frozenset(collapsed)
+
+    def _refresh_responsive_layout(self, available_width=None):
+        width = self.width() if available_width is None else available_width
+        target = self._target_collapsed_groups(width)
+        if target == self._collapsed_titles:
+            return
+        self._collapsed_titles = target
+        for group in self._result_groups:
+            group.set_collapsed(group.title in target)
 
     def _build(self):
         layout = QHBoxLayout(self)
@@ -50,15 +103,14 @@ class ResultsPage(QWidget):
             else None
         )
         self.save = self._save_button()
-        layout.addWidget(
-            ResultRibbonGroup(
-                "FILE",
-                tuple(
-                    widget
-                    for widget in (open_button, self.save)
-                    if widget is not None
-                ),
-            )
+        self._add_group(
+            layout,
+            "FILE",
+            tuple(
+                widget
+                for widget in (open_button, self.save)
+                if widget is not None
+            ),
         )
 
         self.mesh_lines = ribbon_button(
@@ -79,21 +131,20 @@ class ResultsPage(QWidget):
         )
         self.deform = ResultDeformationButton()
         self.section = ResultSectionButton()
-        layout.addWidget(
-            ResultRibbonGroup(
-                "VISUALS",
-                (
-                    self.mesh_lines,
-                    self.boundary_lines,
-                    self.undeformed,
-                    self.deform,
-                    self.section,
-                ),
-            )
+        self._add_group(
+            layout,
+            "VISUALS",
+            (
+                self.mesh_lines,
+                self.boundary_lines,
+                self.undeformed,
+                self.deform,
+                self.section,
+            ),
         )
 
         self.range = ResultRangeButton()
-        layout.addWidget(ResultRibbonGroup("CONTOUR", (self.range,)))
+        self._add_group(layout, "CONTOUR", (self.range,))
 
         self.previous_frame = ribbon_button(
             "Previous",
@@ -114,11 +165,10 @@ class ResultsPage(QWidget):
         self.next_frame.setToolTip("Next result frame or Study iteration")
         self.previous_frame.setEnabled(False)
         self.next_frame.setEnabled(False)
-        layout.addWidget(
-            ResultRibbonGroup(
-                "FRAME",
-                (self.previous_frame, self.choose, self.next_frame),
-            )
+        self._add_group(
+            layout,
+            "FRAME",
+            (self.previous_frame, self.choose, self.next_frame),
         )
 
         self.query_nodes = ribbon_button(
@@ -133,11 +183,10 @@ class ResultsPage(QWidget):
             False,
             88,
         )
-        layout.addWidget(
-            ResultRibbonGroup(
-                "QUERY",
-                (self.query_nodes, self.query_elements),
-            )
+        self._add_group(
+            layout,
+            "QUERY",
+            (self.query_nodes, self.query_elements),
         )
         layout.addStretch(1)
 
