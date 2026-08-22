@@ -26,23 +26,39 @@ class JobsPanel(QWidget):
         root.setSpacing(4)
 
         splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setChildrenCollapsible(False)
+
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
             ["Job", "Source", "Kind", "Solver", "Status"]
         )
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        header = self.table.horizontalHeader()
+        header.setMinimumSectionSize(80)
+        for column in range(4):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        self.table.setColumnWidth(0, 180)
+        self.table.setColumnWidth(1, 260)
+        self.table.setColumnWidth(2, 120)
+        self.table.setColumnWidth(3, 150)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.itemSelectionChanged.connect(self._selection_changed)
+
+        minimum_table_height = (
+            header.sizeHint().height()
+            + self.table.verticalHeader().defaultSectionSize()
+            + 8
+        )
+        self.table.setMinimumHeight(minimum_table_height)
 
         self.output = MonospaceOutputView()
         splitter.addWidget(self.table)
         splitter.addWidget(self.output)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 2)
-        splitter.setSizes([90, 140])
+        splitter.setCollapsible(0, False)
+        splitter.setSizes([95, 140])
         root.addWidget(splitter, 1)
 
         store.changed.connect(self.refresh)
