@@ -8,6 +8,8 @@ from PyQt6.QtWidgets import QApplication, QDialog
 
 from opencae.model.core import EntityRef
 from opencae.model.entities.analysis import Analysis, AnalysisStep
+from opencae.ui.core.icons.factory import _ICON_MAP, _x_icon, make_icon
+from opencae.ui.core.icons.kinds import IconKind
 from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
 
 
@@ -116,15 +118,14 @@ def test_context_menu_keeps_unavailable_actions_visible_but_disabled():
     assert "if available(action_id, store, kind)" not in source
 
 
-def test_delete_uses_a_simple_close_icon():
-    source = (ROOT / "opencae/ui/core/icons/factory.py").read_text(
-        encoding="utf-8"
-    )
+def test_delete_uses_the_canonical_close_glyph():
+    app = QApplication.instance() or QApplication([])
+    size = 32
+    actual = make_icon(IconKind.DELETE, size).pixmap(size, size).toImage()
+    expected = _x_icon(size).pixmap(size, size).toImage()
 
-    assert "if kind == IconKind.DELETE" in source
-    assert "QStyle.StandardPixmap.SP_DialogCloseButton" in source
-    assert "QStyle.StandardPixmap.SP_TrashIcon" not in source
-    assert "IconKind.DELETE:LegacyKind.FIXED" not in source
+    assert actual == expected
+    assert IconKind.DELETE not in _ICON_MAP
 
 
 def test_analysis_dialog_remains_usable_after_exec_returns():
