@@ -12,6 +12,21 @@ def css(p):
     QComboBox#ReferenceCombo, QLineEdit#CompositeFieldEdit {{
         min-width: 0px;
     }}
+    QDoubleSpinBox#XYZFirst,
+    QDoubleSpinBox#XYZMiddle,
+    QDoubleSpinBox#XYZLast {{
+        min-width: 0px;
+        padding: 5px 7px;
+        border-radius: 0px;
+    }}
+    QDoubleSpinBox#XYZFirst {{
+        border-top-left-radius: 3px;
+        border-bottom-left-radius: 3px;
+    }}
+    QDoubleSpinBox#XYZMiddle,
+    QDoubleSpinBox#XYZLast {{
+        border-left: 0px;
+    }}
     QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {{ border-color: #53606d; }}
     QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{ border-color: {p['accent']}; }}
     QComboBox {{ padding-right: 30px; }}
