@@ -24,7 +24,7 @@ class PartMeshSeeds:
         if not self.ctx.require_geometry(part):
             return
         seed = next((item for item in part.mesh.seeds if item.seed_type == "Default"), None)
-        dialog = DefaultSeedDialog(seed, self.ctx.parent)
+        dialog = DefaultSeedDialog(seed, self.ctx.parent, self.ctx.units)
         dialog.apply_requested.connect(lambda values, part_id=part.id: self._apply_default(part_id, values))
         self._open(dialog, part, preview=True)
 
@@ -60,10 +60,6 @@ class PartMeshSeeds:
             if viewport is None:
                 return None
 
-            # Geometry edges are not selectable while the viewport is in mesh
-            # display mode: that mode only exposes mesh node/element pickers.
-            # End any previous context pick first so its own cleanup can finish,
-            # then temporarily enter geometry display for this edge session.
             viewport.cancel_context_pick()
             previous_display = viewport.display_mode
             if previous_display != "geometry":
@@ -91,9 +87,6 @@ class PartMeshSeeds:
             )
 
             def cancel():
-                # ContextPickManager.cancel() normally calls session_finished.
-                # The explicit fallback keeps display restoration deterministic
-                # if the session has already been handed off or cancelled.
                 viewport.cancel_context_pick()
                 session_finished()
 
@@ -109,6 +102,7 @@ class PartMeshSeeds:
             pick_callback=pick,
             seed=seed,
             parent=self.ctx.parent,
+            units=self.ctx.units,
         )
         dialog.target.set_requirement(policy.requirement, allow_part_local=True)
         preview_channel = f"edge-seed-dialog-{id(dialog)}"
@@ -189,9 +183,6 @@ class PartMeshSeeds:
             "method": values["method"],
             "size": values["size"],
             "divisions": values["divisions"],
-            # Edge seeding intentionally exposes only sizing/division control.
-            # Keep the model fields at their neutral values for compatibility
-            # with existing projects and the current meshing backend.
             "bias": "None",
             "bias_factor": 1.0,
         }
