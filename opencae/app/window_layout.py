@@ -94,6 +94,7 @@ def build_docks(window):
         [205],
         Qt.Orientation.Vertical,
     )
+    window.properties_dock.hide()
 
 
 def build_status(window):
