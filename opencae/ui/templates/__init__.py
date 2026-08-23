@@ -18,6 +18,7 @@ from .dialogs import (
     scaffold_dialog,
 )
 from .field_block import field_block
+from .field_label import FieldLabel
 from .field_row import field_row
 from .label_role import LabelRole
 from .label_spec import LabelSpec
@@ -42,7 +43,10 @@ from .primitives import (
     ribbon_label,
     wrapped_ribbon_text,
 )
+from .read_only_value import ReadOnlyValue
+from .section_heading import SectionHeading
 from .tables import read_only_table
+from .vertical_separator import VerticalSeparator
 
 __all__ = [
     "ButtonRole",
@@ -50,7 +54,11 @@ __all__ = [
     "LabelRole",
     "LabelSpec",
     "DialogScaffold",
+    "FieldLabel",
     "NumericUnitInput",
+    "ReadOnlyValue",
+    "SectionHeading",
+    "VerticalSeparator",
     "button",
     "label",
     "action_button",
