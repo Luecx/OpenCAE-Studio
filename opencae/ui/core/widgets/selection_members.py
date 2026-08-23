@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QVBoxLayout, QWidget
 
 from opencae.ui.templates import PRIMARY_CONTROL_HEIGHT, button
@@ -70,7 +71,7 @@ class SelectionMembersWidget(QWidget):
             if not label or self._contains(value):
                 continue
             item = QListWidgetItem(label)
-            item.setData(item.DataRole.UserRole, value)
+            item.setData(Qt.ItemDataRole.UserRole, value)
             self.list.addItem(item)
 
     def members(self) -> list:
@@ -78,7 +79,7 @@ class SelectionMembersWidget(QWidget):
         result = []
         for index in range(self.list.count()):
             item = self.list.item(index)
-            value = item.data(item.DataRole.UserRole)
+            value = item.data(Qt.ItemDataRole.UserRole)
             result.append(item.text() if value is None else value)
         return result
 
@@ -91,6 +92,6 @@ class SelectionMembersWidget(QWidget):
     def _contains(self, value) -> bool:
         """Return whether the current list already stores the supplied member value."""
         return any(
-            self.list.item(index).data(self.list.item(index).DataRole.UserRole) == value
+            self.list.item(index).data(Qt.ItemDataRole.UserRole) == value
             for index in range(self.list.count())
         )
