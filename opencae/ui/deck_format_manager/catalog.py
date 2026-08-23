@@ -26,10 +26,29 @@ def template_spec(key: str, label: str) -> dict:
     }
 
 
-def render_preview(template: str, fields: tuple[tuple[str, str, str], ...]) -> str:
-    """Render a live prototype preview from the field example values."""
+def render_preview(
+    template: str,
+    fields: tuple[tuple[str, str, str], ...],
+    *,
+    repeat_rows: tuple[dict[str, str], ...] = (),
+    repeat: bool = False,
+) -> str:
+    """Render a sample block, optionally repeating all data lines after the keyword."""
     values = defaultdict(lambda: "…")
     values.update({name: example for name, _description, example in fields})
+    if repeat and repeat_rows and "\n" in template:
+        keyword, data = template.split("\n", 1)
+        lines = [_format_template(keyword, values)]
+        for row in repeat_rows:
+            row_values = defaultdict(lambda: "…", values)
+            row_values.update(row)
+            lines.append(_format_template(data, row_values))
+        return "\n".join(lines)
+    return _format_template(template, values)
+
+
+def _format_template(template: str, values) -> str:
+    """Format one preview fragment without making invalid in-progress text fatal."""
     try:
         return template.format_map(values)
     except (ValueError, KeyError):
