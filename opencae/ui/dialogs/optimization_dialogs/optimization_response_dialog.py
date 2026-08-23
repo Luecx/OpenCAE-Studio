@@ -1,13 +1,16 @@
 """Edits one region-scoped response used by topology objectives or constraints."""
 
+from __future__ import annotations
+
 from copy import deepcopy
 
-from PyQt6.QtWidgets import QLabel, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.entities.optimization import OptimizationResponse, ResponseType
 from opencae.model.selection import RegionProjection, RegionRequirement
 from opencae.ui.core.named_entity_dialog import NamedEntityDialog
 from opencae.ui.core.widgets import ChevronComboBox, CompactRegionSelector
+from opencae.ui.templates import FieldLabel
 
 
 class OptimizationResponseDialog(NamedEntityDialog):
@@ -23,6 +26,7 @@ class OptimizationResponseDialog(NamedEntityDialog):
         existing_names=(),
         parent=None,
     ):
+        """Build response type and region selection fields plus solver guidance."""
         entity = value or OptimizationResponse(
             name="Response-1",
             response_type=ResponseType.STIFFNESS_ENERGY,
@@ -32,7 +36,7 @@ class OptimizationResponseDialog(NamedEntityDialog):
             entity,
             existing_names=existing_names,
             parent=parent,
-            width=580,
+            width=620,
         )
         self.kind = ChevronComboBox()
         for kind, label in (
@@ -62,23 +66,24 @@ class OptimizationResponseDialog(NamedEntityDialog):
         self.form.addRow("Type", self.kind)
         self.form.addRow("Region", self.region)
 
-        note = QLabel(
+        note = FieldLabel(
             "Compliance is minimized to maximize global stiffness. The current "
             "OC solver evaluates this objective on the complete model. Volume "
             "and mass responses may use arbitrary element regions."
         )
         note.setWordWrap(True)
-        note.setObjectName("MutedLabel")
         self.add_widget(note)
         self.finish()
 
     def result(self):
+        """Return a detached response candidate from type and region editor state."""
         candidate = self.apply_name(deepcopy(self.value))
         candidate.response_type = ResponseType(self.kind.currentData())
         candidate.region = self.region.definition()
         return candidate
 
     def validate(self) -> bool:
+        """Require valid naming and a non-empty element response region."""
         if not super().validate():
             return False
         if self.region.definition().empty:
