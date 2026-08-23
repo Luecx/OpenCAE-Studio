@@ -5,11 +5,15 @@ from opencae.ui.actions.ids import A
 
 
 def available(action_id, store, kind):
+    """Return whether one action is valid for the current model/tree context."""
     project = store.project
     part = store.active_part()
     has_geometry = bool(part and part.geometry)
-    has_mesh = bool(part and (part.mesh.node_count or part.mesh.elements))
+    has_mesh = bool(
+        part and (part.mesh.node_count or part.mesh.element_definitions)
+    )
     has_assembly = bool(project.assembly.instances)
+
     if action_id == A.DUPLICATE_PART:
         return part is not None
     if action_id in {
@@ -24,7 +28,9 @@ def available(action_id, store, kind):
         return has_mesh
     if action_id == A.ADD_INSTANCE:
         return bool(project.parts)
-    if action_id in {A.DUPLICATE_INSTANCE, A.TRANSFORM_INSTANCE, A.SUPPRESS_INSTANCE}:
+    if action_id in {
+        A.DUPLICATE_INSTANCE, A.TRANSFORM_INSTANCE, A.SUPPRESS_INSTANCE,
+    }:
         return has_assembly
     if action_id in {
         A.FIXED, A.DISPLACEMENT, A.SYMMETRY, A.CLOAD, A.DLOAD, A.PRESSURE,

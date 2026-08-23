@@ -5,11 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterator
 
-from ...core import register_model_type
+from ...core import EntityRef, register_model_type
 from ..elements.base import ElementDefinition
 from ..fem import Element, Node, element_class_for_definition
 from .element_block import ElementBlock
 from .element_control import ElementControl
+from .mesh_definition_registry import (
+    bind_element_blocks,
+    definition_for,
+    refresh_definition_counts,
+    replace_element_blocks,
+)
 from .mesh_settings import MeshSettings
 from .mesh_status import MeshStatus
 from .node_table import NodeTable
@@ -24,7 +30,7 @@ class MeshState:
     settings: MeshSettings = field(default_factory=MeshSettings)
     seeds: list[Seed] = field(default_factory=list)
     element_controls: list[ElementControl] = field(default_factory=list)
-    elements: list[ElementDefinition] = field(default_factory=list)
+    element_definitions: list[ElementDefinition] = field(default_factory=list)
     nodes: NodeTable = field(default_factory=NodeTable)
     element_blocks: list[ElementBlock] = field(default_factory=list)
     entity_nodes: dict[str, list[int]] = field(default_factory=dict)
@@ -38,11 +44,36 @@ class MeshState:
     status: MeshStatus | str = MeshStatus.NOT_GENERATED
     revision: str = ""
 
+    def __post_init__(self) -> None:
+        """Bind compact blocks to the canonical definition collection."""
+        bind_element_blocks(self)
+
     def __setattr__(self, name, value) -> None:
-        """Normalize finite-domain state whenever the mesh status changes."""
+        """Normalize finite-domain state and bind replacement block collections."""
         if name == "status":
             value = MeshStatus.coerce(value)
+        if name == "element_blocks":
+            value = list(value)
+            super().__setattr__(name, value)
+            if "element_definitions" in self.__dict__:
+                bind_element_blocks(self)
+            return
         super().__setattr__(name, value)
+
+    def definition_for(
+        self,
+        reference: EntityRef | str | None,
+    ) -> ElementDefinition | None:
+        """Resolve one block definition reference within this MeshState."""
+        return definition_for(self, reference)
+
+    def replace_element_blocks(self, blocks: list[ElementBlock]) -> None:
+        """Replace generated blocks and rebuild the canonical definition set."""
+        replace_element_blocks(self, blocks)
+
+    def refresh_element_definition_counts(self) -> None:
+        """Synchronize definition summary counts from compact block membership."""
+        refresh_definition_counts(self)
 
     def add_node(
         self,
@@ -101,15 +132,13 @@ class MeshState:
             None,
         )
         if block is None:
-            # Blocks group identical definitions for compact persistence; authored
-            # elements remain object-oriented at the public boundary.
-            definition = element_type.definition()
-            self.elements.append(definition)
-            block = ElementBlock(definition)
+            block = ElementBlock(element_type.definition())
             self.element_blocks.append(block)
+            bind_element_blocks(self)
 
         block.add(element)
         self.element_count = sum(len(item) for item in self.element_blocks)
+        refresh_definition_counts(self)
         if self.status is MeshStatus.NOT_GENERATED:
             self.status = MeshStatus.AUTHORED
         return element

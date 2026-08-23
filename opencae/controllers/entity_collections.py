@@ -2,6 +2,7 @@
 
 
 def project_collections(project):
+    """Return list-backed entity collections that support generic mutations."""
     values = [
         project.parts,
         project.assembly.instances,
@@ -44,7 +45,7 @@ def project_collections(project):
                 part.geometry,
                 part.mesh.seeds,
                 part.mesh.element_controls,
-                part.mesh.elements,
+                part.mesh.element_definitions,
                 part.regions,
                 part.coordinate_systems,
                 part.reference_points,
