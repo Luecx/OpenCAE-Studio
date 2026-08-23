@@ -5,9 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pyvista as pv
 
-from opencae.geometry.meshability import oriented_faces, surface_classification
+from opencae.geometry.meshability import surface_classification
 from .assembly_context import ActorReference
-from .instance_transform import transform_points
+from .geometry_render_cache import GEOMETRY_RENDER_CACHE
+from .instance_transform import rotation_matrix, transform_points
 from .surface_shading import face_color
 
 FACE_COLOR = "#7f8d99"
@@ -26,13 +27,12 @@ def add_geometry(
     hidden_faces=(),
     hidden_cells=(),
 ):
-    """Add persistent CAD actors with subtle diffuse-only normal shading.
+    """Add persistent CAD actors with prepared render meshes and neutral shading.
 
-    Face brightness depends only on the angle between the surface normal and one
-    neutral directional light. A high ambient contribution keeps back-facing
-    surfaces close to their classification color, while a small diffuse term
-    provides a restrained depth cue. Specular highlights and reflections are
-    disabled.
+    Expensive local-space ``clean`` and normal creation is cached per geometry
+    fingerprint. Assembly instances copy those prepared datasets and apply only
+    their rigid transform, avoiding repeated VTK filter work on every stage or
+    Geometry/Mesh context switch.
 
     ``hidden_faces`` and ``hidden_cells`` are display-only topology filters.
     Actors are deliberately still created for hidden faces so subsequent
@@ -42,6 +42,9 @@ def add_geometry(
     _configure_geometry_light(plotter)
     hidden_face_tags = {int(value) for value in hidden_faces}
     hidden_cell_tags = {int(value) for value in hidden_cells}
+    prepared_faces, prepared_edges, prepared_vertices = (
+        GEOMETRY_RENDER_CACHE.prepared(snapshot)
+    )
     faces, edges, vertices = {}, {}, {}
     prefix = f"{instance.name}-" if instance else ""
     visible_surface_count = 0
@@ -55,31 +58,11 @@ def add_geometry(
         )
         if not hidden:
             visible_surface_count += 1
-        points = (
-            transform_points(patch.points, instance)
-            if instance
-            else patch.points
+        mesh = _instance_mesh(
+            prepared_faces[int(patch.tag)],
+            instance,
+            rotate_normals=True,
         )
-        mesh = pv.PolyData(points, oriented_faces(snapshot, patch))
-        try:
-            # OCC tessellation can repeat the same geometric vertex for several
-            # triangles. Merge those ids before calculating point normals so a
-            # curved CAD face shades smoothly. Sharp CAD-face boundaries remain
-            # sharp because every face is represented by a separate actor.
-            mesh = mesh.clean(tolerance=1.0e-10, absolute=False)
-        except (AttributeError, TypeError, ValueError, RuntimeError):
-            pass
-        try:
-            mesh = mesh.compute_normals(
-                cell_normals=True,
-                point_normals=True,
-                consistent_normals=True,
-                auto_orient_normals=False,
-                split_vertices=False,
-                inplace=False,
-            )
-        except (TypeError, ValueError, RuntimeError):
-            pass
         classification = (
             surface_classification(snapshot, patch.tag)
             if color_by_meshability
@@ -126,13 +109,11 @@ def add_geometry(
     # matching the old behavior without deleting/recreating the actors.
     topology_visible = bool(visible_surface_count)
     for patch in snapshot.edges:
-        points = (
-            transform_points(patch.points, instance)
-            if instance
-            else patch.points
+        mesh = _instance_mesh(
+            prepared_edges[int(patch.tag)],
+            instance,
+            rotate_normals=False,
         )
-        mesh = pv.PolyData(points)
-        mesh.lines = patch.lines
         actor = plotter.add_mesh(
             mesh,
             color=EDGE_COLOR,
@@ -153,13 +134,13 @@ def add_geometry(
         )
 
     for patch in snapshot.vertices:
-        point = (
-            transform_points(np.asarray([patch.point]), instance)[0]
-            if instance
-            else patch.point
+        mesh = _instance_mesh(
+            prepared_vertices[int(patch.tag)],
+            instance,
+            rotate_normals=False,
         )
         actor = plotter.add_mesh(
-            pv.PolyData([point]),
+            mesh,
             color=VERTEX_COLOR,
             point_size=8.0,
             render_points_as_spheres=True,
@@ -211,6 +192,22 @@ def forget_actor_colors(actors) -> None:
 def surface_is_hidden(snapshot, tag, hidden_faces, hidden_cells) -> bool:
     """Return whether face/cell visibility state hides one CAD surface."""
     return _surface_hidden(snapshot, tag, hidden_faces, hidden_cells)
+
+
+def _instance_mesh(mesh, instance, *, rotate_normals: bool):
+    """Return a rigidly transformed copy while preserving prepared topology data."""
+    if instance is None:
+        return mesh
+    result = mesh.copy(deep=True)
+    result.points = transform_points(result.points, instance)
+    if rotate_normals:
+        matrix = rotation_matrix(instance.rotation)
+        for attributes in (result.point_data, result.cell_data):
+            if "Normals" not in attributes:
+                continue
+            normals = np.asarray(attributes["Normals"], dtype=float)
+            attributes["Normals"] = normals @ matrix.T
+    return result
 
 
 def _surface_hidden(snapshot, tag, hidden_faces, hidden_cells):
