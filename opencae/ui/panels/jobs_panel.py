@@ -1,26 +1,26 @@
-"""Synchronized job selection and full-width solver output panel."""
+"""Display persistent Jobs and expose their actions through a row context menu."""
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QHeaderView,
-    QSizePolicy,
+    QMenu,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from opencae.ui.core.widgets import MonospaceOutputView
+from opencae.ui.actions.ids import A
 
 
 _COLUMN_WEIGHTS = (0.17, 0.23, 0.11, 0.15, 0.34)
-_MAX_VISIBLE_JOB_ROWS = 3
 
 
 class JobsPanel(QWidget):
-    """Display all jobs above exactly the output of the selected job."""
+    """Display project Jobs without duplicating solver output in the main window."""
 
     def __init__(self, store, jobs, actions, parent=None):
+        """Build the synchronized Job table and its context-action surface."""
         super().__init__(parent)
         self.store = store
         self.jobs = jobs
@@ -41,27 +41,23 @@ class JobsPanel(QWidget):
         self.table.verticalHeader().hide()
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.table.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Fixed,
-        )
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.itemSelectionChanged.connect(self._selection_changed)
-        root.addWidget(self.table)
-
-        self.output = MonospaceOutputView()
-        root.addWidget(self.output, 1)
+        self.table.customContextMenuRequested.connect(self._show_context_menu)
+        root.addWidget(self.table, 1)
 
         store.changed.connect(self.refresh)
         jobs.selection_changed.connect(self._manager_selection_changed)
-        jobs.output_changed.connect(self._output_changed)
         self.refresh()
         self._resize_columns()
 
     def resizeEvent(self, event):
+        """Keep weighted Job columns proportional to the available dock width."""
         super().resizeEvent(event)
         self._resize_columns()
 
     def _resize_columns(self):
+        """Distribute table width using stable semantic column proportions."""
         available = self.table.viewport().width()
         if available <= 0:
             return
@@ -72,16 +68,8 @@ class JobsPanel(QWidget):
             used += width
         self.table.setColumnWidth(4, max(60, available - used))
 
-    def _update_table_height(self):
-        header_height = self.table.horizontalHeader().sizeHint().height()
-        row_height = self.table.verticalHeader().defaultSectionSize()
-        visible_rows = min(max(self.table.rowCount(), 1), _MAX_VISIBLE_JOB_ROWS)
-        frame = self.table.frameWidth() * 2
-        self.table.setFixedHeight(
-            header_height + visible_rows * row_height + frame + 2
-        )
-
     def refresh(self, *_):
+        """Rebuild Job rows while preserving the manager's selected Job."""
         selected = self.jobs.selected_job_id
         values = tuple(self.store.project.jobs)
         self.table.blockSignals(True)
@@ -107,35 +95,54 @@ class JobsPanel(QWidget):
         if selected_row >= 0:
             self.table.selectRow(selected_row)
         self.table.blockSignals(False)
-        self._update_table_height()
         self._resize_columns()
         if selected_row >= 0:
-            job_id = str(
-                self.table.item(selected_row, 0).data(Qt.ItemDataRole.UserRole)
-            )
-            if job_id != self.jobs.selected_job_id:
+            job_id = self._job_id_for_row(selected_row)
+            if job_id and job_id != self.jobs.selected_job_id:
                 self.jobs.select_job(job_id)
-            else:
-                self.output.set_output(self.jobs.output_for(job_id))
-        else:
-            self.output.clear()
 
     def _selection_changed(self):
-        row = self.table.currentRow()
-        item = self.table.item(row, 0) if row >= 0 else None
-        if item is not None:
-            self.jobs.select_job(str(item.data(Qt.ItemDataRole.UserRole)))
+        """Mirror a table selection into JobManager and the project selection."""
+        job_id = self._job_id_for_row(self.table.currentRow())
+        if job_id:
+            self.jobs.select_job(job_id)
 
     def _manager_selection_changed(self, job_id):
+        """Mirror non-table Job selections back into the visible row selection."""
         for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item is not None and str(item.data(Qt.ItemDataRole.UserRole)) == str(job_id):
+            if self._job_id_for_row(row) == str(job_id):
                 self.table.blockSignals(True)
                 self.table.selectRow(row)
                 self.table.blockSignals(False)
                 break
-        self.output.set_output(self.jobs.output_for(job_id))
 
-    def _output_changed(self, job_id, text):
-        if str(job_id) == self.jobs.selected_job_id:
-            self.output.set_output(text)
+    def _show_context_menu(self, pos):
+        """Open actions for the Job under the pointer after making it current."""
+        item = self.table.itemAt(pos)
+        if item is None:
+            return
+        row = item.row()
+        job_id = self._job_id_for_row(row)
+        if not job_id:
+            return
+
+        # Shared Job actions operate on JobManager's selection, so make the
+        # right-clicked row current before evaluating their enabled state.
+        self.table.selectRow(row)
+        self.jobs.select_job(job_id)
+
+        menu = QMenu(self.table)
+        menu.addAction(self.actions.get(A.JOB_MONITOR))
+        menu.addAction(self.actions.get(A.JOB_OPEN_RESULTS))
+        menu.addSeparator()
+        menu.addAction(self.actions.get(A.JOB_STOP))
+        menu.exec(self.table.viewport().mapToGlobal(pos))
+
+    def _job_id_for_row(self, row) -> str:
+        """Return the persistent Job id stored on one table row."""
+        item = self.table.item(row, 0) if row >= 0 else None
+        return (
+            str(item.data(Qt.ItemDataRole.UserRole))
+            if item is not None
+            else ""
+        )
