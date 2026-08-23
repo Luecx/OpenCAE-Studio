@@ -69,9 +69,14 @@ class MaterialDialog(ApplyDialog):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setObjectName("MaterialDefinitionsScroll")
+        # Give the viewport a stable selector; Qt's platform style can otherwise
+        # paint an opaque QAbstractScrollArea background behind the cards.
+        scroll.viewport().setObjectName("MaterialDefinitionsViewport")
+        scroll.viewport().setAutoFillBackground(False)
 
         content = QWidget()
         content.setObjectName("MaterialDefinitionsContent")
+        content.setAutoFillBackground(False)
         cards_layout = QVBoxLayout(content)
         cards_layout.setContentsMargins(0, 0, 0, 0)
         cards_layout.setSpacing(10)
