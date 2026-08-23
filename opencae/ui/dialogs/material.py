@@ -5,7 +5,6 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QFrame,
-    QLabel,
     QLineEdit,
     QMessageBox,
     QScrollArea,
@@ -15,6 +14,7 @@ from PyQt6.QtWidgets import (
 
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.templates import (
+    SectionHeading,
     apply_primary_control_height,
     dialog_buttons,
     field_block,
@@ -34,6 +34,7 @@ class MaterialDialog(ApplyDialog):
         default_name="Material-1",
         units=None,
     ):
+        """Build the material editor from shared field and heading templates."""
         super().__init__(parent)
         self.material = material
         self.units = units
@@ -52,10 +53,7 @@ class MaterialDialog(ApplyDialog):
         self.name.setObjectName("MaterialNameInput")
         apply_primary_control_height(self.name)
         root.addWidget(field_block("Name", self.name))
-
-        definitions = QLabel("Material Definitions")
-        definitions.setObjectName("MaterialSectionTitle")
-        root.addWidget(definitions)
+        root.addWidget(SectionHeading("Material Definitions"))
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
