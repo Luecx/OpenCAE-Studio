@@ -1,7 +1,8 @@
 """Regression coverage for canonical mesh element-definition persistence."""
 
-from copy import deepcopy
 from dataclasses import fields
+
+import pytest
 
 from opencae.model.core import EntityRef, decode_model, encode_model
 from opencae.model.entities.mesh import ElementBlock, MeshState
@@ -21,7 +22,7 @@ def test_mesh_definition_serializes_once_and_round_trips(project_factory):
     assert mesh.element_blocks[0].definition is definition
 
     encoded = project_to_dict(project)
-    persisted = encoded["parts"][0]["mesh"]
+    persisted = encoded["project"]["parts"][0]["mesh"]
     block = persisted["element_blocks"][0]
 
     assert "elements" not in persisted
@@ -77,54 +78,15 @@ def test_element_block_codec_accepts_persisted_definition_ref():
     assert decoded.connectivity == [(1, 2, 3, 4)]
 
 
-def test_schema_20_duplicate_definition_migrates_before_indexing(project_factory):
-    """Reproduce the duplicate-ID loader crash and verify schema-20 repair."""
+def test_previous_project_schema_is_explicitly_rejected(project_factory):
+    """Development builds support only the current on-disk schema."""
     encoded = project_to_dict(
         project_factory(include_constraints=False)["project"]
     )
-    encoded["schema_version"] = 20
-    mesh = encoded["parts"][0]["mesh"]
-    definitions = deepcopy(mesh.pop("element_definitions"))
-    mesh["elements"] = deepcopy(definitions)
+    encoded["schema_version"] = CURRENT_SCHEMA_VERSION - 1
 
-    for block in mesh["element_blocks"]:
-        reference = block.pop("definition_ref")
-        definition = deepcopy(definitions[0])
-        assert definition["id"] == reference["entity_id"]
-        block["definition"] = definition
-
-    decoded = project_from_dict(encoded)
-    loaded = decoded.parts[0].mesh
-
-    assert decoded.schema_version == CURRENT_SCHEMA_VERSION
-    assert len(loaded.element_definitions) == 1
-    assert loaded.element_blocks[0].definition is loaded.element_definitions[0]
-
-
-def test_schema_20_generated_aliases_match_definition_metadata(project_factory):
-    """Schema-20 generated blocks with independent IDs collapse semantically."""
-    encoded = project_to_dict(
-        project_factory(include_constraints=False)["project"]
-    )
-    encoded["schema_version"] = 20
-    mesh = encoded["parts"][0]["mesh"]
-    definitions = deepcopy(mesh.pop("element_definitions"))
-    mesh["elements"] = deepcopy(definitions)
-
-    block = mesh["element_blocks"][0]
-    block.pop("definition_ref")
-    embedded = deepcopy(definitions[0])
-    embedded["id"] = "entity_legacy_block_copy"
-    block["definition"] = embedded
-
-    decoded = project_from_dict(encoded)
-    loaded = decoded.parts[0].mesh
-
-    assert len(loaded.element_definitions) == 1
-    assert loaded.element_blocks[0].definition is loaded.element_definitions[0]
-    assert loaded.element_definitions[0].count == len(
-        loaded.element_blocks[0]
-    )
+    with pytest.raises(ValueError, match="is not supported"):
+        project_from_dict(encoded)
 
 
 def test_mesh_definition_ownership_contract_is_unambiguous():
