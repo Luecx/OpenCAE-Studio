@@ -1,11 +1,10 @@
 """Styles editable fields and the shared primary-control geometry contract."""
 
 from opencae.ui.templates.control_metrics import (
+    COMBO_POPUP_ROW_HEIGHT,
     INLINE_ACTION_SIZE,
     PRIMARY_CONTROL_HEIGHT,
 )
-
-COMBO_POPUP_ROW_HEIGHT = 36
 
 
 def css(p):
