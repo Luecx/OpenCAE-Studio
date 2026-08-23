@@ -20,6 +20,7 @@ from opencae.ui.templates import (
     apply_primary_control_height,
     dialog_buttons,
     field_block,
+    field_row,
 )
 
 SECTION_TYPES = ("Solid", "Shell", "Beam", "Truss")
@@ -166,9 +167,11 @@ class SectionDialog(ApplyDialog):
         apply_primary_control_height(self.shell_points)
 
         integrated_layout.addWidget(field_block("Material", self.shell_material))
-        integrated_layout.addWidget(field_block("Thickness", self.shell_thickness))
         integrated_layout.addWidget(
-            field_block("Integration points", self.shell_points)
+            field_row(
+                field_block("Thickness", self.shell_thickness),
+                field_block("Integration points", self.shell_points),
+            )
         )
         integrated_layout.addStretch(1)
         self.shell_stack.addWidget(integrated)
@@ -206,8 +209,12 @@ class SectionDialog(ApplyDialog):
         page, layout = self._vertical_page()
         mat = ReferenceSelector(materials, material, cm)
         prof = ReferenceSelector(profiles, profile, cp)
-        layout.addWidget(field_block("Material", mat))
-        layout.addWidget(field_block("Profile", prof))
+        layout.addWidget(
+            field_row(
+                field_block("Material", mat),
+                field_block("Profile", prof),
+            )
+        )
         layout.addStretch(1)
         return page, mat, prof
 
@@ -222,8 +229,12 @@ class SectionDialog(ApplyDialog):
             maximum=1e30,
             decimals=6,
         )
-        layout.addWidget(field_block("Material", mat))
-        layout.addWidget(field_block("Cross-sectional area", area))
+        layout.addWidget(
+            field_row(
+                field_block("Material", mat),
+                field_block("Cross-sectional area", area),
+            )
+        )
         layout.addStretch(1)
         return page, mat, area
 
