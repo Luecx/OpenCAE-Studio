@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QStyle, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
 from opencae.ui.core.fields import FieldSpec, create_editor
@@ -16,6 +17,7 @@ from .navigation_tree import order_state, populate_tree, restore_order_state
 
 _KEY_ROLE = int(Qt.ItemDataRole.UserRole)
 _FIXED_ROLE = _KEY_ROLE + 1
+_SUPPORTED_FORMATS_ROLE = _FIXED_ROLE + 1
 
 
 class DeckFormatNavigation(QWidget):
@@ -28,6 +30,7 @@ class DeckFormatNavigation(QWidget):
         """Build the searchable hierarchy and canonical movement controls."""
         super().__init__(parent)
         self._editable = True
+        self._format_name = "FEMaster"
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(8)
@@ -60,6 +63,7 @@ class DeckFormatNavigation(QWidget):
         self.search.textChanged.connect(self._apply_filter)
         self.tree.currentItemChanged.connect(self._selection_changed)
         self.tree.expandAll()
+        self.set_format(self._format_name)
         self._refresh_move_buttons()
 
     def select_key(self, key: str) -> bool:
@@ -80,6 +84,39 @@ class DeckFormatNavigation(QWidget):
         """Return whether ``key`` currently has child records."""
         item = self._items.get(key)
         return bool(item is not None and item.childCount())
+
+    def is_supported(self, key: str, format_name: str | None = None) -> bool:
+        """Return whether a record is supported by the selected solver format."""
+        item = self._items.get(key)
+        if item is None:
+            return False
+        supported = tuple(item.data(0, _SUPPORTED_FORMATS_ROLE) or ())
+        if not supported:
+            return True
+        return (format_name or self._format_name) in supported
+
+    def set_format(self, format_name: str) -> None:
+        """Refresh capability styling for the selected underlying solver format."""
+        self._format_name = str(format_name)
+        active_brush = self.tree.palette().brush(
+            QPalette.ColorGroup.Active,
+            QPalette.ColorRole.Text,
+        )
+        disabled_brush = self.tree.palette().brush(
+            QPalette.ColorGroup.Disabled,
+            QPalette.ColorRole.Text,
+        )
+        for key, item in self._items.items():
+            supported = self.is_supported(key, self._format_name)
+            font = item.font(0)
+            font.setItalic(not supported)
+            item.setFont(0, font)
+            item.setForeground(0, active_brush if supported else disabled_brush)
+            item.setToolTip(
+                0,
+                "" if supported else f"{item.text(0)} is not supported by {self._format_name}.",
+            )
+        self._refresh_move_buttons()
 
     def set_editable(self, editable: bool) -> None:
         """Enable or disable ordering without disabling tree navigation."""
@@ -122,6 +159,7 @@ class DeckFormatNavigation(QWidget):
         item = QTreeWidgetItem((node["label"],))
         item.setData(0, _KEY_ROLE, node["key"])
         item.setData(0, _FIXED_ROLE, bool(node.get("fixed", False)))
+        item.setData(0, _SUPPORTED_FORMATS_ROLE, tuple(node.get("supported_formats", ())))
         item.setIcon(0, make_icon(deck_record_icon_kind(node["key"]), 18))
         self._items[node["key"]] = item
         return item
@@ -141,6 +179,9 @@ class DeckFormatNavigation(QWidget):
         """Move the current item while keeping fixed siblings pinned."""
         item = self.tree.currentItem()
         if not self._editable or item is None or bool(item.data(0, _FIXED_ROLE)):
+            return
+        key = self._key(item)
+        if not self.is_supported(key):
             return
         parent = item.parent()
         if parent is None:
@@ -171,6 +212,10 @@ class DeckFormatNavigation(QWidget):
         item = self.tree.currentItem()
         up = down = False
         if self._editable and item is not None and not bool(item.data(0, _FIXED_ROLE)):
+            if not self.is_supported(self._key(item)):
+                self.move_up_button.setEnabled(False)
+                self.move_down_button.setEnabled(False)
+                return
             parent = item.parent()
             if parent is None:
                 index = self.tree.indexOfTopLevelItem(item)
