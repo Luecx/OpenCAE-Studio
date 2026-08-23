@@ -7,13 +7,14 @@ from collections.abc import Callable, Iterable
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
-    QLabel,
-    QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
+
+from opencae.ui.templates import FieldLabel, apply_inline_action_size
 
 
 class GraphProfileEditor(QWidget):
@@ -48,17 +49,24 @@ class GraphProfileEditor(QWidget):
         table: QTableWidget,
         add: Callable[[], None],
     ) -> QWidget:
-        """Build a titled table pane with add and remove actions."""
+        """Build a titled table pane with shared-size add and remove actions."""
         pane = QWidget()
         layout = QVBoxLayout(pane)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(QLabel(title))
+        layout.setSpacing(8)
+        layout.addWidget(FieldLabel(title))
         layout.addWidget(table)
+
         row = QHBoxLayout()
-        plus = QPushButton("+")
-        minus = QPushButton("−")
-        plus.setFixedWidth(34)
-        minus.setFixedWidth(34)
+        row.setSpacing(6)
+        plus = QToolButton()
+        plus.setText("+")
+        plus.setObjectName("InlineAddButton")
+        apply_inline_action_size(plus)
+        minus = QToolButton()
+        minus.setText("−")
+        minus.setObjectName("InlineRemoveButton")
+        apply_inline_action_size(minus)
         plus.clicked.connect(add)
         minus.clicked.connect(lambda: self._remove(table))
         row.addWidget(plus)
