@@ -1,10 +1,14 @@
 """Provides a reusable editor for automatic-factor or manual-distance values."""
 
-from PyQt6.QtWidgets import QDoubleSpinBox, QFormLayout, QRadioButton, QWidget
+from __future__ import annotations
+
+from PyQt6.QtWidgets import QRadioButton, QVBoxLayout, QWidget
+
+from opencae.ui.templates import NumericUnitInput, field_block
 
 
 class AutomaticManualValueEditor(QWidget):
-    """Edits a value as either factor times a reference scale or an absolute value."""
+    """Edit a value as either factor times a reference scale or an absolute value."""
 
     def __init__(
         self,
@@ -22,37 +26,42 @@ class AutomaticManualValueEditor(QWidget):
         value_decimals=9,
         parent=None,
     ):
+        """Build automatic/manual mode choices with canonical numeric fields."""
         super().__init__(parent)
-        layout = QFormLayout(self)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setHorizontalSpacing(18)
-        layout.setVerticalSpacing(8)
+        layout.setSpacing(10)
 
         self.automatic = QRadioButton(automatic_text)
         self.manual = QRadioButton(manual_text)
-        self.factor = QDoubleSpinBox()
-        self.factor.setDecimals(int(factor_decimals))
-        self.factor.setRange(*map(float, factor_range))
-        self.factor.setValue(float(factor))
-        self.value = QDoubleSpinBox()
-        self.value.setDecimals(int(value_decimals))
-        self.value.setRange(*map(float, value_range))
-        self.value.setValue(max(float(value), float(value_range[0])))
+        self.factor = NumericUnitInput(
+            factor,
+            "",
+            minimum=float(factor_range[0]),
+            maximum=float(factor_range[1]),
+            decimals=int(factor_decimals),
+        )
+        self.value = NumericUnitInput(
+            max(float(value), float(value_range[0])),
+            "",
+            minimum=float(value_range[0]),
+            maximum=float(value_range[1]),
+            decimals=int(value_decimals),
+        )
 
         self.automatic.setChecked(bool(automatic))
         self.manual.setChecked(not bool(automatic))
         self.automatic.toggled.connect(self._sync_enabled)
         self.manual.toggled.connect(self._sync_enabled)
 
-        layout.addRow(self.automatic)
-        layout.addRow(factor_label, self.factor)
-        layout.addRow(self.manual)
-        layout.addRow(value_label, self.value)
+        layout.addWidget(self.automatic)
+        layout.addWidget(field_block(factor_label, self.factor))
+        layout.addWidget(self.manual)
+        layout.addWidget(field_block(value_label, self.value))
         self._sync_enabled()
 
     def values(self) -> tuple[bool, float, float]:
         """Return automatic mode, factor and absolute value."""
-
         return (
             self.automatic.isChecked(),
             self.factor.value(),
@@ -60,5 +69,6 @@ class AutomaticManualValueEditor(QWidget):
         )
 
     def _sync_enabled(self, *_):
+        """Enable only the numeric field that belongs to the selected mode."""
         self.factor.setEnabled(self.automatic.isChecked())
         self.value.setEnabled(self.manual.isChecked())
