@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QCheckBox, QWidget
+from PyQt6.QtWidgets import QCheckBox
 
 from opencae.ui.core.widgets import ChevronComboBox, PickReference
 from opencae.ui.templates import FieldStack, NumericUnitInput, apply_primary_control_height
@@ -10,12 +10,10 @@ from opencae.ui.templates import FieldStack, NumericUnitInput, apply_primary_con
 
 def page(rows):
     """Return one datum method page using the canonical label-above field stack."""
-    widget = QWidget()
-    stack = FieldStack(widget)
-    # FieldStack already owns its layout when constructed with this page parent.
+    stack = FieldStack()
     for label, control in rows:
         stack.addRow(label, control)
-    return widget
+    return stack
 
 
 def number(value=0.0, minimum=-1e15, maximum=1e15, suffix=""):
