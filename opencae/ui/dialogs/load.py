@@ -148,6 +148,7 @@ class LoadDialog(BaseLoadDialog):
                 )
             )
             self.point_masses = QCheckBox("Consider point masses")
+            self.point_masses.setChecked(bool(getattr(load, "consider_point_masses", False)))
             self.root.addWidget(self.point_masses)
 
         self.finish()
