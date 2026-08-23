@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QMessageBox
 from opencae.model.entities.optimization import TopologyControls
 from opencae.ui.core.fields import FieldSpec, create_editor, editor_value
 from opencae.ui.core.named_entity_dialog import NamedEntityDialog
+from opencae.ui.templates import SectionHeading, field_block, field_row
 
 
 class TopologyControlsDialog(NamedEntityDialog):
@@ -19,15 +20,16 @@ class TopologyControlsDialog(NamedEntityDialog):
         existing_names=(),
         parent=None,
     ):
+        """Build grouped numerical controls from the shared editor primitives."""
         super().__init__(
             "Topology Optimization Controls",
             value,
             existing_names=existing_names,
             parent=parent,
-            width=520,
+            width=680,
         )
-        specs = (
-            FieldSpec(
+        specs = {
+            "maximum_iterations": FieldSpec(
                 "maximum_iterations",
                 "Maximum iterations",
                 kind="int",
@@ -35,7 +37,7 @@ class TopologyControlsDialog(NamedEntityDialog):
                 minimum=1,
                 maximum=100000,
             ),
-            FieldSpec(
+            "minimum_density": FieldSpec(
                 "minimum_density",
                 "Minimum density",
                 kind="float",
@@ -44,7 +46,7 @@ class TopologyControlsDialog(NamedEntityDialog):
                 maximum=0.999999,
                 decimals=9,
             ),
-            FieldSpec(
+            "initial_density": FieldSpec(
                 "initial_density",
                 "Initial density",
                 kind="float",
@@ -53,7 +55,7 @@ class TopologyControlsDialog(NamedEntityDialog):
                 maximum=1.0,
                 decimals=6,
             ),
-            FieldSpec(
+            "simp_exponent": FieldSpec(
                 "simp_exponent",
                 "SIMP exponent",
                 kind="float",
@@ -62,7 +64,7 @@ class TopologyControlsDialog(NamedEntityDialog):
                 maximum=100.0,
                 decimals=6,
             ),
-            FieldSpec(
+            "move_limit": FieldSpec(
                 "move_limit",
                 "Move limit",
                 kind="float",
@@ -71,7 +73,7 @@ class TopologyControlsDialog(NamedEntityDialog):
                 maximum=1.0,
                 decimals=6,
             ),
-            FieldSpec(
+            "density_change_tolerance": FieldSpec(
                 "density_change_tolerance",
                 "Density-change tolerance",
                 kind="float",
@@ -80,7 +82,7 @@ class TopologyControlsDialog(NamedEntityDialog):
                 maximum=1.0,
                 decimals=9,
             ),
-            FieldSpec(
+            "objective_tolerance": FieldSpec(
                 "objective_tolerance",
                 "Objective tolerance",
                 kind="float",
@@ -89,7 +91,7 @@ class TopologyControlsDialog(NamedEntityDialog):
                 maximum=1.0,
                 decimals=9,
             ),
-            FieldSpec(
+            "bisection_tolerance": FieldSpec(
                 "bisection_tolerance",
                 "Bisection tolerance",
                 kind="float",
@@ -98,7 +100,7 @@ class TopologyControlsDialog(NamedEntityDialog):
                 maximum=1.0,
                 decimals=12,
             ),
-            FieldSpec(
+            "maximum_bisection_steps": FieldSpec(
                 "maximum_bisection_steps",
                 "Maximum bisection steps",
                 kind="int",
@@ -106,7 +108,7 @@ class TopologyControlsDialog(NamedEntityDialog):
                 minimum=1,
                 maximum=10000,
             ),
-            FieldSpec(
+            "save_every": FieldSpec(
                 "save_every",
                 "Save every N iterations",
                 kind="int",
@@ -114,27 +116,79 @@ class TopologyControlsDialog(NamedEntityDialog):
                 minimum=1,
                 maximum=10000,
             ),
-            FieldSpec(
+            "keep_solver_files": FieldSpec(
                 "keep_solver_files",
                 "Keep FEMaster .res/.frd files",
                 kind="bool",
                 default=value.keep_solver_files,
             ),
+        }
+        self.editors = {
+            key: create_editor(spec)
+            for key, spec in specs.items()
+        }
+
+        self.add_widget(SectionHeading("Iteration Controls"))
+        self.add_widget(
+            field_row(
+                field_block(specs["maximum_iterations"].label, self.editors["maximum_iterations"]),
+                field_block(specs["save_every"].label, self.editors["save_every"]),
+            )
         )
-        self.editors = {}
-        for spec in specs:
-            editor = create_editor(spec)
-            self.editors[spec.key] = editor
-            self.form.addRow(spec.label, editor)
+
+        self.add_widget(SectionHeading("Density and SIMP"))
+        self.add_widget(
+            field_row(
+                field_block(specs["minimum_density"].label, self.editors["minimum_density"]),
+                field_block(specs["initial_density"].label, self.editors["initial_density"]),
+            )
+        )
+        self.add_widget(
+            field_row(
+                field_block(specs["simp_exponent"].label, self.editors["simp_exponent"]),
+                field_block(specs["move_limit"].label, self.editors["move_limit"]),
+            )
+        )
+
+        self.add_widget(SectionHeading("Convergence"))
+        self.add_widget(
+            field_row(
+                field_block(
+                    specs["density_change_tolerance"].label,
+                    self.editors["density_change_tolerance"],
+                ),
+                field_block(
+                    specs["objective_tolerance"].label,
+                    self.editors["objective_tolerance"],
+                ),
+            )
+        )
+        self.add_widget(
+            field_row(
+                field_block(
+                    specs["bisection_tolerance"].label,
+                    self.editors["bisection_tolerance"],
+                ),
+                field_block(
+                    specs["maximum_bisection_steps"].label,
+                    self.editors["maximum_bisection_steps"],
+                ),
+            )
+        )
+
+        self.add_widget(SectionHeading("Output"))
+        self.add_widget(self.editors["keep_solver_files"])
         self.finish()
 
     def result(self):
+        """Return a copied controls entity populated from the current editors."""
         candidate = self.apply_name(deepcopy(self.value))
         for key, editor in self.editors.items():
             setattr(candidate, key, editor_value(editor))
         return candidate
 
     def validate(self) -> bool:
+        """Reject an initial density below the configured minimum density."""
         if not super().validate():
             return False
         minimum = float(editor_value(self.editors["minimum_density"]))
