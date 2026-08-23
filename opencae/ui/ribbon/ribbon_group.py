@@ -1,3 +1,5 @@
+"""Build one ribbon action group with a compact shared group title."""
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
@@ -6,7 +8,10 @@ from opencae.ui.core.theme import PALETTE
 
 
 class RibbonGroup(QFrame):
+    """Arrange ribbon buttons above one compact semantic group caption."""
+
     def __init__(self, spec, actions, parent=None):
+        """Build one expanded or collapsed ribbon action group."""
         super().__init__(parent)
         self.setObjectName("RibbonGroup")
         self.setFrameShape(QFrame.Shape.NoFrame)
@@ -18,8 +23,10 @@ class RibbonGroup(QFrame):
         )
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 4, 9, 2)
-        layout.setSpacing(1)
+        # Keep the group caption close to the lower edge so two-line action
+        # captions get the available vertical space instead of being clipped.
+        layout.setContentsMargins(8, 2, 9, 0)
+        layout.setSpacing(0)
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
@@ -43,7 +50,7 @@ class RibbonGroup(QFrame):
         if spec.collapsed:
             # Keep the same vertical footprint as expanded groups without
             # repeating the group title below the group button.
-            layout.addSpacing(14)
+            layout.addSpacing(13)
         else:
             title = QLabel(spec.title)
             title.setAlignment(Qt.AlignmentFlag.AlignCenter)

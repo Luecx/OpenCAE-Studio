@@ -1,3 +1,5 @@
+"""Build scalar field actors for tabular, formula, and file-backed fields."""
+
 from __future__ import annotations
 
 import math
@@ -19,7 +21,7 @@ def add_field(plotter, grid, snapshot, field):
         remove_actor(plotter, name)
     actor = plotter.add_mesh(target, scalars=field.name, cmap="turbo", n_colors=18, show_edges=True,
         edge_color="#10161c", line_width=1.0, lighting=True, ambient=0.25,
-        diffuse=0.72, scalar_bar_args=scalar_bar_args(field.name), name="field-visualization", render=False)
+        diffuse=0.72, scalar_bar_args=scalar_bar_args(field.name, plotter), name="field-visualization", render=False)
     plotter.render(); return actor
 
 
@@ -54,7 +56,6 @@ def _formula_values(expression, point, components):
         try: result.append(float(eval(expressions[min(index, len(expressions) - 1)], {"__builtins__": {}}, env)))
         except (ArithmeticError, NameError, SyntaxError, TypeError, ValueError): result.append(0.0)
     return result
-
 
 
 def _file_values(path, identifiers, points, components, interpolation):

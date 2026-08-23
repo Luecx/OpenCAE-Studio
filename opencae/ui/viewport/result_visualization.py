@@ -31,7 +31,7 @@ def add_result(plotter, result, field=None, options=None):
         ambient=.22,
         diffuse=.76,
         smooth_shading=True,
-        scalar_bar_args=scalar_bar_args(scalar) if scalar else None,
+        scalar_bar_args=scalar_bar_args(scalar, plotter) if scalar else None,
         name="solution-result",
         pickable=True,
         render=False,

@@ -15,13 +15,16 @@ from .view_cube_polyhedron import (
     camera_view_matrix,
     transform,
 )
+from .viewport_overlay_metrics import VIEW_CUBE_SIZE
 
 
 class ViewCube(QWidget):
     """Display and hit-test a beveled solid aligned with the VTK camera.
 
-    The overlay is deliberately opaque. This avoids the unreliable composition
-    of translucent Qt widgets above native OpenGL/VTK surfaces.
+    The overlay owns all pointer input inside its rectangle. Mouse events must
+    never propagate to the underlying QVTK widget because a propagated press
+    without the matching release leaves VTK in an active camera-interaction
+    state.
     """
 
     view_requested = pyqtSignal(object)
@@ -35,15 +38,17 @@ class ViewCube(QWidget):
             (0.0, 0.0, 1.0),
         )
         self._hovered_normal: Point3D | None = None
+        self._pressed_normal: Point3D | None = None
         self._hit_regions: list[tuple[QPolygonF, Point3D, str]] = []
         self._faces = beveled_cube_faces()
-        self.setFixedSize(174, 174)
+        self.setFixedSize(VIEW_CUBE_SIZE, VIEW_CUBE_SIZE)
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName("View orientation cube")
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation, True)
 
     @property
     def view_matrix(self) -> Matrix3D:
@@ -77,12 +82,22 @@ class ViewCube(QWidget):
             self._hit_regions.append((polygon, face[2], face[1]))
         painter.end()
 
+    def mousePressEvent(self, event) -> None:
+        """Capture pointer presses so QVTK cannot enter a camera-drag state."""
+        self._pressed_normal = (
+            self._normal_at(event.position())
+            if event.button() == Qt.MouseButton.LeftButton
+            else None
+        )
+        event.accept()
+
     def mouseMoveEvent(self, event) -> None:
-        """Highlight the foremost visible face under the pointer."""
+        """Highlight the foremost visible face while keeping input on the cube."""
         normal = self._normal_at(event.position())
         if normal != self._hovered_normal:
             self._hovered_normal = normal
             self.update()
+        event.accept()
 
     def leaveEvent(self, event) -> None:
         """Clear face highlighting after the pointer exits the cube."""
@@ -92,11 +107,17 @@ class ViewCube(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, event) -> None:
-        """Emit the world direction represented by the clicked visible face."""
+        """Emit one face request only for a complete left click on the cube."""
         if event.button() == Qt.MouseButton.LeftButton:
             normal = self._normal_at(event.position())
-            if normal is not None:
+            if normal is not None and normal == self._pressed_normal:
                 self.view_requested.emit(normal)
+        self._pressed_normal = None
+        event.accept()
+
+    def wheelEvent(self, event) -> None:
+        """Keep wheel input above the cube from zooming the VTK camera below it."""
+        event.accept()
 
     def _visible_faces(self) -> list[tuple[float, CubeFace, QPolygonF, Point3D]]:
         """Return front-facing polygons ordered from back toward the viewer."""

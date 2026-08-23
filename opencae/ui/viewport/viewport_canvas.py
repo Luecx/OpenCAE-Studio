@@ -7,6 +7,10 @@ from .result_query_panel import ResultQueryPanel
 from .result_selection_panel import ResultSelectionPanel
 from .view_cube import ViewCube
 from .viewport_notice import ViewportNotice
+from .viewport_overlay_metrics import (
+    VIEWPORT_OVERLAY_GAP,
+    VIEWPORT_OVERLAY_MARGIN,
+)
 
 
 class ViewportCanvas(QWidget):
@@ -45,8 +49,8 @@ class ViewportCanvas(QWidget):
 
     def _position_overlays(self):
         """Position corner overlays and center the workflow guidance notice."""
-        margin = 12
-        gap = 8
+        margin = VIEWPORT_OVERLAY_MARGIN
+        gap = VIEWPORT_OVERLAY_GAP
         if self.cube is not None:
             self.cube.move(
                 max(margin, self.width() - self.cube.width() - margin),
