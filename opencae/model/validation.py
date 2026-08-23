@@ -1,11 +1,8 @@
-"""Project-wide reference, region, Step, Analysis and Job validation."""
+"""Project-wide region, Step, Analysis and Job validation."""
 
 from __future__ import annotations
 
-from dataclasses import fields, is_dataclass
-
 from opencae.geometry.section_filter import region_families
-from opencae.model.core import EntityRef
 from opencae.model.entities.analysis import AnalysisStep
 from opencae.model.entities.jobs import Job
 from opencae.model.entities.loads import TemperatureLoad
@@ -17,7 +14,13 @@ from opencae.model.selection import (
 
 
 def section_assignment_errors(project):
+    """Return section-assignment diagnostics for the current Project graph."""
     project.ensure_references(False)
+    return _section_assignment_errors(project)
+
+
+def _section_assignment_errors(project):
+    """Validate section assignments without rebuilding references again."""
     errors = []
     for part in project.parts:
         for assignment in part.section_assignments:
@@ -53,73 +56,30 @@ def section_assignment_errors(project):
 
 
 def validate_section_assignments(project):
+    """Raise when any section assignment is invalid."""
     errors = section_assignment_errors(project)
     if errors:
         raise ValueError("Invalid section assignments:\n" + "\n".join(errors))
 
 
 def validate_project(project, analysis=None):
-    """Validate the project or the workflow relevant to one selected Analysis."""
+    """Validate the project or the workflow relevant to one selected Analysis.
 
+    Stable EntityRef validation has one authoritative implementation in
+    ``reference_binding``. Keeping a second reflective walker here previously
+    traversed runtime dataclass cycles and caused ``RecursionError`` while
+    starting analyses.
+    """
     project.ensure_references(False)
     errors = list(project.reference_errors)
-    errors.extend(_reference_errors(project))
-    errors.extend(section_assignment_errors(project))
+    errors.extend(_section_assignment_errors(project))
     errors.extend(_region_consumer_errors(project))
     errors.extend(_workflow_errors(project, analysis))
     return _unique(errors)
 
 
-def _reference_errors(project):
-    errors = []
-
-    def walk(value, source, path):
-        if isinstance(value, EntityRef):
-            if not value.entity_id:
-                if value.legacy_name:
-                    errors.append(
-                        f"{source.name}.{path}: unresolved reference "
-                        f"'{value.legacy_name}'"
-                    )
-                return
-            target = project.try_resolve(value)
-            if target is None:
-                errors.append(
-                    f"{source.name}.{path}: target '{value.entity_id}' does not exist"
-                )
-                return
-            if value.expected_type and not _matches_expected(
-                target,
-                value.expected_type,
-            ):
-                errors.append(
-                    f"{source.name}.{path}: expected {value.expected_type}, "
-                    f"got {type(target).__name__}"
-                )
-            return
-        if hasattr(value, "id") and is_dataclass(value):
-            return
-        if is_dataclass(value):
-            for field_info in fields(value):
-                walk(
-                    getattr(value, field_info.name),
-                    source,
-                    f"{path}.{field_info.name}" if path else field_info.name,
-                )
-        elif isinstance(value, (list, tuple)):
-            for index, item in enumerate(value):
-                walk(item, source, f"{path}[{index}]")
-        elif isinstance(value, dict):
-            for key, item in value.items():
-                walk(item, source, f"{path}[{key!r}]")
-
-    for entity in project.index.by_id.values():
-        for field_info in fields(entity):
-            walk(getattr(entity, field_info.name), entity, field_info.name)
-    return errors
-
-
 def _region_consumer_errors(project):
+    """Return non-region semantic errors for region-consuming entities."""
     errors = []
     for load in project.loads:
         if isinstance(load, TemperatureLoad):
@@ -131,34 +91,8 @@ def _region_consumer_errors(project):
     return errors
 
 
-def _matches_expected(entity, expected):
-    normalized = expected.replace(" ", "").casefold()
-    names = {
-        cls.__name__.replace(" ", "").casefold()
-        for cls in type(entity).mro()
-    }
-    if normalized in names:
-        return True
-    aliases = {
-        "region": {"region", "nodeset", "elementset", "surface"},
-        "nodeset": {"region", "nodeset"},
-        "elementset": {"region", "elementset"},
-        "surface": {"region", "surface"},
-        "study": {"study", "topologyoptimization"},
-        "load": {
-            "load", "concentratedload", "distributedload", "pressureload",
-            "volumeload", "temperatureload", "inertiaload",
-        },
-        "support": {
-            "support", "fixedsupport", "displacementsupport",
-            "symmetrysupport", "remotedisplacementsupport",
-            "temperaturesupport",
-        },
-    }
-    return bool(names & aliases.get(normalized, set()))
-
-
 def _workflow_errors(project, analysis=None):
+    """Return Step, Analysis, Job and Result workflow consistency errors."""
     errors = []
     analyses = (analysis,) if analysis is not None else tuple(project.analyses)
     if analysis is not None:
@@ -200,6 +134,7 @@ def _workflow_errors(project, analysis=None):
 
 
 def _unique(values):
+    """Return input diagnostics in stable order without duplicates."""
     result = []
     seen = set()
     for value in values:
