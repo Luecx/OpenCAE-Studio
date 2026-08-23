@@ -39,6 +39,7 @@ class DeckFormatManagerDialog(QDialog):
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self.navigation = DeckFormatNavigation()
+        self.navigation.set_format(self.profile_toolbar.format_name())
         self.navigation.setMinimumWidth(330)
         self._default_order = self.navigation.order_state()
         splitter.addWidget(self.navigation)
@@ -111,7 +112,7 @@ class DeckFormatManagerDialog(QDialog):
         self._display_record(key, label_text, store_current=True)
 
     def _display_record(self, key: str, label_text: str, *, store_current: bool) -> None:
-        """Display global settings, category overview, or one record template."""
+        """Display settings, support information, categories, or one record template."""
         if store_current:
             self._store_current_template()
         self.breadcrumb.setText(self._breadcrumb(label_text))
@@ -125,6 +126,16 @@ class DeckFormatManagerDialog(QDialog):
             self.overview_text.setText(
                 "Select a child record to edit its complete keyword/data template. "
                 "Use Move Up and Move Down on the left to control sibling output order."
+            )
+            self.stack.setCurrentWidget(self.overview_page)
+            return
+        format_name = self.profile_toolbar.format_name()
+        if not self.navigation.is_supported(key, format_name):
+            self.overview_title.setText(f"{label_text} — Not Supported")
+            self.overview_text.setText(
+                f"{label_text} is part of the OpenCAE constraint model, but {format_name} "
+                "does not support this record. It remains visible so profile capability "
+                "differences are explicit instead of silently hiding model features."
             )
             self.stack.setCurrentWidget(self.overview_page)
             return
@@ -142,6 +153,7 @@ class DeckFormatManagerDialog(QDialog):
         if previous:
             self._session_orders[previous] = self.navigation.order_state()
         self._active_profile = self.profile_toolbar.profile_name()
+        self.navigation.set_format(self.profile_toolbar.format_name())
         order = self._session_orders.get(self._active_profile, self._default_order)
         self.navigation.set_order_state(order)
         self._apply_editability()
