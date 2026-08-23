@@ -41,10 +41,10 @@ class ResultRangeButton(QToolButton):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(12)
-        self.minimum, self.minimum_auto = self._field("Minimum")
-        self.maximum, self.maximum_auto = self._field("Maximum")
-        layout.addWidget(field_block("Minimum", self.minimum.parentWidget()))
-        layout.addWidget(field_block("Maximum", self.maximum.parentWidget()))
+        minimum_row, self.minimum, self.minimum_auto = self._field()
+        maximum_row, self.maximum, self.maximum_auto = self._field()
+        layout.addWidget(field_block("Minimum", minimum_row))
+        layout.addWidget(field_block("Maximum", maximum_row))
 
         menu = QMenu(self)
         action = QWidgetAction(menu)
@@ -64,8 +64,8 @@ class ResultRangeButton(QToolButton):
         self.maximum_auto.setChecked(True)
 
     @staticmethod
-    def _field(_label):
-        """Return one numeric limit and a same-height Auto toggle in a composite row."""
+    def _field():
+        """Return one composite numeric limit row and its child controls."""
         host = QWidget()
         row = QHBoxLayout(host)
         row.setContentsMargins(0, 0, 0, 0)
@@ -86,7 +86,7 @@ class ResultRangeButton(QToolButton):
 
         row.addWidget(spin, 1)
         row.addWidget(auto)
-        return spin, auto
+        return host, spin, auto
 
     def set_data_range(self, minimum, maximum):
         """Replace the automatic limits with the range of the active result field."""
