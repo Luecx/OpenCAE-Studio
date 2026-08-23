@@ -60,7 +60,8 @@ def css(p):
     }}
     QDoubleSpinBox#XYZFirst,
     QDoubleSpinBox#XYZMiddle,
-    QDoubleSpinBox#XYZLast {{
+    QDoubleSpinBox#XYZLast,
+    QDoubleSpinBox#XYZLastWithUnit {{
         min-width: 0px;
         padding: 5px 7px;
         border-radius: 0px;
@@ -70,8 +71,16 @@ def css(p):
         border-bottom-left-radius: 3px;
     }}
     QDoubleSpinBox#XYZMiddle,
-    QDoubleSpinBox#XYZLast {{
+    QDoubleSpinBox#XYZLast,
+    QDoubleSpinBox#XYZLastWithUnit {{
         border-left: 0px;
+    }}
+    QDoubleSpinBox#XYZLast {{
+        border-top-right-radius: 3px;
+        border-bottom-right-radius: 3px;
+    }}
+    QDoubleSpinBox#XYZLastWithUnit {{
+        border-right: 0px;
     }}
     QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {{
         border-color: #53606d;
