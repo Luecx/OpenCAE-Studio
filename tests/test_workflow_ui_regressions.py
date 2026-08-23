@@ -2,8 +2,9 @@
 
 import ast
 from pathlib import Path
+from types import SimpleNamespace
 
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QPointF, QTimer, Qt
 from PyQt6.QtWidgets import QApplication, QDialog
 
 from opencae.model.core import EntityRef
@@ -11,6 +12,8 @@ from opencae.model.entities.analysis import Analysis, AnalysisStep
 from opencae.ui.core.icons.factory import _ICON_MAP, _x_icon, make_icon
 from opencae.ui.core.icons.kinds import IconKind
 from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
+from opencae.ui.viewport.click_gesture import ClickGestureTracker
+from opencae.ui.visibility_state import VisibilityState
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -152,3 +155,69 @@ def test_analysis_dialog_remains_usable_after_exec_returns():
     assert [reference.entity_id for reference in candidate.step_refs] == [step.id]
     dialog.deleteLater()
     app.processEvents()
+
+
+class _MouseEvent:
+    """Small Qt-event stand-in for deterministic click-gesture tests."""
+
+    def __init__(self, x, y, *, button=None, buttons=None):
+        self._point = QPointF(float(x), float(y))
+        self._button = button or Qt.MouseButton.NoButton
+        self._buttons = buttons or Qt.MouseButton.NoButton
+
+    def globalPosition(self):
+        return self._point
+
+    def button(self):
+        return self._button
+
+    def buttons(self):
+        return self._buttons
+
+
+def test_viewport_click_tracker_rejects_camera_drag_release():
+    """A left-button camera drag must never be reinterpreted as a pick click."""
+    tracker = ClickGestureTracker(drag_threshold=4.0)
+    tracker.press(
+        _MouseEvent(100, 100, button=Qt.MouseButton.LeftButton)
+    )
+    tracker.move(
+        _MouseEvent(
+            118,
+            103,
+            buttons=Qt.MouseButton.LeftButton,
+        )
+    )
+
+    assert not tracker.release_is_click(
+        _MouseEvent(118, 103, button=Qt.MouseButton.LeftButton)
+    )
+
+
+def test_viewport_click_tracker_accepts_stationary_release():
+    """A normal stationary left click must still reach the active picker."""
+    tracker = ClickGestureTracker(drag_threshold=4.0)
+    tracker.press(
+        _MouseEvent(100, 100, button=Qt.MouseButton.LeftButton)
+    )
+
+    assert tracker.release_is_click(
+        _MouseEvent(102, 101, button=Qt.MouseButton.LeftButton)
+    )
+
+
+def test_visibility_state_emits_topology_scope_without_entity_invalidation():
+    """Face visibility changes identify their Part/category for the fast path."""
+    state = VisibilityState(SimpleNamespace(id="project"))
+    topology = []
+    entities = []
+    state.topology_changed.connect(
+        lambda owner, kind: topology.append((owner, kind))
+    )
+    state.entity_changed.connect(entities.append)
+
+    state.hide_topology("part-1", "face", (7,))
+
+    assert topology == [("part-1", "faces")]
+    assert entities == []
+    assert state.hidden_topology("part-1", "faces") == frozenset({7})

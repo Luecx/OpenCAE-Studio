@@ -7,6 +7,7 @@ on:
       - agent/**
       - refactor/**
       - ui/**
+      - workflow/**
   pull_request:
 
 jobs:
@@ -44,4 +45,5 @@ jobs:
             tests/test_dialog_layout_contracts.py \
             tests/test_geometry_fingerprint.py \
             tests/test_job_action_contracts.py \
-            tests/test_workflow_ui_regressions.py
+            tests/test_workflow_ui_regressions.py \
+            tests/test_viewport_performance_contracts.py

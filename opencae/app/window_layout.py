@@ -11,6 +11,7 @@ from opencae.ui.viewport.viewport_factory import create_viewport
 
 
 def build_ribbon(window):
+    """Create and attach the stage ribbon toolbar."""
     window.ribbon_host = QToolBar("Ribbon", window)
     window.ribbon_host.setObjectName("RibbonHost")
     window.ribbon_host.setMovable(False)
@@ -34,12 +35,29 @@ def build_ribbon(window):
 
 
 def build_viewport(window):
+    """Create the central viewport and connect scoped model/display invalidations."""
     window.viewport = create_viewport(window.context.store)
     window.viewport.visibility = window.visibility
-    window.visibility.changed.connect(window.viewport.request_refresh)
-    window.visibility.changed.connect(
-        lambda: window.viewport.show_model_selection(window.context.store.selection)
+
+    # Entity visibility can affect independently generated overlays and therefore
+    # still invalidates the scene. Part topology visibility has a dedicated fast
+    # path that toggles existing CAD actors instead of rebuilding all geometry.
+    window.visibility.entity_changed.connect(window.viewport.request_refresh)
+    window.visibility.topology_changed.connect(
+        window.viewport.apply_topology_visibility
     )
+    window.visibility.reset.connect(window.viewport.request_refresh)
+    window.visibility.entity_changed.connect(
+        lambda *_: window.viewport.show_model_selection(
+            window.context.store.selection
+        )
+    )
+    window.visibility.reset.connect(
+        lambda: window.viewport.show_model_selection(
+            window.context.store.selection
+        )
+    )
+
     window.setCentralWidget(window.viewport)
     window.context.store.scene_changed.connect(window.viewport.request_refresh)
     window.context.store.active_part_changed.connect(window.viewport.request_refresh)
@@ -50,6 +68,7 @@ def build_viewport(window):
 
 
 def build_docks(window):
+    """Create the project and Job docks and connect stage/result navigation."""
     store = window.context.store
     window.project_dock = ProjectDock(
         store,
@@ -94,6 +113,7 @@ def build_docks(window):
 
 
 def build_status(window):
+    """Build the status bar and active unit-system control."""
     window.statusBar().showMessage("Ready")
     window.units = UnitSystemStatus(window)
     window.units.system_selected.connect(window.controllers.project.set_unit_system)
