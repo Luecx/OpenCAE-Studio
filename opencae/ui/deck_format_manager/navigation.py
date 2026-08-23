@@ -73,7 +73,7 @@ class DeckFormatNavigation(QWidget):
         self.move_up_button.clicked.connect(self.move_up)
         self.move_down_button.clicked.connect(self.move_down)
         self.tree.expandAll()
-        self.select_key("materials.isotropic_elastic")
+        self._refresh_move_buttons()
 
     def select_key(self, key: str) -> bool:
         """Select a known record key and return whether it exists."""
@@ -149,7 +149,9 @@ class DeckFormatNavigation(QWidget):
             "materials": IconKind.MATERIAL,
             "sections": IconKind.SECTION,
             "profiles": IconKind.PROFILE,
+            "fields": IconKind.FIELD,
             "coordinate_systems": IconKind.CSYS,
+            "reference_points": IconKind.RP,
             "constraints": IconKind.CONSTRAINT,
             "boundary_conditions": IconKind.SUPPORT,
             "loads": IconKind.LOAD,
