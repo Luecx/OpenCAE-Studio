@@ -137,7 +137,7 @@ def add_topology_presentation(
             pickable=False,
             reset_camera=False,
             render=False,
-            scalar_bar_args=scalar_bar_args("Density"),
+            scalar_bar_args=scalar_bar_args("Density", plotter),
         )
         names.append(actor_name)
         if options.get("mesh_lines", True):
