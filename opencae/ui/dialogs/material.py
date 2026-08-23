@@ -15,9 +15,9 @@ from PyQt6.QtWidgets import (
 
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.templates import (
-    FIELD_LABEL_SPACING,
     apply_primary_control_height,
     dialog_buttons,
+    field_block,
 )
 from .material_behavior_card import MaterialBehaviorCard
 from .material_behavior_specs import CATEGORIES
@@ -48,22 +48,10 @@ class MaterialDialog(ApplyDialog):
         root.setContentsMargins(24, 20, 24, 18)
         root.setSpacing(16)
 
-        # Name uses the same field rhythm and final control height as every
-        # property editor below; Qt class-specific size hints must not leak into
-        # the visual hierarchy of the dialog.
-        name_block = QWidget()
-        name_block.setObjectName("MaterialFieldBlock")
-        name_layout = QVBoxLayout(name_block)
-        name_layout.setContentsMargins(0, 0, 0, 0)
-        name_layout.setSpacing(FIELD_LABEL_SPACING)
-        name_label = QLabel("Name")
-        name_label.setObjectName("MaterialTopLabel")
-        name_layout.addWidget(name_label)
         self.name = QLineEdit(material.name if material else default_name)
         self.name.setObjectName("MaterialNameInput")
         apply_primary_control_height(self.name)
-        name_layout.addWidget(self.name)
-        root.addWidget(name_block)
+        root.addWidget(field_block("Name", self.name))
 
         definitions = QLabel("Material Definitions")
         definitions.setObjectName("MaterialSectionTitle")
@@ -74,8 +62,8 @@ class MaterialDialog(ApplyDialog):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setObjectName("MaterialDefinitionsScroll")
-        # Give the viewport a stable selector; Qt's platform style can otherwise
-        # paint an opaque QAbstractScrollArea background behind the cards.
+        # The viewport is explicitly transparent so the dialog background stays
+        # continuous between the heading and the behavior cards.
         scroll.viewport().setObjectName("MaterialDefinitionsViewport")
         scroll.viewport().setAutoFillBackground(False)
 
