@@ -8,6 +8,7 @@ from typing import Any
 from opencae.core.ids import new_id
 
 from .model_codec import encode_model
+from .persistent_model_field import is_persistent_model_field
 from .solver_writable import SolverWritable
 
 
@@ -33,10 +34,21 @@ class Entity(SolverWritable):
     )
 
     def __setattr__(self, name, value) -> None:
-        """Prevent stable entity identity from changing after construction."""
+        """Protect identity and invalidate graph indexes on persistent changes."""
         if name == "id" and "id" in self.__dict__ and self.__dict__["id"] != value:
             raise AttributeError("Entity.id is immutable")
+
         super().__setattr__(name, value)
+
+        project = self.__dict__.get("_project")
+        if project is None:
+            return
+        field_info = getattr(type(self), "__dataclass_fields__", {}).get(name)
+        if field_info is None or not is_persistent_model_field(field_info):
+            return
+        invalidate = getattr(project, "invalidate_index", None)
+        if callable(invalidate):
+            invalidate()
 
     @property
     def project(self):
