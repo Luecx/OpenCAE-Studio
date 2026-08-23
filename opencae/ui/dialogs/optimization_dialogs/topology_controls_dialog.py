@@ -177,7 +177,12 @@ class TopologyControlsDialog(NamedEntityDialog):
         )
 
         self.add_widget(SectionHeading("Output"))
-        self.add_widget(self.editors["keep_solver_files"])
+        self.add_widget(
+            field_block(
+                specs["keep_solver_files"].label,
+                self.editors["keep_solver_files"],
+            )
+        )
         self.finish()
 
     def result(self):
