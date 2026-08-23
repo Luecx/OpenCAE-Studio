@@ -1,44 +1,171 @@
-from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen, QPolygonF
+"""Render the camera-oriented beveled ViewCube as an opaque Qt overlay."""
+
+from __future__ import annotations
+
+from PyQt6.QtCore import QPointF, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
 from PyQt6.QtWidgets import QWidget
+
 from opencae.ui.core.theme import PALETTE
+from .view_cube_polyhedron import (
+    CubeFace,
+    Matrix3D,
+    Point3D,
+    beveled_cube_faces,
+    camera_view_matrix,
+    transform,
+)
 
 
 class ViewCube(QWidget):
-    view_requested=pyqtSignal(str)
-    def __init__(self,parent=None):
-        super().__init__(parent); self.setFixedSize(112,118); self.setMouseTracking(True); self._hover=""
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground); self.setCursor(Qt.CursorShape.PointingHandCursor)
+    """Display and hit-test a beveled solid aligned with the VTK camera.
 
-    def paintEvent(self,event):
-        p=QPainter(self); p.setRenderHint(QPainter.RenderHint.Antialiasing,True)
-        p.setPen(QPen(QColor(PALETTE["border_light"]),1.2)); p.setBrush(QColor(27,32,38,225)); p.drawRoundedRect(QRectF(1,1,110,116),8,8)
-        faces=self._faces()
-        for name,poly in faces.items():
-            active=name==self._hover; p.setPen(QPen(QColor(PALETTE["accent"] if active else PALETTE["border_light"]),1.2)); p.setBrush(QColor(PALETTE["panel_hover"] if active else PALETTE["panel_alt"])); p.drawPolygon(poly)
-            p.setPen(QColor(PALETTE["text"])); p.drawText(poly.boundingRect(),Qt.AlignmentFlag.AlignCenter,name)
-        p.setPen(QPen(QColor(PALETTE["border_light"]),1)); p.setBrush(QColor(PALETTE["panel_alt"])); p.drawEllipse(QRectF(40,88,32,22)); p.setPen(QColor(PALETTE["text"])); p.drawText(QRectF(40,88,32,22),Qt.AlignmentFlag.AlignCenter,"ISO")
+    The overlay is deliberately opaque. This avoids the unreliable composition
+    of translucent Qt widgets above native OpenGL/VTK surfaces.
+    """
 
-    def mouseMoveEvent(self,event):
-        self._hover=self._hit(event.position()); self.update()
+    view_requested = pyqtSignal(object)
 
-    def leaveEvent(self,event): self._hover=""; self.update()
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Create the cube with the application's initial isometric camera view."""
+        super().__init__(parent)
+        self._view_matrix = camera_view_matrix(
+            (1.0, 1.0, 1.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 1.0),
+        )
+        self._hovered_normal: Point3D | None = None
+        self._hit_regions: list[tuple[QPolygonF, Point3D, str]] = []
+        self._faces = beveled_cube_faces()
+        self.setFixedSize(174, 174)
+        self.setMouseTracking(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName("View orientation cube")
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
 
-    def mousePressEvent(self,event):
-        if event.button()!=Qt.MouseButton.LeftButton:return
-        name=self._hit(event.position())
-        if name:self.view_requested.emit(name)
+    @property
+    def view_matrix(self) -> Matrix3D:
+        """Return the current world-to-view rotation matrix."""
+        return self._view_matrix
 
-    def _hit(self,point):
-        if QRectF(40,88,32,22).contains(point):return "ISO"
-        for name,poly in self._faces().items():
-            if poly.containsPoint(point,Qt.FillRule.OddEvenFill):return name
-        return ""
+    def set_camera(self, position, focal_point, view_up) -> None:
+        """Update the cube from the live VTK camera vectors."""
+        self.set_view_matrix(camera_view_matrix(position, focal_point, view_up))
+
+    def set_view_matrix(self, matrix: Matrix3D) -> None:
+        """Replace the world-to-view rotation used for the next paint."""
+        normalized = tuple(tuple(float(value) for value in row) for row in matrix)
+        if normalized == self._view_matrix:
+            return
+        self._view_matrix = normalized
+        self._hovered_normal = None
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        """Project, depth-sort, and paint all currently visible faces."""
+        del event
+        visible_faces = self._visible_faces()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
+        self._hit_regions = []
+        for _depth, face, polygon, view_normal in visible_faces:
+            self._draw_face(painter, face, polygon, view_normal)
+            self._hit_regions.append((polygon, face[2], face[1]))
+        painter.end()
+
+    def mouseMoveEvent(self, event) -> None:
+        """Highlight the foremost visible face under the pointer."""
+        normal = self._normal_at(event.position())
+        if normal != self._hovered_normal:
+            self._hovered_normal = normal
+            self.update()
+
+    def leaveEvent(self, event) -> None:
+        """Clear face highlighting after the pointer exits the cube."""
+        del event
+        if self._hovered_normal is not None:
+            self._hovered_normal = None
+            self.update()
+
+    def mouseReleaseEvent(self, event) -> None:
+        """Emit the world direction represented by the clicked visible face."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            normal = self._normal_at(event.position())
+            if normal is not None:
+                self.view_requested.emit(normal)
+
+    def _visible_faces(self) -> list[tuple[float, CubeFace, QPolygonF, Point3D]]:
+        """Return front-facing polygons ordered from back toward the viewer."""
+        center = QPointF(self.width() * 0.5, self.height() * 0.51)
+        scale = min(self.width(), self.height()) * 0.315
+        result = []
+        for face in self._faces:
+            view_normal = transform(self._view_matrix, face[2])
+            if view_normal[2] <= 1.0e-9:
+                continue
+            view_points = tuple(transform(self._view_matrix, point) for point in face[3])
+            polygon = QPolygonF(
+                QPointF(center.x() + point[0] * scale, center.y() - point[1] * scale)
+                for point in view_points
+            )
+            depth = sum(point[2] for point in view_points) / len(view_points)
+            result.append((depth, face, polygon, view_normal))
+        result.sort(key=lambda item: item[0])
+        return result
+
+    def _draw_face(self, painter, face, polygon, view_normal) -> None:
+        """Paint one depth-shaded main, edge, or corner surface."""
+        kind, label, world_normal, _vertices = face
+        active = world_normal == self._hovered_normal
+        base = {
+            "main": QColor("#52697d"),
+            "edge": QColor("#34495b"),
+            "corner": QColor("#293b4b"),
+        }[kind]
+        light = max(
+            0.0,
+            -0.35 * view_normal[0] + 0.55 * view_normal[1] + 0.75 * view_normal[2],
+        )
+        fill = QColor(
+            PALETTE["accent"] if active else base.lighter(82 + round(30 * light))
+        )
+        outline = QColor(PALETTE["accent_hover"] if active else "#91a5b5")
+        painter.setPen(QPen(outline, 1.55 if active else 0.85))
+        painter.setBrush(fill)
+        painter.drawPolygon(polygon)
+        if kind == "main" and self._polygon_area(polygon) >= 250.0:
+            self._draw_label(painter, polygon, label)
 
     @staticmethod
-    def _faces():
-        return {
-            "TOP":QPolygonF((QPointF(28,28),QPointF(56,14),QPointF(85,28),QPointF(56,43))),
-            "FRONT":QPolygonF((QPointF(28,28),QPointF(56,43),QPointF(56,76),QPointF(28,60))),
-            "RIGHT":QPolygonF((QPointF(56,43),QPointF(85,28),QPointF(85,60),QPointF(56,76))),
-        }
+    def _draw_label(painter: QPainter, polygon: QPolygonF, label: str) -> None:
+        """Center a compact direction label on a sufficiently large main face."""
+        font = QFont(painter.font())
+        font.setPixelSize(9)
+        font.setWeight(QFont.Weight.DemiBold)
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.0)
+        painter.setFont(font)
+        painter.setPen(QColor("#f4f7fa"))
+        painter.drawText(polygon.boundingRect(), Qt.AlignmentFlag.AlignCenter, label)
+
+    def _normal_at(self, point: QPointF) -> Point3D | None:
+        """Return the foremost painted face normal containing a local position."""
+        for polygon, normal, _label in reversed(self._hit_regions):
+            if polygon.containsPoint(point, Qt.FillRule.OddEvenFill):
+                return normal
+        return None
+
+    @staticmethod
+    def _polygon_area(polygon: QPolygonF) -> float:
+        """Return screen area used to suppress labels on nearly edge-on faces."""
+        return abs(
+            sum(
+                polygon[index].x() * polygon[(index + 1) % len(polygon)].y()
+                - polygon[(index + 1) % len(polygon)].x() * polygon[index].y()
+                for index in range(len(polygon))
+            )
+            * 0.5
+        )

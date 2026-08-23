@@ -27,6 +27,7 @@ from .section_view import SectionViewController
 from .seed_label_events import handle_seed_label_event
 from .selection_toolbar import SelectionToolbar
 from .viewport_canvas import ViewportCanvas
+from .view_cube_camera import ViewCubeCameraController
 
 
 class PyVistaViewport(QWidget):
@@ -70,7 +71,13 @@ class PyVistaViewport(QWidget):
         self.view_cube = self.canvas.cube
         self.query_panel = self.canvas.query
         self.result_selection_panel = self.canvas.result_selection
-        self.view_cube.view_requested.connect(self._set_view)
+        self._view_cube_camera = ViewCubeCameraController(
+            self.plotter,
+            self.view_cube,
+        )
+        self.view_cube.view_requested.connect(
+            self._view_cube_camera.set_direction
+        )
 
         self.context_pick = ContextPickManager(self)
         self.datum_preview = DatumPreview()
@@ -283,15 +290,6 @@ class PyVistaViewport(QWidget):
 
     def fit_view(self):
         self.scene.fit()
-
-    def _set_view(self, name):
-        {
-            "TOP": self.plotter.view_xy,
-            "FRONT": self.plotter.view_xz,
-            "RIGHT": self.plotter.view_yz,
-        }.get(name, self.plotter.view_isometric)()
-        self.plotter.reset_camera()
-        self.plotter.render()
 
     def toggle_mesh(self):
         self.set_display_mode(
@@ -511,3 +509,8 @@ class PyVistaViewport(QWidget):
             return True
         self._handle_click_event(watched, event)
         return super().eventFilter(watched, event)
+
+    def closeEvent(self, event):
+        """Release the ViewCube's camera observer with the viewport."""
+        self._view_cube_camera.close()
+        super().closeEvent(event)
