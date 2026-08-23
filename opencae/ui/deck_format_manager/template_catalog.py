@@ -1,21 +1,33 @@
-"""Provides representative record templates and placeholder documentation."""
+"""Provide representative record templates and placeholder documentation."""
+
+from .element_type_catalog import element_template_specs
+
 
 TEMPLATE_SPECS = {
     "mesh.nodes": {
-        "template": "*NODE\n{node_id}, {x}, {y}, {z}",
-        "fields": (
-            ("node_id", "Solver node identifier", "101"),
-            ("x", "Global X coordinate", "0.0"),
-            ("y", "Global Y coordinate", "12.5"),
-            ("z", "Global Z coordinate", "4.0"),
+        "template": (
+            "*NODE\n"
+            "{for node in nodes}\n"
+            "{node.id}, {node.x}, {node.y}, {node.z}\n"
+            "{endfor}"
         ),
-    },
-    "mesh.elements": {
-        "template": "*ELEMENT, TYPE={element_type}\n{element_id}, {connectivity}",
-        "fields": (
-            ("element_type", "Formatted element type", "C3D4"),
-            ("element_id", "Solver element identifier", "42"),
-            ("connectivity", "Comma-separated node connectivity", "101, 102, 103, 104"),
+        "fields": (),
+        "loops": (
+            {
+                "collection": "nodes",
+                "item": "node",
+                "description": "Nodes written by this record.",
+                "fields": (
+                    ("id", "Solver node identifier", "101"),
+                    ("x", "Global X coordinate", "0.0"),
+                    ("y", "Global Y coordinate", "12.5"),
+                    ("z", "Global Z coordinate", "4.0"),
+                ),
+                "examples": (
+                    {"id": "101", "x": "0.0", "y": "12.5", "z": "4.0"},
+                    {"id": "102", "x": "8.0", "y": "12.5", "z": "4.0"},
+                ),
+            },
         ),
     },
     "node_sets": {
@@ -33,18 +45,31 @@ TEMPLATE_SPECS = {
         ),
     },
     "surfaces": {
-        "template": "*SURFACE, NAME={surface_name}\n{element_id}, {side_id}",
-        "fields": (
-            ("surface_name", "Surface name", "PRESSURE_FACE"),
-            ("element_id", "Element identifier for one surface facet", "42"),
-            ("side_id", "Local side/face identifier on that element", "S1"),
+        "template": (
+            "*SURFACE, NAME={surface_name}\n"
+            "{for facet in facets}\n"
+            "{facet.element_id}, {facet.side_id}\n"
+            "{endfor}"
         ),
-        "repeatable": True,
-        "repeat_default": True,
-        "repeat_fields": ("element_id", "side_id"),
-        "repeat_examples": (
-            {"element_id": "42", "side_id": "S1"},
-            {"element_id": "43", "side_id": "S2"},
+        "fields": (("surface_name", "Surface name", "PRESSURE_FACE"),),
+        "loops": (
+            {
+                "collection": "facets",
+                "item": "facet",
+                "description": "Element-side entries belonging to the surface.",
+                "fields": (
+                    (
+                        "element_id",
+                        "Element identifier for one surface facet",
+                        "42",
+                    ),
+                    ("side_id", "Local side/face identifier on that element", "S1"),
+                ),
+                "examples": (
+                    {"element_id": "42", "side_id": "S1"},
+                    {"element_id": "43", "side_id": "S2"},
+                ),
+            },
         ),
     },
     "materials.header": {
@@ -73,7 +98,9 @@ TEMPLATE_SPECS = {
     },
     "materials.thermal_expansion": {
         "template": "*EXPANSION\n{thermal_expansion}",
-        "fields": (("thermal_expansion", "Thermal expansion coefficient", "1.2e-5"),),
+        "fields": (
+            ("thermal_expansion", "Thermal expansion coefficient", "1.2e-5"),
+        ),
     },
     "sections.solid": {
         "template": "*SOLID SECTION, ELSET={element_set}, MATERIAL={material_name}",
@@ -84,7 +111,10 @@ TEMPLATE_SPECS = {
         ),
     },
     "sections.shell": {
-        "template": "*SHELL SECTION, ELSET={element_set}, MATERIAL={material_name}\n{thickness}",
+        "template": (
+            "*SHELL SECTION, ELSET={element_set}, MATERIAL={material_name}\n"
+            "{thickness}"
+        ),
         "fields": (
             ("element_set", "Assigned element-set name", "SKIN"),
             ("material_name", "Referenced material name", "STEEL"),
@@ -144,3 +174,5 @@ TEMPLATE_SPECS = {
         ),
     },
 }
+
+TEMPLATE_SPECS.update(element_template_specs())
