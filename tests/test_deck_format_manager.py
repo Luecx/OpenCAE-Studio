@@ -271,7 +271,10 @@ def test_equation_domain_has_explicit_terms():
     """Equation constraints expose typed term entries outside the formatter UI too."""
     from opencae.model.entities.constraints import EquationConstraint, EquationTerm
 
-    equation = EquationConstraint(terms=[EquationTerm(dof=2, coefficient=-3.5)])
+    equation = EquationConstraint(
+        name="Equation-1",
+        terms=[EquationTerm(dof=2, coefficient=-3.5)],
+    )
     assert len(equation.terms) == 1
     assert equation.terms[0].dof == 2
     assert equation.terms[0].coefficient == -3.5
