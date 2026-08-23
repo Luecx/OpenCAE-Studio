@@ -7,6 +7,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from opencae.model.entities.analysis import Analysis
+from opencae.ui.deck_format_manager import DeckFormatManagerDialog
 from opencae.ui.dialogs.deck_preview import DeckPreviewDialog
 
 
@@ -58,6 +59,10 @@ class SolverController:
             self.store.message.emit("Select an Analysis first")
             return
         self.parent.controllers.jobs.validate_analysis(analysis.id)
+
+    def format_manager(self):
+        """Open the UI-only input deck format/profile editor prototype."""
+        DeckFormatManagerDialog(self.parent).exec()
 
     def preview(self):
         try:
