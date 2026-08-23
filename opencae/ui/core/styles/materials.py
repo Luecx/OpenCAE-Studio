@@ -4,25 +4,9 @@
 def css(p):
     """Return QSS for the redesigned material editor."""
     return f"""
-    QLabel#MaterialSectionTitle {{
-        color: {p['text']};
-        font-weight: 600;
-        font-size: 10.5pt;
-        border-left: 3px solid {p['accent']};
-        padding-left: 8px;
-        min-height: 20px;
-    }}
-
-    QLabel#MaterialTopLabel,
-    QLabel#MaterialFieldLabel {{
-        color: {p['muted']};
-        font-size: 9pt;
-    }}
-
     QScrollArea#MaterialDefinitionsScroll,
     QWidget#MaterialDefinitionsViewport,
-    QWidget#MaterialDefinitionsContent,
-    QWidget#MaterialFieldBlock {{
+    QWidget#MaterialDefinitionsContent {{
         background: transparent;
         border: none;
     }}
