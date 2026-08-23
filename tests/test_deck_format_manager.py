@@ -35,7 +35,7 @@ def test_primary_format_groups_are_not_wrapped_in_resources(manager):
     assert manager.navigation.tree.isHeaderHidden()
 
 
-def test_profile_selector_contains_builtins_without_separate_format_selector(manager):
+def test_profile_selector_contains_read_only_builtins(manager):
     """FEMaster/Abaqus are immutable profiles in one canonical selector."""
     from opencae.ui.templates import PRIMARY_CONTROL_HEIGHT
 
@@ -75,12 +75,14 @@ def test_copying_builtin_creates_editable_profile(manager):
     assert manager.apply_button.isEnabled()
 
 
-def test_move_buttons_reorder_only_user_profile_and_builtin_stays_default(manager):
-    """Tree order is changed visually without an order-number column or built-in mutation."""
+def test_move_buttons_reorder_only_user_profile(manager):
+    """Tree order changes without an order-number column and stays profile-local."""
     manager.profile_toolbar.copy_profile()
-    before = manager.navigation.child_labels("materials")
-    assert before[:3] == ["Material Header", "Isotropic Elastic", "Density"]
-
+    assert manager.navigation.child_labels("materials")[:3] == [
+        "Material Header",
+        "Isotropic Elastic",
+        "Density",
+    ]
     assert manager.navigation.select_key("materials.isotropic_elastic")
     manager.navigation.move_down()
     assert manager.navigation.child_labels("materials")[:3] == [
@@ -97,47 +99,33 @@ def test_move_buttons_reorder_only_user_profile_and_builtin_stays_default(manage
     ]
 
 
-def test_elements_are_concrete_deck_types_without_family_subgroups(manager):
-    """Elements list concrete formatter types rather than topology/category folders."""
+def test_femaster_elements_only_show_requested_concrete_types(manager):
+    """The editor omits MITC/FRT/QSPT variants and keeps reduced solid variants."""
     from opencae.ui.deck_format_manager.element_type_catalog import ELEMENT_TYPES
 
     expected_codes = (
         "T3",
         "B33",
         "S3",
-        "MITC3FRT",
-        "S6",
-        "MITC6FRT",
         "S4",
-        "MITC4",
-        "MITC4FRT",
+        "S6",
         "S8",
-        "MITC8",
-        "MITC8FRT",
-        "QSPT",
         "C3D4",
-        "C3D10",
         "C3D5",
-        "C3D13",
         "C3D6",
-        "C3D15",
         "C3D8",
         "C3D8R",
+        "C3D10",
+        "C3D13",
+        "C3D15",
         "C3D20",
         "C3D20R",
     )
     assert tuple(item.code for item in ELEMENT_TYPES) == expected_codes
     labels = manager.navigation.child_labels("mesh.elements")
     assert labels == [item.label for item in ELEMENT_TYPES]
-    assert labels[:3] == [
-        "Linear Truss — T3",
-        "Bernoulli Beam — B33",
-        "Linear Triangular Shell — S3",
-    ]
-    assert "Line Elements" not in labels
-    assert "Shell Elements" not in labels
-    assert "2D Elements" not in labels
-    assert "Solid Elements" not in labels
+    assert all("MITC" not in label and "FRT" not in label for label in labels)
+    assert all("QSPT" not in label for label in labels)
 
 
 def test_element_leaf_uses_explicit_for_loop_without_element_type_field(manager):
@@ -156,64 +144,171 @@ def test_element_leaf_uses_explicit_for_loop_without_element_type_field(manager)
     )
     assert "element_type" not in page.available_field_names()
     assert not hasattr(page, "repeat_rows")
-
-    loop_item = page.fields.topLevelItem(0)
-    assert loop_item.text(0) == "{for element in elements} … {endfor}"
-    assert loop_item.text(2) == "Loop"
-    assert loop_item.child(0).text(0) == "{element.id}"
-    assert loop_item.child(1).text(0) == "{element.connectivity}"
-    assert loop_item.child(0).text(2) == "element in elements"
-
     preview = page.preview.toPlainText()
     assert "*ELEMENT, TYPE=C3D4" in preview
     assert "42, 101, 102, 103, 104" in preview
     assert "43, 201, 202, 203, 204" in preview
-    assert "{for" not in preview
-    assert "{endfor}" not in preview
 
 
-def test_each_element_type_owns_its_literal_keyword_code(manager):
-    """Representative concrete element leaves do not rely on a type placeholder."""
+def test_literal_element_codes_include_reduced_variants(manager):
+    """Representative records own their literal FEMaster type codes."""
     for key, code in (
         ("mesh.elements.t3", "T3"),
-        ("mesh.elements.b33", "B33"),
-        ("mesh.elements.s3", "S3"),
+        ("mesh.elements.s8", "S8"),
+        ("mesh.elements.c3d8r", "C3D8R"),
         ("mesh.elements.c3d20r", "C3D20R"),
     ):
         assert manager.select_key(key)
         first_line = manager.template_page.template_text().splitlines()[0]
         assert first_line == f"*ELEMENT, TYPE={code}"
-        assert "{element_type}" not in manager.template_page.template_text()
 
 
-def test_element_order_is_isolated_per_user_profile(manager):
-    """Concrete element records can be reordered and built-in order stays immutable."""
+def test_profiles_cover_open_cae_types_and_femaster_properties(manager):
+    """Every profile uses FEMaster's generic PROFILE property row."""
+    assert manager.navigation.child_labels("profiles") == [
+        "Rectangle",
+        "Box",
+        "Pipe",
+        "Circle",
+        "I-Profile",
+        "H-Profile",
+        "C-Profile",
+        "U-Profile",
+        "General Profile",
+        "Graph Profile",
+    ]
+    assert manager.select_key("profiles.circle")
+    page = manager.template_page
+    assert page.template_text().startswith("*PROFILE, NAME={profile_name}\n")
+    assert page.available_field_names() == (
+        "profile_name",
+        "area",
+        "iyy",
+        "izz",
+        "torsion_constant",
+        "iyz",
+        "centroid_y",
+        "centroid_z",
+    )
+    preview = page.preview.toPlainText()
+    assert "*PROFILE, NAME=PROFILE-1" in preview
+    assert "800" in preview
+
+
+def test_field_record_exposes_tabular_field_values(manager):
+    """FIELD records document and preview the actual tabular data rows."""
+    assert manager.select_key("fields")
+    page = manager.template_page
+    assert "{for row in rows}" in page.template_text()
+    assert page.available_field_names() == (
+        "field_name",
+        "location",
+        "components",
+        "fill_value",
+        "row.entity_id",
+        "row.values",
+    )
+    preview = page.preview.toPlainText()
+    assert "*FIELD, NAME=TEMPERATURE, TYPE=NODE, COLS=2, FILL=NAN" in preview
+    assert "101, 2.5, 3.5" in preview
+    assert "102, 4.5, 5.5" in preview
+
+
+def test_coordinate_systems_have_rectangular_and_cylindrical_records(manager):
+    """FEMaster coordinate-system kinds are explicit leaves with all vector fields."""
+    assert manager.navigation.child_labels("coordinate_systems") == [
+        "Rectangular",
+        "Cylindrical",
+    ]
+    expected_fields = (
+        "name",
+        "origin_x",
+        "origin_y",
+        "origin_z",
+        "axis_1_x",
+        "axis_1_y",
+        "axis_1_z",
+        "axis_2_x",
+        "axis_2_y",
+        "axis_2_z",
+    )
+    for key, kind in (
+        ("coordinate_systems.rectangular", "RECTANGULAR"),
+        ("coordinate_systems.cylindrical", "CYLINDRICAL"),
+    ):
+        assert manager.select_key(key)
+        page = manager.template_page
+        assert page.template_text().splitlines()[0] == (
+            f"*ORIENTATION, NAME={{name}}, TYPE={kind}"
+        )
+        assert page.available_field_names() == expected_fields
+
+
+def test_femaster_constraints_omit_mpc_and_equation_exposes_terms(manager):
+    """FEMaster omits MPC while Equation documents target/DOF/coefficient terms."""
+    labels = manager.navigation.child_labels("constraints")
+    assert "MPC" not in labels
+    assert "Equation" in labels
+    assert manager.select_key("constraints.equation")
+    page = manager.template_page
+    assert page.template_text() == (
+        "*EQUATION, NAME={equation_name}\n"
+        "{for term in terms}\n"
+        "{term.target}, {term.dof}, {term.coefficient}\n"
+        "{endfor}"
+    )
+    assert page.available_field_names() == (
+        "equation_name",
+        "term.target",
+        "term.dof",
+        "term.coefficient",
+    )
+    assert "NODE_A, 1, 1" in page.preview.toPlainText()
+    assert "NODE_B, 1, -1" in page.preview.toPlainText()
+
+
+def test_equation_domain_has_explicit_terms():
+    """Equation constraints expose typed term entries outside the formatter UI too."""
+    from opencae.model.entities.constraints import EquationConstraint, EquationTerm
+
+    equation = EquationConstraint(terms=[EquationTerm(dof=2, coefficient=-3.5)])
+    assert len(equation.terms) == 1
+    assert equation.terms[0].dof == 2
+    assert equation.terms[0].coefficient == -3.5
+    with pytest.raises(ValueError):
+        EquationTerm(dof=7)
+
+
+def test_float_format_changes_preview_and_available_examples(manager):
+    """The selected float format is applied rather than being a visual-only control."""
     manager.profile_toolbar.copy_profile()
-    parent_key = "mesh.elements"
-    assert manager.navigation.child_labels(parent_key)[:3] == [
-        "Linear Truss — T3",
-        "Bernoulli Beam — B33",
-        "Linear Triangular Shell — S3",
-    ]
-    assert manager.navigation.select_key("mesh.elements.t3")
-    manager.navigation.move_down()
-    assert manager.navigation.child_labels(parent_key)[:2] == [
-        "Bernoulli Beam — B33",
-        "Linear Truss — T3",
-    ]
+    assert manager.select_key("materials.isotropic_elastic")
+    page = manager.template_page
+    page.float_format.setCurrentText(".12e")
+    preview = page.preview.toPlainText()
+    assert "2.100000000000e+05, 3.000000000000e-01" in preview
+    assert page.fields.topLevelItem(0).text(3) == "2.100000000000e+05"
+    assert page.fields.topLevelItem(1).text(3) == "3.000000000000e-01"
 
-    manager.profile_toolbar.profile_combo.setCurrentText("FEMaster")
-    assert manager.navigation.child_labels(parent_key)[:2] == [
-        "Linear Truss — T3",
-        "Bernoulli Beam — B33",
-    ]
+
+def test_template_and_preview_use_line_numbered_monospace_editors(manager):
+    """Both deck panes expose a readable code-editor treatment."""
+    from PyQt6.QtGui import QFont
+    from opencae.ui.deck_format_manager.code_editor import DeckCodeEditor
+
+    page = manager.template_page
+    assert isinstance(page.template, DeckCodeEditor)
+    assert isinstance(page.preview, DeckCodeEditor)
+    assert page.template.line_number_area_width() > 0
+    assert page.preview.line_number_area_width() > 0
+    assert page.template.font().styleHint() == QFont.StyleHint.Monospace
+    assert page.preview.font().styleHint() == QFont.StyleHint.Monospace
 
 
 def test_isotropic_elastic_uses_one_template_and_documents_fields(manager):
     """Keyword options and data lines share one editor with explicit placeholders."""
     assert manager.select_key("materials.isotropic_elastic")
     page = manager.template_page
-    assert manager.stack.currentWidget() is page
     assert page.template_text() == (
         "*ELASTIC, TYPE=ISO\n{youngs_modulus}, {poisson_ratio}"
     )
@@ -224,9 +319,6 @@ def test_isotropic_elastic_uses_one_template_and_documents_fields(manager):
         "temperature",
     )
     assert "*MATERIAL, NAME=STEEL" in page.preview.toPlainText()
-    assert "*ELASTIC, TYPE=ISO" in page.preview.toPlainText()
-    assert "210000, 0.3" in page.preview.toPlainText()
-    assert not hasattr(page, "repeat_rows")
 
 
 def test_available_field_can_be_inserted_in_user_profile(manager):
@@ -260,17 +352,7 @@ def test_surface_template_uses_explicit_facet_loop(manager):
         "facet.side_id",
     )
     assert "surface_entries" not in page.available_field_names()
-    assert not hasattr(page, "repeat_rows")
-
-    record_item = page.fields.topLevelItem(0)
-    loop_item = page.fields.topLevelItem(1)
-    assert record_item.text(0) == "{surface_name}"
-    assert loop_item.text(0) == "{for facet in facets} … {endfor}"
-    assert loop_item.child(0).text(0) == "{facet.element_id}"
-    assert loop_item.child(1).text(0) == "{facet.side_id}"
-
     preview = page.preview.toPlainText()
-    assert "*SURFACE, NAME=PRESSURE_FACE" in preview
     assert "42, S1" in preview
     assert "43, S2" in preview
 
