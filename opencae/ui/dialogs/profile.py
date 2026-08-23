@@ -29,6 +29,8 @@ from opencae.ui.templates import (
 )
 
 from .profile_graph_editor import GraphProfileEditor
+from .profile_parameter_limits import apply_profile_parameter_limits
+from .profile_preview_dimensions import parameter_label
 from .profile_preview_widget import ProfilePreviewWidget
 from .profile_properties_panel import ProfilePropertiesPanel
 
@@ -181,7 +183,9 @@ class ProfileDialog(ApplyDialog):
                 )
                 editor.valueChanged.connect(self._refresh_profile_state)
                 self._editors[key] = editor
-                self.parameter_layout.addWidget(field_block(text, editor))
+                self.parameter_layout.addWidget(
+                    field_block(parameter_label(key, text), editor)
+                )
 
         self.parameter_layout.addStretch(1)
         self._refresh_profile_state()
@@ -196,6 +200,8 @@ class ProfileDialog(ApplyDialog):
         """Refresh derived properties and preview from one dimension snapshot."""
         dimensions = self._dimensions()
         profile_type = self.kind.currentText()
+        apply_profile_parameter_limits(self._editors, profile_type, dimensions)
+        dimensions = self._dimensions()
         data = profile_properties(profile_type, dimensions)
         self.properties.set_properties(data)
         self.preview.set_profile_state(profile_type, dimensions)

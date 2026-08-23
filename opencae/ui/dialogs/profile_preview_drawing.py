@@ -20,9 +20,9 @@ def positive_dimension(values: dict, key: str, fallback: float = 1.0) -> float:
 
 
 def fitted_profile_rect(area: QRectF, width: float, height: float) -> QRectF:
-    """Fit a plausibly proportional profile inside reserved dimension margins."""
+    """Fit a profile without changing the ratio of its physical dimensions."""
     drawing_area = area.adjusted(52.0, 20.0, -46.0, -42.0)
-    ratio = max(0.2, min(width / max(height, 1e-12), 5.0))
+    ratio = width / max(height, 1e-12)
     if drawing_area.width() / max(drawing_area.height(), 1.0) > ratio:
         target_height = drawing_area.height()
         target_width = target_height * ratio
@@ -111,17 +111,31 @@ def draw_vertical_dimension(
     painter.restore()
 
 
-def draw_internal_dimension(
+def draw_thickness_dimension(
     painter: QPainter,
     start: QPointF,
     end: QPointF,
     label: str,
-    text_offset: QPointF,
+    *,
+    label_at_end: bool = True,
 ) -> None:
-    """Draw a compact thickness or diameter measure inside the sketch area."""
+    """Draw a thickness measure with its label beyond one geometry endpoint."""
     painter.save()
     _set_dimension_pen(painter)
-    _draw_measure_line(painter, start, end, label, text_offset)
+    delta = end - start
+    length = math.hypot(delta.x(), delta.y())
+    if length > 1e-9:
+        direction = QPointF(delta.x() / length, delta.y() / length)
+        label_anchor = (
+            end + direction * 20.0
+            if label_at_end
+            else start - direction * 20.0
+        )
+        midpoint = QPointF(
+            (start.x() + end.x()) / 2.0,
+            (start.y() + end.y()) / 2.0,
+        )
+        _draw_measure_line(painter, start, end, label, label_anchor - midpoint)
     painter.restore()
 
 

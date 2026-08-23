@@ -20,22 +20,26 @@ def render_graph_profile(painter: QPainter, area: QRectF, values: dict) -> None:
         draw_neutral_message(painter, area, "No valid graph geometry")
         return
 
-    points = [point for first, second, _ in segments for point in (first, second)]
-    min_y = min(point[0] for point in points)
-    max_y = max(point[0] for point in points)
-    min_z = min(point[1] for point in points)
-    max_z = max(point[1] for point in points)
+    # Thickness participates in fitting, so large walls cannot be clipped and
+    # every segment uses the same coordinate-to-pixel scale for length and width.
+    min_y = min(
+        min(first[0], second[0]) - thickness / 2.0
+        for first, second, thickness in segments
+    )
+    max_y = max(
+        max(first[0], second[0]) + thickness / 2.0
+        for first, second, thickness in segments
+    )
+    min_z = min(
+        min(first[1], second[1]) - thickness / 2.0
+        for first, second, thickness in segments
+    )
+    max_z = max(
+        max(first[1], second[1]) + thickness / 2.0
+        for first, second, thickness in segments
+    )
     span_y = max_y - min_y
     span_z = max_z - min_z
-    reference_span = max(span_y, span_z, 1.0)
-    if span_y <= 1e-12:
-        min_y -= reference_span * 0.15
-        max_y += reference_span * 0.15
-        span_y = max_y - min_y
-    if span_z <= 1e-12:
-        min_z -= reference_span * 0.15
-        max_z += reference_span * 0.15
-        span_z = max_z - min_z
 
     target = area.adjusted(30.0, 22.0, -30.0, -30.0)
     scale = min(target.width() / span_y, target.height() / span_z)
@@ -49,22 +53,23 @@ def render_graph_profile(painter: QPainter, area: QRectF, values: dict) -> None:
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     for first, second, thickness in segments:
-        stroke = max(2.0, min(thickness * scale, 16.0))
-        outline = QPen(QColor(PALETTE["text"]), stroke + 2.0)
-        outline.setCapStyle(Qt.PenCapStyle.RoundCap)
+        stroke = thickness * scale
+        outline = QPen(QColor(PALETTE["text"]), stroke + 1.5)
+        outline.setCapStyle(Qt.PenCapStyle.FlatCap)
         painter.setPen(outline)
         painter.drawLine(mapped(first), mapped(second))
         fill = QColor(PALETTE["accent_dim"])
         fill.setAlpha(230)
         section_pen = QPen(fill, stroke)
-        section_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        section_pen.setCapStyle(Qt.PenCapStyle.FlatCap)
         painter.setPen(section_pen)
         painter.drawLine(mapped(first), mapped(second))
 
-        hatch = QColor(PALETTE["accent"])
-        hatch.setAlpha(115)
-        painter.setPen(QPen(hatch, 0.8, Qt.PenStyle.DashLine))
-        painter.drawLine(mapped(first), mapped(second))
+        if stroke >= 4.0:
+            hatch = QColor(PALETTE["accent"])
+            hatch.setAlpha(115)
+            painter.setPen(QPen(hatch, 0.8, Qt.PenStyle.DashLine))
+            painter.drawLine(mapped(first), mapped(second))
     _draw_axes(painter, area)
     painter.restore()
 

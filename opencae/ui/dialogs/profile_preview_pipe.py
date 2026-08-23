@@ -9,8 +9,8 @@ from .profile_preview_dimensions import dimension_symbol
 from .profile_preview_drawing import (
     draw_centerlines,
     draw_horizontal_dimension,
-    draw_internal_dimension,
     draw_profile_path,
+    draw_thickness_dimension,
     fitted_profile_rect,
     positive_dimension,
 )
@@ -22,7 +22,7 @@ def render_pipe(painter: QPainter, area: QRectF, values: dict) -> None:
     thickness = positive_dimension(values, "thickness", 2.0)
     outer = fitted_profile_rect(area, diameter, diameter)
     scale = outer.width() / diameter
-    wall = min(thickness * scale, outer.width() * 0.44)
+    wall = min(thickness * scale, outer.width() * 0.5)
     inner = outer.adjusted(wall, wall, -wall, -wall)
     path = QPainterPath()
     path.setFillRule(Qt.FillRule.OddEvenFill)
@@ -37,7 +37,7 @@ def render_pipe(painter: QPainter, area: QRectF, values: dict) -> None:
     )
     if inner.width() > 0.5:
         y = outer.center().y()
-        draw_internal_dimension(
+        draw_thickness_dimension(
             painter, QPointF(inner.right(), y), QPointF(outer.right(), y),
-            dimension_symbol("thickness"), QPointF(0.0, -11.0),
+            dimension_symbol("thickness"),
         )

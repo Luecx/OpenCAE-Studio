@@ -22,3 +22,12 @@ DIMENSION_SYMBOLS = {
 def dimension_symbol(key: str) -> str:
     """Return the canonical compact label for one existing model key."""
     return DIMENSION_SYMBOLS.get(key, key)
+
+
+def parameter_label(key: str, text: str) -> str:
+    """Append the drawing symbol to an input label when it adds information."""
+    symbol = dimension_symbol(key)
+    normalized_text = text.casefold().replace(" ", "")
+    if symbol.casefold() == normalized_text:
+        return text
+    return f"{text} ({symbol})"

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import math
 import os
+from collections import Counter
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtGui import QImage
+from PyQt6.QtCore import QRectF
+from PyQt6.QtGui import QImage, QPainter
 from PyQt6.QtWidgets import QApplication, QTableWidget
 
 from opencae.model.entities.profiles.calculations import (
@@ -16,7 +18,13 @@ from opencae.model.entities.profiles.calculations import (
     profile_properties,
 )
 from opencae.ui.dialogs.profile import PROFILE_TYPES, ProfileDialog
+from opencae.ui.dialogs.profile_parameter_limits import (
+    PROFILE_DIMENSION_MAXIMUM,
+)
+from opencae.ui.dialogs.profile_preview_drawing import fitted_profile_rect
+from opencae.ui.dialogs.profile_preview_graph import render_graph_profile
 from opencae.ui.dialogs.profile_preview_widget import ProfilePreviewWidget
+from opencae.ui.templates import FieldLabel
 
 
 _QT_APPLICATION = None
@@ -97,6 +105,33 @@ def test_dimension_change_updates_preview_state(application):
     assert dialog.preview.dimensions["width"] == pytest.approx(73.5)
 
 
+def test_input_labels_share_preview_dimension_symbols(application):
+    """Make drawing abbreviations discoverable beside their numeric inputs."""
+    dialog = ProfileDialog(initial_type="I-profile")
+    labels = {label.text() for label in dialog.findChildren(FieldLabel)}
+
+    assert "Overall height (h)" in labels
+    assert "Flange width (b)" in labels
+    assert "Web thickness (tw)" in labels
+    assert "Flange thickness (tf)" in labels
+
+
+def test_profile_dimensions_and_dependent_thicknesses_are_bounded(application):
+    """Clamp section dimensions without showing a validation-error workflow."""
+    dialog = ProfileDialog(initial_type="I-profile")
+    assert dialog._editors["height"].editor.maximum() == PROFILE_DIMENSION_MAXIMUM
+
+    dialog._editors["flange_width"].setValue(12.0)
+    dialog._editors["web_thickness"].setValue(20.0)
+    dialog._editors["height"].setValue(18.0)
+    dialog._editors["flange_thickness"].setValue(20.0)
+
+    assert dialog._editors["web_thickness"].value() == pytest.approx(12.0)
+    assert dialog._editors["flange_thickness"].value() == pytest.approx(9.0)
+    assert dialog.preview.dimensions["web_thickness"] == pytest.approx(12.0)
+    assert dialog.preview.dimensions["flange_thickness"] == pytest.approx(9.0)
+
+
 def test_graph_table_changes_update_preview_state(application):
     """Propagate graph cell edits and row removal through the same refresh path."""
     dialog = ProfileDialog(initial_type="Graph profile")
@@ -107,6 +142,48 @@ def test_graph_table_changes_update_preview_state(application):
 
     editor.segments.removeRow(0)
     assert dialog.preview.dimensions["segments"] == ""
+
+
+def test_graph_preview_uses_one_scale_for_length_and_thickness(application):
+    """Preserve a graph segment's 10:1 model aspect ratio in painted pixels."""
+    image = QImage(500, 240, QImage.Format.Format_ARGB32)
+    image.fill(0)
+    painter = QPainter(image)
+    render_graph_profile(
+        painter,
+        QRectF(0.0, 0.0, 500.0, 240.0),
+        {
+            "nodes": "1,0,0\n2,100,0",
+            "segments": "1,2,10",
+        },
+    )
+    painter.end()
+
+    pixels = [
+        (image.pixelColor(x, y).getRgb(), x, y)
+        for y in range(image.height())
+        for x in range(image.width())
+    ]
+    colors = Counter(color for color, _x, _y in pixels if color[3])
+    section_fill = colors.most_common(1)[0][0]
+    section_pixels = [
+        (x, y) for color, x, y in pixels if color == section_fill
+    ]
+    painted_length = max(x for x, _y in section_pixels) - min(
+        x for x, _y in section_pixels
+    ) + 1
+    painted_thickness = max(y for _x, y in section_pixels) - min(
+        y for _x, y in section_pixels
+    ) + 1
+
+    assert painted_length / painted_thickness == pytest.approx(10.0, rel=0.05)
+
+
+def test_parametric_preview_fit_preserves_dimension_ratio():
+    """Preserve extreme parameter ratios without visual beautification."""
+    profile = fitted_profile_rect(QRectF(0.0, 0.0, 500.0, 240.0), 100.0, 10.0)
+
+    assert profile.width() / profile.height() == pytest.approx(10.0)
 
 
 def test_profile_properties_remain_connected_to_calculation_values(application):
