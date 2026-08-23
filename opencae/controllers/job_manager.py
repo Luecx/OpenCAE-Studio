@@ -24,7 +24,7 @@ from .job_output_store import JobOutputStore
 
 
 class JobManager(QObject):
-    """Qt orchestrator for Job selection, runners, progress, and monitors."""
+    """Qt orchestrator for Job selection, runners, progress, output, and monitors."""
 
     selection_changed = pyqtSignal(str)
     output_changed = pyqtSignal(str, str)
@@ -78,7 +78,7 @@ class JobManager(QObject):
         )
 
     def output_for(self, job_id) -> str:
-        """Return the bounded display output for one Job."""
+        """Return the bounded persisted solver output for one Job."""
         return self._output_store.read(str(job_id or ""))
 
     def can_stop_selected(self) -> bool:
@@ -181,6 +181,8 @@ class JobManager(QObject):
             monitor = AnalysisJobMonitor(self.store, job.id, self.parent)
 
         self.progress_changed.connect(monitor.set_progress)
+        self.output_changed.connect(monitor.set_output)
+        monitor.set_output(job.id, self.output_for(job.id))
         monitor.destroyed.connect(
             lambda _value=None, current=job.id: self._monitors.pop(current, None)
         )
@@ -219,10 +221,11 @@ class JobManager(QObject):
         self.progress_changed.emit(job.id, 0.0, str(label))
 
     def _append_output(self, job_id, text) -> None:
-        """Persist solver output and notify the panel when its Job is selected."""
+        """Persist solver output and publish it to any open monitor for that Job."""
         value = self._output_store.append(str(job_id), str(text))
-        if str(job_id) == self.selected_job_id:
-            self.output_changed.emit(str(job_id), value)
+        # Monitors can remain open while another Job is selected. Output events
+        # therefore identify their Job and must not be filtered by UI selection.
+        self.output_changed.emit(str(job_id), value)
 
     def _study_output(self, job_id, text) -> None:
         """Normalize line-oriented Study output before persistence."""
