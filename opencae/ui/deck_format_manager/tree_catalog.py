@@ -1,34 +1,6 @@
-"""Defines the editor hierarchy from current OpenCAE record families."""
+"""Define the editor hierarchy from current OpenCAE record families."""
 
-from collections import OrderedDict
-
-from opencae.model.entities.elements.factory import element_definition_types
-
-
-def _slug(value: str) -> str:
-    """Create a stable catalog key fragment from one display label."""
-    return "_".join(str(value).strip().lower().replace("-", " ").split())
-
-
-def _element_children() -> tuple[dict, ...]:
-    """Mirror the canonical OpenCAE element family/topology registry in the tree."""
-    grouped: OrderedDict[str, list[str]] = OrderedDict()
-    for category, topology, _definition_type in element_definition_types():
-        grouped.setdefault(category, []).append(topology)
-    return tuple(
-        {
-            "key": f"mesh.elements.{_slug(category)}",
-            "label": category,
-            "children": tuple(
-                {
-                    "key": f"mesh.elements.{_slug(category)}.{_slug(topology)}",
-                    "label": topology,
-                }
-                for topology in topologies
-            ),
-        }
-        for category, topologies in grouped.items()
-    )
+from .element_type_catalog import element_tree_nodes
 
 
 TREE_SPEC = (
@@ -50,7 +22,7 @@ TREE_SPEC = (
             {
                 "key": "mesh.elements",
                 "label": "Elements",
-                "children": _element_children(),
+                "children": element_tree_nodes(),
             },
         ),
     },
