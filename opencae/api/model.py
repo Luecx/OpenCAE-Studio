@@ -1,9 +1,16 @@
+"""Defines the single public model-authoring facade.
+
+The :class:`Model` class owns user-facing orchestration only. Concrete creation
+logic lives in focused ``model_*`` companion modules so this facade stays small
+while preserving one discoverable API surface.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Iterable
 
-from opencae.model.core import Entity, EntityRef
+from opencae.model.core import Entity
 from opencae.model.entities import (
     Assembly,
     ConcentratedLoad,
@@ -19,27 +26,28 @@ from opencae.model.entities import (
     Region,
     Section,
 )
-from opencae.model.entities.resources.material_behaviors import (
-    DensityBehavior,
-    IsotropicElasticity,
+from opencae.model.selection import RegionDefinition
+
+from .model_assembly import create_coordinate_system, create_instance
+from .model_loads import create_concentrated_load, create_pressure_load
+from .model_mesh import create_element, create_node
+from .model_ownership import require_owned
+from .model_parts import create_part
+from .model_regions import (
+    create_element_set,
+    create_node_set,
+    create_region_target,
+    create_surface,
 )
-from opencae.model.selection import (
-    MeshElementOperand,
-    MeshFacetOperand,
-    MeshNodeOperand,
-    NamedRegionOperand,
-    RegionDefinition,
-    RegionProjection,
-    RegionScope,
-)
+from .model_resources import create_material, create_section
 
 
 @dataclass
 class Model:
-    """High-level object API for constructing OpenCAE models.
+    """High-level object API for constructing one OpenCAE project graph.
 
-    Public callers work with Python objects. Stable ids and ``EntityRef`` are
-    persistence details created by this facade, never string-based user input.
+    Public callers work with Python objects. Stable IDs and ``EntityRef`` values
+    remain implementation details of the domain/persistence layers.
     """
 
     project: Project
@@ -51,33 +59,26 @@ class Model:
         *,
         unit_system: str = "mm-N-s-°C",
     ) -> "Model":
+        """Create an empty model backed by a new :class:`Project`."""
         return cls(Project(name=name, unit_system=unit_system))
 
     def _refresh(self) -> None:
+        """Rebuild project identity/reference indexes after graph mutation."""
+        # Authoring helpers mutate the aggregate directly for a compact API.
+        # Rebuilding here keeps object aliases and ownership checks deterministic.
         self.project.rebuild_index()
 
-    def _require_owned(self, entity: Entity, expected: type | tuple[type, ...]):
-        if not isinstance(entity, expected):
-            names = (
-                ", ".join(item.__name__ for item in expected)
-                if isinstance(expected, tuple)
-                else expected.__name__
-            )
-            raise TypeError(f"Expected {names}, got {type(entity).__name__}")
-        if entity is self.project:
-            return entity
-        if self.project.try_resolve(entity.id) is not entity:
-            raise ValueError(
-                f"{type(entity).__name__} '{entity.name}' does not belong "
-                "to this Model"
-            )
-        return entity
+    def _require_owned(
+        self,
+        entity: Entity,
+        expected: type | tuple[type, ...],
+    ) -> Entity:
+        """Validate an object's type and identity within this model."""
+        return require_owned(self, entity, expected)
 
     def part(self, name: str, *, source_type: str = "Manual") -> Part:
-        part = Part(name=name, source_type=source_type)
-        self.project.parts.append(part)
-        self._refresh()
-        return part
+        """Create and attach a part to the project."""
+        return create_part(self, name, source_type=source_type)
 
     def material(
         self,
@@ -87,24 +88,14 @@ class Model:
         poisson_ratio: float | None = None,
         density: float | None = None,
     ) -> Material:
-        behaviors = []
-        if youngs_modulus is not None or poisson_ratio is not None:
-            if youngs_modulus is None or poisson_ratio is None:
-                raise ValueError(
-                    "youngs_modulus and poisson_ratio must be supplied together"
-                )
-            behaviors.append(
-                IsotropicElasticity(
-                    youngs_modulus=float(youngs_modulus),
-                    poisson_ratio=float(poisson_ratio),
-                )
-            )
-        if density is not None:
-            behaviors.append(DensityBehavior(value=float(density)))
-        material = Material(name=name, behaviors=behaviors)
-        self.project.materials.append(material)
-        self._refresh()
-        return material
+        """Create a material with common isotropic properties."""
+        return create_material(
+            self,
+            name,
+            youngs_modulus=youngs_modulus,
+            poisson_ratio=poisson_ratio,
+            density=density,
+        )
 
     def section(
         self,
@@ -115,20 +106,15 @@ class Model:
         section_type: str = "Solid",
         thickness: float = 0.0,
     ) -> Section:
-        if material is not None:
-            self._require_owned(material, Material)
-        if profile is not None:
-            self._require_owned(profile, Profile)
-        section = Section(
-            name=name,
+        """Create a section referencing material/profile objects directly."""
+        return create_section(
+            self,
+            name,
+            material=material,
+            profile=profile,
             section_type=section_type,
-            thickness=float(thickness),
+            thickness=thickness,
         )
-        section.material = material
-        section.profile = profile
-        self.project.sections.append(section)
-        self._refresh()
-        return section
 
     def instance(
         self,
@@ -138,16 +124,14 @@ class Model:
         translation=(0.0, 0.0, 0.0),
         rotation=(0.0, 0.0, 0.0),
     ) -> Instance:
-        self._require_owned(part, Part)
-        instance = Instance(
-            name=name or f"{part.name}-1",
-            translation=tuple(float(v) for v in translation),
-            rotation=tuple(float(v) for v in rotation),
+        """Create an assembly occurrence of ``part``."""
+        return create_instance(
+            self,
+            part,
+            name=name,
+            translation=translation,
+            rotation=rotation,
         )
-        instance.part = part
-        self.project.assembly.instances.append(instance)
-        self._refresh()
-        return instance
 
     def coordinate_system(
         self,
@@ -159,19 +143,16 @@ class Model:
         axis_2=(0.0, 1.0, 0.0),
         system_type: str = "Cartesian",
     ) -> CoordinateSystem:
-        self._require_owned(owner, (Part, Assembly))
-        scope = "Part" if isinstance(owner, Part) else "Assembly"
-        csys = CoordinateSystem(
+        """Create a part- or assembly-scoped coordinate system."""
+        return create_coordinate_system(
+            self,
+            owner,
             name=name,
+            origin=origin,
+            axis_1=axis_1,
+            axis_2=axis_2,
             system_type=system_type,
-            origin=tuple(float(v) for v in origin),
-            axis_1=tuple(float(v) for v in axis_1),
-            axis_2=tuple(float(v) for v in axis_2),
-            scope=scope,
         )
-        owner.coordinate_systems.append(csys)
-        self._refresh()
-        return csys
 
     def node(
         self,
@@ -180,8 +161,8 @@ class Model:
         *,
         node_id: int | None = None,
     ) -> Node:
-        self._require_owned(part, Part)
-        return part.mesh.add_node(coordinates, node_id)
+        """Create one authored finite-element node in ``part``."""
+        return create_node(self, part, coordinates, node_id=node_id)
 
     def element(
         self,
@@ -191,8 +172,14 @@ class Model:
         *,
         element_id: int | None = None,
     ) -> Element:
-        self._require_owned(part, Part)
-        return part.mesh.add_element(element_type, tuple(nodes), element_id)
+        """Create one authored finite element from Node objects."""
+        return create_element(
+            self,
+            part,
+            element_type,
+            nodes,
+            element_id=element_id,
+        )
 
     def node_set(
         self,
@@ -200,25 +187,8 @@ class Model:
         name: str,
         nodes: Iterable[Node],
     ) -> Region:
-        self._require_owned(part, Part)
-        operands = tuple(
-            MeshNodeOperand(
-                owner_ref=EntityRef.of(part, "Part"),
-                node_id=node.id,
-                mesh_revision=part.mesh.revision,
-            )
-            for node in nodes
-        )
-        region = Region(
-            name=name,
-            scope=RegionScope.PART,
-            preferred_projection=RegionProjection.NODES,
-            definition=RegionDefinition.from_values(operands),
-            geometry_backed=False,
-        )
-        part.regions.append(region)
-        self._refresh()
-        return region
+        """Create a named part region from authored Node objects."""
+        return create_node_set(self, part, name, nodes)
 
     def element_set(
         self,
@@ -226,25 +196,8 @@ class Model:
         name: str,
         elements: Iterable[Element],
     ) -> Region:
-        self._require_owned(part, Part)
-        operands = tuple(
-            MeshElementOperand(
-                owner_ref=EntityRef.of(part, "Part"),
-                element_id=element.id,
-                mesh_revision=part.mesh.revision,
-            )
-            for element in elements
-        )
-        region = Region(
-            name=name,
-            scope=RegionScope.PART,
-            preferred_projection=RegionProjection.ELEMENTS,
-            definition=RegionDefinition.from_values(operands),
-            geometry_backed=False,
-        )
-        part.regions.append(region)
-        self._refresh()
-        return region
+        """Create a named part region from authored Element objects."""
+        return create_element_set(self, part, name, elements)
 
     def surface(
         self,
@@ -252,26 +205,8 @@ class Model:
         name: str,
         facets: Iterable[tuple[Element, str]],
     ) -> Region:
-        self._require_owned(part, Part)
-        operands = tuple(
-            MeshFacetOperand(
-                owner_ref=EntityRef.of(part, "Part"),
-                element_id=element.id,
-                local_face=str(local_face),
-                mesh_revision=part.mesh.revision,
-            )
-            for element, local_face in facets
-        )
-        region = Region(
-            name=name,
-            scope=RegionScope.PART,
-            preferred_projection=RegionProjection.FACETS,
-            definition=RegionDefinition.from_values(operands),
-            geometry_backed=False,
-        )
-        part.regions.append(region)
-        self._refresh()
-        return region
+        """Create a named surface from ``(element, local_face)`` pairs."""
+        return create_surface(self, part, name, facets)
 
     def region_target(
         self,
@@ -279,46 +214,8 @@ class Model:
         *,
         instance: Instance | None = None,
     ) -> RegionDefinition:
-        """Create a solver/selection target from a Region object.
-
-        Part regions need an occurrence in assembly space. If the part has a
-        single active instance it is selected automatically; otherwise callers
-        pass the desired Instance object explicitly.
-        """
-        self._require_owned(region, Region)
-        instance_ref = None
-        if region.scope == RegionScope.PART:
-            parent_id = self.project.index.parent_id.get(region.id)
-            part = self.project.try_resolve(parent_id, Part)
-            if part is None:
-                raise ValueError(f"Part region '{region.name}' has no owning Part")
-            if instance is None:
-                candidates = [
-                    item
-                    for item in self.project.assembly.instances
-                    if not item.suppressed and item.part is part
-                ]
-                if len(candidates) != 1:
-                    raise ValueError(
-                        f"Part region '{region.name}' requires an Instance; "
-                        f"found {len(candidates)} active occurrences"
-                    )
-                instance = candidates[0]
-            self._require_owned(instance, Instance)
-            if instance.part is not part:
-                raise ValueError(
-                    f"Instance '{instance.name}' does not instantiate "
-                    f"Part '{part.name}'"
-                )
-            instance_ref = EntityRef.of(instance, "Instance")
-        return RegionDefinition.from_values(
-            (
-                NamedRegionOperand(
-                    region_ref=EntityRef.of(region, "Region"),
-                    instance_ref=instance_ref,
-                ),
-            )
-        )
+        """Project a named Region object into solver/selection target space."""
+        return create_region_target(self, region, instance=instance)
 
     def concentrated_load(
         self,
@@ -329,21 +226,15 @@ class Model:
         coordinate_system: CoordinateSystem | None = None,
         instance: Instance | None = None,
     ) -> ConcentratedLoad:
-        self._require_owned(target, Region)
-        if coordinate_system is not None:
-            self._require_owned(coordinate_system, CoordinateSystem)
-        values = [float(value) for value in components]
-        if len(values) != 6:
-            raise ValueError("A concentrated load requires six components")
-        load = ConcentratedLoad(
-            name=name,
-            target=self.region_target(target, instance=instance),
-            components=values,
+        """Create a six-component concentrated load on a Region object."""
+        return create_concentrated_load(
+            self,
+            name,
+            target=target,
+            components=components,
+            coordinate_system=coordinate_system,
+            instance=instance,
         )
-        load.coordinate_system = coordinate_system
-        self.project.loads.append(load)
-        self._refresh()
-        return load
 
     def pressure_load(
         self,
@@ -353,15 +244,15 @@ class Model:
         pressure: float,
         instance: Instance | None = None,
     ) -> PressureLoad:
-        self._require_owned(target, Region)
-        load = PressureLoad(
-            name=name,
-            target=self.region_target(target, instance=instance),
-            pressure=float(pressure),
+        """Create a pressure load on a Region object."""
+        return create_pressure_load(
+            self,
+            name,
+            target=target,
+            pressure=pressure,
+            instance=instance,
         )
-        self.project.loads.append(load)
-        self._refresh()
-        return load
 
     def validate(self) -> None:
+        """Raise if the authored project contains invalid references."""
         self.project.ensure_references(strict=True)
