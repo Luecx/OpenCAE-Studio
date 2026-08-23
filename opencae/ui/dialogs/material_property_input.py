@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QLabel, QWidget
 
 
@@ -30,6 +31,7 @@ class MaterialPropertyInput(QWidget):
             # Units are presentation metadata, not another editable model value.
             self.unit_label = QLabel(unit)
             self.unit_label.setObjectName("MaterialPropertyUnit")
+            self.unit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(self.unit_label)
 
     def value(self) -> float:
