@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.ui.core.widgets import ChevronComboBox
-from opencae.ui.templates import FIELD_LABEL_SPACING, apply_primary_control_height
+from opencae.ui.templates import apply_primary_control_height, field_block
 from .material_behavior_specs import (
     CATEGORY_ICONS,
     CATEGORY_TYPES,
@@ -147,14 +147,6 @@ class MaterialBehaviorCard(QFrame):
         """Rebuild model/property controls for the active behavior type."""
         self._clear_body()
 
-        model_block = QWidget()
-        model_layout = QVBoxLayout(model_block)
-        model_layout.setContentsMargins(0, 0, 0, 0)
-        model_layout.setSpacing(FIELD_LABEL_SPACING)
-        model_label = QLabel("Model")
-        model_label.setObjectName("MaterialFieldLabel")
-        model_layout.addWidget(model_label)
-
         self.kind = ChevronComboBox()
         self.kind.setObjectName("MaterialModelCombo")
         self.kind.setMinimumWidth(0)
@@ -164,8 +156,7 @@ class MaterialBehaviorCard(QFrame):
         index = self.kind.findData(self._current_kind)
         self.kind.setCurrentIndex(max(index, 0))
         self.kind.currentIndexChanged.connect(self._kind_changed)
-        model_layout.addWidget(self.kind)
-        self.body_layout.addWidget(model_block)
+        self.body_layout.addWidget(field_block("Model", self.kind))
 
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
@@ -179,19 +170,10 @@ class MaterialBehaviorCard(QFrame):
             default_values(self._current_kind),
         )
         for position, (key, label_text, default, quantity) in enumerate(specs):
-            field = QWidget()
-            field_layout = QVBoxLayout(field)
-            field_layout.setContentsMargins(0, 0, 0, 0)
-            field_layout.setSpacing(FIELD_LABEL_SPACING)
-
-            label = QLabel(label_text)
-            label.setObjectName("MaterialFieldLabel")
-            field_layout.addWidget(label)
-
             unit = self.units.symbol(quantity) if quantity and self.units is not None else ""
             editor = MaterialPropertyInput(values.get(key, default), unit)
-            field_layout.addWidget(editor)
             self._editors[key] = editor
+            field = field_block(label_text, editor)
 
             # Two related properties share a row; one property uses the full
             # width so the card never leaves an arbitrary empty half-column.
