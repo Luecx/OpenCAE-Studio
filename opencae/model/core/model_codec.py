@@ -35,26 +35,51 @@ def encode_model(value: Any) -> Any:
 
 
 def decode_model(value: Any) -> Any:
-    """Reconstruct one model value from registered JSON-compatible type data."""
+    """Reconstruct one model value and reject fields outside the current schema."""
     if isinstance(value, list):
         return [decode_model(item) for item in value]
     if not isinstance(value, dict):
         return value
+
     if "__path__" in value:
+        unknown = set(value) - {"__path__"}
+        if unknown:
+            raise ValueError(
+                f"Unexpected path fields: {', '.join(sorted(unknown))}"
+            )
         return Path(value["__path__"])
+
     if "__tuple__" in value:
+        unknown = set(value) - {"__tuple__"}
+        if unknown:
+            raise ValueError(
+                f"Unexpected tuple fields: {', '.join(sorted(unknown))}"
+            )
         return tuple(decode_model(item) for item in value["__tuple__"])
+
     if "__type__" in value:
-        cls = model_class(value["__type__"])
-        accepted = (
-            {field_info.name for field_info in fields(cls) if field_info.init}
-            if is_dataclass(cls)
-            else None
-        )
+        type_name = value["__type__"]
+        cls = model_class(type_name)
+        if is_dataclass(cls):
+            accepted = {
+                field_info.name
+                for field_info in fields(cls)
+                if is_persistent_model_field(field_info)
+            }
+            unknown = set(value) - accepted - {"__type__"}
+            if unknown:
+                names = ", ".join(sorted(unknown))
+                raise ValueError(
+                    f"Unknown persisted field(s) for {type_name}: {names}"
+                )
+        else:
+            accepted = None
+
         kwargs = {
             key: decode_model(item)
             for key, item in value.items()
             if key != "__type__" and (accepted is None or key in accepted)
         }
         return cls(**kwargs)
+
     return {key: decode_model(item) for key, item in value.items()}
