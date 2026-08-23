@@ -5,6 +5,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QSizePolicy, QWidget
 
 PRIMARY_CONTROL_HEIGHT = 40
+INLINE_ACTION_SIZE = 32
 FIELD_LABEL_SPACING = 6
 
 
@@ -25,8 +26,8 @@ def apply_primary_control_height(widget: QWidget) -> QWidget:
     return widget
 
 
-def apply_primary_square_button(widget: QWidget) -> QWidget:
-    """Size an inline action button to the same square as a primary control."""
-    widget.setProperty("primaryControl", True)
-    widget.setFixedSize(PRIMARY_CONTROL_HEIGHT, PRIMARY_CONTROL_HEIGHT)
+def apply_inline_action_size(widget: QWidget) -> QWidget:
+    """Size a secondary create/pick action without competing with its field."""
+    widget.setProperty("inlineAction", True)
+    widget.setFixedSize(INLINE_ACTION_SIZE, INLINE_ACTION_SIZE)
     return widget
