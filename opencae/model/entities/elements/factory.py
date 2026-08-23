@@ -1,5 +1,3 @@
-"""Create and enumerate canonical OpenCAE element-definition classes."""
-
 from .base import ElementDefinition
 from .beam import BeamElementDefinition
 from .hexahedron import HexahedronElementDefinition
@@ -28,16 +26,7 @@ _TYPES = {
 }
 
 
-def element_definition_types() -> tuple[tuple[str, str, type[ElementDefinition]], ...]:
-    """Return canonical element families in their stable UI/export ordering."""
-    return tuple(
-        (category, topology, definition_type)
-        for (category, topology), definition_type in _TYPES.items()
-    )
-
-
 def create_element_definition(category: str, topology: str, **kwargs) -> ElementDefinition:
-    """Create the registered element-definition class for one family/topology."""
     cls = _TYPES.get((category, topology), ElementDefinition)
     if cls is ElementDefinition:
         return cls(category=category, topology=topology, **kwargs)
