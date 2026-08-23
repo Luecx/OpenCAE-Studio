@@ -14,11 +14,13 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.ui.core.apply_dialog import ApplyDialog
-from opencae.ui.templates import dialog_buttons
+from opencae.ui.templates import (
+    FIELD_LABEL_SPACING,
+    apply_primary_control_height,
+    dialog_buttons,
+)
 from .material_behavior_card import MaterialBehaviorCard
 from .material_behavior_specs import CATEGORIES
-
-_FIELD_SPACING = 6
 
 
 class MaterialDialog(ApplyDialog):
@@ -46,17 +48,20 @@ class MaterialDialog(ApplyDialog):
         root.setContentsMargins(24, 20, 24, 18)
         root.setSpacing(16)
 
-        # Keep label-to-editor spacing identical to the property fields inside
-        # behavior cards; the root layout only controls section separation.
+        # Name uses the same field rhythm and final control height as every
+        # property editor below; Qt class-specific size hints must not leak into
+        # the visual hierarchy of the dialog.
         name_block = QWidget()
         name_block.setObjectName("MaterialFieldBlock")
         name_layout = QVBoxLayout(name_block)
         name_layout.setContentsMargins(0, 0, 0, 0)
-        name_layout.setSpacing(_FIELD_SPACING)
+        name_layout.setSpacing(FIELD_LABEL_SPACING)
         name_label = QLabel("Name")
         name_label.setObjectName("MaterialTopLabel")
         name_layout.addWidget(name_label)
         self.name = QLineEdit(material.name if material else default_name)
+        self.name.setObjectName("MaterialNameInput")
+        apply_primary_control_height(self.name)
         name_layout.addWidget(self.name)
         root.addWidget(name_block)
 
