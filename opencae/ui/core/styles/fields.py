@@ -5,6 +5,8 @@ from opencae.ui.templates.control_metrics import (
     PRIMARY_CONTROL_HEIGHT,
 )
 
+COMBO_POPUP_ROW_HEIGHT = 36
+
 
 def css(p):
     """Return QSS for text, numeric, combo and compact composite controls."""
@@ -91,7 +93,14 @@ def css(p):
         background: {p['panel_alt']};
         border: 1px solid {p['border_light']};
         selection-background-color: {p['accent_dim']};
-        padding: 3px;
+        padding: 2px;
+        outline: 0px;
+    }}
+    QComboBox QAbstractItemView::item {{
+        min-height: {COMBO_POPUP_ROW_HEIGHT}px;
+        padding-left: 10px;
+        padding-right: 10px;
+        border: none;
     }}
 
     QWidget#NumericUnitInput {{
@@ -130,7 +139,7 @@ def css(p):
         border-radius: 3px;
     }}
     QToolButton#InlineAddButton {{
-        font-size: 14px;
+        font-size: 15px;
         font-weight: 600;
     }}
     QToolButton#InlineAddButton:hover,
