@@ -14,6 +14,7 @@ from .dialogs import (
     dialog_buttons,
     scaffold_dialog,
 )
+from .field_block import field_block
 from .label_role import LabelRole
 from .label_spec import LabelSpec
 from .layouts import (
@@ -53,6 +54,7 @@ __all__ = [
     "ribbon_label",
     "wrapped_ribbon_text",
     "form_layout",
+    "field_block",
     "dialog_layout",
     "horizontal_group",
     "vertical_group",
