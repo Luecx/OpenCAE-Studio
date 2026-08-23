@@ -1,4 +1,4 @@
-"""Encodes current project files and applies explicitly supported migrations."""
+"""Encodes and decodes the single current OpenCAE project file format."""
 
 from __future__ import annotations
 
@@ -9,42 +9,57 @@ import opencae.model.selection
 from opencae.model.core import decode_model, encode_model
 from opencae.model.project import Project
 
-from .mesh_definition_migration import (
-    SOURCE_SCHEMA_VERSION,
-    TARGET_SCHEMA_VERSION,
-    migrate_mesh_definitions,
-)
-
-CURRENT_SCHEMA_VERSION = TARGET_SCHEMA_VERSION
+PROJECT_FORMAT = "opencae-project"
+CURRENT_SCHEMA_VERSION = 22
+_ENVELOPE_FIELDS = {"format", "schema_version", "project"}
 
 
 def project_to_dict(project: Project) -> dict[str, Any]:
-    """Encode one Project using the current persistent schema."""
-    project.schema_version = CURRENT_SCHEMA_VERSION
-    project.ensure_references(strict=False)
-    return encode_model(project)
+    """Encode one valid Project using only the current development schema."""
+    if not isinstance(project, Project):
+        raise TypeError("project_to_dict() expects an OpenCAE Project")
+    project.ensure_references(strict=True)
+    return {
+        "format": PROJECT_FORMAT,
+        "schema_version": CURRENT_SCHEMA_VERSION,
+        "project": encode_model(project),
+    }
 
 
 def project_from_dict(data: dict[str, Any]) -> Project:
-    """Decode a current Project, migrating the directly preceding schema."""
-    if not isinstance(data, dict) or data.get("__type__") != "project":
-        raise ValueError("This is not a current OpenCAE project file")
+    """Decode one file written by the current development schema.
+
+    OpenCAE is still in development, so older schemas are intentionally rejected
+    instead of carrying migration and compatibility layers in runtime code.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("This is not an OpenCAE project file")
+
+    unknown = set(data) - _ENVELOPE_FIELDS
+    if unknown:
+        raise ValueError(
+            "Unknown project envelope field(s): " + ", ".join(sorted(unknown))
+        )
+    if set(data) != _ENVELOPE_FIELDS:
+        missing = _ENVELOPE_FIELDS - set(data)
+        raise ValueError(
+            "Missing project envelope field(s): " + ", ".join(sorted(missing))
+        )
+    if data["format"] != PROJECT_FORMAT:
+        raise ValueError("This is not an OpenCAE project file")
+
     try:
-        version = int(data.get("schema_version"))
+        version = int(data["schema_version"])
     except (TypeError, ValueError) as exc:
         raise ValueError("The project file has no valid schema version") from exc
-
-    if version == SOURCE_SCHEMA_VERSION:
-        data = migrate_mesh_definitions(data)
-        version = CURRENT_SCHEMA_VERSION
     if version != CURRENT_SCHEMA_VERSION:
         raise ValueError(
             f"Project schema {version} is not supported by this development "
             f"build; schema {CURRENT_SCHEMA_VERSION} is required"
         )
 
-    project = decode_model(data)
+    project = decode_model(data["project"])
     if not isinstance(project, Project):
-        raise TypeError("The file does not contain an OpenCAE project")
-    project.ensure_references(strict=False)
+        raise TypeError("The file does not contain an OpenCAE Project")
+    project.ensure_references(strict=True)
     return project
