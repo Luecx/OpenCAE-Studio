@@ -18,6 +18,8 @@ from opencae.ui.templates import dialog_buttons
 from .material_behavior_card import MaterialBehaviorCard
 from .material_behavior_specs import CATEGORIES
 
+_FIELD_SPACING = 6
+
 
 class MaterialDialog(ApplyDialog):
     """Create or edit a Material using compact inline behavior cards."""
@@ -42,14 +44,21 @@ class MaterialDialog(ApplyDialog):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 18)
-        root.setSpacing(14)
+        root.setSpacing(16)
 
+        # Keep label-to-editor spacing identical to the property fields inside
+        # behavior cards; the root layout only controls section separation.
+        name_block = QWidget()
+        name_block.setObjectName("MaterialFieldBlock")
+        name_layout = QVBoxLayout(name_block)
+        name_layout.setContentsMargins(0, 0, 0, 0)
+        name_layout.setSpacing(_FIELD_SPACING)
         name_label = QLabel("Name")
         name_label.setObjectName("MaterialTopLabel")
-        root.addWidget(name_label)
-
+        name_layout.addWidget(name_label)
         self.name = QLineEdit(material.name if material else default_name)
-        root.addWidget(self.name)
+        name_layout.addWidget(self.name)
+        root.addWidget(name_block)
 
         definitions = QLabel("Material Definitions")
         definitions.setObjectName("MaterialSectionTitle")
