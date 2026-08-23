@@ -5,7 +5,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QSizePolicy, QWidget
 
 PRIMARY_CONTROL_HEIGHT = 40
-INLINE_ACTION_SIZE = 32
+INLINE_ACTION_SIZE = 36
 FIELD_LABEL_SPACING = 6
 
 
@@ -27,7 +27,12 @@ def apply_primary_control_height(widget: QWidget) -> QWidget:
 
 
 def apply_inline_action_size(widget: QWidget) -> QWidget:
-    """Size a secondary create/pick action without competing with its field."""
+    """Size a secondary create/pick action close to its primary field height.
+
+    Inline actions are intentionally a little smaller than the 40 px data field
+    so they remain secondary, but 36 px keeps them visually substantial enough
+    beside a full-width selector.
+    """
     widget.setProperty("inlineAction", True)
     widget.setFixedSize(INLINE_ACTION_SIZE, INLINE_ACTION_SIZE)
     return widget
