@@ -110,20 +110,19 @@ def css(p):
         background: transparent;
     }}
 
-    QComboBox#MaterialModelCombo {{
+    QLineEdit#MaterialNameInput,
+    QComboBox#MaterialModelCombo,
+    QDoubleSpinBox#MaterialPropertySpin,
+    QDoubleSpinBox#MaterialPropertySpinWithUnit {{
         min-width: 0px;
+    }}
+    QComboBox#MaterialModelCombo {{
         max-width: 360px;
-        min-height: 28px;
     }}
 
     QWidget#MaterialPropertyInput {{
         background: transparent;
         border: none;
-    }}
-    QDoubleSpinBox#MaterialPropertySpin,
-    QDoubleSpinBox#MaterialPropertySpinWithUnit {{
-        min-width: 0px;
-        min-height: 28px;
     }}
     QDoubleSpinBox#MaterialPropertySpinWithUnit {{
         border-top-right-radius: 0px;
@@ -132,8 +131,7 @@ def css(p):
     }}
     QLabel#MaterialPropertyUnit {{
         min-width: 54px;
-        min-height: 28px;
-        padding: 5px 10px;
+        padding: 0px 10px;
         background: {p['panel_alt']};
         color: {p['text']};
         border: 1px solid {p['border_light']};
