@@ -3,6 +3,8 @@
 from .button_role import ButtonRole
 from .button_spec import ButtonSpec
 from .control_metrics import (
+    COMBO_POPUP_EXTRA_HEIGHT,
+    COMBO_POPUP_ROW_HEIGHT,
     FIELD_LABEL_SPACING,
     INLINE_ACTION_SIZE,
     PRIMARY_CONTROL_HEIGHT,
@@ -73,6 +75,8 @@ __all__ = [
     "CONTROL_GROUP_SPACING",
     "PRIMARY_CONTROL_HEIGHT",
     "INLINE_ACTION_SIZE",
+    "COMBO_POPUP_ROW_HEIGHT",
+    "COMBO_POPUP_EXTRA_HEIGHT",
     "FIELD_LABEL_SPACING",
     "apply_primary_control_height",
     "apply_inline_action_size",
