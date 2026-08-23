@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -19,6 +19,7 @@ from opencae.ui.templates import FieldStack, SectionHeading
 
 from .result_query_model import QueryResult
 from .result_selection_panel import RESULT_INFO_WIDTH
+from .viewport_overlay_metrics import VIEWPORT_OVERLAY_MARGIN
 
 
 class ResultQueryPanel(QFrame):
@@ -29,7 +30,7 @@ class ResultQueryPanel(QFrame):
         super().__init__(parent)
         self.setObjectName("ResultQueryPanel")
         self.setFixedWidth(RESULT_INFO_WIDTH)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
         self.hide()
         self.setStyleSheet(
             f"QFrame#ResultQueryPanel{{background:{PALETTE['panel']};"
@@ -52,6 +53,7 @@ class ResultQueryPanel(QFrame):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.table.setWordWrap(True)
         self.table.hide()
         layout.addWidget(self.table)
 
@@ -64,7 +66,7 @@ class ResultQueryPanel(QFrame):
         )
 
     def show_result(self, title, result):
-        """Replace the summary/matrix contents with one query result and show the panel."""
+        """Replace contents and size the overlay after Qt resolves wrapped text."""
         self.title.setText(str(title))
         self._clear()
         rows = result.summary or [("Result", "No values available for this selection")]
@@ -73,34 +75,99 @@ class ResultQueryPanel(QFrame):
             text.setObjectName("ResultQueryValue")
             text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             text.setWordWrap(True)
+            text.setSizePolicy(
+                QSizePolicy.Policy.Expanding,
+                QSizePolicy.Policy.Minimum,
+            )
             self.form.addRow(str(key), text)
         if result.matrix:
             self._show_matrix(result.columns, result.matrix)
-        self.layout().activate()
-        self.adjustSize()
-        self.setFixedHeight(self.sizeHint().height())
+
         self.show()
+        self._fit_to_contents()
+        # Wrapped labels and stretched table columns receive their final widths
+        # only after one event turn. Refit once more to avoid stale height hints.
+        QTimer.singleShot(0, self._fit_to_contents)
         self.raise_()
 
     def _show_matrix(self, columns, values):
-        """Render a compact no-scroll matrix beneath the label/value summary."""
+        """Populate the query matrix; final row heights are resolved after show."""
         self.table.setColumnCount(len(columns))
         self.table.setHorizontalHeaderLabels(columns)
         self.table.setRowCount(len(values))
         for row, items in enumerate(values):
             for column, value in enumerate(items):
                 self.table.setItem(row, column, QTableWidgetItem(str(value)))
-        self.table.resizeRowsToContents()
-        row_height = sum(
-            max(24, self.table.rowHeight(row)) for row in range(len(values))
-        )
-        self.table.setFixedHeight(
-            self.table.horizontalHeader().height()
-            + row_height
-            + 2 * self.table.frameWidth()
-            + 2
-        )
         self.table.show()
+
+    def _fit_to_contents(self):
+        """Resize the panel to natural content without extending below the viewport."""
+        if not self.isVisible():
+            return
+
+        layout = self.layout()
+        margins = layout.contentsMargins()
+        content_width = max(
+            1,
+            self.width() - margins.left() - margins.right(),
+        )
+        self.form.setFixedWidth(content_width)
+        self.form.updateGeometry()
+        if self.form.layout() is not None:
+            self.form.layout().invalidate()
+            self.form.layout().activate()
+
+        table_height = 0
+        if self.table.isVisible():
+            self.table.setFixedWidth(content_width)
+            self.table.horizontalHeader().resizeSections(QHeaderView.ResizeMode.Stretch)
+            self.table.resizeRowsToContents()
+            table_height = (
+                self.table.horizontalHeader().height()
+                + sum(
+                    max(24, self.table.rowHeight(row))
+                    for row in range(self.table.rowCount())
+                )
+                + 2 * self.table.frameWidth()
+                + 2
+            )
+
+        layout.invalidate()
+        layout.activate()
+        chrome_height = (
+            margins.top()
+            + margins.bottom()
+            + self.title.sizeHint().height()
+            + self.form.sizeHint().height()
+            + layout.spacing()
+        )
+        if self.table.isVisible():
+            chrome_height += layout.spacing()
+
+        desired_height = chrome_height + table_height
+        parent = self.parentWidget()
+        available_height = (
+            max(
+                120,
+                parent.height() - self.y() - VIEWPORT_OVERLAY_MARGIN,
+            )
+            if parent is not None
+            else desired_height
+        )
+
+        if self.table.isVisible():
+            available_table = max(84, available_height - chrome_height)
+            visible_table_height = min(table_height, available_table)
+            self.table.setFixedHeight(visible_table_height)
+            self.table.setVerticalScrollBarPolicy(
+                Qt.ScrollBarPolicy.ScrollBarAsNeeded
+                if visible_table_height < table_height
+                else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            )
+            desired_height = chrome_height + visible_table_height
+
+        self.resize(self.width(), min(desired_height, available_height))
+        self.updateGeometry()
 
     def clear_query(self):
         """Clear and hide the current query overlay."""
@@ -109,9 +176,9 @@ class ResultQueryPanel(QFrame):
 
     def _clear(self):
         """Reset summary and matrix contents while releasing dynamic field widgets."""
-        self.setMinimumHeight(0)
-        self.setMaximumHeight(16777215)
         self.form.clear()
         self.table.clearContents()
         self.table.setRowCount(0)
+        self.table.setColumnCount(0)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.table.hide()
