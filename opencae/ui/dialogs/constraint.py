@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QCheckBox, QLineEdit, QMessageBox, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QCheckBox, QLineEdit, QMessageBox, QVBoxLayout
 
 from opencae.model.entities.constraints import (
     ConstraintType,
@@ -11,7 +11,6 @@ from opencae.model.entities.constraints import (
     direct_control_point_error,
 )
 from opencae.model.naming import is_unique
-from opencae.model.selection import RegionDefinition
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.widgets import ChevronComboBox, CompactRegionSelector
 from opencae.ui.templates import (
@@ -22,6 +21,13 @@ from opencae.ui.templates import (
     dialog_buttons,
     field_block,
     field_row,
+)
+
+from .constraint_dialog_layout import (
+    master_definition,
+    region_labels,
+    section_container,
+    slave_definition,
 )
 
 
@@ -77,11 +83,9 @@ class ConstraintDialog(ApplyDialog):
         )
 
         root.addWidget(SectionHeading("Constraint Regions"))
-        master = _master_definition(constraint)
-        slave = _slave_definition(constraint)
         self.master = CompactRegionSelector(
             project,
-            master,
+            master_definition(constraint),
             options,
             lambda owner, done, finished: self._pick(
                 "master", owner, done, finished
@@ -90,7 +94,7 @@ class ConstraintDialog(ApplyDialog):
         )
         self.slave = CompactRegionSelector(
             project,
-            slave,
+            slave_definition(constraint),
             options,
             lambda owner, done, finished: self._pick(
                 "slave", owner, done, finished
@@ -103,7 +107,7 @@ class ConstraintDialog(ApplyDialog):
         root.addWidget(self.slave_field)
 
         components = tuple(getattr(constraint, "components", (1, 1, 1, 1, 1, 1)))
-        self.component_section = _section_container(root, "Degrees of Freedom")
+        self.component_section = section_container(root, "Degrees of Freedom")
         self.components = CheckGrid(
             ("U1", "U2", "U3", "R1", "R2", "R3"),
             components,
@@ -111,7 +115,7 @@ class ConstraintDialog(ApplyDialog):
         )
         self.component_section.layout().addWidget(self.components)
 
-        self.tie_section = _section_container(root, "Tie Options")
+        self.tie_section = section_container(root, "Tie Options")
         self.adjust = QCheckBox("Adjust slave nodes to the master surface")
         self.adjust.setChecked(bool(getattr(constraint, "adjust", False)))
         distance_unit = self.units.symbol("length") if self.units is not None else ""
@@ -170,12 +174,7 @@ class ConstraintDialog(ApplyDialog):
         coupling = kind in {ConstraintType.KINEMATIC, ConstraintType.DISTRIBUTING}
         self.master.set_requirement(constraint_region_requirement(kind, "master"))
         self.slave.set_requirement(constraint_region_requirement(kind, "slave"))
-        master_label, slave_label = {
-            ConstraintType.KINEMATIC: ("Control point", "Coupled region"),
-            ConstraintType.DISTRIBUTING: ("Control point", "Distributed region"),
-            ConstraintType.TIE: ("Master surface", "Slave surface"),
-            ConstraintType.RIGID_BODY: ("Reference point", "Rigid body region"),
-        }.get(kind, ("Master", "Slave"))
+        master_label, slave_label = region_labels(kind)
         self.master_field.set_label(master_label)
         self.slave_field.set_label(slave_label)
         self.component_section.setVisible(coupling)
@@ -256,32 +255,3 @@ class ConstraintDialog(ApplyDialog):
         self.name.setText(default_name)
         self.master.clear()
         self.slave.clear()
-
-
-def _section_container(root: QVBoxLayout, title: str) -> QWidget:
-    """Create one dynamic dialog section whose heading hides with its content."""
-    host = QWidget()
-    layout = QVBoxLayout(host)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(12)
-    layout.addWidget(SectionHeading(title))
-    root.addWidget(host)
-    return host
-
-
-def _master_definition(constraint):
-    """Return the stored master/control definition across supported constraint types."""
-    if constraint is None:
-        return RegionDefinition()
-    return getattr(
-        constraint,
-        "control_point",
-        getattr(constraint, "reference", getattr(constraint, "master", RegionDefinition())),
-    )
-
-
-def _slave_definition(constraint):
-    """Return the stored slave/body definition across supported constraint types."""
-    if constraint is None:
-        return RegionDefinition()
-    return getattr(constraint, "body", getattr(constraint, "slave", RegionDefinition()))
