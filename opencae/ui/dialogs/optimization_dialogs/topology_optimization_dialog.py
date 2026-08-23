@@ -39,7 +39,10 @@ class TopologyOptimizationDialog(NamedEntityDialog):
         analyses = [
             (analysis.name, analysis.id)
             for analysis in project.analyses
-            if any(step.step_type == "Linear Static" for step in analysis.steps)
+            if any(
+                step.step_type == "Linear Static"
+                for step in analysis.resolved_steps(project)
+            )
         ]
         self.analysis = ReferenceSelector(
             analyses,
