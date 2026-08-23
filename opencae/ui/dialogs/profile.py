@@ -1,4 +1,4 @@
-"""Provides Create/Edit Profile with the shared label-above-control styling."""
+"""Provides Create/Edit Profile with shared editor and property-panel templates."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QMessageBox,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -19,13 +18,15 @@ from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.widgets import ChevronComboBox
 from opencae.ui.templates import (
     NumericUnitInput,
+    SectionHeading,
+    VerticalSeparator,
     apply_primary_control_height,
     dialog_buttons,
     field_block,
-    read_only_table,
 )
 
 from .profile_graph_editor import GraphProfileEditor
+from .profile_properties_panel import ProfilePropertiesPanel
 
 
 PROFILE_TYPES = (
@@ -41,19 +42,9 @@ PROFILE_TYPES = (
     "Graph profile",
 )
 
-_PROPERTY_QUANTITIES = {
-    "Area": "area",
-    "Centroid y": "length",
-    "Centroid z": "length",
-    "Iyy": "section_inertia",
-    "Izz": "section_inertia",
-    "Iyz": "section_inertia",
-    "Torsion constant": "section_inertia",
-}
-
 
 class ProfileDialog(ApplyDialog):
-    """Create or edit a section profile using vertically labelled controls."""
+    """Create or edit a profile with definition and derived-property columns."""
 
     def __init__(
         self,
@@ -64,6 +55,7 @@ class ProfileDialog(ApplyDialog):
         default_name="Profile-1",
         units=None,
     ):
+        """Build the profile editor using the canonical resource-dialog styling."""
         super().__init__(parent)
         self.profile = profile
         self.units = units
@@ -71,7 +63,7 @@ class ProfileDialog(ApplyDialog):
         self._editors = {}
 
         self.setWindowTitle("Edit Profile" if profile else "Create Profile")
-        self.setMinimumSize(880, 560)
+        self.setMinimumSize(920, 560)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 18)
@@ -92,18 +84,26 @@ class ProfileDialog(ApplyDialog):
 
         body = QHBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(16)
+        body.setSpacing(18)
+
+        definition_panel = QWidget()
+        definition_layout = QVBoxLayout(definition_panel)
+        definition_layout.setContentsMargins(0, 0, 0, 0)
+        definition_layout.setSpacing(12)
+        definition_layout.addWidget(SectionHeading("Profile Definition"))
 
         self.parameter_host = QWidget()
         self.parameter_layout = QVBoxLayout(self.parameter_host)
         self.parameter_layout.setContentsMargins(0, 0, 0, 0)
         self.parameter_layout.setSpacing(12)
-        body.addWidget(self.parameter_host, 1)
+        definition_layout.addWidget(self.parameter_host, 1)
+        body.addWidget(definition_panel, 1)
 
-        self.properties = read_only_table(
-            ("Property", "Value", "Unit"),
-            stretch_columns=(0, 1),
-        )
+        # The divider communicates that the left side owns editable dimensions
+        # while the right side only reports values derived from those inputs.
+        body.addWidget(VerticalSeparator())
+
+        self.properties = ProfilePropertiesPanel(self.units)
         body.addWidget(self.properties, 1)
         root.addLayout(body, 1)
 
@@ -166,15 +166,9 @@ class ProfileDialog(ApplyDialog):
         return {key: editor.value() for key, editor in self._editors.items()}
 
     def _update_properties(self, *_args) -> None:
-        """Recompute read-only section properties after an input change."""
+        """Recompute and refresh the read-only derived section properties."""
         data = profile_properties(self.kind.currentText(), self._dimensions())
-        self.properties.setRowCount(len(data))
-        for row, (name, value) in enumerate(data.items()):
-            quantity = _PROPERTY_QUANTITIES.get(name)
-            unit = self._symbol(quantity)
-            self.properties.setItem(row, 0, QTableWidgetItem(name))
-            self.properties.setItem(row, 1, QTableWidgetItem(f"{value:.8g}"))
-            self.properties.setItem(row, 2, QTableWidgetItem(unit))
+        self.properties.set_properties(data)
 
     def validate(self) -> bool:
         """Reject empty and duplicate profile names before committing."""
