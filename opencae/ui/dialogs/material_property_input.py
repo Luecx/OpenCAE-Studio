@@ -5,6 +5,8 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QLabel, QWidget
 
+from opencae.ui.templates import apply_primary_control_height
+
 
 class MaterialPropertyInput(QWidget):
     """Edit one numeric material value and display its unit as a fixed suffix cell."""
@@ -12,6 +14,7 @@ class MaterialPropertyInput(QWidget):
     def __init__(self, value: float, unit: str = "", parent=None):
         super().__init__(parent)
         self.setObjectName("MaterialPropertyInput")
+        apply_primary_control_height(self)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -24,6 +27,7 @@ class MaterialPropertyInput(QWidget):
         self.editor.setRange(-1e30, 1e30)
         self.editor.setDecimals(8)
         self.editor.setValue(float(value))
+        apply_primary_control_height(self.editor)
         layout.addWidget(self.editor, 1)
 
         self.unit_label = None
@@ -32,6 +36,7 @@ class MaterialPropertyInput(QWidget):
             self.unit_label = QLabel(unit)
             self.unit_label.setObjectName("MaterialPropertyUnit")
             self.unit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            apply_primary_control_height(self.unit_label)
             layout.addWidget(self.unit_label)
 
     def value(self) -> float:
