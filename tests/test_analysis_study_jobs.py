@@ -13,16 +13,16 @@ from opencae.model.entities.project import Project
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_legacy_analysis_owned_steps_migrate_to_shared_project_steps():
+def test_analysis_references_project_owned_steps_only():
     step = AnalysisStep(name="Static", step_type="Linear Static")
-    analysis = Analysis(name="Analysis-1", steps=[step])
-
-    project = Project(name="Migration", analyses=[analysis])
+    analysis = Analysis(name="Analysis-1")
+    analysis.bind_steps([step])
+    project = Project(name="Current", steps=[step], analyses=[analysis])
 
     assert project.steps == [step]
-    assert analysis.steps == []
     assert [ref.entity_id for ref in analysis.step_refs] == [step.id]
     assert analysis.resolved_steps(project) == (step,)
+    assert not hasattr(analysis, "steps")
 
 
 def test_shared_steps_and_studies_survive_model_roundtrip():
@@ -48,19 +48,7 @@ def test_shared_steps_and_studies_survive_model_roundtrip():
         == restored.steps[0].id
     )
     assert restored.studies[0].name == "Topology-1"
-    assert restored.optimizations is restored.studies
-
-
-def test_legacy_optimizations_collection_migrates_to_studies():
-    study = TopologyOptimization(name="Topology-1")
-
-    project = Project(name="Legacy", optimizations=[study])
-
-    assert project.studies == [study]
-    assert project.optimizations is project.studies
-    payload = project.to_dict()
-    assert "studies" in payload
-    assert "optimizations" not in payload
+    assert not hasattr(restored, "optimizations")
 
 
 def test_results_are_bound_to_the_job_that_created_them():
