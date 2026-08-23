@@ -1,4 +1,6 @@
-from PyQt6.QtWidgets import QDialog, QDoubleSpinBox, QStackedWidget, QWidget
+"""Provides the focused editor for one material-behavior definition."""
+
+from PyQt6.QtWidgets import QDialog, QStackedWidget, QVBoxLayout, QWidget
 
 from opencae.model.entities.resources.material_behaviors import (
     DensityBehavior,
@@ -8,7 +10,14 @@ from opencae.model.entities.resources.material_behaviors import (
     NeoHookeElasticity,
 )
 from opencae.ui.core.widgets import ChevronComboBox
-from opencae.ui.templates import dialog_buttons, form_layout, scaffold_dialog
+from opencae.ui.templates import (
+    NumericUnitInput,
+    SectionHeading,
+    dialog_buttons,
+    field_block,
+    field_row,
+    scaffold_dialog,
+)
 
 _BY_CATEGORY = {
     "Elasticity": ("Isotropic elasticity", "Neo-Hooke"),
@@ -36,19 +45,23 @@ _PROPERTY_SPECS = {
 
 
 class MaterialPropertyDialog(QDialog):
+    """Edit one material behavior using the same field hierarchy as MaterialDialog."""
+
     def __init__(self, behavior=None, parent=None, category=None, units=None):
+        """Build the behavior-type selector and its unit-aware property values."""
         super().__init__(parent)
         self.behavior = behavior
         self.units = units or getattr(getattr(parent, "controllers", None), "units", None)
         self.category = category or getattr(behavior, "category", "Elasticity")
         self.types = _BY_CATEGORY[self.category]
 
-        scaffold = scaffold_dialog(self, self.category, width=520)
+        scaffold = scaffold_dialog(self, self.category, width=620)
         self.kind = ChevronComboBox()
         self.kind.addItems(self.types)
         self.kind.setCurrentText(getattr(behavior, "behavior_type", self.types[0]))
         scaffold.form.addRow("Definition", self.kind)
 
+        scaffold.root.addWidget(SectionHeading("Property Values"))
         self.stack = QStackedWidget()
         scaffold.root.addWidget(self.stack)
         self._pages = {}
@@ -67,38 +80,59 @@ class MaterialPropertyDialog(QDialog):
         scaffold.root.addWidget(buttons)
 
     def _add_page(self, kind):
+        """Create one behavior page with paired unit-aware scalar fields."""
         page = QWidget()
-        form = form_layout(page)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
         editors = []
+        blocks = []
         for text, default, quantity in _PROPERTY_SPECS[kind]:
-            editor = QDoubleSpinBox()
-            editor.setRange(-1e30, 1e30)
-            editor.setDecimals(8)
-            if self.units is not None and quantity:
-                editor.setSuffix(self.units.suffix(quantity))
-            editor.setValue(default)
-            form.addRow(text, editor)
+            unit = (
+                self.units.suffix(quantity)
+                if self.units is not None and quantity
+                else ""
+            )
+            editor = NumericUnitInput(
+                default,
+                unit,
+                minimum=-1e30,
+                maximum=1e30,
+                decimals=8,
+            )
             editors.append(editor)
+            blocks.append(field_block(text, editor))
+
+        # Material properties naturally occur in pairs. Keeping both values on
+        # one row mirrors the main Material dialog without introducing a table.
+        for index in range(0, len(blocks), 2):
+            pair = blocks[index:index + 2]
+            layout.addWidget(field_row(*pair) if len(pair) == 2 else pair[0])
+        layout.addStretch(1)
+
         self._pages[kind] = editors
         self.stack.addWidget(page)
 
     def _load(self):
-        b = self.behavior
+        """Populate the active page from the existing behavior when editing."""
+        behavior = self.behavior
         values = []
-        if isinstance(b, IsotropicElasticity):
-            values = [b.youngs_modulus, b.poisson_ratio]
-        elif isinstance(b, NeoHookeElasticity):
-            values = [b.c10, b.d1]
-        elif isinstance(b, DensityBehavior):
-            values = [b.value]
-        elif isinstance(b, IsotropicThermalExpansion):
-            values = [b.coefficient, b.reference_temperature]
-        elif isinstance(b, IsotropicPlasticity):
-            values = [b.yield_stress, b.tangent_modulus]
+        if isinstance(behavior, IsotropicElasticity):
+            values = [behavior.youngs_modulus, behavior.poisson_ratio]
+        elif isinstance(behavior, NeoHookeElasticity):
+            values = [behavior.c10, behavior.d1]
+        elif isinstance(behavior, DensityBehavior):
+            values = [behavior.value]
+        elif isinstance(behavior, IsotropicThermalExpansion):
+            values = [behavior.coefficient, behavior.reference_temperature]
+        elif isinstance(behavior, IsotropicPlasticity):
+            values = [behavior.yield_stress, behavior.tangent_modulus]
         for editor, value in zip(self._pages[self.kind.currentText()], values):
             editor.setValue(value)
 
     def behavior_value(self):
+        """Return the material-behavior entity represented by the current page."""
         kind = self.kind.currentText()
         values = [editor.value() for editor in self._pages[kind]]
         return {
