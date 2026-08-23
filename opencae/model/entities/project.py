@@ -101,12 +101,6 @@ class Project(Entity):
 
     def try_resolve(self, ref, expected_type=None):
         """Resolve one reference or return ``None`` when it is unavailable."""
-        value = self.index.try_resolve(ref, expected_type)
-        if value is not None:
-            return value
-        # Direct list mutation can add a new entity without touching the cached
-        # index. A miss is therefore the one safe place to refresh lazily.
-        self.rebuild_index()
         return self.index.try_resolve(ref, expected_type)
 
     def references_to(self, entity_or_id):
