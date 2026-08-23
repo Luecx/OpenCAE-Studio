@@ -1,3 +1,5 @@
+"""Provides the persistent region-operand editor used across modelling dialogs."""
+
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -5,7 +7,6 @@ from PyQt6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
-    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -22,6 +23,8 @@ from opencae.model.selection import (
     selection_item_kind,
     selection_item_label,
 )
+from opencae.ui.templates import PRIMARY_CONTROL_HEIGHT, button
+
 from .chevron_combo import ChevronComboBox
 
 
@@ -44,6 +47,7 @@ class RegionSelectionWidget(QWidget):
         allow_part_local=False,
         show_named_regions=True,
     ):
+        """Build the operand table and region-management actions."""
         super().__init__(parent)
         self.project = project
         self.pick_callback = pick_callback
@@ -75,47 +79,54 @@ class RegionSelectionWidget(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(6)
         self.options = ChevronComboBox()
-        self.options.setMinimumWidth(250)
+        self.options.setMinimumWidth(0)
         self._reload_options()
-        self.add_button = QPushButton("Add region")
-        self.add_button.clicked.connect(self._add_option)
+
+        self.add_button = button("Add region", clicked=self._add_option)
+        self.add_button.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
         row.addWidget(self.options, 1)
         row.addWidget(self.add_button)
+
         self.save_button = None
         if save_callback:
-            self.save_button = QPushButton("Save as region")
-            self.save_button.clicked.connect(lambda: save_callback(self, self.definition()))
+            self.save_button = button(
+                "Save as region",
+                clicked=lambda: save_callback(self, self.definition()),
+            )
+            self.save_button.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
             row.addWidget(self.save_button)
-        row.addSpacing(18)
+
+        row.addSpacing(12)
         row.addStretch(1)
-        self.remove_button = QPushButton("Remove")
-        self.remove_button.clicked.connect(self._remove_selected)
-        self.clear_button = QPushButton("Clear")
-        self.clear_button.clicked.connect(self.clear)
+        self.remove_button = button("Remove", clicked=self._remove_selected)
+        self.clear_button = button("Clear", clicked=self.clear)
+        self.remove_button.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
+        self.clear_button.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
         row.addWidget(self.remove_button)
         row.addWidget(self.clear_button)
         root.addWidget(self.action_row)
 
         self.set_named_region_controls_visible(show_named_regions)
         self._refresh()
-        # Do not call instance methods from QObject.destroyed.  At that point
-        # the C++ QWidget has already been destroyed and emitting Qt signals
-        # from finish_selection() raises "wrapped C/C++ object ... deleted".
-        # Dialog owners end active selection sessions from their finished
-        # signal, before their child widgets are destroyed.
+        # Do not call instance methods from QObject.destroyed. At that point the
+        # C++ widget is already gone; dialog owners end selection from finished.
 
     def definition(self) -> RegionDefinition:
+        """Return the current immutable region definition."""
         return self._definition
 
     def currentValue(self):
+        """Expose the definition through the value-style selector API."""
         return self.definition()
 
     def set_definition(self, value):
+        """Replace the complete definition and notify dependent editors."""
         self._definition = RegionDefinition.from_values(value)
         self._refresh()
         self.value_changed.emit(self._definition)
 
     def set_requirement(self, requirement, *, allow_part_local=None):
+        """Change target compatibility constraints and refresh named options."""
         self.requirement = requirement
         if allow_part_local is not None:
             self.allow_part_local = bool(allow_part_local)
@@ -123,12 +134,14 @@ class RegionSelectionWidget(QWidget):
         self._refresh()
 
     def set_named_region_controls_visible(self, visible: bool):
+        """Show or hide the named-region add/save controls as one group."""
         self.options.setVisible(bool(visible))
         self.add_button.setVisible(bool(visible))
         if self.save_button is not None:
             self.save_button.setVisible(bool(visible))
 
     def begin_selection(self):
+        """Start one lifetime-owned viewport pick session if available."""
         if self._cancel_pick is not None or self.pick_callback is None:
             return
         cancel = self.pick_callback(self, self.apply_pick, self._session_finished)
@@ -136,6 +149,7 @@ class RegionSelectionWidget(QWidget):
         self.picking_changed.emit(True)
 
     def finish_selection(self):
+        """End the active viewport session and restore non-picking state."""
         cancel = self._cancel_pick
         self._cancel_pick = None
         if cancel:
@@ -143,10 +157,12 @@ class RegionSelectionWidget(QWidget):
         self.picking_changed.emit(False)
 
     def _session_finished(self):
+        """Handle completion initiated by the viewport selection controller."""
         self._cancel_pick = None
         self.picking_changed.emit(False)
 
     def _reload_options(self):
+        """Rebuild named region options allowed by the active requirement."""
         self.options.clear()
         for label, value in self._all_options:
             if _option_matches_requirement(self.project, value, self.requirement):
@@ -157,16 +173,19 @@ class RegionSelectionWidget(QWidget):
             self.add_button.setEnabled(available)
 
     def add_definition(self, value):
+        """Append all operands from another region definition."""
         definition = RegionDefinition.from_values(value)
         self._definition = RegionDefinition((*self._definition.items, *definition.items))
         self._refresh()
         self.value_changed.emit(self._definition)
 
     def add_item(self, value):
+        """Append one selection item or raw operand to the region."""
         item = value if isinstance(value, RegionSelectionItem) else RegionSelectionItem(value)
         self.add_definition(RegionDefinition((item,)))
 
     def apply_pick(self, value, operation=SelectionOperation.ADD):
+        """Apply an add, remove or replacement pick result to the current definition."""
         definition = RegionDefinition.from_values(value)
         operation = SelectionOperation(operation)
         if operation == SelectionOperation.REPLACE:
@@ -182,16 +201,19 @@ class RegionSelectionWidget(QWidget):
         self.value_changed.emit(self._definition)
 
     def clear(self):
+        """Remove every operand from the current definition."""
         self._definition = RegionDefinition()
         self._refresh()
         self.value_changed.emit(self._definition)
 
     def _add_option(self):
+        """Append the named-region option currently selected in the combo box."""
         value = self.options.currentData()
         if value is not None:
             self.add_definition(value)
 
     def _remove_selected(self):
+        """Remove all operand rows selected in the table."""
         rows = {index.row() for index in self.table.selectionModel().selectedRows()}
         if not rows:
             return
@@ -202,6 +224,7 @@ class RegionSelectionWidget(QWidget):
         self.value_changed.emit(self._definition)
 
     def _refresh(self):
+        """Render the current immutable definition into the read-only operand table."""
         self.table.setRowCount(len(self._definition.items))
         for row, item in enumerate(self._definition.items):
             values = (
@@ -216,12 +239,14 @@ class RegionSelectionWidget(QWidget):
 
 
 def _position(value):
+    """Format an optional picked world position for the operand table."""
     if value is None:
         return "—"
     return "(" + ", ".join(f"{component:.6g}" for component in value) + ")"
 
 
 def _option_matches_requirement(project, value, requirement):
+    """Return whether a named-region option satisfies the requested projection."""
     if requirement is None:
         return True
     projection = requirement.projection
