@@ -1,6 +1,16 @@
+"""Creates and runs the OpenCAE Qt application."""
+
 from __future__ import annotations
 
 import sys
+
+from .qt_platform import configure_qt_platform_environment
+
+# QPA backend selection happens when QApplication is created, but this module
+# imports the complete GUI (and therefore PyVistaQt/VTK) below. Configure the
+# process environment first so every launch path, including the console script,
+# uses the same safe backend decision.
+configure_qt_platform_environment()
 
 from PyQt6.QtWidgets import QApplication
 
@@ -12,6 +22,7 @@ from .main_window import MainWindow
 
 
 def run() -> int:
+    """Create QApplication, show the main window and enter the Qt event loop."""
     set_windows_app_id()
     app = QApplication(sys.argv)
     app.setApplicationName("OpenCAE Studio")
