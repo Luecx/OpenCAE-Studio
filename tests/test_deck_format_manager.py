@@ -97,6 +97,51 @@ def test_move_buttons_reorder_only_user_profile_and_builtin_stays_default(manage
     ]
 
 
+def test_elements_mirror_canonical_element_definition_hierarchy(manager):
+    """Element records are grouped by the model registry rather than a UI-only list."""
+    from opencae.model.entities.elements.factory import element_definition_types
+
+    expected: dict[str, list[str]] = {}
+    for category, topology, _definition_type in element_definition_types():
+        expected.setdefault(category, []).append(topology)
+
+    assert manager.navigation.child_labels("mesh.elements") == list(expected)
+    for category, topologies in expected.items():
+        category_key = "mesh.elements." + "_".join(category.lower().split())
+        assert manager.navigation.child_labels(category_key) == topologies
+
+
+def test_element_leaf_has_own_repeatable_connectivity_template(manager):
+    """Each concrete element topology owns its type/header and repeated connectivity rows."""
+    key = "mesh.elements.solid_elements.tetrahedra"
+    assert manager.select_key(key)
+    page = manager.template_page
+    assert page.template_text() == "*ELEMENT, TYPE={element_type}\n{element_id}, {connectivity}"
+    assert page.available_field_names() == ("element_type", "element_id", "connectivity")
+    assert page.is_repeatable()
+    assert page.repeat_rows.isChecked()
+    assert page.fields.topLevelItem(0).text(2) == "Record"
+    assert page.fields.topLevelItem(1).text(2) == "Repeated row"
+    assert page.fields.topLevelItem(2).text(2) == "Repeated row"
+    preview = page.preview.toPlainText()
+    assert "*ELEMENT, TYPE=TETRAHEDRA" in preview
+    assert "42, 101, 102, 103, 104" in preview
+    assert "43, 102, 105, 106, 103" in preview
+
+
+def test_nested_element_order_is_isolated_per_user_profile(manager):
+    """Move Up/Down also works at deep element leaves and remains profile-local."""
+    manager.profile_toolbar.copy_profile()
+    parent_key = "mesh.elements.solid_elements"
+    assert manager.navigation.child_labels(parent_key)[:2] == ["Tetrahedra", "Pyramids"]
+    assert manager.navigation.select_key(parent_key + ".tetrahedra")
+    manager.navigation.move_down()
+    assert manager.navigation.child_labels(parent_key)[:2] == ["Pyramids", "Tetrahedra"]
+
+    manager.profile_toolbar.profile_combo.setCurrentText("FEMaster")
+    assert manager.navigation.child_labels(parent_key)[:2] == ["Tetrahedra", "Pyramids"]
+
+
 def test_isotropic_elastic_uses_one_template_and_documents_fields(manager):
     """Keyword options and data lines share one editor with explicit placeholders."""
     assert manager.select_key("materials.isotropic_elastic")
