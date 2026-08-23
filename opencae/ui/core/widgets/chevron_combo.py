@@ -10,17 +10,19 @@ from opencae.ui.core.theme import PALETTE
 from opencae.ui.templates.control_metrics import (
     COMBO_POPUP_EXTRA_HEIGHT,
     COMBO_POPUP_ROW_HEIGHT,
+    apply_primary_control_height,
 )
 
 
 class ChevronComboBox(QComboBox):
-    """Flat combo box whose popup shows every entry when screen space permits."""
+    """Canonical primary combo whose popup shows every entry when space permits."""
 
     def __init__(self, parent=None):
-        """Initialize the canonical combo geometry and sizing policy."""
+        """Initialize canonical 40 px geometry, flexible width and popup policy."""
         super().__init__(parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumWidth(316)
+        self.setMinimumWidth(0)
+        apply_primary_control_height(self)
         self.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
@@ -30,7 +32,7 @@ class ChevronComboBox(QComboBox):
         """Open the popup and explicitly size it to its complete item list.
 
         Some Qt platform styles ignore ``maxVisibleItems`` for non-editable
-        combo boxes.  The popup is therefore resized after Qt creates its view,
+        combo boxes. The popup is therefore resized after Qt creates its view,
         using the same row-height token that the stylesheet uses for each item.
         """
         view = self.view()
