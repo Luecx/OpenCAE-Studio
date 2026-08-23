@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from .control_metrics import FIELD_LABEL_SPACING
+from .field_label import FieldLabel
 
 
 def field_block(label_text: str, control: QWidget, parent=None) -> QWidget:
@@ -20,8 +21,8 @@ def field_block(label_text: str, control: QWidget, parent=None) -> QWidget:
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(FIELD_LABEL_SPACING)
 
-    label = QLabel(label_text)
-    label.setObjectName("PrimaryFieldLabel")
-    layout.addWidget(label)
+    # Centralizing the label type keeps typography identical even when fields
+    # are assembled by different dialogs or nested editor components.
+    layout.addWidget(FieldLabel(label_text))
     layout.addWidget(control)
     return host
