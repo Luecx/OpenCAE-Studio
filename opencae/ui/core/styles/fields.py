@@ -1,9 +1,20 @@
 """Styles editable fields and the shared primary-control geometry contract."""
 
+from opencae.ui.templates.control_metrics import PRIMARY_CONTROL_HEIGHT
+
 
 def css(p):
     """Return QSS for text, numeric, combo and compact composite controls."""
     return f"""
+    QWidget#PrimaryFieldBlock {{
+        background: transparent;
+        border: none;
+    }}
+    QLabel#PrimaryFieldLabel {{
+        color: {p['muted']};
+        font-size: 9pt;
+    }}
+
     QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
         background: {p['window']};
         border: 1px solid {p['border_light']};
@@ -29,14 +40,13 @@ def css(p):
         image: none;
     }}
 
-    /* The content box is 38px plus the 1px border on each side, yielding the
-       same 40px painted height for every primary Qt input class. */
+    /* Primary controls have one painted height regardless of their Qt class. */
     QLineEdit[primaryControl="true"],
     QComboBox[primaryControl="true"],
     QSpinBox[primaryControl="true"],
     QDoubleSpinBox[primaryControl="true"] {{
-        min-height: 38px;
-        max-height: 38px;
+        min-height: {PRIMARY_CONTROL_HEIGHT - 2}px;
+        max-height: {PRIMARY_CONTROL_HEIGHT - 2}px;
         padding-top: 0px;
         padding-bottom: 0px;
     }}
@@ -62,8 +72,12 @@ def css(p):
     QDoubleSpinBox#XYZLast {{
         border-left: 0px;
     }}
-    QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {{ border-color: #53606d; }}
-    QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{ border-color: {p['accent']}; }}
+    QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {{
+        border-color: #53606d;
+    }}
+    QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+        border-color: {p['accent']};
+    }}
     QComboBox {{ padding-right: 30px; }}
     QComboBox::drop-down {{
         subcontrol-origin: padding;
@@ -103,19 +117,40 @@ def css(p):
         border-bottom-right-radius: 3px;
     }}
 
+    QPushButton#InlineAddButton,
+    QPushButton#InlinePickButton {{
+        min-width: {PRIMARY_CONTROL_HEIGHT}px;
+        max-width: {PRIMARY_CONTROL_HEIGHT}px;
+        min-height: {PRIMARY_CONTROL_HEIGHT}px;
+        max-height: {PRIMARY_CONTROL_HEIGHT}px;
+        padding: 0px;
+        color: {p['accent']};
+        background: {p['panel_alt']};
+        border: 1px solid {p['border_light']};
+        border-radius: 3px;
+    }}
     QPushButton#InlineAddButton {{
-        min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px;
-        padding: 0; font-size: 15px; font-weight: 700;
-        color: {p['accent']}; background: {p['panel_alt']};
-        border: 1px solid {p['border_light']}; border-radius: 3px;
+        font-size: 15px;
+        font-weight: 700;
     }}
-    QPushButton#InlineAddButton[primaryControl="true"] {{
-        min-width: 40px; max-width: 40px; min-height: 40px; max-height: 40px;
+    QPushButton#InlineAddButton:hover,
+    QPushButton#InlinePickButton:hover {{
+        border-color: {p['accent']};
+        background: {p['accent_dim']};
     }}
-    QPushButton#InlineAddButton:hover {{ border-color: {p['accent']}; background: {p['accent_dim']}; }}
+
     QLabel#MatrixHeader {{ color: {p['muted']}; font-size: 8pt; min-width: 22px; }}
     QDoubleSpinBox#MatrixCell {{ min-width: 76px; max-width: 96px; padding: 4px 5px; }}
     QCheckBox {{ spacing: 7px; }}
-    QCheckBox::indicator {{ width: 15px; height: 15px; border: 1px solid {p['border_light']}; background: {p['window']}; border-radius: 2px; }}
-    QCheckBox::indicator:checked {{ background: {p['accent']}; border-color: {p['accent']}; }}
+    QCheckBox::indicator {{
+        width: 15px;
+        height: 15px;
+        border: 1px solid {p['border_light']};
+        background: {p['window']};
+        border-radius: 2px;
+    }}
+    QCheckBox::indicator:checked {{
+        background: {p['accent']};
+        border-color: {p['accent']};
+    }}
     """
