@@ -50,7 +50,13 @@ class AnalysisJobMonitor(QDialog):
         )
 
     def set_output(self, job_id, text):
-        """Replace the visible solver transcript for this monitor's Job."""
+        """Load the persisted solver transcript when this monitor is opened."""
         if str(job_id) != self.job_id:
             return
         self.output.set_output(text)
+
+    def append_output(self, job_id, text):
+        """Append a live solver-output chunk for this monitor's Job."""
+        if str(job_id) != self.job_id:
+            return
+        self.output.append_output(text)
