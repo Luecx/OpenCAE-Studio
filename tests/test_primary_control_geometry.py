@@ -2,13 +2,21 @@
 
 from PyQt6.QtWidgets import QApplication, QLineEdit, QSpinBox
 
+from opencae.ui.core.file_path import FilePathEditor
 from opencae.ui.core.theme import stylesheet
-from opencae.ui.core.widgets import ChevronComboBox, ReferenceSelector
+from opencae.ui.core.widgets import (
+    ChevronComboBox,
+    CompactRegionSelector,
+    ComponentsWidget,
+    ReferenceSelector,
+)
 from opencae.ui.templates import (
     COMBO_POPUP_EXTRA_HEIGHT,
     COMBO_POPUP_ROW_HEIGHT,
     INLINE_ACTION_SIZE,
     PRIMARY_CONTROL_HEIGHT,
+    CheckGrid,
+    CheckList,
     FieldLabel,
     NumericUnitInput,
     ReadOnlyValue,
@@ -78,6 +86,63 @@ def test_reference_selector_actions_match_primary_control_height():
         app.processEvents()
 
 
+def test_compact_region_selector_uses_same_height_actions():
+    """Keep viewport/detail actions aligned with the region summary field."""
+    app = QApplication.instance() or QApplication([])
+    selector = CompactRegionSelector(object())
+    selector.show()
+    app.processEvents()
+    try:
+        assert selector.summary.height() == PRIMARY_CONTROL_HEIGHT
+        assert selector.pick_button.size().width() == PRIMARY_CONTROL_HEIGHT
+        assert selector.pick_button.size().height() == PRIMARY_CONTROL_HEIGHT
+        assert selector.extended_button.size().width() == PRIMARY_CONTROL_HEIGHT
+        assert selector.extended_button.size().height() == PRIMARY_CONTROL_HEIGHT
+    finally:
+        selector.close()
+        selector.deleteLater()
+        app.processEvents()
+
+
+def test_file_path_editor_uses_primary_geometry_for_both_cells():
+    """Keep the browse action exactly aligned with the editable path field."""
+    app = QApplication.instance() or QApplication([])
+    editor = FilePathEditor("model.dat")
+    editor.show()
+    app.processEvents()
+    try:
+        assert editor.edit.height() == PRIMARY_CONTROL_HEIGHT
+        assert editor.button.height() == PRIMARY_CONTROL_HEIGHT
+        assert editor.button.width() == PRIMARY_CONTROL_HEIGHT
+    finally:
+        editor.close()
+        editor.deleteLater()
+        app.processEvents()
+
+
+def test_component_widget_uses_segmented_units_and_three_columns():
+    """Keep vector components interchangeable with other canonical dialog fields."""
+    app = QApplication.instance() or QApplication([])
+    components = ComponentsWidget(
+        ("Ux", "Uy", "Uz", "Rx", "Ry", "Rz"),
+        (1.0, 2.0, 3.0, None, None, None),
+        checkable=True,
+        suffixes=("mm", "mm", "mm", "", "", ""),
+    )
+    components.show()
+    app.processEvents()
+    try:
+        assert len(components._fields) == 6
+        assert components._fields[0].editor.height() == PRIMARY_CONTROL_HEIGHT
+        assert components._fields[0].editor.unit_label.text() == "mm"
+        assert components.values()[:3] == [1.0, 2.0, 3.0]
+        assert components.values()[3:] == [None, None, None]
+    finally:
+        components.close()
+        components.deleteLater()
+        app.processEvents()
+
+
 def test_combo_popup_uses_tall_rows_and_bottom_reserve():
     """Keep popup rows readable and preserve room below the final item border."""
     app = QApplication.instance() or QApplication([])
@@ -105,8 +170,8 @@ def test_combo_popup_uses_tall_rows_and_bottom_reserve():
         app.processEvents()
 
 
-def test_field_block_places_canonical_label_above_control():
-    """Protect the shared vertical field hierarchy and semantic label type."""
+def test_field_block_places_canonical_label_above_control_and_can_relabel():
+    """Protect the shared vertical hierarchy used by dynamic constraint fields."""
     app = QApplication.instance() or QApplication([])
     control = apply_primary_control_height(QLineEdit("Value"))
     block = field_block("Name", control)
@@ -115,7 +180,21 @@ def test_field_block_places_canonical_label_above_control():
     assert isinstance(layout.itemAt(0).widget(), FieldLabel)
     assert layout.itemAt(0).widget().text() == "Name"
     assert layout.itemAt(1).widget() is control
+    block.set_label("Control point")
+    assert block.label.text() == "Control point"
     block.deleteLater()
+    app.processEvents()
+
+
+def test_check_templates_preserve_declared_values():
+    """Keep finite checkbox groups and checked entity lists independent of dialogs."""
+    app = QApplication.instance() or QApplication([])
+    grid = CheckGrid(("U1", "U2", "U3"), (True, False, True))
+    listing = CheckList((("A", "a"), ("B", "b")), ("b",))
+    assert grid.values() == (True, False, True)
+    assert listing.selected_values() == ["b"]
+    grid.deleteLater()
+    listing.deleteLater()
     app.processEvents()
 
 
