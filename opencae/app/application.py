@@ -1,4 +1,4 @@
-"""Creates and runs the OpenCAE Qt application."""
+"""Creates and runs the OpenCAE Qt application with immediate startup feedback."""
 
 from __future__ import annotations
 
@@ -6,36 +6,60 @@ import sys
 
 from .qt_platform import configure_qt_platform_environment
 
-# QPA backend selection happens when QApplication is created, but this module
-# imports the complete GUI (and therefore PyVistaQt/VTK) below. Configure the
-# process environment first so every launch path, including the console script,
-# uses the same safe backend decision.
+# QPA selection must precede all Qt/VTK imports.
 configure_qt_platform_environment()
 
 from PyQt6.QtWidgets import QApplication
 
-from opencae.ui.core.dialog_form_polisher import DialogFormPolisher
-from opencae.ui.core.theme import stylesheet
-from .app_icon import application_icon, set_windows_app_id
-from .context import AppContext
-from .main_window import MainWindow
+from .startup_window import StartupWindow
+
+
+def _progress(app: QApplication, startup: StartupWindow, value: int, text: str) -> None:
+    """Paint one startup milestone before continuing synchronous initialization."""
+    startup.set_progress(value, text)
+    app.processEvents()
 
 
 def run() -> int:
-    """Create QApplication, show the main window and enter the Qt event loop."""
+    """Create QApplication, show startup feedback, then build the full main window."""
+    # Keep heavyweight OpenCAE UI, PyVista, and VTK imports below the first
+    # visible Qt surface. This avoids several seconds of apparently dead startup.
+    from .app_icon import application_icon, set_windows_app_id
+
     set_windows_app_id()
     app = QApplication(sys.argv)
     app.setApplicationName("OpenCAE Studio")
     app.setOrganizationName("OpenCAE")
+
+    startup = StartupWindow()
+    startup.show()
+    _progress(app, startup, 8, "Starting application…")
+
+    from opencae.ui.core.dialog_form_polisher import DialogFormPolisher
+    from opencae.ui.core.theme import stylesheet
+
     app.setWindowIcon(application_icon())
     app.setStyle("Fusion")
     app.setStyleSheet(stylesheet())
-
-    # Keep the filter alive for the lifetime of QApplication. It normalizes all
-    # QFormLayout-based dialogs, including stacked selector pages, on show.
     app._dialog_form_polisher = DialogFormPolisher(app)
     app.installEventFilter(app._dialog_form_polisher)
+    _progress(app, startup, 28, "Loading interface…")
 
-    window = MainWindow(AppContext.create())
+    from .context import AppContext
+
+    context = AppContext.create()
+    _progress(app, startup, 48, "Initializing project services…")
+
+    # MainWindow transitively imports the viewport stack and therefore PyVista/
+    # VTK. The startup window is already painted while those imports complete.
+    from .main_window import MainWindow
+
+    _progress(app, startup, 66, "Preparing 3D viewport…")
+    window = MainWindow(context)
+    _progress(app, startup, 94, "Finalizing workspace…")
+
     window.show()
+    app.processEvents()
+    startup.set_progress(100, "Ready")
+    startup.close()
     return app.exec()

@@ -7,7 +7,10 @@ from ..elements.base import ElementDefinition
 from .element_block import ElementBlock
 
 
-def definition_for(mesh, reference: EntityRef | str | None) -> ElementDefinition | None:
+def definition_for(
+    mesh,
+    reference: EntityRef | str | None,
+) -> ElementDefinition | None:
     """Resolve one block definition reference within a MeshState."""
     entity_id = (
         reference.entity_id
@@ -28,7 +31,7 @@ def replace_element_blocks(mesh, blocks: list[ElementBlock]) -> None:
     """Replace blocks and rebuild one canonical definition collection."""
     source_definitions = []
     for block in blocks:
-        definition = getattr(block, "_definition", None)
+        definition = block.definition
         if definition is None:
             definition = definition_for(mesh, block.definition_ref)
         if definition is None:
@@ -47,7 +50,11 @@ def replace_element_blocks(mesh, blocks: list[ElementBlock]) -> None:
 
     object.__setattr__(mesh, "element_definitions", canonical)
     object.__setattr__(mesh, "element_blocks", list(blocks))
-    for block, source in zip(mesh.element_blocks, source_definitions, strict=True):
+    for block, source in zip(
+        mesh.element_blocks,
+        source_definitions,
+        strict=True,
+    ):
         definition = by_key[definition_key(source)]
         _bind_block(mesh, block, definition)
     refresh_definition_counts(mesh)
@@ -63,7 +70,7 @@ def bind_element_blocks(mesh, register_missing: bool = True) -> None:
 
     for block in mesh.element_blocks:
         definition = by_id.get(block.definition_ref.entity_id)
-        runtime_definition = getattr(block, "_definition", None)
+        runtime_definition = block.definition
         if definition is None and runtime_definition is not None:
             if not register_missing:
                 raise ValueError(
@@ -73,7 +80,8 @@ def bind_element_blocks(mesh, register_missing: bool = True) -> None:
                 (
                     item
                     for item in definitions
-                    if definition_key(item) == definition_key(runtime_definition)
+                    if definition_key(item)
+                    == definition_key(runtime_definition)
                 ),
                 None,
             )
@@ -118,8 +126,12 @@ def definition_key(definition: ElementDefinition) -> tuple:
     )
 
 
-def _bind_block(mesh, block: ElementBlock, definition: ElementDefinition) -> None:
+def _bind_block(
+    mesh,
+    block: ElementBlock,
+    definition: ElementDefinition,
+) -> None:
     """Bind one block to a canonical definition already owned by the mesh."""
     block.definition_ref = EntityRef.of(definition, "ElementDefinition")
-    block._definition = definition
+    block.definition = definition
     block.bind_mesh(mesh)
