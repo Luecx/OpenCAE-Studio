@@ -72,13 +72,17 @@ class DeckTemplateEditor(QWidget):
         self.preview = QPlainTextEdit()
         self.preview.setReadOnly(True)
         self.preview.setMinimumHeight(170)
-        self.preview.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+        self.preview.setFont(
+            QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        )
         root.addWidget(self.preview, 2)
 
         self.template.textChanged.connect(self._template_changed)
-        self.enabled.toggled.connect(self.changed)
+        self.enabled.toggled.connect(self._template_changed)
         self.float_format.currentTextChanged.connect(self._template_changed)
-        self.fields.itemDoubleClicked.connect(lambda _item, _column: self.insert_selected_field())
+        self.fields.itemDoubleClicked.connect(
+            lambda _item, _column: self.insert_selected_field()
+        )
         self.insert_button.clicked.connect(self.insert_selected_field)
 
     def load_record(self, key: str, label: str, text: str | None = None) -> None:
@@ -132,7 +136,9 @@ class DeckTemplateEditor(QWidget):
         helper.setWordWrap(True)
         layout.addWidget(helper)
         self.template = QPlainTextEdit()
-        self.template.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+        self.template.setFont(
+            QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        )
         self.template.setTabChangesFocus(False)
         layout.addWidget(self.template, 1)
         return panel
@@ -181,4 +187,6 @@ class DeckTemplateEditor(QWidget):
         text = render_preview(self.template.toPlainText(), self._fields)
         if self._key.startswith("materials.") and self._key != "materials.header":
             text = "*MATERIAL, NAME=STEEL\n" + text
-        self.preview.setPlainText(text if self.enabled.isChecked() else "<record disabled>")
+        self.preview.setPlainText(
+            text if self.enabled.isChecked() else "<record disabled>"
+        )
