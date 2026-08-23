@@ -7,6 +7,10 @@ from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QComboBox
 
 from opencae.ui.core.theme import PALETTE
+from opencae.ui.templates.control_metrics import (
+    COMBO_POPUP_EXTRA_HEIGHT,
+    COMBO_POPUP_ROW_HEIGHT,
+)
 
 
 class ChevronComboBox(QComboBox):
@@ -26,33 +30,32 @@ class ChevronComboBox(QComboBox):
         """Open the popup and explicitly size it to its complete item list.
 
         Some Qt platform styles ignore ``maxVisibleItems`` for non-editable
-        combo boxes and create a one-row popup with scroll arrows.  Resizing the
-        actual popup view/container after Qt creates it makes the behavior
-        independent of that style hint.
+        combo boxes.  The popup is therefore resized after Qt creates its view,
+        using the same row-height token that the stylesheet uses for each item.
         """
         view = self.view()
         view.setMinimumHeight(0)
         view.setMaximumHeight(16_777_215)
+        view.setSpacing(0)
         self.setMaxVisibleItems(max(1, self.count()))
         super().showPopup()
 
-        # Qt may finish native popup geometry on the next event-loop turn, so
-        # fit it both now and once more after that geometry has settled.
+        # Native popup geometry may finish on the next event-loop turn. Fitting
+        # twice prevents a platform style from reintroducing its default height.
         self._fit_popup_to_contents()
         QTimer.singleShot(0, self._fit_popup_to_contents)
 
     def _fit_popup_to_contents(self) -> None:
-        """Resize the visible popup to all rows, bounded by available screen."""
+        """Resize the visible popup to complete rows without clipping its frame."""
         count = self.count()
         if count <= 0:
             return
 
         view = self.view()
-        fallback_row_height = max(self.fontMetrics().height() + 12, 28)
-        content_height = 2 * view.frameWidth()
+        content_height = 2 * view.frameWidth() + COMBO_POPUP_EXTRA_HEIGHT
         for row in range(count):
-            height = view.sizeHintForRow(row)
-            content_height += height if height > 0 else fallback_row_height
+            hinted = view.sizeHintForRow(row)
+            content_height += max(COMBO_POPUP_ROW_HEIGHT, hinted if hinted > 0 else 0)
 
         screen = self.screen()
         if screen is None:
@@ -79,6 +82,10 @@ class ChevronComboBox(QComboBox):
         popup = view.window()
         if popup is None or popup is self.window():
             return
+
+        # The popup frame/title chrome is outside the item view. Preserve it and
+        # add the view's reserved bottom breathing room so the final row border
+        # is never clipped by one or two pixels on native platform styles.
         chrome = max(0, popup.height() - view.height())
         popup_height = target_height + chrome
         popup.setMinimumHeight(popup_height)
