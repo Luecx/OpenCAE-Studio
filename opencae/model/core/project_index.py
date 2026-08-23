@@ -8,6 +8,7 @@ from typing import Any, Iterable
 from .entity import Entity
 from .persistent_model_field import is_persistent_model_field
 from .reference import EntityRef
+from .reference_type import matches_reference_type
 from .reference_use import ReferenceUse
 
 
@@ -41,8 +42,6 @@ class ProjectIndex:
         """Register one Entity and recursively traverse its owned values."""
         existing = self.by_id.get(entity.id)
         if existing is entity:
-            # An object alias is a relationship to the already indexed entity,
-            # not another ownership path to traverse recursively.
             return
         if existing is not None and existing is not entity:
             raise ValueError(
@@ -114,8 +113,6 @@ class ProjectIndex:
                     )
                 return
             if isinstance(value, Entity):
-                # Owned entities are scanned independently, otherwise their
-                # references would be attributed to the wrong source object.
                 return
             if not is_dataclass(value) and not isinstance(
                 value,
@@ -152,14 +149,28 @@ class ProjectIndex:
     def resolve(
         self,
         ref: EntityRef | str | None,
-        expected_type: type | tuple[type, ...] | None = None,
+        expected_type: type | tuple[type, ...] | str | None = None,
     ):
-        """Resolve a stable reference/ID and optionally enforce a Python type."""
+        """Resolve a stable reference/ID and enforce all declared type contracts."""
         entity_id = ref.entity_id if isinstance(ref, EntityRef) else str(ref or "")
         entity = self.by_id.get(entity_id)
         if entity is None:
             raise KeyError(f"Referenced entity '{entity_id}' does not exist")
-        if expected_type is not None and not isinstance(entity, expected_type):
+
+        if isinstance(ref, EntityRef) and ref.expected_type:
+            if not matches_reference_type(entity, ref.expected_type):
+                raise TypeError(
+                    f"Entity '{entity.name}' is {type(entity).__name__}, "
+                    f"expected {ref.expected_type}"
+                )
+
+        if isinstance(expected_type, str):
+            if not matches_reference_type(entity, expected_type):
+                raise TypeError(
+                    f"Entity '{entity.name}' is {type(entity).__name__}, "
+                    f"expected {expected_type}"
+                )
+        elif expected_type is not None and not isinstance(entity, expected_type):
             names = (
                 ", ".join(item.__name__ for item in expected_type)
                 if isinstance(expected_type, tuple)
@@ -174,7 +185,7 @@ class ProjectIndex:
     def try_resolve(
         self,
         ref: EntityRef | str | None,
-        expected_type: type | tuple[type, ...] | None = None,
+        expected_type: type | tuple[type, ...] | str | None = None,
     ):
         """Resolve a reference or return ``None`` for missing/wrong-type values."""
         try:
