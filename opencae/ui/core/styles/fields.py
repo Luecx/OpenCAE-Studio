@@ -1,4 +1,8 @@
+"""Styles editable fields and the shared primary-control geometry contract."""
+
+
 def css(p):
+    """Return QSS for text, numeric, combo and compact composite controls."""
     return f"""
     QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
         background: {p['window']};
@@ -23,6 +27,23 @@ def css(p):
         width: 0px;
         height: 0px;
         image: none;
+    }}
+
+    /* Primary controls use identical outer geometry regardless of Qt class.
+       Vertical padding is removed because the widget height itself is fixed by
+       ui.templates.control_metrics. */
+    QLineEdit[primaryControl="true"],
+    QComboBox[primaryControl="true"],
+    QSpinBox[primaryControl="true"],
+    QDoubleSpinBox[primaryControl="true"] {{
+        min-height: 0px;
+        padding-top: 0px;
+        padding-bottom: 0px;
+    }}
+    QPushButton[primaryControl="true"] {{
+        min-width: 0px;
+        min-height: 0px;
+        padding: 0px;
     }}
 
     QComboBox#ReferenceCombo, QLineEdit#CompositeFieldEdit {{
@@ -60,11 +81,38 @@ def css(p):
         selection-background-color: {p['accent_dim']};
         padding: 3px;
     }}
+
+    QWidget#NumericUnitInput {{
+        background: transparent;
+        border: none;
+    }}
+    QDoubleSpinBox#PrimaryNumeric,
+    QDoubleSpinBox#PrimaryNumericWithUnit {{
+        min-width: 0px;
+    }}
+    QDoubleSpinBox#PrimaryNumericWithUnit {{
+        border-top-right-radius: 0px;
+        border-bottom-right-radius: 0px;
+        border-right: 0px;
+    }}
+    QLabel#PrimaryUnitLabel {{
+        min-width: 54px;
+        padding: 0px 10px;
+        background: {p['panel_alt']};
+        color: {p['text']};
+        border: 1px solid {p['border_light']};
+        border-top-right-radius: 3px;
+        border-bottom-right-radius: 3px;
+    }}
+
     QPushButton#InlineAddButton {{
         min-width: 30px; max-width: 30px; min-height: 30px; max-height: 30px;
         padding: 0; font-size: 15px; font-weight: 700;
         color: {p['accent']}; background: {p['panel_alt']};
         border: 1px solid {p['border_light']}; border-radius: 3px;
+    }}
+    QPushButton#InlineAddButton[primaryControl="true"] {{
+        min-width: 0px; max-width: none; min-height: 0px; max-height: none;
     }}
     QPushButton#InlineAddButton:hover {{ border-color: {p['accent']}; background: {p['accent_dim']}; }}
     QLabel#MatrixHeader {{ color: {p['muted']}; font-size: 8pt; min-width: 22px; }}
