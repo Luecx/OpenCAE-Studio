@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
+    QFrame,
     QHBoxLayout,
     QLineEdit,
     QMessageBox,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -26,6 +29,7 @@ from opencae.ui.templates import (
 )
 
 from .profile_graph_editor import GraphProfileEditor
+from .profile_preview_widget import ProfilePreviewWidget
 from .profile_properties_panel import ProfilePropertiesPanel
 
 
@@ -92,11 +96,34 @@ class ProfileDialog(ApplyDialog):
         definition_layout.setSpacing(12)
         definition_layout.addWidget(SectionHeading("Profile Definition"))
 
+        self.preview = ProfilePreviewWidget(self.kind.currentText())
+        definition_layout.addWidget(self.preview)
+
         self.parameter_host = QWidget()
         self.parameter_layout = QVBoxLayout(self.parameter_host)
         self.parameter_layout.setContentsMargins(0, 0, 0, 0)
         self.parameter_layout.setSpacing(12)
-        definition_layout.addWidget(self.parameter_host, 1)
+
+        parameter_scroll = QScrollArea()
+        parameter_scroll.setObjectName("ProfileParametersScroll")
+        parameter_scroll.setWidgetResizable(True)
+        parameter_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        parameter_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        parameter_scroll.viewport().setObjectName("ProfileParametersViewport")
+        self.parameter_host.setObjectName("ProfileParametersContent")
+        # These three surfaces are structural only, so the dialog background
+        # must remain continuous around the actual editor controls.
+        parameter_scroll.setStyleSheet(
+            "QScrollArea#ProfileParametersScroll, "
+            "QWidget#ProfileParametersViewport, "
+            "QWidget#ProfileParametersContent {"
+            "background: transparent; border: none;"
+            "}"
+        )
+        parameter_scroll.setWidget(self.parameter_host)
+        definition_layout.addWidget(parameter_scroll, 1)
         body.addWidget(definition_panel, 1)
 
         # The divider communicates that the left side owns editable dimensions
@@ -141,7 +168,7 @@ class ProfileDialog(ApplyDialog):
                 current.get("nodes", "1,-20,0\n2,20,0"),
                 current.get("segments", "1,2,2.0"),
             )
-            editor.connect_changed(self._update_properties)
+            editor.connect_changed(self._refresh_profile_state)
             self._editors["graph"] = editor
             self.parameter_layout.addWidget(editor)
         else:
@@ -152,23 +179,26 @@ class ProfileDialog(ApplyDialog):
                     unit,
                     decimals=6,
                 )
-                editor.valueChanged.connect(self._update_properties)
+                editor.valueChanged.connect(self._refresh_profile_state)
                 self._editors[key] = editor
                 self.parameter_layout.addWidget(field_block(text, editor))
 
         self.parameter_layout.addStretch(1)
-        self._update_properties()
+        self._refresh_profile_state()
 
-    def _dimensions(self):
+    def _dimensions(self) -> dict:
         """Return the active profile dimension payload."""
         if "graph" in self._editors:
             return self._editors["graph"].values()
         return {key: editor.value() for key, editor in self._editors.items()}
 
-    def _update_properties(self, *_args) -> None:
-        """Recompute and refresh the read-only derived section properties."""
-        data = profile_properties(self.kind.currentText(), self._dimensions())
+    def _refresh_profile_state(self, *_args) -> None:
+        """Refresh derived properties and preview from one dimension snapshot."""
+        dimensions = self._dimensions()
+        profile_type = self.kind.currentText()
+        data = profile_properties(profile_type, dimensions)
         self.properties.set_properties(data)
+        self.preview.set_profile_state(profile_type, dimensions)
 
     def validate(self) -> bool:
         """Reject empty and duplicate profile names before committing."""
