@@ -1,3 +1,5 @@
+"""Builds standardized dialog shells and button boxes for OpenCAE UI forms."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -5,13 +7,15 @@ from dataclasses import dataclass
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QVBoxLayout
 
+from .label_role import LabelRole
 from .layouts import dialog_layout, form_layout
 from .primitives import label
-from .specs import LabelRole
 
 
 @dataclass(slots=True)
 class DialogScaffold:
+    """References the reusable root/form layouts created for one dialog."""
+
     root: QVBoxLayout
     form: QFormLayout
 
@@ -24,6 +28,7 @@ def scaffold_dialog(
     modal: bool = True,
     delete_on_close: bool = False,
 ) -> DialogScaffold:
+    """Configure a QDialog and return its canonical heading/form scaffold."""
     dialog.setWindowTitle(title)
     dialog.setModal(modal)
     dialog.setMinimumWidth(width)
@@ -44,6 +49,7 @@ def dialog_buttons(
     close_instead_of_cancel: bool = False,
     primary_apply: bool = False,
 ) -> QDialogButtonBox:
+    """Create the canonical OK/Cancel-or-Close dialog button box."""
     cancel = (
         QDialogButtonBox.StandardButton.Close
         if close_instead_of_cancel
@@ -54,6 +60,8 @@ def dialog_buttons(
         flags |= QDialogButtonBox.StandardButton.Apply
     buttons = QDialogButtonBox(flags)
 
+    # Styling the logical primary action here prevents every dialog from having
+    # to know stylesheet object names.
     primary = (
         buttons.button(QDialogButtonBox.StandardButton.Apply)
         if primary_apply and include_apply
@@ -65,6 +73,7 @@ def dialog_buttons(
 
 
 def apply_close_buttons() -> QDialogButtonBox:
+    """Create the canonical non-modal Apply/Close button box."""
     buttons = QDialogButtonBox(
         QDialogButtonBox.StandardButton.Apply
         | QDialogButtonBox.StandardButton.Close
