@@ -68,7 +68,6 @@ class DeckTemplateEditor(QWidget):
         self.float_format.currentTextChanged.connect(self._template_changed)
         self.repeat_rows.toggled.connect(self._template_changed)
         self.fields.itemDoubleClicked.connect(lambda _item, _column: self.insert_selected_field())
-        self.insert_button.clicked.connect(self.insert_selected_field)
 
     def load_record(self, key: str, label_text: str, text: str | None = None) -> None:
         """Load a record specification while optionally restoring session text."""
