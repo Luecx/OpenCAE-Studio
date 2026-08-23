@@ -3,7 +3,15 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QAbstractSpinBox, QComboBox, QDialog, QLineEdit, QMessageBox, QStackedWidget
+from PyQt6.QtWidgets import (
+    QAbstractSpinBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QLineEdit,
+    QMessageBox,
+    QStackedWidget,
+)
 
 from opencae.model.naming import is_unique
 from opencae.ui.core.widgets import ChevronComboBox
@@ -56,7 +64,9 @@ class DatumDialogBase(QDialog):
         layout.addWidget(self.stack, 1)
 
         buttons = apply_close_buttons()
-        buttons.button(buttons.StandardButton.Apply).clicked.connect(self._apply)
+        apply_button = buttons.button(QDialogButtonBox.StandardButton.Apply)
+        if apply_button is not None:
+            apply_button.clicked.connect(self._apply)
         buttons.rejected.connect(self.close)
         layout.addWidget(buttons)
 
