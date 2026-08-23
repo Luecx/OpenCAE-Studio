@@ -125,11 +125,8 @@ def css(p):
     }}
 
     /* Geometry comes exclusively from setFixedSize() in control_metrics.
-       Repeating width/height here makes Qt's stylesheet box model add the
-       1 px frame on top of that size on some platform styles, clipping the
-       lower rounded border. */
-    QToolButton#InlineAddButton,
-    QToolButton#InlinePickButton {{
+       Repeating dimensions in QSS can clip a one-pixel rounded border. */
+    QToolButton[inlineAction="true"] {{
         padding: 0px;
         margin: 0px;
         color: {p['accent']};
@@ -141,8 +138,7 @@ def css(p):
         font-size: 15px;
         font-weight: 600;
     }}
-    QToolButton#InlineAddButton:hover,
-    QToolButton#InlinePickButton:hover,
+    QToolButton[inlineAction="true"]:hover,
     QToolButton#InlinePickButton:checked {{
         border-color: {p['accent']};
         background: {p['accent_dim']};
