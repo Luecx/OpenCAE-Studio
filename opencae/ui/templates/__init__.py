@@ -1,4 +1,15 @@
-from .dialogs import DialogScaffold, apply_close_buttons, dialog_buttons, scaffold_dialog
+"""Curated public surface for reusable OpenCAE UI construction templates."""
+
+from .button_role import ButtonRole
+from .button_spec import ButtonSpec
+from .dialogs import (
+    DialogScaffold,
+    apply_close_buttons,
+    dialog_buttons,
+    scaffold_dialog,
+)
+from .label_role import LabelRole
+from .label_spec import LabelSpec
 from .layouts import (
     CONTROL_GROUP_SPACING,
     DIALOG_MARGINS,
@@ -12,8 +23,13 @@ from .layouts import (
     vertical_group,
 )
 from .menus import action_group_button
-from .primitives import action_button, button, label, ribbon_label, wrapped_ribbon_text
-from .specs import ButtonRole, ButtonSpec, LabelRole, LabelSpec
+from .primitives import (
+    action_button,
+    button,
+    label,
+    ribbon_label,
+    wrapped_ribbon_text,
+)
 from .tables import read_only_table
 
 __all__ = [
