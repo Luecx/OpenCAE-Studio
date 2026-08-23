@@ -36,7 +36,7 @@ def create_element(
 
     # A Node is a lightweight authored value rather than an Entity. Ownership is
     # therefore proven against the Part's node table instead of ProjectIndex.
-    owned = {node.id: node for node in part.mesh.node_objects()}
+    owned = {node.id: node for node in part.mesh.nodes}
     for node in node_values:
         if not isinstance(node, Node):
             raise TypeError(
