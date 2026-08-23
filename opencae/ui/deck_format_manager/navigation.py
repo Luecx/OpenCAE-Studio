@@ -14,9 +14,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.core.icon_factory import make_icon
 
 from .catalog import TREE_SPEC
+from .navigation_icons import deck_record_icon_kind
 
 
 _KEY_ROLE = int(Qt.ItemDataRole.UserRole)
@@ -36,7 +37,6 @@ class DeckFormatNavigation(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(8)
-
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search records…")
         self.search.setClearButtonEnabled(True)
@@ -132,31 +132,9 @@ class DeckFormatNavigation(QWidget):
         item.setData(0, _KEY_ROLE, node["key"])
         item.setData(0, _FIXED_ROLE, bool(node.get("fixed", False)))
         item.setData(0, _LABEL_ROLE, node["label"])
-        item.setIcon(0, make_icon(self._icon_kind(node["key"]), 18))
+        item.setIcon(0, make_icon(deck_record_icon_kind(node["key"]), 18))
         self._items[node["key"]] = item
         return item
-
-    @staticmethod
-    def _icon_kind(key: str) -> IconKind:
-        """Map editor record families onto the existing OpenCAE icon language."""
-        root = key.split(".", 1)[0]
-        return {
-            "general": IconKind.SETTINGS,
-            "mesh": IconKind.MESH,
-            "node_sets": IconKind.NODE_SET,
-            "element_sets": IconKind.ELEMENT_SET,
-            "surfaces": IconKind.SURFACE,
-            "materials": IconKind.MATERIAL,
-            "sections": IconKind.SECTION,
-            "profiles": IconKind.PROFILE,
-            "fields": IconKind.FIELD,
-            "coordinate_systems": IconKind.CSYS,
-            "reference_points": IconKind.RP,
-            "constraints": IconKind.CONSTRAINT,
-            "boundary_conditions": IconKind.SUPPORT,
-            "loads": IconKind.LOAD,
-            "analysis": IconKind.ANALYSIS,
-        }.get(root, IconKind.DECK)
 
     def _selection_changed(self, current, _previous) -> None:
         """Publish the semantic record selection and refresh movement states."""
@@ -232,7 +210,9 @@ class DeckFormatNavigation(QWidget):
             if parent is None:
                 index = self.tree.indexOfTopLevelItem(item)
                 if index > 0:
-                    up = not bool(self.tree.topLevelItem(index - 1).data(0, _FIXED_ROLE))
+                    up = not bool(
+                        self.tree.topLevelItem(index - 1).data(0, _FIXED_ROLE)
+                    )
                 down = index + 1 < self.tree.topLevelItemCount()
             else:
                 index = parent.indexOfChild(item)
