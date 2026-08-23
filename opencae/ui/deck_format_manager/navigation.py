@@ -11,12 +11,11 @@ from opencae.ui.templates import ButtonSpec, apply_primary_control_height, butto
 
 from .catalog import TREE_SPEC
 from .navigation_icons import deck_record_icon_kind
+from .navigation_tree import order_state, populate_tree, restore_order_state
 
 
 _KEY_ROLE = int(Qt.ItemDataRole.UserRole)
 _FIXED_ROLE = _KEY_ROLE + 1
-_LABEL_ROLE = _KEY_ROLE + 2
-_ROOT_KEY = "__root__"
 
 
 class DeckFormatNavigation(QWidget):
@@ -57,7 +56,7 @@ class DeckFormatNavigation(QWidget):
         root.addLayout(controls)
 
         self._items: dict[str, QTreeWidgetItem] = {}
-        self._populate()
+        populate_tree(self.tree, TREE_SPEC, self._create_item)
         self.search.textChanged.connect(self._apply_filter)
         self.tree.currentItemChanged.connect(self._selection_changed)
         self.tree.expandAll()
@@ -75,7 +74,7 @@ class DeckFormatNavigation(QWidget):
     def current_key(self) -> str:
         """Return the stable key for the current navigation item."""
         item = self.tree.currentItem()
-        return str(item.data(0, _KEY_ROLE)) if item is not None else ""
+        return self._key(item) if item is not None else ""
 
     def is_category(self, key: str) -> bool:
         """Return whether ``key`` currently has child records."""
@@ -92,31 +91,17 @@ class DeckFormatNavigation(QWidget):
         return [self.tree.topLevelItem(index).text(0) for index in range(self.tree.topLevelItemCount())]
 
     def child_labels(self, key: str) -> list[str]:
-        """Return child labels for one category in current order."""
+        """Return direct child labels for one category in current order."""
         item = self._items[key]
         return [item.child(index).text(0) for index in range(item.childCount())]
 
     def order_state(self) -> dict[str, tuple[str, ...]]:
-        """Return stable sibling-key ordering for the current tree."""
-        roots = [self.tree.topLevelItem(index) for index in range(self.tree.topLevelItemCount())]
-        state = {_ROOT_KEY: tuple(str(item.data(0, _KEY_ROLE)) for item in roots)}
-        for root in roots:
-            if root.childCount():
-                state[str(root.data(0, _KEY_ROLE))] = tuple(
-                    str(root.child(index).data(0, _KEY_ROLE))
-                    for index in range(root.childCount())
-                )
-        return state
+        """Return stable sibling-key ordering for every hierarchy level."""
+        return order_state(self.tree, self._key)
 
     def set_order_state(self, state: dict[str, tuple[str, ...]]) -> None:
         """Restore sibling ordering by stable record keys without emitting edits."""
-        self._reorder_top_level(state.get(_ROOT_KEY, ()))
-        for parent_key, keys in state.items():
-            if parent_key == _ROOT_KEY:
-                continue
-            parent = self._items.get(parent_key)
-            if parent is not None:
-                self._reorder_children(parent, keys)
+        restore_order_state(self.tree, self._items, state)
         self._refresh_move_buttons()
 
     def move_up(self) -> None:
@@ -129,35 +114,28 @@ class DeckFormatNavigation(QWidget):
 
     def _move_button(self, text, pixmap, callback):
         """Create a canonical primary-height navigation action."""
-        control = button(
-            ButtonSpec(text, icon=self.style().standardIcon(pixmap)),
-            clicked=callback,
-        )
+        control = button(ButtonSpec(text, icon=self.style().standardIcon(pixmap)), clicked=callback)
         return apply_primary_control_height(control)
-
-    def _populate(self) -> None:
-        """Populate the tree from the current editor catalog."""
-        for node in TREE_SPEC:
-            item = self._create_item(node)
-            self.tree.addTopLevelItem(item)
-            for child in node.get("children", ()):
-                item.addChild(self._create_item(child))
 
     def _create_item(self, node: dict) -> QTreeWidgetItem:
         """Create one tree item with stable metadata and a semantic icon."""
         item = QTreeWidgetItem((node["label"],))
         item.setData(0, _KEY_ROLE, node["key"])
         item.setData(0, _FIXED_ROLE, bool(node.get("fixed", False)))
-        item.setData(0, _LABEL_ROLE, node["label"])
         item.setIcon(0, make_icon(deck_record_icon_kind(node["key"]), 18))
         self._items[node["key"]] = item
         return item
+
+    @staticmethod
+    def _key(item: QTreeWidgetItem) -> str:
+        """Return one item's stable catalog key."""
+        return str(item.data(0, _KEY_ROLE))
 
     def _selection_changed(self, current, _previous) -> None:
         """Publish the semantic record selection and refresh movement states."""
         self._refresh_move_buttons()
         if current is not None:
-            self.current_changed.emit(str(current.data(0, _KEY_ROLE)), current.text(0))
+            self.current_changed.emit(self._key(current), current.text(0))
 
     def _move(self, direction: int) -> None:
         """Move the current item while keeping fixed siblings pinned."""
@@ -205,29 +183,8 @@ class DeckFormatNavigation(QWidget):
         self.move_up_button.setEnabled(up)
         self.move_down_button.setEnabled(down)
 
-    def _reorder_top_level(self, keys: tuple[str, ...]) -> None:
-        """Reorder existing top-level items according to ``keys``."""
-        for target, key in enumerate(keys):
-            item = self._items.get(key)
-            if item is None or item.parent() is not None:
-                continue
-            current = self.tree.indexOfTopLevelItem(item)
-            if current != target and current >= 0:
-                self.tree.insertTopLevelItem(target, self.tree.takeTopLevelItem(current))
-
-    def _reorder_children(self, parent: QTreeWidgetItem, keys: tuple[str, ...]) -> None:
-        """Reorder existing children of ``parent`` according to ``keys``."""
-        for target, key in enumerate(keys):
-            item = self._items.get(key)
-            if item is None or item.parent() is not parent:
-                continue
-            current = parent.indexOfChild(item)
-            if current != target and current >= 0:
-                parent.insertChild(target, parent.takeChild(current))
-        parent.setExpanded(True)
-
     def _apply_filter(self, text: str) -> None:
-        """Filter leaf labels while keeping matching parent context visible."""
+        """Filter descendants while keeping matching ancestor context visible."""
         needle = text.strip().casefold()
 
         def visit(item: QTreeWidgetItem) -> bool:
