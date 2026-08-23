@@ -45,8 +45,8 @@ def test_primary_dialog_controls_share_exact_height():
         app.processEvents()
 
 
-def test_reference_selector_uses_near_primary_sized_actions():
-    """Keep create/pick actions substantial while visually secondary to fields."""
+def test_reference_selector_actions_match_primary_control_height():
+    """Keep reference combo and inline create/pick actions exactly aligned."""
     app = QApplication.instance() or QApplication([])
     selector = ReferenceSelector(
         (("Steel", "steel"),),
@@ -57,13 +57,13 @@ def test_reference_selector_uses_near_primary_sized_actions():
     selector.show()
     app.processEvents()
     try:
+        assert INLINE_ACTION_SIZE == PRIMARY_CONTROL_HEIGHT
         assert selector.height() == PRIMARY_CONTROL_HEIGHT
         assert selector.combo.height() == PRIMARY_CONTROL_HEIGHT
-        assert INLINE_ACTION_SIZE == 36
-        assert selector.add_button.height() == INLINE_ACTION_SIZE
-        assert selector.add_button.width() == INLINE_ACTION_SIZE
-        assert selector.pick_button.height() == INLINE_ACTION_SIZE
-        assert selector.pick_button.width() == INLINE_ACTION_SIZE
+        assert selector.add_button.height() == PRIMARY_CONTROL_HEIGHT
+        assert selector.add_button.width() == PRIMARY_CONTROL_HEIGHT
+        assert selector.pick_button.height() == PRIMARY_CONTROL_HEIGHT
+        assert selector.pick_button.width() == PRIMARY_CONTROL_HEIGHT
     finally:
         selector.close()
         selector.deleteLater()
