@@ -1,4 +1,8 @@
+"""Return application button stylesheet fragments."""
+
+
 def css(p):
+    """Build shared QPushButton and QToolButton rules from the active palette."""
     return f"""
     QPushButton {{
         background: {p['panel_alt']};
@@ -51,7 +55,7 @@ def css(p):
         border-color: {p['accent']};
     }}
     QToolButton[ribbonButton="true"] {{
-        padding: 4px 3px 3px 3px;
+        padding: 2px 3px 1px 3px;
         color: {p['text']};
     }}
     QToolButton[ribbonButton="true"]:hover {{
