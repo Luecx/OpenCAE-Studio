@@ -20,7 +20,7 @@ def css(p):
     }}
 
     QScrollArea#MaterialDefinitionsScroll,
-    QScrollArea#MaterialDefinitionsScroll QWidget#qt_scrollarea_viewport,
+    QWidget#MaterialDefinitionsViewport,
     QWidget#MaterialDefinitionsContent,
     QWidget#MaterialFieldBlock {{
         background: transparent;
