@@ -9,7 +9,11 @@ from opencae.ui.templates import (
     COMBO_POPUP_ROW_HEIGHT,
     INLINE_ACTION_SIZE,
     PRIMARY_CONTROL_HEIGHT,
+    FieldLabel,
     NumericUnitInput,
+    ReadOnlyValue,
+    SectionHeading,
+    VerticalSeparator,
     apply_primary_control_height,
     field_block,
 )
@@ -26,8 +30,9 @@ def test_primary_dialog_controls_share_exact_height():
     combo.addItem("Option")
     integer = apply_primary_control_height(QSpinBox())
     numeric = NumericUnitInput(210000.0, "MPa")
+    readonly = ReadOnlyValue("210000", "MPa")
 
-    widgets = (line, combo, integer, numeric)
+    widgets = (line, combo, integer, numeric, readonly)
     for widget in widgets:
         widget.show()
     app.processEvents()
@@ -37,6 +42,9 @@ def test_primary_dialog_controls_share_exact_height():
         assert numeric.editor.height() == PRIMARY_CONTROL_HEIGHT
         assert numeric.unit_label is not None
         assert numeric.unit_label.height() == PRIMARY_CONTROL_HEIGHT
+        assert readonly.value_label.height() == PRIMARY_CONTROL_HEIGHT
+        assert readonly.unit_label is not None
+        assert readonly.unit_label.height() == PRIMARY_CONTROL_HEIGHT
     finally:
         for widget in widgets:
             widget.close()
@@ -97,14 +105,25 @@ def test_combo_popup_uses_tall_rows_and_bottom_reserve():
         app.processEvents()
 
 
-def test_field_block_places_label_above_control():
-    """Protect the vertical label hierarchy shared by resource dialogs."""
+def test_field_block_places_canonical_label_above_control():
+    """Protect the shared vertical field hierarchy and semantic label type."""
     app = QApplication.instance() or QApplication([])
     control = apply_primary_control_height(QLineEdit("Value"))
     block = field_block("Name", control)
     layout = block.layout()
     assert layout is not None
+    assert isinstance(layout.itemAt(0).widget(), FieldLabel)
     assert layout.itemAt(0).widget().text() == "Name"
     assert layout.itemAt(1).widget() is control
     block.deleteLater()
     app.processEvents()
+
+
+def test_editor_presentation_components_have_semantic_object_names():
+    """Keep reusable headings and separators independent of individual dialogs."""
+    heading = SectionHeading("Profile Properties")
+    separator = VerticalSeparator()
+    assert heading.objectName() == "EditorSectionHeading"
+    assert separator.objectName() == "EditorVerticalSeparator"
+    heading.deleteLater()
+    separator.deleteLater()
