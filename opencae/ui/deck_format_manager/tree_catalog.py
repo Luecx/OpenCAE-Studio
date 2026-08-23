@@ -1,6 +1,7 @@
-"""Define the editor hierarchy from current OpenCAE record families."""
+"""Define the FEMaster editor hierarchy from current OpenCAE record families."""
 
 from .element_type_catalog import element_tree_nodes
+from .profile_record_catalog import profile_tree_nodes
 
 
 TREE_SPEC = (
@@ -53,16 +54,23 @@ TREE_SPEC = (
     {
         "key": "profiles",
         "label": "Profiles",
-        "children": (
-            {"key": "profiles.rectangle", "label": "Rectangle"},
-            {"key": "profiles.box", "label": "Box"},
-            {"key": "profiles.pipe", "label": "Pipe"},
-            {"key": "profiles.i", "label": "I-Profile"},
-            {"key": "profiles.general", "label": "General Profile"},
-        ),
+        "children": profile_tree_nodes(),
     },
     {"key": "fields", "label": "Fields"},
-    {"key": "coordinate_systems", "label": "Coordinate Systems"},
+    {
+        "key": "coordinate_systems",
+        "label": "Coordinate Systems",
+        "children": (
+            {
+                "key": "coordinate_systems.rectangular",
+                "label": "Rectangular",
+            },
+            {
+                "key": "coordinate_systems.cylindrical",
+                "label": "Cylindrical",
+            },
+        ),
+    },
     {"key": "reference_points", "label": "Reference Points"},
     {
         "key": "constraints",
@@ -73,7 +81,6 @@ TREE_SPEC = (
             {"key": "constraints.tie", "label": "Tie"},
             {"key": "constraints.rigid", "label": "Rigid Body"},
             {"key": "constraints.equation", "label": "Equation"},
-            {"key": "constraints.mpc", "label": "MPC"},
         ),
     },
     {
