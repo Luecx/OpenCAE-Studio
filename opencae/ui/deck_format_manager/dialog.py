@@ -1,13 +1,26 @@
-"""Provides the integrated Input Deck Format Manager editor shell."""
+"""Provide the integrated Input Deck Format Manager editor shell."""
 
 from __future__ import annotations
 
 from copy import deepcopy
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QSplitter, QStackedWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QSplitter,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
-from opencae.ui.templates import LabelRole, SectionHeading, dialog_buttons, dialog_layout, label
+from opencae.ui.templates import (
+    LabelRole,
+    SectionHeading,
+    dialog_buttons,
+    dialog_layout,
+    label,
+)
 
 from .catalog import GLOBAL_PAGES
 from .global_settings import DeckGlobalSettings
@@ -17,7 +30,7 @@ from .template_editor import DeckTemplateEditor
 
 
 class DeckFormatManagerDialog(QDialog):
-    """Prototype profile editing while keeping built-in format profiles immutable."""
+    """Edit user deck profiles while keeping built-in format profiles immutable."""
 
     applied = pyqtSignal(str, str)
 
@@ -28,7 +41,7 @@ class DeckFormatManagerDialog(QDialog):
         self.resize(1450, 860)
         self.setMinimumSize(1120, 700)
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
-        self._session_templates: dict[str, dict[str, str]] = {}
+        self._session_records: dict[str, dict[str, dict[str, object]]] = {}
         self._session_orders: dict[str, dict[str, tuple[str, ...]]] = {}
         self._current_template_key = ""
         self._loading = False
@@ -60,13 +73,13 @@ class DeckFormatManagerDialog(QDialog):
         self._active_profile = self.profile_toolbar.profile_name()
         self.navigation.current_changed.connect(self._show_record)
         self.navigation.order_changed.connect(self._order_changed)
-        self.template_page.changed.connect(self._template_changed)
+        self.template_page.changed.connect(self._record_changed)
         self.profile_toolbar.save_requested.connect(self.apply_changes)
         self.profile_toolbar.selection_changed.connect(self._profile_changed)
         self.profile_toolbar.profile_copied.connect(self._profile_copied)
         self.profile_toolbar.profile_created.connect(self._profile_created)
         self.profile_toolbar.profile_deleted.connect(self._profile_deleted)
-        self.navigation.select_key("materials.isotropic_elastic")
+        self.navigation.select_key("materials.elastic.isotropic")
         self._apply_editability()
         self.setWindowModified(False)
 
@@ -78,7 +91,7 @@ class DeckFormatManagerDialog(QDialog):
         """Commit current user-profile state to the in-dialog session."""
         if not self.profile_toolbar.is_editable():
             return
-        self._store_current_template()
+        self._store_current_record()
         self._session_orders[self._active_profile] = self.navigation.order_state()
         self.setWindowModified(False)
         self.applied.emit(self.profile_toolbar.format_name(), self._active_profile)
@@ -108,13 +121,13 @@ class DeckFormatManagerDialog(QDialog):
         return area
 
     def _show_record(self, key: str, label_text: str) -> None:
-        """Switch the right page after preserving the current editable template."""
+        """Switch the right page after preserving the current editable record."""
         self._display_record(key, label_text, store_current=True)
 
     def _display_record(self, key: str, label_text: str, *, store_current: bool) -> None:
-        """Display settings, support information, categories, or one record template."""
+        """Display global settings, categories, or one normal record editor page."""
         if store_current:
-            self._store_current_template()
+            self._store_current_record()
         self.breadcrumb.setText(self._breadcrumb(label_text))
         self._current_template_key = ""
         if key in GLOBAL_PAGES:
@@ -124,32 +137,30 @@ class DeckFormatManagerDialog(QDialog):
         if self.navigation.is_category(key):
             self.overview_title.setText(label_text)
             self.overview_text.setText(
-                "Select a child record to edit its complete keyword/data template. "
+                "Select a child record to inspect its complete keyword/data template. "
                 "Use Move Up and Move Down on the left to control sibling output order."
             )
             self.stack.setCurrentWidget(self.overview_page)
             return
-        format_name = self.profile_toolbar.format_name()
-        if not self.navigation.is_supported(key, format_name):
-            self.overview_title.setText(f"{label_text} — Not Supported")
-            self.overview_text.setText(
-                f"{label_text} is part of the OpenCAE constraint model, but {format_name} "
-                "does not support this record. It remains visible so profile capability "
-                "differences are explicit instead of silently hiding model features."
-            )
-            self.stack.setCurrentWidget(self.overview_page)
-            return
+
         self._loading = True
         self._current_template_key = key
-        text = self._session_templates.get(self._active_profile, {}).get(key)
-        self.template_page.load_record(key, label_text, text)
+        state = self._session_records.get(self._active_profile, {}).get(key)
+        self.template_page.load_record(
+            key,
+            label_text,
+            state,
+            supported=self.navigation.is_supported(
+                key, self.profile_toolbar.format_name()
+            ),
+        )
         self._loading = False
         self.stack.setCurrentWidget(self.template_page)
 
     def _profile_changed(self) -> None:
         """Switch isolated editor/order state when the selected profile changes."""
         previous = self._active_profile
-        self._store_current_template(profile=previous)
+        self._store_current_record(profile=previous)
         if previous:
             self._session_orders[previous] = self.navigation.order_state()
         self._active_profile = self.profile_toolbar.profile_name()
@@ -159,29 +170,33 @@ class DeckFormatManagerDialog(QDialog):
         self._apply_editability()
         item = self.navigation.tree.currentItem()
         if item is not None:
-            self._display_record(self.navigation.current_key(), item.text(0), store_current=False)
+            self._display_record(
+                self.navigation.current_key(), item.text(0), store_current=False
+            )
         self.setWindowModified(False)
 
     def _profile_copied(self, source: str, target: str) -> None:
-        """Copy current template/order state when creating a profile copy."""
-        self._store_current_template(profile=source)
-        self._session_templates[target] = deepcopy(self._session_templates.get(source, {}))
+        """Copy current record/order state when creating a profile copy."""
+        self._store_current_record(profile=source)
+        self._session_records[target] = deepcopy(
+            self._session_records.get(source, {})
+        )
         self._session_orders[target] = deepcopy(
             self._session_orders.get(source, self.navigation.order_state())
         )
 
     def _profile_created(self, name: str, _format_name: str) -> None:
         """Initialize a new editable profile from default ordering and templates."""
-        self._session_templates[name] = {}
+        self._session_records[name] = {}
         self._session_orders[name] = deepcopy(self._default_order)
 
     def _profile_deleted(self, name: str) -> None:
         """Discard session state for a deleted user profile."""
-        self._session_templates.pop(name, None)
+        self._session_records.pop(name, None)
         self._session_orders.pop(name, None)
 
     def _apply_editability(self) -> None:
-        """Make built-in FEMaster/Abaqus profiles view-only throughout the editor."""
+        """Make built-in profiles view-only while custom profiles remain editable."""
         editable = self.profile_toolbar.is_editable()
         self.navigation.set_editable(editable)
         self.template_page.set_editable(editable)
@@ -199,26 +214,29 @@ class DeckFormatManagerDialog(QDialog):
             parent = parent.parent()
         return " > ".join(reversed(labels))
 
-    def _template_changed(self) -> None:
-        """Remember edits locally and mark the user profile dirty."""
-        if self._loading or not self._current_template_key or not self.profile_toolbar.is_editable():
+    def _record_changed(self) -> None:
+        """Remember all record controls locally and mark a user profile dirty."""
+        if (
+            self._loading
+            or not self._current_template_key
+            or not self.profile_toolbar.is_editable()
+        ):
             return
-        self._session_templates.setdefault(self._active_profile, {})[
+        self._session_records.setdefault(self._active_profile, {})[
             self._current_template_key
-        ] = self.template_page.template_text()
+        ] = self.template_page.record_state()
         self._mark_dirty()
 
-    def _store_current_template(self, *, profile: str | None = None) -> None:
-        """Retain the selected template for a user profile before navigation."""
+    def _store_current_record(self, *, profile: str | None = None) -> None:
+        """Retain the selected record state before navigation or profile changes."""
         target = profile or self._active_profile
         if not target or not self._current_template_key:
             return
-        # The two built-in profiles are never given mutable session overrides.
         if target in {"FEMaster", "Abaqus"}:
             return
-        self._session_templates.setdefault(target, {})[
+        self._session_records.setdefault(target, {})[
             self._current_template_key
-        ] = self.template_page.template_text()
+        ] = self.template_page.record_state()
 
     def _order_changed(self) -> None:
         """Store ordering only for editable user profiles."""

@@ -33,7 +33,6 @@ ELEMENT_TYPES: tuple[DeckElementType, ...] = (
         8,
     ),
     DeckElementType("c3d10", "Quadratic Tetrahedron — C3D10", "C3D10", 10),
-    DeckElementType("c3d13", "Quadratic Pyramid — C3D13", "C3D13", 13),
     DeckElementType("c3d15", "Quadratic Wedge — C3D15", "C3D15", 15),
     DeckElementType("c3d20", "Quadratic Hexahedron — C3D20", "C3D20", 20),
     DeckElementType(
@@ -51,6 +50,7 @@ def element_tree_nodes() -> tuple[dict, ...]:
         {
             "key": f"mesh.elements.{element.key}",
             "label": element.label,
+            "supported_formats": ("FEMaster",),
         }
         for element in ELEMENT_TYPES
     )
@@ -98,6 +98,7 @@ def element_template_specs() -> dict[str, dict]:
                     ),
                 },
             ),
+            "commands": ("ELEMENT",),
         }
         for element in ELEMENT_TYPES
     }

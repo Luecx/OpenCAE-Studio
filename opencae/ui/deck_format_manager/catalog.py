@@ -1,4 +1,4 @@
-"""Assemble the UI-only deck-format editor catalog and preview helpers."""
+"""Assemble the deck-format editor catalog and live-preview helpers."""
 
 from __future__ import annotations
 
@@ -16,16 +16,12 @@ GLOBAL_PAGES = {
 }
 
 
-def template_spec(key: str, label: str) -> dict:
-    """Return a representative template specification for one tree leaf."""
-    if key in TEMPLATE_SPECS:
+def template_spec(key: str, _label: str = "") -> dict:
+    """Return the explicit template specification for one concrete tree leaf."""
+    try:
         return TEMPLATE_SPECS[key]
-    field_name = label.lower().replace(" ", "_").replace("-", "_") + "_name"
-    return {
-        "template": f"*{label.upper().replace(' ', '')}, NAME={{{field_name}}}",
-        "fields": ((field_name, f"{label} name", label.upper().replace(" ", "_")),),
-        "loops": (),
-    }
+    except KeyError as exc:
+        raise KeyError(f"No deck template is registered for '{key}'") from exc
 
 
 def format_preview_value(value: object, float_format: str = ".6g") -> str:
@@ -36,7 +32,7 @@ def format_preview_value(value: object, float_format: str = ".6g") -> str:
 
 
 def formatted_spec(spec: dict, float_format: str = ".6g") -> dict:
-    """Return a preview-only copy with all numeric examples formatted consistently."""
+    """Return a preview-only copy with numeric examples formatted consistently."""
     result = deepcopy(spec)
     result["fields"] = tuple(
         (name, description, format_preview_value(example, float_format))
@@ -67,7 +63,7 @@ def render_preview(
     *,
     float_format: str = ".6g",
 ) -> str:
-    """Render a live prototype preview using the selected floating-point format."""
+    """Render a representative block using the selected floating-point format."""
     preview = formatted_spec(spec, float_format)
     values = {
         name: example

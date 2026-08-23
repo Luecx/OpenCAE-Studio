@@ -1,4 +1,4 @@
-"""Provide the record-level template and live-preview editor page."""
+"""Provide the record-level template, field browser and live-preview editor page."""
 
 from __future__ import annotations
 
@@ -40,11 +40,12 @@ class DeckTemplateEditor(QWidget):
     changed = pyqtSignal()
 
     def __init__(self, parent=None):
-        """Build the unified template editor, input browser, and output preview."""
+        """Build the unified template editor, input browser and output preview."""
         super().__init__(parent)
         self._key = ""
         self._spec: dict = {"fields": (), "loops": ()}
         self._editable = True
+        self._supported = True
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -77,29 +78,56 @@ class DeckTemplateEditor(QWidget):
             lambda _item, _column: self.insert_selected_field()
         )
 
-    def load_record(self, key: str, label_text: str, text: str | None = None) -> None:
-        """Load a record specification while optionally restoring session text."""
+    def load_record(
+        self,
+        key: str,
+        label_text: str,
+        state: dict | None = None,
+        *,
+        supported: bool = True,
+    ) -> None:
+        """Load one explicit record spec and optional profile-local editor state."""
         self._key = key
         self._spec = template_spec(key, label_text)
+        self._supported = bool(supported)
+        state = dict(state or {})
+
         self.template.blockSignals(True)
-        self.template.setPlainText(
-            text if text is not None else str(self._spec["template"])
-        )
-        self.template.blockSignals(False)
+        self.float_format.blockSignals(True)
+        self.enabled.blockSignals(True)
+        try:
+            self.template.setPlainText(str(state.get("template", self._spec["template"])))
+            self.float_format.setCurrentText(str(state.get("float_format", ".6g")))
+            default_enabled = bool(state.get("enabled", self._spec.get("enabled", True)))
+            self.enabled.setChecked(default_enabled and self._supported)
+        finally:
+            self.template.blockSignals(False)
+            self.float_format.blockSignals(False)
+            self.enabled.blockSignals(False)
+
         self._populate_fields()
         self._update_preview()
         self.set_editable(self._editable)
 
     def set_editable(self, editable: bool) -> None:
-        """Toggle record inputs while keeping help fields and preview readable."""
+        """Toggle profile editing while keeping unsupported records viewable."""
         self._editable = bool(editable)
+        can_edit_record = self._editable and self._supported
         for control in (
             self.enabled,
             self.float_format,
             self.template,
             self.insert_button,
         ):
-            control.setEnabled(self._editable)
+            control.setEnabled(can_edit_record)
+
+    def record_state(self) -> dict[str, object]:
+        """Return the complete profile-local state for the current record."""
+        return {
+            "template": self.template.toPlainText(),
+            "enabled": self.enabled.isChecked() and self._supported,
+            "float_format": self.float_format.currentText() or ".6g",
+        }
 
     def template_text(self) -> str:
         """Return the complete keyword-and-data template currently being edited."""
@@ -121,14 +149,14 @@ class DeckTemplateEditor(QWidget):
 
     def insert_field(self, name: str) -> None:
         """Insert one documented placeholder at the current template cursor."""
-        if not self._editable or name not in self.available_field_names():
+        if not self.template.isEnabled() or name not in self.available_field_names():
             return
         self._insert_text("{" + name + "}")
 
     def insert_selected_field(self) -> None:
         """Insert the selected placeholder or loop skeleton at the edit cursor."""
         item = self.fields.currentItem()
-        if item is None or not self._editable:
+        if item is None or not self.template.isEnabled():
             return
         insertion = item.data(0, _INSERT_ROLE)
         if insertion:
