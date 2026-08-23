@@ -158,7 +158,7 @@ def _owning_part(model: "Model", region: Region) -> Part:
 
 def _require_part_nodes(part: Part, nodes: tuple[Node, ...]) -> None:
     """Reject Node values that are not present in the Part mesh."""
-    owned = {node.id: node for node in part.mesh.node_objects()}
+    owned = {node.id: node for node in part.mesh.nodes}
     for node in nodes:
         if not isinstance(node, Node):
             raise TypeError(f"Expected Node, got {type(node).__name__}")
@@ -168,7 +168,7 @@ def _require_part_nodes(part: Part, nodes: tuple[Node, ...]) -> None:
 
 def _require_part_elements(part: Part, elements: tuple[Element, ...]) -> None:
     """Reject Element values that are not present in the Part mesh."""
-    owned = {element.id: element for element in part.mesh.element_objects()}
+    owned = {element.id: element for element in part.mesh.iter_elements()}
     for element in elements:
         if not isinstance(element, Element):
             raise TypeError(f"Expected Element, got {type(element).__name__}")
