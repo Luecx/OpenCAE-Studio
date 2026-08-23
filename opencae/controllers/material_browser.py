@@ -44,5 +44,6 @@ def add_material_from_browser(controller):
         "materials",
         material,
     )
-    controller.store.select(material)
-    return material
+    stored = controller.store.project.resolve(material.id)
+    controller.store.select(stored)
+    return stored

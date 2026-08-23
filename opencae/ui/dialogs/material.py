@@ -121,7 +121,6 @@ class MaterialDialog(ApplyDialog):
         return {
             "name": self.name.text().strip(),
             "behaviors": behaviors,
-            "fields": [],
             "properties": dict(getattr(self.material, "properties", {})),
             "density": 0.0,
             "youngs_modulus": 0.0,

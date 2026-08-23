@@ -54,20 +54,23 @@ class CoordinateSystemDialog(QDialog):
         )
 
         root.addWidget(SectionHeading("Coordinate System Definition"))
+        length_unit = units.symbol("length") if units is not None else ""
         self.origin = XYZPicker(
             allowed=_POINT_KINDS,
             value_kind="point",
-            suffix=units.symbol("length") if units is not None else "",
+            suffix=length_unit,
         )
         self.axis_1 = XYZPicker(
             (1.0, 0.0, 0.0),
             allowed=_DIRECTION_KINDS,
             value_kind="direction",
+            suffix=length_unit,
         )
         self.axis_2 = XYZPicker(
             (0.0, 1.0, 0.0),
             allowed=_DIRECTION_KINDS,
             value_kind="direction",
+            suffix=length_unit,
         )
         for widget in (self.origin, self.axis_1, self.axis_2):
             widget.pick_requested.connect(self.pick_requested)
@@ -76,7 +79,8 @@ class CoordinateSystemDialog(QDialog):
         root.addWidget(field_block("Origin", self.origin))
         self.axis_1_field = field_block("X direction", self.axis_1)
         self.axis_2_field = field_block("Y direction", self.axis_2)
-        root.addWidget(field_row(self.axis_1_field, self.axis_2_field))
+        root.addWidget(self.axis_1_field)
+        root.addWidget(self.axis_2_field)
         root.addStretch(1)
         self.kind.currentTextChanged.connect(self._update_labels)
 

@@ -63,7 +63,7 @@ def css(p):
     QDoubleSpinBox#XYZLast,
     QDoubleSpinBox#XYZLastWithUnit {{
         min-width: 0px;
-        padding: 5px 7px;
+        padding: 0px 7px;
         border-radius: 0px;
     }}
     QDoubleSpinBox#XYZFirst {{
@@ -133,7 +133,6 @@ def css(p):
         border-top-right-radius: 3px;
         border-bottom-right-radius: 3px;
     }}
-
     /* Geometry comes exclusively from setFixedSize() in control_metrics.
        Repeating dimensions in QSS can clip a one-pixel rounded border. */
     QToolButton[inlineAction="true"] {{

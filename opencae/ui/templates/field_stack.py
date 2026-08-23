@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from .field_block import FieldBlock, field_block
@@ -18,6 +19,7 @@ class FieldStack(QWidget):
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(spacing)
+        self._layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
     def addRow(self, label, control: QWidget | None = None) -> QWidget:
         """Append a labelled control or one standalone widget.

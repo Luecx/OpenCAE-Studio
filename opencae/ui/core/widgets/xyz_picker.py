@@ -14,7 +14,11 @@ from PyQt6.QtWidgets import (
 
 from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.theme import PALETTE
-from opencae.ui.templates import apply_inline_action_size, apply_primary_control_height
+from opencae.ui.templates import (
+    CONTROL_GROUP_SPACING,
+    apply_inline_action_size,
+    apply_primary_control_height,
+)
 
 
 class XYZPicker(QWidget):
@@ -48,7 +52,11 @@ class XYZPicker(QWidget):
 
         unit = str(suffix or "").strip()
         self.editors = []
-        segment_names = ("XYZFirst", "XYZMiddle", "XYZLastWithUnit" if unit else "XYZLast")
+        segment_names = (
+            "XYZFirst",
+            "XYZMiddle",
+            "XYZLastWithUnit" if unit else "XYZLast",
+        )
         for axis, value, object_name in zip("XYZ", values, segment_names):
             editor = QDoubleSpinBox()
             editor.setObjectName(object_name)
@@ -81,6 +89,7 @@ class XYZPicker(QWidget):
         apply_inline_action_size(self.pick_button)
         self.pick_button.toggled.connect(self._toggle_pick)
         self.pick_button.setEnabled(bool(self.allowed))
+        layout.addSpacing(CONTROL_GROUP_SPACING)
         layout.addWidget(self.pick_button)
 
         self.setFocusProxy(self.editors[0])

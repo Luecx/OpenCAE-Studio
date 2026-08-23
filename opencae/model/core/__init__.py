@@ -27,6 +27,7 @@ __all__ = [
     "ReferenceUse",
     "EntityRef",
     "as_entity_ref",
+    "cascade_entity_ids",
     "clone_entity_graph",
     "compatible_replacements",
     "delete_entity_graph",
@@ -37,6 +38,7 @@ __all__ = [
 ]
 
 from .reference_edit import (
+    cascade_entity_ids,
     clone_entity_graph,
     compatible_replacements,
     delete_entity_graph,

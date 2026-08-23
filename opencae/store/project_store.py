@@ -176,14 +176,17 @@ class ProjectStore(QObject):
         self.message.emit(description)
 
     def select(self, entity):
-        """Select a live Project Entity or a non-Entity UI selection value."""
+        """Select a Project Entity by stable ID or a non-Entity UI value."""
         if isinstance(entity, Entity):
-            if entity is not self.project and self.project.try_resolve(entity.id) is not entity:
+            live_entity = self.project.try_resolve(entity.id)
+            if live_entity is None:
                 raise ValueError(
                     f"{type(entity).__name__} '{entity.name}' does not belong "
                     "to this Project"
                 )
-            self._selection = EntityRef.of(entity)
+            # Commands replace the graph with a validated copy. The stable ID
+            # intentionally bridges objects held by controllers across that swap.
+            self._selection = EntityRef.of(live_entity)
         else:
             self._selection = entity
         self.selection_changed.emit(self.selection)

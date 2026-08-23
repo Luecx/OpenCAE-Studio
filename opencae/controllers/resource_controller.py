@@ -66,7 +66,7 @@ class ResourceController:
             values = dialog.values()
             if current: values["id"] = current.id
             value = Material(**values)
-            self._replace_or_append("materials", current, value, f"{'Edited' if current else 'Created'} material {value.name}")
+            value = self._replace_or_append("materials", current, value, f"{'Edited' if current else 'Created'} material {value.name}")
             state["existing"] = value
             self.store.select(value)
 
@@ -97,7 +97,7 @@ class ResourceController:
             values = dialog.values(); kind = values.pop("profile_type")
             if current: values["id"] = current.id
             value = create_profile(kind, **values)
-            self._replace_or_append("profiles", current, value, f"{'Edited' if current else 'Created'} profile {value.name}")
+            value = self._replace_or_append("profiles", current, value, f"{'Edited' if current else 'Created'} profile {value.name}")
             state["existing"] = value
             self.store.select(value)
 
@@ -128,7 +128,7 @@ class ResourceController:
             values = dialog.values(); kind = values.pop("section_type")
             if current: values["id"] = current.id
             value = create_section(kind, **values)
-            self._replace_or_append("sections", current, value, f"{'Edited' if current else 'Created'} section {value.name}")
+            value = self._replace_or_append("sections", current, value, f"{'Edited' if current else 'Created'} section {value.name}")
             state["existing"] = value
             self.store.select(value)
 
@@ -165,7 +165,7 @@ class ResourceController:
             values = dialog.values()
             if current: values["id"] = current.id
             value = FieldDefinition(**values)
-            self._replace_or_append("fields", current, value, f"{'Edited' if current else 'Created'} field {value.name}")
+            value = self._replace_or_append("fields", current, value, f"{'Edited' if current else 'Created'} field {value.name}")
             state["existing"] = value
             self.store.select(value)
 
@@ -193,3 +193,4 @@ class ResourceController:
             self.store.add_entity(description, project.id, attribute, new)
         else:
             self.store.replace_entity(description, project.id, attribute, new)
+        return self.store.project.resolve(new.id)

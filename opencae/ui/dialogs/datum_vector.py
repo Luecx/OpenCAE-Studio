@@ -1,3 +1,5 @@
+"""Provides the multi-method Datum Vector creation dialog."""
+
 import numpy as np
 
 from opencae.ui.core.widgets import XYZPicker
@@ -20,6 +22,7 @@ class DatumVectorDialog(DatumDialogBase):
     )
 
     def __init__(self, default_name, existing_names=(), coordinate_systems=(), parent=None, units=None):
+        """Build vector definition pages with pickable origins and directions."""
         super().__init__(
             "Create Datum Vector",
             self.METHODS,
@@ -37,6 +40,7 @@ class DatumVectorDialog(DatumDialogBase):
             (1.0, 0.0, 0.0),
             allowed=_DIRECTION_KINDS,
             value_kind="direction",
+            suffix=units.symbol("length") if units is not None else "",
         )
         self.add_page(
             page(
