@@ -23,6 +23,7 @@ from .dialogs import (
 from .field_block import FieldBlock, field_block
 from .field_label import FieldLabel
 from .field_row import field_row
+from .field_stack import FieldStack
 from .label_role import LabelRole
 from .label_spec import LabelSpec
 from .layouts import (
@@ -62,6 +63,7 @@ __all__ = [
     "DialogScaffold",
     "FieldBlock",
     "FieldLabel",
+    "FieldStack",
     "NumericUnitInput",
     "ReadOnlyValue",
     "SectionHeading",
