@@ -23,14 +23,22 @@ class FieldStack(QWidget):
         """Append a labelled control or one standalone widget.
 
         The method intentionally mirrors the small subset of QFormLayout used by
-        legacy OpenCAE dialog shells.  New code can therefore migrate to the
+        legacy OpenCAE dialog shells. New code can therefore migrate to the
         label-above hierarchy without every subclass needing a bespoke rewrite.
         """
         if control is None:
             widget = label
             self._layout.addWidget(widget)
             return widget
-        block = field_block(str(label), control)
+
+        label_text = label.text() if hasattr(label, "text") else str(label)
+        if not str(label_text).strip():
+            # Checkboxes and descriptive rows already carry their own caption;
+            # adding an empty FieldLabel would create unexplained vertical air.
+            self._layout.addWidget(control)
+            return control
+
+        block = field_block(str(label_text), control)
         self._blocks[control] = block
         self._layout.addWidget(block)
         return block
