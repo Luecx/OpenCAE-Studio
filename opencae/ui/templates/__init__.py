@@ -2,6 +2,9 @@
 
 from .button_role import ButtonRole
 from .button_spec import ButtonSpec
+from .check_grid import CheckGrid
+from .check_list import CheckList
+from .component_field import ComponentField
 from .control_metrics import (
     COMBO_POPUP_EXTRA_HEIGHT,
     COMBO_POPUP_ROW_HEIGHT,
@@ -17,7 +20,7 @@ from .dialogs import (
     dialog_buttons,
     scaffold_dialog,
 )
-from .field_block import field_block
+from .field_block import FieldBlock, field_block
 from .field_label import FieldLabel
 from .field_row import field_row
 from .label_role import LabelRole
@@ -51,9 +54,13 @@ from .vertical_separator import VerticalSeparator
 __all__ = [
     "ButtonRole",
     "ButtonSpec",
+    "CheckGrid",
+    "CheckList",
+    "ComponentField",
     "LabelRole",
     "LabelSpec",
     "DialogScaffold",
+    "FieldBlock",
     "FieldLabel",
     "NumericUnitInput",
     "ReadOnlyValue",
