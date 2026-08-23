@@ -27,7 +27,7 @@ class JobManager(QObject):
     """Qt orchestrator for Job selection, runners, progress, output, and monitors."""
 
     selection_changed = pyqtSignal(str)
-    output_changed = pyqtSignal(str, str)
+    output_appended = pyqtSignal(str, str)
     progress_changed = pyqtSignal(str, float, str)
     topology_frame = pyqtSignal(str, object, object, object, object)
 
@@ -62,10 +62,8 @@ class JobManager(QObject):
         if value is not None:
             self.store.select(value)
         self.selection_changed.emit(self.selected_job_id)
-        self.output_changed.emit(
-            self.selected_job_id,
-            self.output_for(self.selected_job_id),
-        )
+        # Selecting a row no longer owns any output presentation. Solver text is
+        # loaded only when a dedicated monitor is opened.
         self.parent.refresh_action_states()
 
     def _repair_selection(self, *_args) -> None:
@@ -181,7 +179,7 @@ class JobManager(QObject):
             monitor = AnalysisJobMonitor(self.store, job.id, self.parent)
 
         self.progress_changed.connect(monitor.set_progress)
-        self.output_changed.connect(monitor.set_output)
+        self.output_appended.connect(monitor.append_output)
         monitor.set_output(job.id, self.output_for(job.id))
         monitor.destroyed.connect(
             lambda _value=None, current=job.id: self._monitors.pop(current, None)
@@ -221,11 +219,13 @@ class JobManager(QObject):
         self.progress_changed.emit(job.id, 0.0, str(label))
 
     def _append_output(self, job_id, text) -> None:
-        """Persist solver output and publish it to any open monitor for that Job."""
-        value = self._output_store.append(str(job_id), str(text))
-        # Monitors can remain open while another Job is selected. Output events
-        # therefore identify their Job and must not be filtered by UI selection.
-        self.output_changed.emit(str(job_id), value)
+        """Persist one solver-output chunk and stream only that chunk to monitors."""
+        job_key = str(job_id)
+        addition = str(text)
+        self._output_store.append(job_key, addition)
+        # Monitors can remain open while another Job is selected, so each event
+        # carries its Job id and the monitor performs the final filtering.
+        self.output_appended.emit(job_key, addition)
 
     def _study_output(self, job_id, text) -> None:
         """Normalize line-oriented Study output before persistence."""
