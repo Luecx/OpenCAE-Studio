@@ -57,6 +57,7 @@ class A:
     ANALYSIS_EDIT = "analysis.edit"
     ANALYSIS_RUN = "analysis.run"
     SOLVER_SETTINGS = "analysis.solver_settings"
+    DECK_FORMAT_MANAGER = "solver.deck_format_manager"
     VALIDATE = "analysis.validate"
     PREVIEW_DECK = "analysis.preview_deck"
     WRITE_DECK = "analysis.write_deck"
