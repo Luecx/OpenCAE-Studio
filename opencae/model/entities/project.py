@@ -1,8 +1,8 @@
 """Defines the persistent root aggregate of one OpenCAE model.
 
-Project owns domain collections and reference navigation only. Graph-shape
-compatibility is delegated to ``project_migrations`` and solver export ordering
-to ``opencae.exporting``.
+Project owns the current domain graph and reference navigation. File-format
+versioning, migrations, and filesystem state are persistence/application
+responsibilities and are deliberately kept out of the aggregate.
 """
 
 from dataclasses import dataclass, field
@@ -16,7 +16,6 @@ from .fields import FieldDefinition
 from .jobs.job import Job
 from .jobs.result_set import ResultSet
 from .loads.base import Load
-from .optimization import TopologyOptimization
 from .parts.part import Part
 from .profiles.base import Profile
 from .resources.material import Material
@@ -28,12 +27,14 @@ from .supports.base import Support
 @register_model_type("project")
 @dataclass
 class Project(Entity):
-    """Persistent aggregate root for model definition, execution, and results."""
+    """Current OpenCAE model aggregate with one canonical owner per entity."""
 
-    schema_version: int = 21
     name: str = "Untitled"
     unit_system: str = "mm-N-s-°C"
-    path: Path | None = None
+    path: Path | None = field(
+        default=None,
+        metadata={"serialize": False},
+    )
     parts: list[Part] = field(default_factory=list)
     assembly: Assembly = field(
         default_factory=lambda: Assembly(name="Main Assembly")
@@ -47,12 +48,6 @@ class Project(Entity):
     steps: list[AnalysisStep] = field(default_factory=list)
     analyses: list[Analysis] = field(default_factory=list)
     studies: list[Study] = field(default_factory=list)
-    # Legacy import field. ``project_migrations`` aliases this to ``studies`` and
-    # serialization omits it so new files keep one canonical collection.
-    optimizations: list[TopologyOptimization] = field(
-        default_factory=list,
-        metadata={"serialize": False},
-    )
     jobs: list[Job] = field(default_factory=list)
     results: list[ResultSet] = field(default_factory=list)
     _index: ProjectIndex | None = field(
@@ -69,12 +64,7 @@ class Project(Entity):
     )
 
     def __post_init__(self) -> None:
-        """Normalize legacy graph shapes and build the identity/reference index."""
-        from .project_migrations import migrate_project_graph
-
-        # Direct Project construction is part of the Python model API, so graph
-        # compatibility must also hold outside file-loading code.
-        migrate_project_graph(self)
+        """Build the runtime identity/reference index for the current graph."""
         self.rebuild_index()
 
     @property
@@ -83,6 +73,10 @@ class Project(Entity):
         if self._index is None:
             self.rebuild_index()
         return self._index
+
+    def invalidate_index(self) -> None:
+        """Mark runtime identity/reference indexes stale after direct mutation."""
+        self._index = None
 
     def rebuild_index(self, strict: bool = False) -> ProjectIndex:
         """Rebuild entity identity/reverse references and validate the graph."""
@@ -97,7 +91,7 @@ class Project(Entity):
         return self._index
 
     def ensure_references(self, strict: bool = False) -> list[str]:
-        """Refresh reference diagnostics and optionally raise on invalid links."""
+        """Refresh reference diagnostics and optionally reject invalid links."""
         self.rebuild_index(strict)
         return list(self.reference_errors)
 
@@ -107,11 +101,18 @@ class Project(Entity):
 
     def try_resolve(self, ref, expected_type=None):
         """Resolve one reference or return ``None`` when it is unavailable."""
+        value = self.index.try_resolve(ref, expected_type)
+        if value is not None:
+            return value
+        # Direct list mutation can add a new entity without touching the cached
+        # index. A miss is therefore the one safe place to refresh lazily.
+        self.rebuild_index()
         return self.index.try_resolve(ref, expected_type)
 
     def references_to(self, entity_or_id):
         """Return reverse-reference uses targeting an entity object or ID."""
         entity_id = getattr(entity_or_id, "id", entity_or_id)
+        self.rebuild_index()
         return self.index.references_to(str(entity_id))
 
     def render_deck(
