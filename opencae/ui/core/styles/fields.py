@@ -1,6 +1,9 @@
 """Styles editable fields and the shared primary-control geometry contract."""
 
-from opencae.ui.templates.control_metrics import PRIMARY_CONTROL_HEIGHT
+from opencae.ui.templates.control_metrics import (
+    INLINE_ACTION_SIZE,
+    PRIMARY_CONTROL_HEIGHT,
+)
 
 
 def css(p):
@@ -49,9 +52,6 @@ def css(p):
         max-height: {PRIMARY_CONTROL_HEIGHT - 2}px;
         padding-top: 0px;
         padding-bottom: 0px;
-    }}
-    QPushButton[primaryControl="true"] {{
-        padding: 0px;
     }}
 
     QComboBox#ReferenceCombo, QLineEdit#CompositeFieldEdit {{
@@ -117,24 +117,25 @@ def css(p):
         border-bottom-right-radius: 3px;
     }}
 
-    QPushButton#InlineAddButton,
-    QPushButton#InlinePickButton {{
-        min-width: {PRIMARY_CONTROL_HEIGHT}px;
-        max-width: {PRIMARY_CONTROL_HEIGHT}px;
-        min-height: {PRIMARY_CONTROL_HEIGHT}px;
-        max-height: {PRIMARY_CONTROL_HEIGHT}px;
+    QToolButton#InlineAddButton,
+    QToolButton#InlinePickButton {{
+        min-width: {INLINE_ACTION_SIZE}px;
+        max-width: {INLINE_ACTION_SIZE}px;
+        min-height: {INLINE_ACTION_SIZE}px;
+        max-height: {INLINE_ACTION_SIZE}px;
         padding: 0px;
         color: {p['accent']};
         background: {p['panel_alt']};
         border: 1px solid {p['border_light']};
         border-radius: 3px;
     }}
-    QPushButton#InlineAddButton {{
-        font-size: 15px;
-        font-weight: 700;
+    QToolButton#InlineAddButton {{
+        font-size: 14px;
+        font-weight: 600;
     }}
-    QPushButton#InlineAddButton:hover,
-    QPushButton#InlinePickButton:hover {{
+    QToolButton#InlineAddButton:hover,
+    QToolButton#InlinePickButton:hover,
+    QToolButton#InlinePickButton:checked {{
         border-color: {p['accent']};
         background: {p['accent_dim']};
     }}
