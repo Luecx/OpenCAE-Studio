@@ -29,20 +29,18 @@ def css(p):
         image: none;
     }}
 
-    /* Primary controls use identical outer geometry regardless of Qt class.
-       Vertical padding is removed because the widget height itself is fixed by
-       ui.templates.control_metrics. */
+    /* The content box is 38px plus the 1px border on each side, yielding the
+       same 40px painted height for every primary Qt input class. */
     QLineEdit[primaryControl="true"],
     QComboBox[primaryControl="true"],
     QSpinBox[primaryControl="true"],
     QDoubleSpinBox[primaryControl="true"] {{
-        min-height: 0px;
+        min-height: 38px;
+        max-height: 38px;
         padding-top: 0px;
         padding-bottom: 0px;
     }}
     QPushButton[primaryControl="true"] {{
-        min-width: 0px;
-        min-height: 0px;
         padding: 0px;
     }}
 
