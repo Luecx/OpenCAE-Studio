@@ -1,21 +1,24 @@
-"""Live density and convergence window for a topology Study job."""
+"""Live density, convergence and solver-output window for a topology Study Job."""
 
 from pathlib import Path
 
 import numpy as np
 from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtWidgets import QDialog, QLabel, QProgressBar, QVBoxLayout
+from PyQt6.QtWidgets import QDialog, QLabel, QProgressBar, QSplitter, QVBoxLayout, QWidget
 
 from opencae.model.entities.optimization import OptimizationRun
 from opencae.optimization import build_mesh_index
+from opencae.ui.core.widgets import MonospaceOutputView
+from opencae.ui.templates import SectionHeading
 from opencae.ui.viewport.topology_overlay import TopologyDensityOverlay
 from opencae.ui.viewport.viewport_factory import create_viewport
 
 
 class TopologyJobMonitor(QDialog):
-    """Show only the latest topology state while preserving all frames on disk."""
+    """Show the latest topology frame, convergence state, and solver transcript."""
 
     def __init__(self, store, job_id, parent=None):
+        """Build a resizable visualization/output monitor for one Study Job."""
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.store = store
@@ -26,19 +29,38 @@ class TopologyJobMonitor(QDialog):
         self.setWindowTitle(
             f"Topology Monitor - {getattr(job, 'name', 'Job')}"
         )
-        self.resize(980, 720)
+        self.resize(980, 760)
+
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
         self.phase = QLabel(getattr(job, "progress_label", "Prepared"))
         self.metrics = QLabel("Waiting for the first optimization iteration")
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
-        self.viewport = create_viewport(store, self)
-        self.viewport.set_stage("STUDIES")
-        self.viewport.set_display_mode("mesh")
         layout.addWidget(self.phase)
         layout.addWidget(self.metrics)
         layout.addWidget(self.progress)
-        layout.addWidget(self.viewport, 1)
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        self.viewport = create_viewport(store, splitter)
+        self.viewport.set_stage("STUDIES")
+        self.viewport.set_display_mode("mesh")
+        splitter.addWidget(self.viewport)
+
+        output_host = QWidget(splitter)
+        output_layout = QVBoxLayout(output_host)
+        output_layout.setContentsMargins(0, 8, 0, 0)
+        output_layout.setSpacing(8)
+        output_layout.addWidget(SectionHeading("Solver Output"))
+        self.output = MonospaceOutputView(output_host)
+        output_layout.addWidget(self.output, 1)
+        splitter.addWidget(output_host)
+        splitter.setStretchFactor(0, 4)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([500, 170])
+        layout.addWidget(splitter, 1)
+
         self.viewport.request_refresh(fit=True)
         self.set_progress(
             self.job_id,
@@ -48,6 +70,7 @@ class TopologyJobMonitor(QDialog):
         QTimer.singleShot(0, self._restore_latest_frame)
 
     def set_progress(self, job_id, value, label):
+        """Apply a progress event only when it belongs to this monitor's Job."""
         if str(job_id) != self.job_id:
             return
         self.phase.setText(str(label))
@@ -55,7 +78,14 @@ class TopologyJobMonitor(QDialog):
             round(min(max(float(value), 0.0), 1.0) * 1000)
         )
 
+    def set_output(self, job_id, text):
+        """Replace the visible solver transcript for this monitor's Job."""
+        if str(job_id) != self.job_id:
+            return
+        self.output.set_output(text)
+
     def show_frame(self, job_id, run, iteration, mesh_index, density):
+        """Queue the newest topology frame and convergence metrics for display."""
         if str(job_id) != self.job_id:
             return
         constraints = ", ".join(
@@ -71,6 +101,7 @@ class TopologyJobMonitor(QDialog):
         QTimer.singleShot(0, self._present_pending)
 
     def _restore_latest_frame(self):
+        """Reload the latest persisted density frame when reopening a monitor."""
         run = next(
             (
                 value
@@ -107,6 +138,7 @@ class TopologyJobMonitor(QDialog):
         )
 
     def _present_pending(self):
+        """Present only the most recent queued topology density frame."""
         if self._pending is None:
             return
         run, iteration, mesh_index, density = self._pending
@@ -123,5 +155,6 @@ class TopologyJobMonitor(QDialog):
             self.phase.setText(f"Live visualization failed: {exc}")
 
     def closeEvent(self, event):
+        """Release monitor-owned topology actors before destroying the viewport."""
         self.overlay.clear(self.viewport)
         super().closeEvent(event)
