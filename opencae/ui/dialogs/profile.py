@@ -1,20 +1,30 @@
-"""Provides Create/Edit Profile dialogs with canonical control geometry."""
+"""Provides Create/Edit Profile with the shared label-above-control styling."""
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QMessageBox, QTableWidgetItem, QWidget
+from PyQt6.QtWidgets import (
+    QHBoxLayout,
+    QLineEdit,
+    QMessageBox,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
-from opencae.model.entities.profiles.calculations import profile_parameters, profile_properties
+from opencae.model.entities.profiles.calculations import (
+    profile_parameters,
+    profile_properties,
+)
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.widgets import ChevronComboBox
 from opencae.ui.templates import (
     NumericUnitInput,
     apply_primary_control_height,
     dialog_buttons,
-    form_layout,
+    field_block,
     read_only_table,
-    scaffold_dialog,
 )
+
 from .profile_graph_editor import GraphProfileEditor
 
 
@@ -43,7 +53,7 @@ _PROPERTY_QUANTITIES = {
 
 
 class ProfileDialog(ApplyDialog):
-    """Create or edit all profile types using one consistent control metric."""
+    """Create or edit a section profile using vertically labelled controls."""
 
     def __init__(
         self,
@@ -60,58 +70,72 @@ class ProfileDialog(ApplyDialog):
         self.existing_names = {name.casefold() for name in existing_names}
         self._editors = {}
 
-        title = "Edit Profile" if profile else "Create Profile"
-        scaffold = scaffold_dialog(self, title, width=880)
-        self.setMinimumHeight(520)
+        self.setWindowTitle("Edit Profile" if profile else "Create Profile")
+        self.setMinimumSize(880, 560)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 20, 24, 18)
+        root.setSpacing(16)
 
         self.name = QLineEdit(profile.name if profile else default_name)
         apply_primary_control_height(self.name)
+        root.addWidget(field_block("Name", self.name))
 
         self.kind = ChevronComboBox()
-        self.kind.addItems(PROFILE_TYPES)
-        self.kind.setCurrentText(profile.profile_type if profile else (initial_type or "Box"))
+        self.kind.setMinimumWidth(0)
         apply_primary_control_height(self.kind)
-
-        scaffold.form.addRow("Name", self.name)
-        scaffold.form.addRow("Profile type", self.kind)
+        self.kind.addItems(PROFILE_TYPES)
+        self.kind.setCurrentText(
+            profile.profile_type if profile else (initial_type or "Box")
+        )
+        root.addWidget(field_block("Profile type", self.kind))
 
         body = QHBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(16)
 
-        self.form_host = QWidget()
-        self.form = form_layout(self.form_host)
-        body.addWidget(self.form_host, 1)
+        self.parameter_host = QWidget()
+        self.parameter_layout = QVBoxLayout(self.parameter_host)
+        self.parameter_layout.setContentsMargins(0, 0, 0, 0)
+        self.parameter_layout.setSpacing(12)
+        body.addWidget(self.parameter_host, 1)
 
         self.properties = read_only_table(
             ("Property", "Value", "Unit"),
             stretch_columns=(0, 1),
         )
         body.addWidget(self.properties, 1)
-        scaffold.root.addLayout(body, 1)
+        root.addLayout(body, 1)
 
         buttons = dialog_buttons(include_apply=True)
         self.bind_buttons(buttons, True)
-        scaffold.root.addWidget(buttons)
+        root.addWidget(buttons)
 
         self.kind.currentTextChanged.connect(self._rebuild)
         self._rebuild()
 
-    def _symbol(self, quantity):
-        """Return the current project symbol for a physical quantity."""
-        return self.units.symbol(quantity) if self.units is not None else ""
+    def _symbol(self, quantity: str | None) -> str:
+        """Return the active project symbol for one physical quantity."""
+        return self.units.symbol(quantity) if quantity and self.units is not None else ""
 
-    def _rebuild(self):
-        """Rebuild the parameter editor for the selected profile type."""
-        while self.form.rowCount():
-            self.form.removeRow(0)
+    def _clear_parameters(self) -> None:
+        """Remove controls belonging to the previously selected profile type."""
+        while self.parameter_layout.count():
+            item = self.parameter_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def _rebuild(self, *_args) -> None:
+        """Rebuild profile-specific inputs below the profile-type selector."""
+        self._clear_parameters()
         self._editors = {}
-
         current = (
             self.profile.dimensions
             if self.profile and self.kind.currentText() == self.profile.profile_type
             else {}
         )
+
         if self.kind.currentText() == "Graph profile":
             editor = GraphProfileEditor(
                 current.get("nodes", "1,-20,0\n2,20,0"),
@@ -119,43 +143,41 @@ class ProfileDialog(ApplyDialog):
             )
             editor.connect_changed(self._update_properties)
             self._editors["graph"] = editor
-            self.form.addRow(editor)
+            self.parameter_layout.addWidget(editor)
         else:
             unit = self._symbol("length")
             for key, text, default in profile_parameters(self.kind.currentText()):
-                # Profile dimensions use the same segmented numeric control as
-                # Materials, so adding or removing a unit never changes height.
                 editor = NumericUnitInput(
-                    value=float(current.get(key, default)),
-                    unit=unit,
-                    minimum=-1e30,
-                    maximum=1e30,
+                    float(current.get(key, default)),
+                    unit,
                     decimals=6,
                 )
                 editor.valueChanged.connect(self._update_properties)
                 self._editors[key] = editor
-                self.form.addRow(text, editor)
+                self.parameter_layout.addWidget(field_block(text, editor))
+
+        self.parameter_layout.addStretch(1)
         self._update_properties()
 
     def _dimensions(self):
-        """Return dimensions in the representation expected by profile models."""
+        """Return the active profile dimension payload."""
         if "graph" in self._editors:
             return self._editors["graph"].values()
         return {key: editor.value() for key, editor in self._editors.items()}
 
-    def _update_properties(self, *_args):
-        """Recalculate and display the derived geometric profile properties."""
+    def _update_properties(self, *_args) -> None:
+        """Recompute read-only section properties after an input change."""
         data = profile_properties(self.kind.currentText(), self._dimensions())
         self.properties.setRowCount(len(data))
         for row, (name, value) in enumerate(data.items()):
             quantity = _PROPERTY_QUANTITIES.get(name)
-            unit = self._symbol(quantity) if quantity else ""
+            unit = self._symbol(quantity)
             self.properties.setItem(row, 0, QTableWidgetItem(name))
             self.properties.setItem(row, 1, QTableWidgetItem(f"{value:.8g}"))
             self.properties.setItem(row, 2, QTableWidgetItem(unit))
 
-    def validate(self):
-        """Reject empty or duplicate profile names before committing."""
+    def validate(self) -> bool:
+        """Reject empty and duplicate profile names before committing."""
         name = self.name.text().strip()
         if not name:
             QMessageBox.warning(self, "Invalid profile", "Enter a profile name.")
@@ -171,16 +193,16 @@ class ProfileDialog(ApplyDialog):
             return False
         return True
 
-    def values(self):
-        """Return values consumed by the profile factory."""
+    def values(self) -> dict:
+        """Return constructor values for the current profile."""
         return {
             "name": self.name.text().strip(),
             "profile_type": self.kind.currentText(),
             "dimensions": self._dimensions(),
         }
 
-    def prepare_new(self, default_name, existing_names):
-        """Reset name state when Apply keeps a create dialog open."""
+    def prepare_new(self, default_name, existing_names) -> None:
+        """Reset the reusable dialog after Apply creates a profile."""
         self.profile = None
         self.existing_names = {name.casefold() for name in existing_names}
         self.name.setText(default_name)
