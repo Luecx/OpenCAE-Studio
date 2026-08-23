@@ -132,7 +132,7 @@ def css(p):
     }}
     QLabel#MaterialPropertyUnit {{
         min-width: 54px;
-        min-height: 22px;
+        min-height: 28px;
         padding: 5px 10px;
         background: {p['panel_alt']};
         color: {p['text']};
