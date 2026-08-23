@@ -1,63 +1,15 @@
-"""Repairs and validates stable references in a persistent Project graph."""
+"""Validates stable references in the current persistent Project graph."""
 
 from __future__ import annotations
 
-from dataclasses import fields, is_dataclass, replace
+from dataclasses import fields, is_dataclass
 from typing import Any
 
 from .entity import Entity
 from .persistent_model_field import is_persistent_model_field
 from .project_index import ProjectIndex
 from .reference import EntityRef
-
-
-def repair_project_references(project) -> list[str]:
-    """Resolve legacy name references exactly once after loading/migration.
-
-    Runtime validation never calls this function and therefore never mutates the
-    model. Ambiguous names are reported instead of guessed.
-    """
-    index = ProjectIndex(project)
-    errors: list[str] = []
-
-    def bind(ref: EntityRef, path: str) -> EntityRef:
-        if ref.entity_id: return ref
-        if not ref.legacy_name: return ref
-        candidates = [entity for entity in index.by_id.values() if entity.name.casefold() == ref.legacy_name.casefold() and _expected(entity, ref.expected_type)]
-        if len(candidates) == 1: return EntityRef.of(candidates[0], ref.expected_type or type(candidates[0]).__name__)
-        if not candidates: errors.append(f"{path}: '{ref.legacy_name}' was not found")
-        else: errors.append(f"{path}: '{ref.legacy_name}' is ambiguous ({len(candidates)} matches)")
-        return ref
-
-    def rewrite(value: Any, path: str):
-        if isinstance(value, EntityRef): return bind(value, path)
-        if isinstance(value, Entity):
-            for info in fields(value):
-                if not is_persistent_model_field(info):
-                    continue
-                current = getattr(value, info.name)
-                updated = rewrite(current, f"{path}.{info.name}")
-                if updated is not current: setattr(value, info.name, updated)
-            return value
-        if is_dataclass(value):
-            changes = {}
-            for info in fields(value):
-                if not is_persistent_model_field(info):
-                    continue
-                current = getattr(value, info.name)
-                updated = rewrite(current, f"{path}.{info.name}")
-                if updated is not current: changes[info.name] = updated
-            return replace(value, **changes) if changes else value
-        if isinstance(value, list):
-            return [rewrite(item, f"{path}[{index}]") for index, item in enumerate(value)]
-        if isinstance(value, tuple):
-            return tuple(rewrite(item, f"{path}[{index}]") for index, item in enumerate(value))
-        if isinstance(value, dict):
-            return {key: rewrite(item, f"{path}[{key!r}]") for key, item in value.items()}
-        return value
-
-    rewrite(project, "project")
-    return errors
+from .reference_type import matches_reference_type
 
 
 def validate_project_references(
@@ -65,21 +17,32 @@ def validate_project_references(
     index: ProjectIndex | None = None,
     strict: bool = False,
 ) -> list[str]:
-    """Return diagnostics for unresolved or type-incompatible references."""
+    """Return diagnostics for unresolved or type-incompatible references.
+
+    Validation is read-only and traverses persistent fields only. Legacy name
+    binding is intentionally unsupported in the development file format.
+    """
     index = index or ProjectIndex(project)
     errors: list[str] = []
     active_values: set[int] = set()
 
-    def walk(value: Any, path: str):
+    def walk(value: Any, path: str) -> None:
         """Visit persistent values once per active recursion path."""
         if isinstance(value, EntityRef):
             if not value.entity_id:
-                if value.legacy_name: errors.append(f"{path}: unresolved legacy reference '{value.legacy_name}'")
                 return
             entity = index.by_id.get(value.entity_id)
-            if entity is None: errors.append(f"{path}: entity '{value.entity_id}' does not exist")
-            elif not _expected(entity, value.expected_type): errors.append(f"{path}: {type(entity).__name__} is not {value.expected_type}")
+            if entity is None:
+                errors.append(
+                    f"{path}: entity '{value.entity_id}' does not exist"
+                )
+            elif not matches_reference_type(entity, value.expected_type):
+                errors.append(
+                    f"{path}: {type(entity).__name__} is not "
+                    f"{value.expected_type}"
+                )
             return
+
         if not isinstance(value, Entity) and not is_dataclass(value) and not isinstance(
             value,
             (list, tuple, dict),
@@ -109,25 +72,33 @@ def validate_project_references(
 
     walk(project, "project")
     errors.extend(_validate_region_consumers(project))
-    if strict and errors: raise ValueError("Invalid model references:\n- " + "\n- ".join(errors))
+    if strict and errors:
+        raise ValueError("Invalid model references:\n- " + "\n- ".join(errors))
     return errors
 
 
-def bind_project_references(project, index=None, strict=False):
-    """Compatibility alias; binding no longer occurs during normal mutations."""
-    return validate_project_references(project, index, strict)
-
-
-def _validate_region_consumers(project):
-    from opencae.model.entities.constraints import ConstraintType, constraint_region_requirement
+def _validate_region_consumers(project) -> list[str]:
+    """Validate region-valued relationships with their consumer requirements."""
+    from opencae.model.entities.constraints import (
+        ConstraintType,
+        constraint_region_requirement,
+    )
     from opencae.model.entities.loads import TemperatureLoad, load_region_requirement
     from opencae.model.entities.supports import SUPPORT_REGION_REQUIREMENT
-    from opencae.model.selection import RegionProjection, RegionRequirement, validate_region_definition
-    errors = []
+    from opencae.model.selection import (
+        RegionProjection,
+        RegionRequirement,
+        validate_region_definition,
+    )
+
+    errors: list[str] = []
 
     def check(owner, definition, requirement, *, allow_part_local=False):
         diagnostics = validate_region_definition(
-            project, definition, requirement, allow_part_local=allow_part_local
+            project,
+            definition,
+            requirement,
+            allow_part_local=allow_part_local,
         )
         errors.extend(
             f"{type(owner).__name__} {owner.name}: {item.message}"
@@ -144,38 +115,58 @@ def _validate_region_consumers(project):
     for part in project.parts:
         for assignment in part.section_assignments:
             check(
-                assignment, assignment.target,
+                assignment,
+                assignment.target,
                 RegionRequirement(RegionProjection.ELEMENTS, (1, 2, 3), 1),
                 allow_part_local=True,
             )
         from opencae.model.selection import local_element_ids, local_geometry_tags
+
         for seed in part.mesh.seeds:
-            if getattr(seed, "seed_type", "") != "Edge": continue
+            if getattr(seed, "seed_type", "") != "Edge":
+                continue
             if not local_geometry_tags(part, seed.target, 1):
-                errors.append(f"{type(seed).__name__} {seed.name}: target contains no edges")
+                errors.append(
+                    f"{type(seed).__name__} {seed.name}: target contains no edges"
+                )
         for control in part.mesh.element_controls:
             if not control.target.empty and not local_element_ids(part, control.target):
-                errors.append(f"{type(control).__name__} {control.name}: target contains no elements")
+                errors.append(
+                    f"{type(control).__name__} {control.name}: target contains no elements"
+                )
     for constraint in project.assembly.constraints:
         kind = ConstraintType.coerce(constraint.constraint_type)
         if kind in {ConstraintType.KINEMATIC, ConstraintType.DISTRIBUTING}:
-            check(constraint, constraint.control_point, constraint_region_requirement(kind, "master"))
-            check(constraint, constraint.slave, constraint_region_requirement(kind, "slave"))
+            check(
+                constraint,
+                constraint.control_point,
+                constraint_region_requirement(kind, "master"),
+            )
+            check(
+                constraint,
+                constraint.slave,
+                constraint_region_requirement(kind, "slave"),
+            )
         elif kind == ConstraintType.TIE:
-            check(constraint, constraint.master, constraint_region_requirement(kind, "master"))
-            check(constraint, constraint.slave, constraint_region_requirement(kind, "slave"))
+            check(
+                constraint,
+                constraint.master,
+                constraint_region_requirement(kind, "master"),
+            )
+            check(
+                constraint,
+                constraint.slave,
+                constraint_region_requirement(kind, "slave"),
+            )
         elif kind == ConstraintType.RIGID_BODY:
-            check(constraint, constraint.reference, constraint_region_requirement(kind, "master"))
-            check(constraint, constraint.body, constraint_region_requirement(kind, "slave"))
+            check(
+                constraint,
+                constraint.reference,
+                constraint_region_requirement(kind, "master"),
+            )
+            check(
+                constraint,
+                constraint.body,
+                constraint_region_requirement(kind, "slave"),
+            )
     return errors
-
-
-def _expected(entity, expected_type: str) -> bool:
-    if not expected_type: return True
-    expected = expected_type.casefold().replace(" ", "")
-    names = {cls.__name__.casefold().replace(" ", "") for cls in type(entity).mro()}
-    if expected in names: return True
-    if expected in {"nodeset", "elementset", "surface", "region"}:
-        from opencae.model.entities.regions import Region
-        return isinstance(entity, Region)
-    return False
