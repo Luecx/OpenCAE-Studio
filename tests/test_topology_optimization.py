@@ -154,9 +154,9 @@ def test_topology_model_roundtrip_preserves_separate_radii():
     optimization.filter_settings.density_constraint_radius.factor = 2.25
     optimization.filter_settings.sensitivity_radius.factor = 5.5
     decoded = decode_model(
-        encode_model(Project(name="P", optimizations=[optimization]))
+        encode_model(Project(name="P", studies=[optimization]))
     )
-    restored = decoded.optimizations[0].filter_settings
+    restored = decoded.studies[0].filter_settings
     assert restored.density_constraint_radius.factor == 2.25
     assert restored.sensitivity_radius.factor == 5.5
 
@@ -208,7 +208,7 @@ def test_topology_deck_uses_native_femaster_topology_loadcase(
             )
         ],
     )
-    project.optimizations.append(optimization)
+    project.studies.append(optimization)
     project.rebuild_index()
     index = build_mesh_index(project)
     deck = render_topology_deck(
