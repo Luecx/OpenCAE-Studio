@@ -17,6 +17,12 @@ def specs(c):
         ActionSpec(A.ANALYSIS_NEW, "New Analysis", I.NEW_ANALYSIS, c.analysis.new_analysis),
         ActionSpec(A.ANALYSIS_EDIT, "Edit Analysis", I.EDIT, c.analysis.edit_active_analysis),
         ActionSpec(A.SOLVER_SETTINGS, "Solver Settings", I.SETTINGS, c.analysis.settings_dialog),
+        ActionSpec(
+            A.DECK_FORMAT_MANAGER,
+            "Input Deck Formats…",
+            I.DECK,
+            c.solver.format_manager,
+        ),
         ActionSpec(A.VALIDATE, "Validate", I.VALIDATE, c.analysis.validate_active, "F7"),
         ActionSpec(A.PREVIEW_DECK, "Preview Deck", I.PREVIEW_DECK, c.solver.preview),
         ActionSpec(A.WRITE_DECK, "Write Deck", I.WRITE_DECK, c.solver.write),
