@@ -112,7 +112,7 @@ def css(p):
         border: 1px solid {p['border_light']}; border-radius: 3px;
     }}
     QPushButton#InlineAddButton[primaryControl="true"] {{
-        min-width: 0px; max-width: none; min-height: 0px; max-height: none;
+        min-width: 40px; max-width: 40px; min-height: 40px; max-height: 40px;
     }}
     QPushButton#InlineAddButton:hover {{ border-color: {p['accent']}; background: {p['accent_dim']}; }}
     QLabel#MatrixHeader {{ color: {p['muted']}; font-size: 8pt; min-width: 22px; }}
