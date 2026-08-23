@@ -1,118 +1,190 @@
-"""Provides the format/profile management toolbar for the editor prototype."""
+"""Provides the profile-management toolbar for the deck-format editor."""
 
 from __future__ import annotations
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import (
-    QComboBox,
-    QHBoxLayout,
-    QInputDialog,
-    QLabel,
-    QPushButton,
-    QWidget,
-)
+from PyQt6.QtWidgets import QHBoxLayout, QInputDialog, QWidget
 
+from opencae.ui.core.fields import FieldSpec, create_editor
 from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.core.widgets import ChevronComboBox
+from opencae.ui.templates import (
+    ButtonRole,
+    ButtonSpec,
+    apply_primary_control_height,
+    button,
+    label,
+)
 
 
 class DeckProfileToolbar(QWidget):
-    """Manage temporary format/profile selections above the deck editor."""
+    """Select built-in/user profiles and manage session-only user copies."""
 
     save_requested = pyqtSignal()
     selection_changed = pyqtSignal()
+    profile_copied = pyqtSignal(str, str)
+    profile_created = pyqtSignal(str, str)
+    profile_deleted = pyqtSignal(str)
 
     def __init__(self, parent=None):
-        """Build built-in format/profile selectors and management actions."""
+        """Build one canonical profile selector plus same-height action buttons."""
         super().__init__(parent)
-        self._profiles = {
-            "FEMaster": ["FEMaster - Default", "FEMaster - Custom"],
-            "Abaqus": ["Abaqus - Default"],
+        self._profile_meta: dict[str, tuple[str, bool]] = {
+            "FEMaster": ("FEMaster", True),
+            "Abaqus": ("Abaqus", True),
         }
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        layout.addWidget(QLabel("Built-in Format:"))
-        self.format_combo = QComboBox()
-        self.format_combo.addItems(tuple(self._profiles))
-        self.format_combo.setMinimumWidth(190)
-        layout.addWidget(self.format_combo)
-        layout.addSpacing(12)
-        layout.addWidget(QLabel("Profile:"))
-        self.profile_combo = QComboBox()
-        self.profile_combo.setMinimumWidth(260)
+        layout.addWidget(label("Profile:"))
+
+        profile = create_editor(
+            FieldSpec(
+                "profile",
+                "Profile",
+                kind="choice",
+                choices=tuple(self._profile_meta),
+                default="FEMaster",
+            )
+        )
+        if not isinstance(profile, ChevronComboBox):
+            raise TypeError("Deck profile selector must use ChevronComboBox")
+        self.profile_combo = profile
+        self.profile_combo.setMinimumWidth(340)
         layout.addWidget(self.profile_combo, 1)
 
-        for button in (
-            self._button("New Profile", IconKind.FILE, self._new_profile),
-            self._button("Copy", IconKind.DUPLICATE, self._copy_profile),
-            self._button("Delete", IconKind.DELETE, self._delete_profile),
-            self._button("Save", IconKind.SAVE, self.save_requested.emit),
-        ):
-            layout.addWidget(button)
-
-        self.format_combo.currentTextChanged.connect(self._format_changed)
-        self.profile_combo.currentTextChanged.connect(
-            lambda _text: self.selection_changed.emit()
+        self.new_button = self._button(
+            "New Profile",
+            IconKind.FILE,
+            self._new_profile,
+            "Create an editable profile based on the selected format.",
         )
-        self._format_changed(self.format_combo.currentText())
+        self.copy_button = self._button(
+            "Copy",
+            IconKind.DUPLICATE,
+            self.copy_profile,
+            "Copy the selected profile into an editable user profile.",
+        )
+        self.delete_button = self._button(
+            "Delete",
+            IconKind.DELETE,
+            self.delete_profile,
+            "Delete the selected user profile.",
+            role=ButtonRole.DANGER,
+        )
+        self.save_button = self._button(
+            "Save",
+            IconKind.SAVE,
+            self.save_requested.emit,
+            "Save changes to the selected user profile.",
+        )
+        for control in (
+            self.new_button,
+            self.copy_button,
+            self.delete_button,
+            self.save_button,
+        ):
+            layout.addWidget(control)
 
-    def format_name(self) -> str:
-        """Return the selected built-in format name."""
-        return self.format_combo.currentText()
+        self.profile_combo.currentTextChanged.connect(self._selection_changed)
+        self._refresh_actions()
 
     def profile_name(self) -> str:
-        """Return the selected editable profile name."""
+        """Return the selected profile name."""
         return self.profile_combo.currentText()
 
-    @staticmethod
-    def _button(text: str, icon: IconKind, callback) -> QPushButton:
-        """Create one compact profile toolbar button."""
-        button = QPushButton(text)
-        button.setIcon(make_icon(icon, 18))
-        button.clicked.connect(callback)
-        return button
+    def format_name(self) -> str:
+        """Return the built-in format that underlies the selected profile."""
+        return self._profile_meta.get(self.profile_name(), ("FEMaster", True))[0]
 
-    def _format_changed(self, name: str) -> None:
-        """Refresh profiles when the built-in format selection changes."""
-        self.profile_combo.blockSignals(True)
-        self.profile_combo.clear()
-        self.profile_combo.addItems(self._profiles.get(name, ()))
-        self.profile_combo.blockSignals(False)
-        self.selection_changed.emit()
+    def is_builtin(self) -> bool:
+        """Return whether the selected profile is a read-only built-in format."""
+        return self._profile_meta.get(self.profile_name(), ("", False))[1]
+
+    def is_editable(self) -> bool:
+        """Return whether profile settings may be changed."""
+        return bool(self.profile_name()) and not self.is_builtin()
+
+    def copy_profile(self) -> str:
+        """Copy the selected profile and return the new editable profile name."""
+        source = self.profile_name() or "FEMaster"
+        candidate = self._unique_name(source + " Copy")
+        self._profile_meta[candidate] = (self.format_name(), False)
+        self.profile_combo.addItem(candidate)
+        self.profile_copied.emit(source, candidate)
+        self.profile_combo.setCurrentText(candidate)
+        return candidate
+
+    def delete_profile(self) -> None:
+        """Delete the selected user profile; built-in profiles remain immutable."""
+        name = self.profile_name()
+        if not name or self.is_builtin():
+            return
+        index = self.profile_combo.currentIndex()
+        self._profile_meta.pop(name, None)
+        self.profile_combo.removeItem(index)
+        self.profile_deleted.emit(name)
+        self._refresh_actions()
+
+    def _button(
+        self,
+        text: str,
+        icon_kind: IconKind,
+        callback,
+        tooltip: str,
+        *,
+        role: ButtonRole = ButtonRole.DEFAULT,
+    ):
+        """Create one canonical primary-height toolbar button."""
+        control = button(
+            ButtonSpec(
+                text,
+                role=role,
+                tooltip=tooltip,
+                icon=make_icon(icon_kind, 18),
+            ),
+            clicked=callback,
+        )
+        return apply_primary_control_height(control)
 
     def _new_profile(self) -> None:
-        """Create a session-only profile for evaluating the management workflow."""
-        name, ok = QInputDialog.getText(self, "New Profile", "Profile name:")
+        """Create an editable profile based on the selected profile's format."""
+        base_format = self.format_name()
+        default_name = self._unique_name(base_format + " - Custom")
+        name, ok = QInputDialog.getText(
+            self,
+            "New Profile",
+            "Profile name:",
+            text=default_name,
+        )
         if not ok or not name.strip():
             return
         profile = name.strip()
-        values = self._profiles.setdefault(self.format_name(), [])
-        if profile not in values:
-            values.append(profile)
-            self.profile_combo.addItem(profile)
+        if profile in self._profile_meta:
+            profile = self._unique_name(profile)
+        self._profile_meta[profile] = (base_format, False)
+        self.profile_combo.addItem(profile)
+        self.profile_created.emit(profile, base_format)
         self.profile_combo.setCurrentText(profile)
 
-    def _copy_profile(self) -> None:
-        """Copy the current profile inside the editor session."""
-        current = self.profile_name() or "Profile"
-        values = self._profiles.setdefault(self.format_name(), [])
-        base = current + " Copy"
-        candidate = base
+    def _unique_name(self, base: str) -> str:
+        """Return a profile name that does not collide with an existing entry."""
+        if base not in self._profile_meta:
+            return base
         number = 2
-        while candidate in values:
-            candidate = f"{base} {number}"
+        while f"{base} {number}" in self._profile_meta:
             number += 1
-        values.append(candidate)
-        self.profile_combo.addItem(candidate)
-        self.profile_combo.setCurrentText(candidate)
+        return f"{base} {number}"
 
-    def _delete_profile(self) -> None:
-        """Delete user profiles while keeping the built-in default profile."""
-        index = self.profile_combo.currentIndex()
-        if index <= 0:
-            return
-        values = self._profiles.get(self.format_name(), [])
-        if index < len(values):
-            values.pop(index)
-        self.profile_combo.removeItem(index)
+    def _selection_changed(self, _name: str) -> None:
+        """Refresh action state and publish the new profile selection."""
+        self._refresh_actions()
         self.selection_changed.emit()
+
+    def _refresh_actions(self) -> None:
+        """Keep destructive/save actions disabled for immutable built-ins."""
+        editable = self.is_editable()
+        self.delete_button.setEnabled(editable)
+        self.save_button.setEnabled(editable)
+        self.copy_button.setEnabled(bool(self.profile_name()))
