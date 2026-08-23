@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFontDatabase
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFrame,
     QHBoxLayout,
-    QPlainTextEdit,
     QSplitter,
     QTreeWidget,
     QTreeWidgetItem,
@@ -27,7 +25,8 @@ from opencae.ui.templates import (
     label,
 )
 
-from .catalog import render_preview, template_spec
+from .catalog import formatted_spec, render_preview, template_spec
+from .code_editor import DeckCodeEditor
 from .template_language import loop_from_spec, loop_skeleton
 
 
@@ -66,17 +65,14 @@ class DeckTemplateEditor(QWidget):
         preview_header.addWidget(label("Representative values", role=LabelRole.MUTED))
         root.addLayout(preview_header)
 
-        self.preview = QPlainTextEdit()
+        self.preview = DeckCodeEditor()
         self.preview.setReadOnly(True)
         self.preview.setMinimumHeight(170)
-        self.preview.setFont(
-            QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
-        )
         root.addWidget(self.preview, 2)
 
         self.template.textChanged.connect(self._template_changed)
         self.enabled.toggled.connect(self._template_changed)
-        self.float_format.currentTextChanged.connect(self._template_changed)
+        self.float_format.currentTextChanged.connect(self._float_format_changed)
         self.fields.itemDoubleClicked.connect(
             lambda _item, _column: self.insert_selected_field()
         )
@@ -117,7 +113,10 @@ class DeckTemplateEditor(QWidget):
         ]
         for loop_spec in self._spec.get("loops", ()):
             loop = loop_from_spec(loop_spec)
-            names.extend(f"{loop.item}.{name}" for name, _description, _example in loop.fields)
+            names.extend(
+                f"{loop.item}.{name}"
+                for name, _description, _example in loop.fields
+            )
         return tuple(names)
 
     def insert_field(self, name: str) -> None:
@@ -179,11 +178,7 @@ class DeckTemplateEditor(QWidget):
         )
         helper.setWordWrap(True)
         layout.addWidget(helper)
-        self.template = QPlainTextEdit()
-        self.template.setFont(
-            QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
-        )
-        self.template.setTabChangesFocus(False)
+        self.template = DeckCodeEditor()
         layout.addWidget(self.template, 1)
         return panel
 
@@ -201,7 +196,9 @@ class DeckTemplateEditor(QWidget):
         helper.setWordWrap(True)
         layout.addWidget(helper)
         self.fields = QTreeWidget()
-        self.fields.setHeaderLabels(("Field / Syntax", "Meaning", "Scope", "Example"))
+        self.fields.setHeaderLabels(
+            ("Field / Syntax", "Meaning", "Scope", "Example")
+        )
         self.fields.setRootIsDecorated(True)
         self.fields.setAlternatingRowColors(True)
         self.fields.setColumnWidth(0, 220)
@@ -215,16 +212,20 @@ class DeckTemplateEditor(QWidget):
         return panel
 
     def _populate_fields(self) -> None:
-        """Refresh record fields and hierarchical loop-scoped input documentation."""
+        """Refresh input documentation using the selected float presentation."""
         self.fields.clear()
-        for name, description, example in tuple(self._spec.get("fields", ())):
+        preview_spec = formatted_spec(
+            self._spec,
+            self.float_format.currentText() or ".6g",
+        )
+        for name, description, example in tuple(preview_spec.get("fields", ())):
             display = "{" + name + "}"
-            item = QTreeWidgetItem((display, description, "Record", example))
+            item = QTreeWidgetItem((display, description, "Record", str(example)))
             item.setData(0, _INSERT_ROLE, display)
             item.setData(0, _FIELD_NAME_ROLE, name)
             self.fields.addTopLevelItem(item)
 
-        for loop_spec in self._spec.get("loops", ()):
+        for loop_spec in preview_spec.get("loops", ()):
             loop = loop_from_spec(loop_spec)
             syntax = f"{{for {loop.item} in {loop.collection}}} … {{endfor}}"
             parent = QTreeWidgetItem(
@@ -244,7 +245,7 @@ class DeckTemplateEditor(QWidget):
                         display,
                         description,
                         f"{loop.item} in {loop.collection}",
-                        example,
+                        str(example),
                     )
                 )
                 child.setData(0, _INSERT_ROLE, display)
@@ -261,9 +262,19 @@ class DeckTemplateEditor(QWidget):
         self._update_preview()
         self.changed.emit()
 
+    def _float_format_changed(self, *_args) -> None:
+        """Apply float formatting to both helper examples and the live preview."""
+        self._populate_fields()
+        self._update_preview()
+        self.changed.emit()
+
     def _update_preview(self) -> None:
         """Render a sample block without invoking a solver exporter."""
-        text = render_preview(self.template.toPlainText(), self._spec)
+        text = render_preview(
+            self.template.toPlainText(),
+            self._spec,
+            float_format=self.float_format.currentText() or ".6g",
+        )
         if self._key.startswith("materials.") and self._key != "materials.header":
             text = "*MATERIAL, NAME=STEEL\n" + text
         self.preview.setPlainText(
