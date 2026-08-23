@@ -1,4 +1,4 @@
-"""Provides Create/Edit Section dialogs with canonical control geometry."""
+"""Provides Create/Edit Section with the shared label-above-control styling."""
 
 from __future__ import annotations
 
@@ -18,10 +18,8 @@ from opencae.ui.core.widgets import ChevronComboBox, MatrixEditor, ReferenceSele
 from opencae.ui.templates import (
     NumericUnitInput,
     apply_primary_control_height,
-    apply_primary_square_button,
     dialog_buttons,
-    form_layout,
-    scaffold_dialog,
+    field_block,
 )
 
 SECTION_TYPES = ("Solid", "Shell", "Beam", "Truss")
@@ -29,7 +27,7 @@ SHELL_TYPES = ("Integrated shell section", "ABD shell section")
 
 
 class SectionDialog(ApplyDialog):
-    """Create or edit all section variants with one standard control height."""
+    """Create or edit all section variants with vertically labelled controls."""
 
     def __init__(
         self,
@@ -49,25 +47,35 @@ class SectionDialog(ApplyDialog):
         self.units = units
         self.existing_names = {name.casefold() for name in existing_names}
 
-        title = "Edit Section" if section else "Create Section"
-        scaffold = scaffold_dialog(self, title, width=760)
+        self.setWindowTitle("Edit Section" if section else "Create Section")
+        self.setMinimumSize(760, 520)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 20, 24, 18)
+        root.setSpacing(16)
 
         self.name = QLineEdit(section.name if section else default_name)
         apply_primary_control_height(self.name)
+        root.addWidget(field_block("Name", self.name))
 
         self.kind = ChevronComboBox()
+        self.kind.setMinimumWidth(0)
         self.kind.addItems(SECTION_TYPES)
-        self.kind.setCurrentText(section.section_type if section else (initial_type or "Solid"))
+        self.kind.setCurrentText(
+            section.section_type if section else (initial_type or "Solid")
+        )
         apply_primary_control_height(self.kind)
-
-        scaffold.form.addRow("Name", self.name)
-        scaffold.form.addRow("Section type", self.kind)
+        root.addWidget(field_block("Section type", self.kind))
 
         self.stack = QStackedWidget()
-        scaffold.root.addWidget(self.stack, 1)
+        root.addWidget(self.stack, 1)
 
-        material_current = section.material_ref.entity_id if section and section.material_ref else ""
-        profile_current = section.profile_ref.entity_id if section and section.profile_ref else ""
+        material_current = (
+            section.material_ref.entity_id if section and section.material_ref else ""
+        )
+        profile_current = (
+            section.profile_ref.entity_id if section and section.profile_ref else ""
+        )
 
         self.solid_material = self._reference_page(
             "Material",
@@ -77,7 +85,11 @@ class SectionDialog(ApplyDialog):
         )
         self.stack.addWidget(self.solid_material[0])
 
-        self.shell_page = self._shell_page(materials, material_current, create_material)
+        self.shell_page = self._shell_page(
+            materials,
+            material_current,
+            create_material,
+        )
         self.stack.addWidget(self.shell_page)
 
         self.beam_page, self.beam_material, self.beam_profile = self._beam_page(
@@ -99,56 +111,48 @@ class SectionDialog(ApplyDialog):
 
         buttons = dialog_buttons(include_apply=True)
         self.bind_buttons(buttons, True)
-        scaffold.root.addWidget(buttons)
+        root.addWidget(buttons)
 
         self.kind.currentIndexChanged.connect(self.stack.setCurrentIndex)
         self.kind.currentIndexChanged.connect(self._resize)
         self.stack.setCurrentIndex(SECTION_TYPES.index(self.kind.currentText()))
 
     @staticmethod
-    def _style_reference_selector(selector: ReferenceSelector) -> ReferenceSelector:
-        """Make a composite reference selector obey the primary-control metric."""
-        apply_primary_control_height(selector)
-        apply_primary_control_height(selector.combo)
-        apply_primary_square_button(selector.add_button)
-        apply_primary_square_button(selector.pick_button)
-        return selector
+    def _vertical_page() -> tuple[QWidget, QVBoxLayout]:
+        """Create a dynamic section page using the standard vertical rhythm."""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        return page, layout
 
     @classmethod
     def _reference_page(cls, text, values, current, callback):
-        """Create a one-row page containing a consistently sized reference field."""
-        page = QWidget()
-        form = form_layout(page)
-        selector = cls._style_reference_selector(
-            ReferenceSelector(values, current, callback)
-        )
-        form.addRow(text, selector)
+        """Create a page containing one labelled object-reference selector."""
+        page, layout = cls._vertical_page()
+        selector = ReferenceSelector(values, current, callback)
+        layout.addWidget(field_block(text, selector))
+        layout.addStretch(1)
         return page, selector
 
     def _shell_page(self, materials, current, callback):
         """Build integrated and ABD shell-section editors."""
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
+        page, layout = self._vertical_page()
 
-        form = form_layout()
         self.shell_definition = ChevronComboBox()
+        self.shell_definition.setMinimumWidth(0)
         self.shell_definition.addItems(SHELL_TYPES)
         self.shell_definition.setCurrentText(
             getattr(self.section, "shell_definition", SHELL_TYPES[0])
         )
         apply_primary_control_height(self.shell_definition)
-        form.addRow("Shell formulation", self.shell_definition)
-        layout.addLayout(form)
+        layout.addWidget(field_block("Shell formulation", self.shell_definition))
 
         self.shell_stack = QStackedWidget()
-        layout.addWidget(self.shell_stack)
+        layout.addWidget(self.shell_stack, 1)
 
-        integrated = QWidget()
-        integrated_form = form_layout(integrated)
-        self.shell_material = self._style_reference_selector(
-            ReferenceSelector(materials, current, callback)
-        )
+        integrated, integrated_layout = self._vertical_page()
+        self.shell_material = ReferenceSelector(materials, current, callback)
         self.shell_thickness = NumericUnitInput(
             value=getattr(self.section, "thickness", 1.0),
             unit=self.units.symbol("length") if self.units is not None else "",
@@ -161,14 +165,18 @@ class SectionDialog(ApplyDialog):
         self.shell_points.setValue(getattr(self.section, "integration_points", 5))
         apply_primary_control_height(self.shell_points)
 
-        integrated_form.addRow("Material", self.shell_material)
-        integrated_form.addRow("Thickness", self.shell_thickness)
-        integrated_form.addRow("Integration points", self.shell_points)
+        integrated_layout.addWidget(field_block("Material", self.shell_material))
+        integrated_layout.addWidget(field_block("Thickness", self.shell_thickness))
+        integrated_layout.addWidget(
+            field_block("Integration points", self.shell_points)
+        )
+        integrated_layout.addStretch(1)
         self.shell_stack.addWidget(integrated)
 
         abd = QWidget()
         abd_layout = QVBoxLayout(abd)
         abd_layout.setContentsMargins(0, 0, 0, 0)
+        abd_layout.setSpacing(12)
 
         abd_group = QGroupBox("6 × 6 generalized stiffness matrix")
         abd_box = QVBoxLayout(abd_group)
@@ -182,29 +190,31 @@ class SectionDialog(ApplyDialog):
 
         abd_layout.addWidget(abd_group)
         abd_layout.addWidget(shear_group)
+        abd_layout.addStretch(1)
         self.shell_stack.addWidget(abd)
 
-        self.shell_definition.currentIndexChanged.connect(self.shell_stack.setCurrentIndex)
-        self.shell_stack.setCurrentIndex(SHELL_TYPES.index(self.shell_definition.currentText()))
+        self.shell_definition.currentIndexChanged.connect(
+            self.shell_stack.setCurrentIndex
+        )
+        self.shell_stack.setCurrentIndex(
+            SHELL_TYPES.index(self.shell_definition.currentText())
+        )
         return page
 
     def _beam_page(self, materials, profiles, material, profile, cm, cp):
-        """Build the material/profile selector page for beam sections."""
-        page = QWidget()
-        form = form_layout(page)
-        mat = self._style_reference_selector(ReferenceSelector(materials, material, cm))
-        prof = self._style_reference_selector(ReferenceSelector(profiles, profile, cp))
-        form.addRow("Material", mat)
-        form.addRow("Profile", prof)
+        """Build the material/profile selectors for beam sections."""
+        page, layout = self._vertical_page()
+        mat = ReferenceSelector(materials, material, cm)
+        prof = ReferenceSelector(profiles, profile, cp)
+        layout.addWidget(field_block("Material", mat))
+        layout.addWidget(field_block("Profile", prof))
+        layout.addStretch(1)
         return page, mat, prof
 
     def _truss_page(self, materials, material, callback):
-        """Build the material and cross-sectional-area page for trusses."""
-        page = QWidget()
-        form = form_layout(page)
-        mat = self._style_reference_selector(
-            ReferenceSelector(materials, material, callback)
-        )
+        """Build the material and cross-sectional-area editor for trusses."""
+        page, layout = self._vertical_page()
+        mat = ReferenceSelector(materials, material, callback)
         area = NumericUnitInput(
             value=getattr(self.section, "area", 1.0),
             unit=self.units.symbol("area") if self.units is not None else "",
@@ -212,15 +222,16 @@ class SectionDialog(ApplyDialog):
             maximum=1e30,
             decimals=6,
         )
-        form.addRow("Material", mat)
-        form.addRow("Cross-sectional area", area)
+        layout.addWidget(field_block("Material", mat))
+        layout.addWidget(field_block("Cross-sectional area", area))
+        layout.addStretch(1)
         return page, mat, area
 
-    def _resize(self):
-        """Resize the dialog after switching section page."""
+    def _resize(self, *_args) -> None:
+        """Refresh the preferred dialog size after switching section type."""
         self.adjustSize()
 
-    def validate(self):
+    def validate(self) -> bool:
         """Validate naming and required section references before committing."""
         name = self.name.text().strip()
         values = self.values()
@@ -269,7 +280,7 @@ class SectionDialog(ApplyDialog):
         """Create a persistent entity reference for a selected resource."""
         return EntityRef(str(value), kind) if value else None
 
-    def values(self):
+    def values(self) -> dict:
         """Return constructor values for the currently selected section type."""
         kind = self.kind.currentText()
         result = {"name": self.name.text().strip(), "section_type": kind}
@@ -301,7 +312,7 @@ class SectionDialog(ApplyDialog):
             result["shear_matrix"] = self.shear.values()
         return result
 
-    def prepare_new(self, default_name, existing_names):
+    def prepare_new(self, default_name, existing_names) -> None:
         """Reset name state when Apply keeps a create dialog open."""
         self.section = None
         self.existing_names = {name.casefold() for name in existing_names}
