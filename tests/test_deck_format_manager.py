@@ -102,7 +102,7 @@ def test_elements_are_concrete_deck_types_without_family_subgroups(manager):
     from opencae.ui.deck_format_manager.element_type_catalog import ELEMENT_TYPES
 
     expected_codes = (
-        "T2",
+        "T3",
         "B33",
         "S3",
         "MITC3FRT",
@@ -130,7 +130,7 @@ def test_elements_are_concrete_deck_types_without_family_subgroups(manager):
     labels = manager.navigation.child_labels("mesh.elements")
     assert labels == [item.label for item in ELEMENT_TYPES]
     assert labels[:3] == [
-        "Linear Truss — T2",
+        "Linear Truss — T3",
         "Bernoulli Beam — B33",
         "Linear Triangular Shell — S3",
     ]
@@ -175,7 +175,7 @@ def test_element_leaf_uses_explicit_for_loop_without_element_type_field(manager)
 def test_each_element_type_owns_its_literal_keyword_code(manager):
     """Representative concrete element leaves do not rely on a type placeholder."""
     for key, code in (
-        ("mesh.elements.t2", "T2"),
+        ("mesh.elements.t3", "T3"),
         ("mesh.elements.b33", "B33"),
         ("mesh.elements.s3", "S3"),
         ("mesh.elements.c3d20r", "C3D20R"),
@@ -191,20 +191,20 @@ def test_element_order_is_isolated_per_user_profile(manager):
     manager.profile_toolbar.copy_profile()
     parent_key = "mesh.elements"
     assert manager.navigation.child_labels(parent_key)[:3] == [
-        "Linear Truss — T2",
+        "Linear Truss — T3",
         "Bernoulli Beam — B33",
         "Linear Triangular Shell — S3",
     ]
-    assert manager.navigation.select_key("mesh.elements.t2")
+    assert manager.navigation.select_key("mesh.elements.t3")
     manager.navigation.move_down()
     assert manager.navigation.child_labels(parent_key)[:2] == [
         "Bernoulli Beam — B33",
-        "Linear Truss — T2",
+        "Linear Truss — T3",
     ]
 
     manager.profile_toolbar.profile_combo.setCurrentText("FEMaster")
     assert manager.navigation.child_labels(parent_key)[:2] == [
-        "Linear Truss — T2",
+        "Linear Truss — T3",
         "Bernoulli Beam — B33",
     ]
 
