@@ -9,7 +9,9 @@ from opencae.ui.templates.control_metrics import (
 def css(p):
     """Return QSS for text, numeric, combo and compact composite controls."""
     return f"""
-    QWidget#PrimaryFieldBlock {{
+    QWidget#PrimaryFieldBlock,
+    QWidget#PrimaryFieldStack,
+    QWidget#PrimaryFieldRow {{
         background: transparent;
         border: none;
     }}
@@ -24,7 +26,6 @@ def css(p):
         border-radius: 3px;
         padding: 5px 9px;
         min-height: 22px;
-        min-width: 316px;
     }}
     QSpinBox, QDoubleSpinBox {{
         padding-right: 9px;
