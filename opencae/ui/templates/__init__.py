@@ -4,9 +4,10 @@ from .button_role import ButtonRole
 from .button_spec import ButtonSpec
 from .control_metrics import (
     FIELD_LABEL_SPACING,
+    INLINE_ACTION_SIZE,
     PRIMARY_CONTROL_HEIGHT,
+    apply_inline_action_size,
     apply_primary_control_height,
-    apply_primary_square_button,
 )
 from .dialogs import (
     DialogScaffold,
@@ -69,7 +70,8 @@ __all__ = [
     "FORM_VERTICAL_SPACING",
     "CONTROL_GROUP_SPACING",
     "PRIMARY_CONTROL_HEIGHT",
+    "INLINE_ACTION_SIZE",
     "FIELD_LABEL_SPACING",
     "apply_primary_control_height",
-    "apply_primary_square_button",
+    "apply_inline_action_size",
 ]
