@@ -6,6 +6,7 @@ from dataclasses import fields, is_dataclass
 from typing import Any, Iterable
 
 from .entity import Entity
+from .persistent_model_field import is_persistent_model_field
 from .reference import EntityRef
 from .reference_use import ReferenceUse
 
@@ -20,6 +21,7 @@ class ProjectIndex:
         self.parent_id: dict[str, str | None] = {}
         self.path: dict[str, str] = {}
         self.reverse: dict[str, list[ReferenceUse]] = {}
+        self._active_values: set[int] = set()
         self._build()
 
     def _build(self) -> None:
@@ -38,6 +40,10 @@ class ProjectIndex:
     ) -> None:
         """Register one Entity and recursively traverse its owned values."""
         existing = self.by_id.get(entity.id)
+        if existing is entity:
+            # An object alias is a relationship to the already indexed entity,
+            # not another ownership path to traverse recursively.
+            return
         if existing is not None and existing is not entity:
             raise ValueError(
                 f"Duplicate entity id '{entity.id}' at {path} and "
@@ -48,7 +54,7 @@ class ProjectIndex:
         self.parent_id[entity.id] = parent_id
         self.path[entity.id] = path
         for field_info in fields(entity):
-            if field_info.name.startswith("_"):
+            if not is_persistent_model_field(field_info):
                 continue
             self._visit_value(
                 getattr(entity, field_info.name),
@@ -61,24 +67,39 @@ class ProjectIndex:
         if isinstance(value, Entity):
             self._visit_entity(value, parent_id, path)
             return
-        if is_dataclass(value):
-            for field_info in fields(value):
-                self._visit_value(
-                    getattr(value, field_info.name),
-                    parent_id,
-                    f"{path}.{field_info.name}",
-                )
+        if not is_dataclass(value) and not isinstance(
+            value,
+            (list, tuple, dict),
+        ):
             return
-        if isinstance(value, (list, tuple)):
-            for index, item in enumerate(value):
-                self._visit_value(item, parent_id, f"{path}[{index}]")
+
+        identity = id(value)
+        if identity in self._active_values:
             return
-        if isinstance(value, dict):
-            for key, item in value.items():
-                self._visit_value(item, parent_id, f"{path}[{key!r}]")
+        self._active_values.add(identity)
+        try:
+            if is_dataclass(value):
+                for field_info in fields(value):
+                    if not is_persistent_model_field(field_info):
+                        continue
+                    self._visit_value(
+                        getattr(value, field_info.name),
+                        parent_id,
+                        f"{path}.{field_info.name}",
+                    )
+            elif isinstance(value, (list, tuple)):
+                for index, item in enumerate(value):
+                    self._visit_value(item, parent_id, f"{path}[{index}]")
+            else:
+                for key, item in value.items():
+                    self._visit_value(item, parent_id, f"{path}[{key!r}]")
+        finally:
+            self._active_values.remove(identity)
 
     def _scan_references(self, source: Entity) -> None:
         """Record every EntityRef nested inside one source Entity."""
+        active_values: set[int] = set()
+
         def walk(value: Any, path: str) -> None:
             """Recursively collect reference leaves without crossing Entities."""
             if isinstance(value, EntityRef):
@@ -96,21 +117,35 @@ class ProjectIndex:
                 # Owned entities are scanned independently, otherwise their
                 # references would be attributed to the wrong source object.
                 return
-            if is_dataclass(value):
-                for item in fields(value):
-                    walk(getattr(value, item.name), f"{path}.{item.name}")
-            elif isinstance(value, list):
-                for index, item in enumerate(value):
-                    walk(item, f"{path}[{index}]")
-            elif isinstance(value, dict):
-                for key, item in value.items():
-                    walk(item, f"{path}[{key!r}]")
-            elif isinstance(value, tuple):
-                for index, item in enumerate(value):
-                    walk(item, f"{path}[{index}]")
+            if not is_dataclass(value) and not isinstance(
+                value,
+                (list, tuple, dict),
+            ):
+                return
+
+            identity = id(value)
+            if identity in active_values:
+                return
+            active_values.add(identity)
+            try:
+                if is_dataclass(value):
+                    for item in fields(value):
+                        if is_persistent_model_field(item):
+                            walk(
+                                getattr(value, item.name),
+                                f"{path}.{item.name}",
+                            )
+                elif isinstance(value, (list, tuple)):
+                    for index, item in enumerate(value):
+                        walk(item, f"{path}[{index}]")
+                else:
+                    for key, item in value.items():
+                        walk(item, f"{path}[{key!r}]")
+            finally:
+                active_values.remove(identity)
 
         for field_info in fields(source):
-            if field_info.name.startswith("_"):
+            if not is_persistent_model_field(field_info):
                 continue
             walk(getattr(source, field_info.name), field_info.name)
 

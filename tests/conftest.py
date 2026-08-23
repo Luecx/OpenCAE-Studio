@@ -8,7 +8,12 @@ from opencae.model.entities.assembly import Assembly, Instance
 from opencae.model.entities.constraints import KinematicCoupling, TieConstraint
 from opencae.model.entities.elements import ElementDefinition
 from opencae.model.entities.loads import ConcentratedLoad, PressureLoad
-from opencae.model.entities.mesh import ElementBlock, MeshState, NodeTable
+from opencae.model.entities.mesh import (
+    ElementBlock,
+    MeshState,
+    MeshStatus,
+    NodeTable,
+)
 from opencae.model.entities.parts import Part
 from opencae.model.entities.project import Project
 from opencae.model.entities.regions import ReferencePoint, Region, SectionAssignment
@@ -79,7 +84,7 @@ def project_factory():
             node_count=4,
             element_count=1,
             mesh_dimension=3,
-            status="Generated",
+            status=MeshStatus.CURRENT,
             revision="mesh-r1",
         )
         part_rp = ReferencePoint(name="PART_RP", position=(0.25, 0.25, 0.25), scope="Part")

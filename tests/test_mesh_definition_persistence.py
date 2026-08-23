@@ -33,6 +33,25 @@ def test_mesh_definition_serializes_once_and_round_trips(project_factory):
     loaded = decoded.parts[0].mesh
     assert loaded.element_blocks[0].definition is loaded.element_definitions[0]
     assert loaded.element_definitions[0].count == 1
+    assert decoded.index.path[loaded.element_definitions[0].id].endswith(
+        ".mesh.element_definitions[0]"
+    )
+
+
+def test_bound_element_block_runtime_links_are_not_traversed(project_factory):
+    """Runtime definition and mesh aliases cannot form index traversal cycles."""
+    project = project_factory(include_constraints=False)["project"]
+    mesh = project.parts[0].mesh
+    block = mesh.element_blocks[0]
+
+    assert block.definition is mesh.element_definitions[0]
+    assert block._mesh is mesh
+
+    project.rebuild_index(strict=True)
+
+    definition = mesh.element_definitions[0]
+    assert project.resolve(definition.id) is definition
+    assert project.index.parent_id[definition.id] == project.parts[0].id
 
 
 def test_element_block_codec_accepts_persisted_definition_ref():

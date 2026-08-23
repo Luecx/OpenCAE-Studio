@@ -1,9 +1,12 @@
+"""Repairs and validates stable references in a persistent Project graph."""
+
 from __future__ import annotations
 
 from dataclasses import fields, is_dataclass, replace
 from typing import Any
 
 from .entity import Entity
+from .persistent_model_field import is_persistent_model_field
 from .project_index import ProjectIndex
 from .reference import EntityRef
 
@@ -30,7 +33,8 @@ def repair_project_references(project) -> list[str]:
         if isinstance(value, EntityRef): return bind(value, path)
         if isinstance(value, Entity):
             for info in fields(value):
-                if not info.init: continue
+                if not is_persistent_model_field(info):
+                    continue
                 current = getattr(value, info.name)
                 updated = rewrite(current, f"{path}.{info.name}")
                 if updated is not current: setattr(value, info.name, updated)
@@ -38,7 +42,8 @@ def repair_project_references(project) -> list[str]:
         if is_dataclass(value):
             changes = {}
             for info in fields(value):
-                if not info.init: continue
+                if not is_persistent_model_field(info):
+                    continue
                 current = getattr(value, info.name)
                 updated = rewrite(current, f"{path}.{info.name}")
                 if updated is not current: changes[info.name] = updated
@@ -55,11 +60,18 @@ def repair_project_references(project) -> list[str]:
     return errors
 
 
-def validate_project_references(project, index: ProjectIndex | None = None, strict: bool = False) -> list[str]:
+def validate_project_references(
+    project,
+    index: ProjectIndex | None = None,
+    strict: bool = False,
+) -> list[str]:
+    """Return diagnostics for unresolved or type-incompatible references."""
     index = index or ProjectIndex(project)
     errors: list[str] = []
+    active_values: set[int] = set()
 
     def walk(value: Any, path: str):
+        """Visit persistent values once per active recursion path."""
         if isinstance(value, EntityRef):
             if not value.entity_id:
                 if value.legacy_name: errors.append(f"{path}: unresolved legacy reference '{value.legacy_name}'")
@@ -68,17 +80,32 @@ def validate_project_references(project, index: ProjectIndex | None = None, stri
             if entity is None: errors.append(f"{path}: entity '{value.entity_id}' does not exist")
             elif not _expected(entity, value.expected_type): errors.append(f"{path}: {type(entity).__name__} is not {value.expected_type}")
             return
-        if isinstance(value, Entity):
-            for info in fields(value):
-                if info.name.startswith("_"): continue
-                walk(getattr(value, info.name), f"{path}.{info.name}")
+        if not isinstance(value, Entity) and not is_dataclass(value) and not isinstance(
+            value,
+            (list, tuple, dict),
+        ):
             return
-        if is_dataclass(value):
-            for info in fields(value): walk(getattr(value, info.name), f"{path}.{info.name}")
-        elif isinstance(value, (list, tuple)):
-            for number, item in enumerate(value): walk(item, f"{path}[{number}]")
-        elif isinstance(value, dict):
-            for key, item in value.items(): walk(item, f"{path}[{key!r}]")
+
+        identity = id(value)
+        if identity in active_values:
+            return
+        active_values.add(identity)
+        try:
+            if isinstance(value, Entity) or is_dataclass(value):
+                for info in fields(value):
+                    if is_persistent_model_field(info):
+                        walk(
+                            getattr(value, info.name),
+                            f"{path}.{info.name}",
+                        )
+            elif isinstance(value, (list, tuple)):
+                for number, item in enumerate(value):
+                    walk(item, f"{path}[{number}]")
+            else:
+                for key, item in value.items():
+                    walk(item, f"{path}[{key!r}]")
+        finally:
+            active_values.remove(identity)
 
     walk(project, "project")
     errors.extend(_validate_region_consumers(project))

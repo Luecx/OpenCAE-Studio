@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from opencae.model.core import EntityRef
+from opencae.model.entities.mesh import MeshStatus
 from opencae.model.entities.regions import Region
 from opencae.persistence.project_codec import project_from_dict, project_to_dict
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand, make_add_command, make_delete_command, make_replace_command
@@ -38,7 +39,8 @@ def test_composite_field_updates_are_reversible(project_factory):
     project = command.apply(project); project.rebuild_index()
     assert part.mesh.status == "Outdated" and part.mesh.revision == "mesh-r2"
     project = command.undo(project); project.rebuild_index()
-    assert part.mesh.status == "Generated" and part.mesh.revision == "mesh-r1"
+    assert part.mesh.status is MeshStatus.CURRENT
+    assert part.mesh.revision == "mesh-r1"
 
 
 def test_schema_18_roundtrip_preserves_region_operands(project_factory):
