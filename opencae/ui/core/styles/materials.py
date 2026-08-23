@@ -19,6 +19,14 @@ def css(p):
         font-size: 9pt;
     }}
 
+    QScrollArea#MaterialDefinitionsScroll,
+    QScrollArea#MaterialDefinitionsScroll QWidget#qt_scrollarea_viewport,
+    QWidget#MaterialDefinitionsContent,
+    QWidget#MaterialFieldBlock {{
+        background: transparent;
+        border: none;
+    }}
+
     QFrame#MaterialBehaviorCard {{
         background: {p['panel']};
         border: 1px solid {p['border']};
@@ -27,19 +35,17 @@ def css(p):
     QFrame#MaterialBehaviorCard:hover {{
         border-color: {p['border_light']};
     }}
-    QFrame#MaterialBehaviorCard[defined="true"] {{
+    QFrame#MaterialBehaviorCard[expanded="true"] {{
         border-color: {p['accent']};
     }}
 
-    QWidget#MaterialBehaviorHeader {{
+    QWidget#MaterialBehaviorHeader,
+    QWidget#MaterialBehaviorBody {{
         background: transparent;
         border: none;
     }}
     QWidget#MaterialBehaviorBody {{
-        background: {p['panel_alt']};
         border-top: 1px solid {p['border']};
-        border-bottom-left-radius: 6px;
-        border-bottom-right-radius: 6px;
     }}
 
     QLabel#MaterialBehaviorIcon {{
@@ -72,8 +78,7 @@ def css(p):
         border-color: #254d38;
     }}
 
-    QToolButton#MaterialBehaviorAction,
-    QToolButton#MaterialBehaviorChevron {{
+    QToolButton#MaterialBehaviorAction {{
         min-width: 28px;
         max-width: 28px;
         min-height: 28px;
@@ -81,31 +86,58 @@ def css(p):
         border: 1px solid {p['border']};
         border-radius: 4px;
         background: {p['panel_alt']};
-        color: {p['muted']};
+        color: {p['accent']};
         font-size: 13px;
         font-weight: 600;
     }}
-    QToolButton#MaterialBehaviorAction {{
-        color: {p['accent']};
-    }}
-    QToolButton#MaterialBehaviorAction:hover,
-    QToolButton#MaterialBehaviorChevron:hover {{
+    QToolButton#MaterialBehaviorAction:hover {{
         border-color: {p['accent']};
         background: {p['accent_dim']};
         color: {p['text']};
     }}
-    QToolButton#MaterialBehaviorChevron:disabled {{
-        color: {p['border_light']};
+
+    QToolButton#MaterialBehaviorChevron {{
+        min-width: 24px;
+        max-width: 24px;
+        min-height: 28px;
+        max-height: 28px;
+        border: none;
+        border-radius: 0px;
         background: transparent;
-        border-color: transparent;
+        padding: 0px;
+    }}
+    QToolButton#MaterialBehaviorChevron:hover {{
+        background: transparent;
     }}
 
-    QComboBox#MaterialModelCombo,
-    QDoubleSpinBox#MaterialPropertySpin {{
+    QComboBox#MaterialModelCombo {{
+        min-width: 0px;
+        max-width: 360px;
+        min-height: 28px;
+    }}
+
+    QWidget#MaterialPropertyInput {{
+        background: transparent;
+        border: none;
+    }}
+    QDoubleSpinBox#MaterialPropertySpin,
+    QDoubleSpinBox#MaterialPropertySpinWithUnit {{
         min-width: 0px;
         min-height: 28px;
     }}
-    QComboBox#MaterialModelCombo {{
-        max-width: 360px;
+    QDoubleSpinBox#MaterialPropertySpinWithUnit {{
+        border-top-right-radius: 0px;
+        border-bottom-right-radius: 0px;
+        border-right: 0px;
+    }}
+    QLabel#MaterialPropertyUnit {{
+        min-width: 54px;
+        min-height: 22px;
+        padding: 5px 10px;
+        background: {p['panel_alt']};
+        color: {p['text']};
+        border: 1px solid {p['border_light']};
+        border-top-right-radius: 3px;
+        border-bottom-right-radius: 3px;
     }}
     """
