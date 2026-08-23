@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.ui.core.widgets import ChevronComboBox
+from opencae.ui.templates import FIELD_LABEL_SPACING, apply_primary_control_height
 from .material_behavior_specs import (
     CATEGORY_ICONS,
     CATEGORY_TYPES,
@@ -149,7 +150,7 @@ class MaterialBehaviorCard(QFrame):
         model_block = QWidget()
         model_layout = QVBoxLayout(model_block)
         model_layout.setContentsMargins(0, 0, 0, 0)
-        model_layout.setSpacing(6)
+        model_layout.setSpacing(FIELD_LABEL_SPACING)
         model_label = QLabel("Model")
         model_label.setObjectName("MaterialFieldLabel")
         model_layout.addWidget(model_label)
@@ -157,6 +158,7 @@ class MaterialBehaviorCard(QFrame):
         self.kind = ChevronComboBox()
         self.kind.setObjectName("MaterialModelCombo")
         self.kind.setMinimumWidth(0)
+        apply_primary_control_height(self.kind)
         for kind in CATEGORY_TYPES[self.category]:
             self.kind.addItem(TYPE_LABELS[kind], kind)
         index = self.kind.findData(self._current_kind)
@@ -180,7 +182,7 @@ class MaterialBehaviorCard(QFrame):
             field = QWidget()
             field_layout = QVBoxLayout(field)
             field_layout.setContentsMargins(0, 0, 0, 0)
-            field_layout.setSpacing(6)
+            field_layout.setSpacing(FIELD_LABEL_SPACING)
 
             label = QLabel(label_text)
             label.setObjectName("MaterialFieldLabel")
