@@ -1,3 +1,5 @@
+"""Owns meshing configuration and the compact mesh snapshot of one Part."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -9,6 +11,7 @@ from ..fem import Element, Node, element_class_for_definition
 from .element_block import ElementBlock
 from .element_control import ElementControl
 from .mesh_settings import MeshSettings
+from .mesh_status import MeshStatus
 from .node_table import NodeTable
 from .seed import Seed
 
@@ -32,23 +35,35 @@ class MeshState:
     mesh_dimension: int = 0
     minimum_quality: float | None = None
     mean_quality: float | None = None
-    status: str = "Not generated"
+    status: MeshStatus | str = MeshStatus.NOT_GENERATED
     revision: str = ""
+
+    def __setattr__(self, name, value) -> None:
+        """Normalize finite-domain state whenever the mesh status changes."""
+        if name == "status":
+            value = MeshStatus.coerce(value)
+        super().__setattr__(name, value)
 
     def add_node(
         self,
         coordinates: tuple[float, float, float],
         node_id: int | None = None,
     ) -> Node:
+        """Add one authored Node and update compact mesh metadata."""
         node = self.nodes.add(coordinates, node_id)
         self.node_count = len(self.nodes)
-        if self.status == "Not generated":
-            self.status = "Authored"
+        if self.status is MeshStatus.NOT_GENERATED:
+            self.status = MeshStatus.AUTHORED
         return node
 
     def next_element_id(self) -> int:
+        """Return the next positive element ID across all compact blocks."""
         return max(
-            (element_id for block in self.element_blocks for element_id in block.ids),
+            (
+                element_id
+                for block in self.element_blocks
+                for element_id in block.ids
+            ),
             default=0,
         ) + 1
 
@@ -58,9 +73,17 @@ class MeshState:
         nodes: tuple[Node, ...] | list[Node],
         element_id: int | None = None,
     ) -> Element:
-        if not isinstance(element_type, type) or not issubclass(element_type, Element):
+        """Add one authored Element after validating type and node ownership."""
+        if not isinstance(element_type, type) or not issubclass(
+            element_type,
+            Element,
+        ):
             raise TypeError("element_type must be an Element subclass")
-        element = element_type(element_id or self.next_element_id(), tuple(nodes))
+
+        element = element_type(
+            element_id or self.next_element_id(),
+            tuple(nodes),
+        )
         node_ids = set(self.nodes.ids)
         missing = [node.id for node in element.nodes if node.id not in node_ids]
         if missing:
@@ -78,27 +101,36 @@ class MeshState:
             None,
         )
         if block is None:
+            # Blocks group identical definitions for compact persistence; authored
+            # elements remain object-oriented at the public boundary.
             definition = element_type.definition()
             self.elements.append(definition)
             block = ElementBlock(definition)
             self.element_blocks.append(block)
+
         block.add(element)
         self.element_count = sum(len(item) for item in self.element_blocks)
-        if self.status == "Not generated":
-            self.status = "Authored"
+        if self.status is MeshStatus.NOT_GENERATED:
+            self.status = MeshStatus.AUTHORED
         return element
 
     def iter_elements(self) -> Iterator[Element]:
+        """Yield authored Element objects reconstructed from compact blocks."""
         nodes = {node.id: node for node in self.nodes}
         for block in self.element_blocks:
-            cls = element_class_for_definition(block.definition)
+            element_type = element_class_for_definition(block.definition)
             for element_id, connectivity in zip(
-                block.ids, block.connectivity, strict=True
+                block.ids,
+                block.connectivity,
+                strict=True,
             ):
                 try:
-                    element_nodes = tuple(nodes[node_id] for node_id in connectivity)
+                    element_nodes = tuple(
+                        nodes[node_id] for node_id in connectivity
+                    )
                 except KeyError as exc:
                     raise ValueError(
-                        f"Element {element_id} references missing node {exc.args[0]}"
+                        f"Element {element_id} references missing node "
+                        f"{exc.args[0]}"
                     ) from exc
-                yield cls(element_id, element_nodes)
+                yield element_type(element_id, element_nodes)
