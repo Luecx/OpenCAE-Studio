@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .reference_type import matches_reference_type
+
 
 class EntityObjectReference:
     """Public object view over one persisted ``*_ref`` entity relationship."""
@@ -22,22 +24,37 @@ class EntityObjectReference:
             instance.__dict__.pop(self.cache_name, None)
             return None
 
+        expected = getattr(ref, "expected_type", "") or self.expected_type
         cached = instance.__dict__.get(self.cache_name)
-        if cached is not None and getattr(cached, "id", None) == ref.entity_id:
+        project = getattr(instance, "project", None)
+
+        if project is None:
+            if (
+                cached is not None
+                and getattr(cached, "id", None) == ref.entity_id
+                and matches_reference_type(cached, expected)
+            ):
+                return cached
+            return None
+
+        if (
+            cached is not None
+            and getattr(cached, "id", None) == ref.entity_id
+            and matches_reference_type(cached, expected)
+            and project.try_resolve(ref) is cached
+        ):
             return cached
 
-        project = getattr(instance, "project", None)
-        if project is None:
-            return None
         resolved = project.try_resolve(ref)
-        if resolved is not None:
-            # Caching avoids repeatedly walking the ProjectIndex from property
-            # rendering. Entity._bind_project clears this cache on graph rebinding.
-            instance.__dict__[self.cache_name] = resolved
+        if resolved is None or not matches_reference_type(resolved, expected):
+            instance.__dict__.pop(self.cache_name, None)
+            return None
+
+        instance.__dict__[self.cache_name] = resolved
         return resolved
 
     def __set__(self, instance, value) -> None:
-        """Persist an object relationship as a stable EntityRef."""
+        """Persist an object relationship after validating type and ownership."""
         from .entity import Entity
         from .reference import EntityRef
 
@@ -54,5 +71,21 @@ class EntityObjectReference:
 
         current = getattr(instance, self.ref_name, None)
         expected = getattr(current, "expected_type", "") or self.expected_type
+        if not matches_reference_type(value, expected):
+            public_name = self.ref_name.removesuffix("_ref")
+            raise TypeError(
+                f"{type(instance).__name__}.{public_name} expects "
+                f"{expected or 'Entity'}, got {type(value).__name__}"
+            )
+
+        project = getattr(instance, "project", None)
+        if project is not None and project.try_resolve(value.id) is not value:
+            public_name = self.ref_name.removesuffix("_ref")
+            raise ValueError(
+                f"{type(value).__name__} '{value.name}' assigned to "
+                f"{type(instance).__name__}.{public_name} does not belong "
+                "to the same Project"
+            )
+
         setattr(instance, self.ref_name, EntityRef.of(value, expected))
         instance.__dict__[self.cache_name] = value
