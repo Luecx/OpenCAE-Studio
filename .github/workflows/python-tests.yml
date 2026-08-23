@@ -6,6 +6,7 @@ on:
       - master
       - agent/**
       - refactor/**
+      - ui/**
   pull_request:
 
 jobs:
@@ -39,5 +40,6 @@ jobs:
             tests/test_optimization_public_api.py \
             tests/test_public_model_api.py \
             tests/test_qt_platform.py \
+            tests/test_primary_control_geometry.py \
             tests/test_job_action_contracts.py \
             tests/test_workflow_ui_regressions.py
