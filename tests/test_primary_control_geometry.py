@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QApplication, QLineEdit, QSpinBox
 from opencae.ui.core.theme import stylesheet
 from opencae.ui.core.widgets import ChevronComboBox, ReferenceSelector
 from opencae.ui.templates import (
+    INLINE_ACTION_SIZE,
     PRIMARY_CONTROL_HEIGHT,
     NumericUnitInput,
     apply_primary_control_height,
@@ -42,8 +43,8 @@ def test_primary_dialog_controls_share_exact_height():
         app.processEvents()
 
 
-def test_reference_selector_actions_match_combo_height():
-    """Keep inline create/pick buttons aligned with the reference combo."""
+def test_reference_selector_uses_compact_centered_actions():
+    """Keep reference fields primary-sized while create/pick remain secondary."""
     app = QApplication.instance() or QApplication([])
     selector = ReferenceSelector(
         (("Steel", "steel"),),
@@ -54,29 +55,32 @@ def test_reference_selector_actions_match_combo_height():
     selector.show()
     app.processEvents()
     try:
-        heights = {
-            selector.height(),
-            selector.combo.height(),
-            selector.add_button.height(),
-            selector.pick_button.height(),
-        }
-        assert heights == {PRIMARY_CONTROL_HEIGHT}
+        assert selector.height() == PRIMARY_CONTROL_HEIGHT
+        assert selector.combo.height() == PRIMARY_CONTROL_HEIGHT
+        assert selector.add_button.height() == INLINE_ACTION_SIZE
+        assert selector.add_button.width() == INLINE_ACTION_SIZE
+        assert selector.pick_button.height() == INLINE_ACTION_SIZE
+        assert selector.pick_button.width() == INLINE_ACTION_SIZE
     finally:
         selector.close()
         selector.deleteLater()
         app.processEvents()
 
 
-def test_combo_popup_requests_every_available_entry():
-    """Avoid scrolling short dropdowns when screen space can show all rows."""
+def test_combo_popup_expands_beyond_one_row_when_space_allows():
+    """Prevent platform styles from collapsing short dropdowns to one row."""
     app = QApplication.instance() or QApplication([])
     combo = ChevronComboBox()
-    combo.addItems([f"Option {index}" for index in range(18)])
+    combo.addItems([f"Option {index}" for index in range(6)])
     combo.show()
     app.processEvents()
     try:
         combo.showPopup()
         app.processEvents()
+        row_height = combo.view().sizeHintForRow(0)
+        if row_height <= 0:
+            row_height = max(combo.fontMetrics().height() + 12, 28)
+        assert combo.view().height() >= row_height * 2
         assert combo.maxVisibleItems() >= combo.count()
         combo.hidePopup()
     finally:
