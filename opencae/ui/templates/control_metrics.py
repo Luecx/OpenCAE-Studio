@@ -5,7 +5,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QSizePolicy, QWidget
 
 PRIMARY_CONTROL_HEIGHT = 40
-INLINE_ACTION_SIZE = 36
+INLINE_ACTION_SIZE = PRIMARY_CONTROL_HEIGHT
 COMBO_POPUP_ROW_HEIGHT = 36
 COMBO_POPUP_EXTRA_HEIGHT = 8
 FIELD_LABEL_SPACING = 6
@@ -29,11 +29,11 @@ def apply_primary_control_height(widget: QWidget) -> QWidget:
 
 
 def apply_inline_action_size(widget: QWidget) -> QWidget:
-    """Size a secondary create/pick action close to its primary field height.
+    """Make an inline create/pick action exactly match its neighboring field.
 
-    Inline actions are intentionally a little smaller than the 40 px data field
-    so they remain secondary, but 36 px keeps them visually substantial enough
-    beside a full-width selector.
+    Inline actions share the 40 px outer box of primary controls.  Their visual
+    weight remains secondary through icon/glyph styling rather than a smaller
+    geometry, which keeps composite rows perfectly aligned without clipping.
     """
     widget.setProperty("inlineAction", True)
     widget.setFixedSize(INLINE_ACTION_SIZE, INLINE_ACTION_SIZE)
