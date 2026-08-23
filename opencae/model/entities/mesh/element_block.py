@@ -10,60 +10,55 @@ from ..fem import Element
 
 
 @register_model_type("element_block")
-@dataclass(init=False)
+@dataclass
 class ElementBlock(SolverWritable):
-    """Compact element storage referencing a MeshState-owned definition."""
+    """Compact element storage referencing a MeshState-owned definition.
 
-    definition_ref: EntityRef
+    ``definition`` is a non-serialized runtime alias so the public API remains
+    object-oriented. ``definition_ref`` is the only persisted relationship.
+    """
+
+    definition: ElementDefinition | EntityRef | None = field(
+        default=None,
+        metadata={"serialize": False},
+        repr=False,
+        compare=False,
+    )
     ids: list[int] = field(default_factory=list)
     connectivity: list[tuple[int, ...]] = field(default_factory=list)
+    definition_ref: EntityRef | None = None
+    _mesh: object | None = field(
+        init=False,
+        default=None,
+        repr=False,
+        compare=False,
+    )
 
-    def __init__(
-        self,
-        definition: ElementDefinition | EntityRef | None = None,
-        ids: list[int] | tuple[int, ...] | None = None,
-        connectivity: list[tuple[int, ...]] | tuple[tuple[int, ...], ...] | None = None,
-        *,
-        definition_ref: EntityRef | None = None,
-    ) -> None:
-        """Create a block from a public definition object or a persisted reference."""
-        if definition is not None and definition_ref is not None:
+    def __post_init__(self) -> None:
+        """Normalize public object input or a persisted reference."""
+        if self.definition is not None and self.definition_ref is not None:
             raise TypeError("Pass either definition or definition_ref, not both")
-        source = definition if definition is not None else definition_ref
+        source = (
+            self.definition
+            if self.definition is not None
+            else self.definition_ref
+        )
         if source is None:
             raise TypeError("ElementBlock requires an element definition")
 
         self.definition_ref = as_entity_ref(source, "ElementDefinition")
-        self.ids = [int(value) for value in (ids or ())]
-        self.connectivity = [
-            tuple(int(node_id) for node_id in row)
-            for row in (connectivity or ())
-        ]
-        if len(self.ids) != len(self.connectivity):
-            raise ValueError("ElementBlock ids and connectivity must have equal length")
-
-        # Runtime object access remains object-oriented. Only definition_ref is
-        # persisted, so the same ElementDefinition is never serialized twice.
-        self._definition = (
+        self.definition = (
             source if isinstance(source, ElementDefinition) else None
         )
-        self._mesh = None
-
-    @property
-    def definition(self) -> ElementDefinition:
-        """Return the canonical definition object referenced by this block."""
-        mesh = getattr(self, "_mesh", None)
-        if mesh is not None:
-            definition = mesh.definition_for(self.definition_ref)
-            if definition is not None:
-                return definition
-
-        definition = getattr(self, "_definition", None)
-        if definition is not None:
-            return definition
-        raise RuntimeError(
-            f"Element definition '{self.definition_ref.entity_id}' is not bound"
-        )
+        self.ids = [int(value) for value in self.ids]
+        self.connectivity = [
+            tuple(int(node_id) for node_id in row)
+            for row in self.connectivity
+        ]
+        if len(self.ids) != len(self.connectivity):
+            raise ValueError(
+                "ElementBlock ids and connectivity must have equal length"
+            )
 
     def bind_mesh(self, mesh) -> None:
         """Bind this block to its owning MeshState and validate its reference."""
@@ -74,15 +69,20 @@ class ElementBlock(SolverWritable):
                 "owned by its MeshState"
             )
         self._mesh = mesh
-        self._definition = definition
+        self.definition = definition
 
     def __len__(self) -> int:
+        """Return the number of compact elements in this block."""
         return len(self.ids)
 
     def add(self, element: Element) -> None:
         """Append one element while preserving definition compatibility."""
         if not isinstance(element, Element):
             raise TypeError("ElementBlock.add expects an Element object")
+        if self.definition is None:
+            raise RuntimeError(
+                f"Element definition '{self.definition_ref.entity_id}' is not bound"
+            )
         if not isinstance(self.definition, element.definition_type):
             raise TypeError(
                 f"{type(element).__name__} is incompatible with "

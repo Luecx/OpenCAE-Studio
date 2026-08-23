@@ -7,6 +7,7 @@ from opencae.ui.docks.output_dock import OutputDock
 from opencae.ui.docks.project_dock import ProjectDock
 from opencae.ui.ribbon.ribbon import Ribbon
 from opencae.ui.status_unit_system import UnitSystemStatus
+from opencae.ui.viewport.stage_guidance import assembly_guidance
 from opencae.ui.viewport.viewport_factory import create_viewport
 
 
@@ -61,8 +62,11 @@ def build_viewport(window):
     window.setCentralWidget(window.viewport)
     window.context.store.scene_changed.connect(window.viewport.request_refresh)
     window.context.store.active_part_changed.connect(window.viewport.request_refresh)
-    window.viewport.selection_changed.connect(window.context.store.select)
     window.context.store.selection_changed.connect(window.viewport.show_model_selection)
+    window.context.store.changed.connect(
+        lambda *_: _sync_viewport_guidance(window)
+    )
+    window.viewport.selection_changed.connect(window.context.store.select)
     window.viewport.message.connect(window.context.store.message.emit)
     window.viewport.request_refresh(fit=True)
 
@@ -100,6 +104,9 @@ def build_docks(window):
     )
     window.ribbon.stage_changed.connect(window.project_dock.tree.set_stage_focus)
     window.ribbon.stage_changed.connect(window.viewport.set_stage)
+    window.ribbon.stage_changed.connect(
+        lambda stage: _sync_viewport_guidance(window, stage)
+    )
     window.resizeDocks(
         [window.project_dock],
         [285],
@@ -110,6 +117,24 @@ def build_docks(window):
         [205],
         Qt.Orientation.Vertical,
     )
+    _sync_viewport_guidance(window)
+
+
+def _sync_viewport_guidance(window, stage=None):
+    """Show or clear centered guidance for stages that require assembly content."""
+    notice = getattr(getattr(window.viewport, "canvas", None), "notice", None)
+    if notice is None:
+        return
+    current_stage = stage or window.ribbon.current_stage
+    message = assembly_guidance(
+        current_stage,
+        window.context.store.project,
+    )
+    if message is None:
+        notice.clear()
+    else:
+        notice.set_message(*message)
+    window.viewport.canvas._position_overlays()
 
 
 def build_status(window):

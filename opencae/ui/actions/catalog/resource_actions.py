@@ -1,11 +1,21 @@
+"""Registers material, field, section, and profile resource actions."""
+
+from opencae.controllers.material_browser import add_material_from_browser
 from opencae.ui.actions.ids import A
 from opencae.ui.actions.spec import ActionSpec
 from opencae.ui.core.icon_factory import IconKind as I
 
 
 def specs(c):
+    """Return the resource action specifications for the central registry."""
     return (
         ActionSpec(A.MATERIAL, "New Material", I.MATERIAL, c.resources.material),
+        ActionSpec(
+            A.MATERIAL_BROWSER,
+            "Material Browser",
+            I.MATERIAL,
+            lambda: add_material_from_browser(c.resources),
+        ),
         ActionSpec(A.SET_ELASTICITY, "Elasticity", I.ELASTICITY, lambda: c.resources.set_behavior("Elasticity")),
         ActionSpec(A.SET_DENSITY, "Density", I.DENSITY, lambda: c.resources.set_behavior("Density")),
         ActionSpec(A.SET_PLASTICITY, "Plasticity", I.PLASTICITY, lambda: c.resources.set_behavior("Plasticity")),
