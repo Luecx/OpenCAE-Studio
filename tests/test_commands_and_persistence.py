@@ -52,6 +52,7 @@ def test_commands_apply_and_undo_by_entity_id(project_factory):
 
 
 def test_composite_field_updates_are_reversible(project_factory):
+    """A composite can update nested and direct fields without invalidating refs."""
     data = project_factory(include_constraints=False)
     project, part = data["project"], data["part"]
     command = CompositeCommand(
@@ -64,9 +65,9 @@ def test_composite_field_updates_are_reversible(project_factory):
             ),
             UpdateFieldCommand(
                 part.id,
-                "mesh.revision",
-                part.mesh.revision,
-                "mesh-r2",
+                "name",
+                part.name,
+                "PART_RENAMED",
             ),
         )
     )
@@ -74,12 +75,12 @@ def test_composite_field_updates_are_reversible(project_factory):
     project = command.apply(project)
     project.rebuild_index()
     assert part.mesh.status == "Outdated"
-    assert part.mesh.revision == "mesh-r2"
+    assert part.name == "PART_RENAMED"
 
     project = command.undo(project)
     project.rebuild_index()
     assert part.mesh.status is MeshStatus.CURRENT
-    assert part.mesh.revision == "mesh-r1"
+    assert part.name == "PART"
 
 
 def test_current_schema_roundtrip_preserves_region_operands(project_factory):
