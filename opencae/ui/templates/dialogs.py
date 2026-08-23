@@ -5,19 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QVBoxLayout
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout
 
-from .label_role import LabelRole
-from .layouts import dialog_layout, form_layout
-from .primitives import label
+from .field_stack import FieldStack
+from .layouts import dialog_layout
 
 
 @dataclass(slots=True)
 class DialogScaffold:
-    """References the reusable root/form layouts created for one dialog."""
+    """References the reusable root and semantic field stack for one dialog."""
 
     root: QVBoxLayout
-    form: QFormLayout
+    form: FieldStack
 
 
 def scaffold_dialog(
@@ -28,7 +27,7 @@ def scaffold_dialog(
     modal: bool = True,
     delete_on_close: bool = False,
 ) -> DialogScaffold:
-    """Configure a QDialog and return its canonical heading/form scaffold."""
+    """Configure a dialog with the canonical label-above editor scaffold."""
     dialog.setWindowTitle(title)
     dialog.setModal(modal)
     dialog.setMinimumWidth(width)
@@ -37,9 +36,8 @@ def scaffold_dialog(
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
     root = dialog_layout(dialog)
-    root.addWidget(label(title, role=LabelRole.TITLE))
-    form = form_layout()
-    root.addLayout(form)
+    form = FieldStack()
+    root.addWidget(form)
     return DialogScaffold(root, form)
 
 

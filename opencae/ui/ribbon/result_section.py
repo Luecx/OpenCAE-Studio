@@ -1,3 +1,5 @@
+"""Provides the interactive result section-view ribbon control."""
+
 from __future__ import annotations
 
 import math
@@ -5,51 +7,19 @@ import math
 from PyQt6.QtCore import QSignalBlocker, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
-    QDoubleSpinBox,
-    QFormLayout,
     QHBoxLayout,
     QMenu,
     QPushButton,
     QToolButton,
+    QVBoxLayout,
     QWidget,
     QWidgetAction,
 )
 
 from opencae.ui.core.icon_factory import IconKind
+from opencae.ui.templates import PRIMARY_CONTROL_HEIGHT, Vector3Input, field_block
+
 from .result_widgets import ribbon_button
-
-
-class _Vector3Editor(QWidget):
-    changed = pyqtSignal()
-
-    def __init__(self, value=(0.0, 0.0, 0.0), parent=None):
-        super().__init__(parent)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-        self.editors: list[QDoubleSpinBox] = []
-        for axis, component in zip("XYZ", value, strict=True):
-            editor = QDoubleSpinBox()
-            editor.setRange(-1.0e30, 1.0e30)
-            editor.setDecimals(7)
-            editor.setValue(float(component))
-            editor.setPrefix(f"{axis}: ")
-            editor.setMinimumWidth(92)
-            editor.valueChanged.connect(lambda _value: self.changed.emit())
-            self.editors.append(editor)
-            layout.addWidget(editor, 1)
-
-    def value(self) -> tuple[float, float, float]:
-        return tuple(editor.value() for editor in self.editors)
-
-    def set_value(self, value) -> None:
-        values = tuple(float(component) for component in value)
-        if len(values) != 3:
-            raise ValueError("A vector requires exactly three components")
-        blockers = [QSignalBlocker(editor) for editor in self.editors]
-        for editor, component in zip(self.editors, values, strict=True):
-            editor.setValue(component)
-        del blockers
 
 
 class ResultSectionButton(QToolButton):
@@ -58,6 +28,7 @@ class ResultSectionButton(QToolButton):
     settings_changed = pyqtSignal()
 
     def __init__(self, parent=None):
+        """Build the section toggle and its compact label-above plane editor."""
         super().__init__(parent)
         template = ribbon_button("Section View", IconKind.SECTION_VIEW, False, 92)
         self.setText(template.text())
@@ -71,41 +42,43 @@ class ResultSectionButton(QToolButton):
 
         self._origin_is_automatic = True
         panel = QWidget()
-        form = QFormLayout(panel)
-        form.setContentsMargins(12, 10, 12, 10)
-        form.setHorizontalSpacing(10)
-        form.setVerticalSpacing(8)
+        panel.setMinimumWidth(360)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(12)
 
-        self.origin = _Vector3Editor()
-        self.normal = _Vector3Editor((1.0, 0.0, 0.0))
-        form.addRow("Origin", self.origin)
-        form.addRow("Normal", self.normal)
+        self.origin = Vector3Input()
+        self.normal = Vector3Input((1.0, 0.0, 0.0))
+        layout.addWidget(field_block("Origin", self.origin))
+        layout.addWidget(field_block("Normal", self.normal))
 
         axes = QWidget()
         axis_layout = QHBoxLayout(axes)
         axis_layout.setContentsMargins(0, 0, 0, 0)
-        axis_layout.setSpacing(4)
+        axis_layout.setSpacing(6)
         for label, vector in (
             ("X", (1.0, 0.0, 0.0)),
             ("Y", (0.0, 1.0, 0.0)),
             ("Z", (0.0, 0.0, 1.0)),
         ):
             button = QPushButton(label)
-            button.setFixedWidth(48)
-            button.clicked.connect(lambda _checked=False, value=vector: self._set_axis(value))
-            axis_layout.addWidget(button)
-        axis_layout.addStretch(1)
-        form.addRow("Align normal", axes)
+            button.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
+            button.clicked.connect(
+                lambda _checked=False, value=vector: self._set_axis(value)
+            )
+            axis_layout.addWidget(button, 1)
+        layout.addWidget(field_block("Align normal", axes))
 
         self.invert = QCheckBox("Invert clipping direction")
         self.show_plane = QCheckBox("Show interactive plane")
         self.show_plane.setChecked(True)
-        form.addRow("", self.invert)
-        form.addRow("", self.show_plane)
+        layout.addWidget(self.invert)
+        layout.addWidget(self.show_plane)
 
         center = QPushButton("Center on current result")
+        center.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
         center.clicked.connect(self._request_center)
-        form.addRow("", center)
+        layout.addWidget(center)
 
         menu = QMenu(self)
         action = QWidgetAction(menu)
@@ -120,6 +93,7 @@ class ResultSectionButton(QToolButton):
         self.show_plane.toggled.connect(self.settings_changed.emit)
 
     def values(self) -> dict:
+        """Return the clipping-plane state consumed by the result viewport."""
         return {
             "enabled": self.isChecked(),
             "origin": None if self._origin_is_automatic else self.origin.value(),
@@ -152,22 +126,27 @@ class ResultSectionButton(QToolButton):
         del blockers
 
     def reset_for_result(self) -> None:
+        """Return the section origin to automatic centering for a newly opened result."""
         self._origin_is_automatic = True
 
     def _origin_edited(self) -> None:
+        """Mark the origin as manually controlled after direct user editing."""
         self._origin_is_automatic = False
         self.settings_changed.emit()
 
     def _request_center(self) -> None:
+        """Ask the viewport to center the clipping plane on the active result."""
         self._origin_is_automatic = True
         self.settings_changed.emit()
 
     def _set_axis(self, value) -> None:
+        """Align the section normal with one global Cartesian axis."""
         self.normal.set_value(value)
         self.settings_changed.emit()
 
     @staticmethod
     def _normalized(value) -> tuple[float, float, float]:
+        """Return a safe unit normal, falling back to global X for zero vectors."""
         vector = tuple(float(component) for component in value)
         length = math.sqrt(sum(component * component for component in vector))
         if length <= 1.0e-14:

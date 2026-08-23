@@ -2,9 +2,10 @@
 
 from .automatic_manual_value_editor import AutomaticManualValueEditor
 from .chevron_combo import ChevronComboBox
-from .compact_region_selector import CompactRegionSelector, ExtendedRegionDialog
+from .compact_region_selector import CompactRegionSelector
 from .components import ComponentsWidget
 from .entity_selector_bar import EntitySelectorBar
+from .extended_region_dialog import ExtendedRegionDialog
 from .matrix_editor import MatrixEditor
 from .monospace_output_view import MonospaceOutputView
 from .pick_reference import PickReference

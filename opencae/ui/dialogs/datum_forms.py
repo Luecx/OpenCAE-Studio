@@ -1,32 +1,34 @@
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QWidget
+"""Builds reusable labelled controls for Datum Point/Vector/Plane method pages."""
 
-from opencae.ui.core.widgets import PickReference
+from __future__ import annotations
+
+from PyQt6.QtWidgets import QCheckBox
+
+from opencae.ui.core.widgets import ChevronComboBox, PickReference
+from opencae.ui.templates import FieldStack, NumericUnitInput, apply_primary_control_height
 
 
 def page(rows):
-    widget = QWidget()
-    form = QFormLayout(widget)
-    form.setHorizontalSpacing(16)
-    form.setVerticalSpacing(9)
-    form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-    form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-    form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+    """Return one datum method page using the canonical label-above field stack."""
+    stack = FieldStack()
     for label, control in rows:
-        form.addRow(label, control)
-    return widget
+        stack.addRow(label, control)
+    return stack
 
 
 def number(value=0.0, minimum=-1e15, maximum=1e15, suffix=""):
-    control = QDoubleSpinBox()
-    control.setRange(minimum, maximum)
-    control.setDecimals(8)
-    control.setSuffix(str(suffix or ""))
-    control.setValue(value)
-    return control
+    """Return a datum numeric editor with an optional fixed unit segment."""
+    return NumericUnitInput(
+        value,
+        str(suffix or "").strip(),
+        minimum=minimum,
+        maximum=maximum,
+        decimals=8,
+    )
 
 
 def references(*allowed):
+    """Return a transient viewport-reference field accepting the requested kinds."""
     expanded = []
     for value in allowed:
         group = (
@@ -41,19 +43,25 @@ def references(*allowed):
 
 
 def choice(values):
-    control = QComboBox()
+    """Return a canonical chevron combo for finite datum options."""
+    control = ChevronComboBox()
+    control.setMinimumWidth(0)
     control.addItems(values)
+    apply_primary_control_height(control)
     return control
 
 
 def check(text="", checked=False):
+    """Return a datum checkbox with the requested initial state."""
     control = QCheckBox(text)
     control.setChecked(checked)
     return control
 
 
 def csys_choice(systems):
-    control = QComboBox()
+    """Return a coordinate-system combo storing the geometry needed by datum math."""
+    control = ChevronComboBox()
+    control.setMinimumWidth(0)
     control.addItem(
         "Global",
         {
@@ -74,4 +82,5 @@ def csys_choice(systems):
                 "system_type": system.system_type,
             },
         )
+    apply_primary_control_height(control)
     return control

@@ -52,7 +52,13 @@ class ResourceController:
 
     def _material_dialog(self, material=None, parent=None):
         project = self.store.project
-        dialog = MaterialDialog(material, [item.name for item in project.materials], parent or self.parent, next_name("Material", project.materials))
+        dialog = MaterialDialog(
+            material,
+            [item.name for item in project.materials],
+            parent or self.parent,
+            next_name("Material", project.materials),
+            self.units,
+        )
         state = {"existing": material}
 
         def commit():

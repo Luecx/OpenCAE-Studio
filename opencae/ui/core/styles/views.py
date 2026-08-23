@@ -1,4 +1,8 @@
+"""Styles tree, table, and list views used throughout the application."""
+
+
 def css(p):
+    """Return QSS for item views and table headers."""
     return f"""
     QTreeView, QTreeWidget, QTableView, QTableWidget, QListView,
     QListWidget, QTextEdit, QPlainTextEdit {{
@@ -23,14 +27,21 @@ def css(p):
     }}
     QTreeView::item:hover, QTreeWidget::item:hover {{ background: {p['panel_hover']}; }}
     QTreeView::item:selected, QTreeWidget::item:selected {{ background: {p['accent_dim']}; }}
-    QFrame#MaterialBehaviorRow {{
-        background: {p['panel_alt']};
-        border: 1px solid {p['border']};
+
+    QListWidget#EditorCheckList {{
+        background: {p['window']};
+        border: 1px solid {p['border_light']};
         border-radius: 3px;
+        padding: 3px;
     }}
-    QFrame#MaterialBehaviorRow:hover {{ border-color: {p['border_light']}; }}
-    QLabel#BehaviorCategory {{ font-weight: 600; color: {p['text']}; }}
-    QLabel#BehaviorValue {{ color: {p['muted']}; }}
+    QListWidget#EditorCheckList::item {{
+        min-height: 32px;
+        padding: 2px 7px;
+        border: none;
+    }}
+    QListWidget#EditorCheckList::item:hover {{ background: {p['panel_hover']}; }}
+    QListWidget#EditorCheckList::item:selected {{ background: {p['accent_dim']}; }}
+
     QHeaderView {{
         background: {p['panel_alt']};
     }}

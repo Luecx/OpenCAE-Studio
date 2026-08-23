@@ -1,16 +1,16 @@
 """Edits the compliance response used as the topology objective."""
 
+from __future__ import annotations
+
 from copy import deepcopy
 
-from PyQt6.QtWidgets import QLabel, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.core import EntityRef
-from opencae.model.entities.optimization import (
-    OptimizationObjective,
-    ResponseType,
-)
+from opencae.model.entities.optimization import OptimizationObjective, ResponseType
 from opencae.ui.core.named_entity_dialog import NamedEntityDialog
 from opencae.ui.core.widgets import ReferenceSelector
+from opencae.ui.templates import ReadOnlyValue
 
 
 class OptimizationObjectiveDialog(NamedEntityDialog):
@@ -24,9 +24,8 @@ class OptimizationObjectiveDialog(NamedEntityDialog):
         existing_names=(),
         parent=None,
     ):
-        entity = value or OptimizationObjective(
-            name="Minimize Compliance"
-        )
+        """Build the objective response reference and fixed optimization sense."""
+        entity = value or OptimizationObjective(name="Minimize Compliance")
         super().__init__(
             "Optimization Objective",
             entity,
@@ -44,10 +43,14 @@ class OptimizationObjectiveDialog(NamedEntityDialog):
             self.value.response_ref.entity_id,
         )
         self.form.addRow("Response", self.response)
-        self.form.addRow("Sense", QLabel("Minimize Compliance / Maximize Stiffness"))
+        self.form.addRow(
+            "Sense",
+            ReadOnlyValue("Minimize Compliance / Maximize Stiffness"),
+        )
         self.finish()
 
     def result(self):
+        """Return a detached objective candidate from the selected response."""
         candidate = self.apply_name(deepcopy(self.value))
         candidate.response_ref = EntityRef(
             str(self.response.currentValue() or ""),
@@ -57,6 +60,7 @@ class OptimizationObjectiveDialog(NamedEntityDialog):
         return candidate
 
     def validate(self) -> bool:
+        """Require valid naming and a compliance response reference."""
         if not super().validate():
             return False
         if not self.response.currentValue():

@@ -1,14 +1,17 @@
 """Edits the analysis and design-domain regions of a topology optimization."""
 
+from __future__ import annotations
+
 from copy import deepcopy
 
-from PyQt6.QtWidgets import QFormLayout, QGroupBox, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.core import EntityRef
 from opencae.model.entities.optimization import TopologyOptimization
 from opencae.model.selection import RegionProjection, RegionRequirement
 from opencae.ui.core.named_entity_dialog import NamedEntityDialog
 from opencae.ui.core.widgets import CompactRegionSelector, ReferenceSelector
+from opencae.ui.templates import SectionHeading, field_block
 
 
 class TopologyOptimizationDialog(NamedEntityDialog):
@@ -24,13 +27,14 @@ class TopologyOptimizationDialog(NamedEntityDialog):
         existing_names=(),
         parent=None,
     ):
+        """Build the linked analysis plus design, frozen-solid and frozen-void domains."""
         entity = value or TopologyOptimization(name="Topology Optimization-1")
         super().__init__(
             "Topology Optimization",
             entity,
             existing_names=existing_names,
             parent=parent,
-            width=610,
+            width=660,
         )
         analyses = [
             (analysis.name, analysis.id)
@@ -72,15 +76,14 @@ class TopologyOptimizationDialog(NamedEntityDialog):
             requirement=requirement,
             extended_title="Frozen-void region",
         )
-        regions = QGroupBox("Design domains")
-        region_form = QFormLayout(regions)
-        region_form.addRow("Design domain", self.design)
-        region_form.addRow("Frozen solid", self.solid)
-        region_form.addRow("Frozen void", self.void)
-        self.add_widget(regions)
+        self.add_widget(SectionHeading("Design Domains"))
+        self.add_widget(field_block("Design domain", self.design))
+        self.add_widget(field_block("Frozen solid", self.solid))
+        self.add_widget(field_block("Frozen void", self.void))
         self.finish()
 
     def result(self):
+        """Return a detached optimization candidate from the current references/regions."""
         candidate = self.apply_name(deepcopy(self.value))
         candidate.analysis_ref = EntityRef(
             str(self.analysis.currentValue() or ""),
@@ -92,6 +95,7 @@ class TopologyOptimizationDialog(NamedEntityDialog):
         return candidate
 
     def validate(self) -> bool:
+        """Require valid naming, one static analysis and a non-empty design domain."""
         if not super().validate():
             return False
         if not self.analysis.currentValue():
