@@ -16,7 +16,7 @@ class DeckElementType:
 
 
 ELEMENT_TYPES: tuple[DeckElementType, ...] = (
-    DeckElementType("t2", "Linear Truss — T2", "T2", 2),
+    DeckElementType("t3", "Linear Truss — T3", "T3", 2),
     DeckElementType("b33", "Bernoulli Beam — B33", "B33", 2),
     DeckElementType("s3", "Linear Triangular Shell — S3", "S3", 3),
     DeckElementType(
