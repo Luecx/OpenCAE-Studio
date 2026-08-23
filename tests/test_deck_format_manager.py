@@ -244,11 +244,26 @@ def test_coordinate_systems_have_rectangular_and_cylindrical_records(manager):
         assert page.available_field_names() == expected_fields
 
 
-def test_femaster_constraints_omit_mpc_and_equation_exposes_terms(manager):
-    """FEMaster omits MPC while Equation documents target/DOF/coefficient terms."""
+def test_mpc_stays_visible_but_is_unsupported_by_femaster(manager):
+    """Solver capability differences are explicit without hiding model records."""
     labels = manager.navigation.child_labels("constraints")
-    assert "MPC" not in labels
-    assert "Equation" in labels
+    assert "MPC" in labels
+    assert not manager.navigation.is_supported("constraints.mpc")
+    assert manager.select_key("constraints.mpc")
+    assert manager.stack.currentWidget() is manager.overview_page
+    assert manager.overview_title.text() == "MPC — Not Supported"
+    assert "not supported by FEMaster" in manager.overview_text.text()
+    assert "not supported by FEMaster" in manager.navigation.tree.currentItem().toolTip(0)
+    assert manager.navigation.tree.currentItem().font(0).italic()
+
+    manager.profile_toolbar.profile_combo.setCurrentText("Abaqus")
+    assert manager.navigation.is_supported("constraints.mpc")
+    assert not manager.navigation.tree.currentItem().font(0).italic()
+
+
+def test_equation_exposes_target_dof_and_coefficient_terms(manager):
+    """Equation documents the target/DOF/coefficient entries used by the solver."""
+    assert "Equation" in manager.navigation.child_labels("constraints")
     assert manager.select_key("constraints.equation")
     page = manager.template_page
     assert page.template_text() == (
