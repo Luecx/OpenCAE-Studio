@@ -1,4 +1,4 @@
-"""Define the FEMaster editor hierarchy from current OpenCAE record families."""
+"""Define the deck editor hierarchy from current OpenCAE record families."""
 
 from .element_type_catalog import element_tree_nodes
 from .profile_record_catalog import profile_tree_nodes
@@ -81,6 +81,11 @@ TREE_SPEC = (
             {"key": "constraints.tie", "label": "Tie"},
             {"key": "constraints.rigid", "label": "Rigid Body"},
             {"key": "constraints.equation", "label": "Equation"},
+            {
+                "key": "constraints.mpc",
+                "label": "MPC",
+                "supported_formats": ("Abaqus",),
+            },
         ),
     },
     {
