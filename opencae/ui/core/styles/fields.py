@@ -2,7 +2,6 @@
 
 from opencae.ui.templates.control_metrics import (
     COMBO_POPUP_ROW_HEIGHT,
-    INLINE_ACTION_SIZE,
     PRIMARY_CONTROL_HEIGHT,
 )
 
@@ -125,13 +124,14 @@ def css(p):
         border-bottom-right-radius: 3px;
     }}
 
+    /* Geometry comes exclusively from setFixedSize() in control_metrics.
+       Repeating width/height here makes Qt's stylesheet box model add the
+       1 px frame on top of that size on some platform styles, clipping the
+       lower rounded border. */
     QToolButton#InlineAddButton,
     QToolButton#InlinePickButton {{
-        min-width: {INLINE_ACTION_SIZE}px;
-        max-width: {INLINE_ACTION_SIZE}px;
-        min-height: {INLINE_ACTION_SIZE}px;
-        max-height: {INLINE_ACTION_SIZE}px;
         padding: 0px;
+        margin: 0px;
         color: {p['accent']};
         background: {p['panel_alt']};
         border: 1px solid {p['border_light']};
