@@ -33,10 +33,18 @@ TEMPLATE_SPECS = {
         ),
     },
     "surfaces": {
-        "template": "*SURFACE, NAME={surface_name}\n{surface_entries}",
+        "template": "*SURFACE, NAME={surface_name}\n{element_id}, {side_id}",
         "fields": (
             ("surface_name", "Surface name", "PRESSURE_FACE"),
-            ("surface_entries", "Formatted surface facets", "SOLID, S1"),
+            ("element_id", "Element identifier for one surface facet", "42"),
+            ("side_id", "Local side/face identifier on that element", "S1"),
+        ),
+        "repeatable": True,
+        "repeat_default": True,
+        "repeat_fields": ("element_id", "side_id"),
+        "repeat_examples": (
+            {"element_id": "42", "side_id": "S1"},
+            {"element_id": "43", "side_id": "S2"},
         ),
     },
     "materials.header": {
