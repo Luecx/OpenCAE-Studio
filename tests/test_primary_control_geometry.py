@@ -5,6 +5,8 @@ from PyQt6.QtWidgets import QApplication, QLineEdit, QSpinBox
 from opencae.ui.core.theme import stylesheet
 from opencae.ui.core.widgets import ChevronComboBox, ReferenceSelector
 from opencae.ui.templates import (
+    COMBO_POPUP_EXTRA_HEIGHT,
+    COMBO_POPUP_ROW_HEIGHT,
     INLINE_ACTION_SIZE,
     PRIMARY_CONTROL_HEIGHT,
     NumericUnitInput,
@@ -43,8 +45,8 @@ def test_primary_dialog_controls_share_exact_height():
         app.processEvents()
 
 
-def test_reference_selector_uses_compact_centered_actions():
-    """Keep reference fields primary-sized while create/pick remain secondary."""
+def test_reference_selector_uses_near_primary_sized_actions():
+    """Keep create/pick actions substantial while visually secondary to fields."""
     app = QApplication.instance() or QApplication([])
     selector = ReferenceSelector(
         (("Steel", "steel"),),
@@ -57,6 +59,7 @@ def test_reference_selector_uses_compact_centered_actions():
     try:
         assert selector.height() == PRIMARY_CONTROL_HEIGHT
         assert selector.combo.height() == PRIMARY_CONTROL_HEIGHT
+        assert INLINE_ACTION_SIZE == 36
         assert selector.add_button.height() == INLINE_ACTION_SIZE
         assert selector.add_button.width() == INLINE_ACTION_SIZE
         assert selector.pick_button.height() == INLINE_ACTION_SIZE
@@ -67,9 +70,11 @@ def test_reference_selector_uses_compact_centered_actions():
         app.processEvents()
 
 
-def test_combo_popup_expands_beyond_one_row_when_space_allows():
-    """Prevent platform styles from collapsing short dropdowns to one row."""
+def test_combo_popup_uses_tall_rows_and_bottom_reserve():
+    """Keep popup rows readable and preserve room below the final item border."""
     app = QApplication.instance() or QApplication([])
+    previous_stylesheet = app.styleSheet()
+    app.setStyleSheet(stylesheet())
     combo = ChevronComboBox()
     combo.addItems([f"Option {index}" for index in range(6)])
     combo.show()
@@ -78,14 +83,17 @@ def test_combo_popup_expands_beyond_one_row_when_space_allows():
         combo.showPopup()
         app.processEvents()
         row_height = combo.view().sizeHintForRow(0)
-        if row_height <= 0:
-            row_height = max(combo.fontMetrics().height() + 12, 28)
-        assert combo.view().height() >= row_height * 2
+        assert max(COMBO_POPUP_ROW_HEIGHT, row_height) >= 36
+        minimum_complete_height = (
+            combo.count() * COMBO_POPUP_ROW_HEIGHT + COMBO_POPUP_EXTRA_HEIGHT
+        )
+        assert combo.view().height() >= minimum_complete_height
         assert combo.maxVisibleItems() >= combo.count()
         combo.hidePopup()
     finally:
         combo.close()
         combo.deleteLater()
+        app.setStyleSheet(previous_stylesheet)
         app.processEvents()
 
 
