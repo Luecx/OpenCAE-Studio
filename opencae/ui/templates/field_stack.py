@@ -59,3 +59,19 @@ class FieldStack(QWidget):
     def addStretch(self, stretch: int = 1) -> None:
         """Append flexible vertical space below the current fields."""
         self._layout.addStretch(stretch)
+
+    def clear(self) -> None:
+        """Delete all currently displayed rows and reset control-to-block mappings."""
+        self._blocks.clear()
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            widget = item.widget()
+            nested = item.layout()
+            if widget is not None:
+                widget.deleteLater()
+            elif nested is not None:
+                while nested.count():
+                    child_item = nested.takeAt(0)
+                    child = child_item.widget()
+                    if child is not None:
+                        child.deleteLater()
