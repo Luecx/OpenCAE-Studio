@@ -19,6 +19,8 @@ def template_spec(key: str, label: str) -> dict:
     """Return a representative template specification for one tree leaf."""
     if key in TEMPLATE_SPECS:
         return TEMPLATE_SPECS[key]
+    if key.startswith("mesh.elements."):
+        return _element_template_spec(label)
     field_name = label.lower().replace(" ", "_").replace("-", "_") + "_name"
     return {
         "template": f"*{label.upper().replace(' ', '')}, NAME={{{field_name}}}",
@@ -45,6 +47,26 @@ def render_preview(
             lines.append(_format_template(data, row_values))
         return "\n".join(lines)
     return _format_template(template, values)
+
+
+def _element_template_spec(label: str) -> dict:
+    """Describe one canonical element-family record with repeated element rows."""
+    example_type = "".join(character for character in label.upper() if character.isalnum())
+    return {
+        "template": "*ELEMENT, TYPE={element_type}\n{element_id}, {connectivity}",
+        "fields": (
+            ("element_type", f"Deck element type used for {label}", example_type),
+            ("element_id", "Solver element identifier", "42"),
+            ("connectivity", "Ordered solver node connectivity", "101, 102, 103, 104"),
+        ),
+        "repeatable": True,
+        "repeat_default": True,
+        "repeat_fields": ("element_id", "connectivity"),
+        "repeat_examples": (
+            {"element_id": "42", "connectivity": "101, 102, 103, 104"},
+            {"element_id": "43", "connectivity": "102, 105, 106, 103"},
+        ),
+    }
 
 
 def _format_template(template: str, values) -> str:
