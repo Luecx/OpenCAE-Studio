@@ -13,6 +13,7 @@ from PyQt6.QtCore import QObject, QProcess, QThread, pyqtSignal, pyqtSlot
 from opencae.model.entities.optimization import OptimizationIteration, OptimizationRun
 
 from .deck import render_topology_deck
+from .density_state import store_density_volumes
 from .initialization_worker import TopologyInitializationWorker
 from .iteration import compute_iteration, read_topology_fields
 from .res_field_reader import ResFieldReader
@@ -273,6 +274,7 @@ class TopologyOptimizationRunner(QObject):
             self.physical_density,
             self.reader,
         )
+        store_density_volumes(self._current_density_file, fields["VOLUME"])
         calculation = compute_iteration(
             self.project,
             optimization,

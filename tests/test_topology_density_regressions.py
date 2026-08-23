@@ -6,6 +6,20 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from opencae.model.core import EntityRef
+from opencae.model.entities.optimization import (
+    OptimizationConstraint,
+    OptimizationResponse,
+    OptimizationRun,
+    ResponseType,
+    TopologyOptimization,
+)
+from opencae.model.entities.project import Project
+from opencae.optimization import (
+    automatic_density_threshold,
+    load_density_state,
+    store_density_volumes,
+)
 from opencae.optimization.iteration import read_topology_fields
 from opencae.optimization.oc import optimality_criteria_update
 from opencae.ui.viewport.topology_overlay import visible_density_indices
@@ -80,3 +94,56 @@ def test_threshold_keeps_uniform_values_with_roundoff_visible():
     visible = visible_density_indices(values, 0.3)
 
     assert np.array_equal(visible, np.asarray([0, 1]))
+
+
+def test_density_state_roundtrip_preserves_solver_element_volumes(tmp_path):
+    path = tmp_path / "density.npz"
+    np.savez_compressed(path, physical=np.asarray([0.8, 0.2]))
+
+    legacy_density, legacy_volumes = load_density_state(path)
+    assert np.allclose(legacy_density, [0.8, 0.2])
+    assert legacy_volumes is None
+
+    store_density_volumes(path, [3.0, 7.0])
+    density, volumes = load_density_state(path)
+
+    assert np.allclose(density, [0.8, 0.2])
+    assert np.allclose(volumes, [3.0, 7.0])
+
+
+def test_automatic_threshold_matches_closest_weighted_volume_fraction():
+    response = OptimizationResponse(
+        name="Volume fraction",
+        response_type=ResponseType.VOLUME_FRACTION,
+    )
+    constraint = OptimizationConstraint(
+        name="Volume constraint",
+        response_ref=EntityRef.of(response),
+        limit=0.3,
+    )
+    study = TopologyOptimization(
+        name="Topology",
+        responses=[response],
+        constraints=[constraint],
+    )
+    run = OptimizationRun(
+        name="Run",
+        optimization_ref=EntityRef.of(study),
+    )
+    study.runs.append(run)
+    project = Project(name="Threshold", studies=[study])
+    mesh_index = SimpleNamespace(
+        count=4,
+        material_densities=np.ones(4),
+        mask_for=lambda _project, _region: np.ones(4, dtype=bool),
+    )
+
+    result = automatic_density_threshold(
+        project,
+        run,
+        mesh_index,
+        density=[0.9, 0.8, 0.2, 0.1],
+        volumes=[2.0, 1.0, 4.0, 3.0],
+    )
+
+    assert result == pytest.approx((0.8, 0.3, 0.3))

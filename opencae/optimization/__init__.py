@@ -1,6 +1,8 @@
 """Public API for topology optimization algorithms and FEMaster integration."""
 
 from .deck import DENSITY_FIELD_NAME, render_topology_deck
+from .density_state import load_density_state, store_density_volumes
+from .density_threshold import active_constraint_limit, automatic_density_threshold
 from .filtering import (
     FilterOperators,
     build_density_constraint_matrix,
@@ -28,6 +30,8 @@ __all__ = [
     "ResponseEvaluation",
     "TopologyMeshIndex",
     "TopologyOptimizationRunner",
+    "active_constraint_limit",
+    "automatic_density_threshold",
     "build_density_constraint_matrix",
     "build_distance_matrix",
     "build_filter_operators",
@@ -35,7 +39,9 @@ __all__ = [
     "dense_values",
     "evaluate_response",
     "minimum_element_distance",
+    "load_density_state",
     "optimality_criteria_update",
     "render_topology_deck",
+    "store_density_volumes",
     "validate_topology_optimization",
 ]

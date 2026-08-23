@@ -27,7 +27,7 @@ class OptimizationController(
         self._dialogs = []
         self._run_dialogs = {}
         self._display_iteration = {}
-        self._threshold = 0.30
+        self._threshold = None
         self._overlay = TopologyDensityOverlay()
         self._pending_display = None
         store.selection_changed.connect(self._selection_changed)

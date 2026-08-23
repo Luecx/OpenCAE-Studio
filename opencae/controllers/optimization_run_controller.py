@@ -9,7 +9,11 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QInputDialog
 
 from opencae.model.entities.optimization import OptimizationIteration, OptimizationRun
-from opencae.optimization import build_mesh_index
+from opencae.optimization import (
+    automatic_density_threshold,
+    build_mesh_index,
+    load_density_state,
+)
 
 
 class OptimizationRunMixin:
@@ -34,18 +38,19 @@ class OptimizationRunMixin:
         self._step_iteration(1)
 
     def threshold(self):
+        """Choose automatic constraint matching or a manual density cutoff."""
         value, accepted = QInputDialog.getDouble(
             self.parent,
             "Topology density threshold",
-            "Show elements with density ≥",
-            self._threshold,
+            "Show elements with density ≥ (0 = match constraint)",
+            self._threshold if self._threshold is not None else 0.0,
             0.0,
             1.0,
             3,
         )
         if not accepted:
             return
-        self._threshold = float(value)
+        self._threshold = float(value) if value > 0.0 else None
         self._show_selected_iteration()
 
     def _show_selected_iteration(self):
@@ -71,8 +76,11 @@ class OptimizationRunMixin:
         if not density_path.exists():
             self.store.message.emit(f"Density state is unavailable: {density_path}")
             return
-        with np.load(density_path, allow_pickle=False) as values:
-            physical = np.asarray(values["physical"], dtype=float).copy()
+        try:
+            physical, volumes = load_density_state(density_path)
+        except (OSError, KeyError, ValueError) as exc:
+            self.store.message.emit(f"Density state could not be loaded: {exc}")
+            return
         try:
             mesh_index = build_mesh_index(project)
         except Exception as exc:
@@ -85,7 +93,7 @@ class OptimizationRunMixin:
             )
             return
         self.parent.ribbon.set_stage("STUDIES")
-        self._show_density(run, iteration, mesh_index, physical)
+        self._show_density(run, iteration, mesh_index, physical, volumes)
 
     def _step_iteration(self, delta):
         project = self.store.project
@@ -112,7 +120,8 @@ class OptimizationRunMixin:
             self.parent.viewport.clear_region_previews("optimization-selection")
             self.parent.viewport.clear_datum_reference_preview()
 
-    def _show_density(self, run, iteration, mesh_index, density):
+    def _show_density(self, run, iteration, mesh_index, density, volumes=None):
+        """Queue one density state and its optional exact element volumes."""
         viewport = self.parent.viewport
         if not hasattr(viewport, "scene") or not hasattr(viewport, "plotter"):
             return
@@ -121,6 +130,7 @@ class OptimizationRunMixin:
             iteration,
             mesh_index,
             np.asarray(density, dtype=float).copy(),
+            None if volumes is None else np.asarray(volumes, dtype=float).copy(),
         )
         if getattr(viewport, "display_mode", "") != "mesh":
             viewport.set_display_mode("mesh")
@@ -129,17 +139,31 @@ class OptimizationRunMixin:
             self._restore_pending_display()
 
     def _restore_pending_display(self):
-        if self._pending_display is None or self.parent.ribbon.current_stage != "STUDIES":
+        """Restore the queued frame once the mesh viewport is ready."""
+        if (
+            self._pending_display is None
+            or self.parent.ribbon.current_stage != "STUDIES"
+        ):
             return
-        run, iteration, mesh_index, density = self._pending_display
+        run, iteration, mesh_index, density, volumes = self._pending_display
         try:
+            threshold = self._threshold
+            if threshold is None:
+                matched = automatic_density_threshold(
+                    self.store.project,
+                    run,
+                    mesh_index,
+                    density,
+                    volumes,
+                )
+                threshold = matched[0] if matched is not None else 0.0
             self._overlay.show(
                 self.parent.viewport,
                 run,
                 iteration,
                 mesh_index,
                 density,
-                threshold=self._threshold,
+                threshold=threshold,
             )
         except Exception as exc:
             self.store.message.emit(f"Topology display failed: {exc}")

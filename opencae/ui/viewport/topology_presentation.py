@@ -10,6 +10,7 @@ from opencae.geometry.orphan_mesh import snapshot_from_part
 from .pyvista_mesh import build_grid
 from .scalar_bar import scalar_bar_args
 from .vtk_cell_data import cell_array
+from .viewport_text_box import apply_viewport_text_box
 
 _THRESHOLD_ABSOLUTE_TOLERANCE = 1.0e-9
 _THRESHOLD_RELATIVE_TOLERANCE = 1.0e-9
@@ -174,12 +175,13 @@ def add_topology_presentation(
             )
             names.append(boundary_name)
     label_name = f"{name_prefix}-label"
-    plotter.add_text(
+    label_actor = plotter.add_text(
         topology_label(number, objective, density, threshold),
         position="upper_left",
         font_size=10,
         name=label_name,
         render=False,
     )
+    apply_viewport_text_box(label_actor)
     names.append(label_name)
     return actor, grid, mesh_actor, boundary_actor, names

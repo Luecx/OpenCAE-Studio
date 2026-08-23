@@ -2,16 +2,31 @@
 
 from pathlib import Path
 
-import numpy as np
 from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtWidgets import QDialog, QLabel, QProgressBar, QSplitter, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import (
+    QDialog,
+    QLabel,
+    QProgressBar,
+    QSplitter,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from opencae.model.entities.optimization import OptimizationRun
-from opencae.optimization import build_mesh_index
+from opencae.optimization import (
+    active_constraint_limit,
+    automatic_density_threshold,
+    build_mesh_index,
+    load_density_state,
+)
 from opencae.ui.core.widgets import MonospaceOutputView
 from opencae.ui.templates import SectionHeading
 from opencae.ui.viewport.topology_overlay import TopologyDensityOverlay
 from opencae.ui.viewport.viewport_factory import create_viewport
+
+from .topology_convergence_plot import TopologyConvergencePlot
+from .topology_threshold_control import TopologyThresholdControl
 
 
 class TopologyJobMonitor(QDialog):
@@ -30,6 +45,7 @@ class TopologyJobMonitor(QDialog):
             f"Topology Monitor - {getattr(job, 'name', 'Job')}"
         )
         self.resize(980, 760)
+        self.setMinimumSize(720, 520)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
@@ -41,6 +57,15 @@ class TopologyJobMonitor(QDialog):
         layout.addWidget(self.phase)
         layout.addWidget(self.metrics)
         layout.addWidget(self.progress)
+
+        self.tabs = QTabWidget()
+        density_page = QWidget()
+        density_layout = QVBoxLayout(density_page)
+        density_layout.setContentsMargins(8, 8, 8, 8)
+        density_layout.setSpacing(8)
+
+        self.threshold_control = TopologyThresholdControl()
+        density_layout.addWidget(self.threshold_control)
 
         splitter = QSplitter(Qt.Orientation.Vertical)
         self.viewport = create_viewport(store, splitter)
@@ -59,7 +84,14 @@ class TopologyJobMonitor(QDialog):
         splitter.setStretchFactor(0, 4)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([500, 170])
-        layout.addWidget(splitter, 1)
+        density_layout.addWidget(splitter, 1)
+        self.tabs.addTab(density_page, "Density")
+
+        self.convergence = TopologyConvergencePlot()
+        self.tabs.addTab(self.convergence, "Convergence")
+        layout.addWidget(self.tabs, 1)
+
+        self.threshold_control.threshold_changed.connect(self._present_pending)
 
         self.viewport.request_refresh(fit=True)
         self.set_progress(
@@ -103,7 +135,15 @@ class TopologyJobMonitor(QDialog):
             f"Constraint {constraints}   "
             f"max Δρ {iteration.maximum_density_change:.3g}"
         )
-        self._pending = (run, iteration, mesh_index, density)
+        try:
+            _stored_density, volumes = load_density_state(iteration.density_file)
+        except (OSError, KeyError, ValueError):
+            volumes = None
+        self.convergence.set_iterations(
+            run.iterations,
+            active_constraint_limit(self.store.project, run),
+        )
+        self._pending = (run, iteration, mesh_index, density, volumes)
         QTimer.singleShot(0, self._present_pending)
 
     def _restore_latest_frame(self):
@@ -126,8 +166,7 @@ class TopologyJobMonitor(QDialog):
         if not path.exists():
             return
         try:
-            with np.load(path, allow_pickle=False) as values:
-                density = np.asarray(values["physical"], dtype=float).copy()
+            density, _ = load_density_state(path)
             mesh_index = build_mesh_index(self.store.project)
         except Exception as exc:
             self.phase.setText(f"Stored visualization failed: {exc}")
@@ -147,15 +186,37 @@ class TopologyJobMonitor(QDialog):
         """Present only the most recent queued topology density frame."""
         if self._pending is None:
             return
-        run, iteration, mesh_index, density = self._pending
+        run, iteration, mesh_index, density, volumes = self._pending
         try:
+            threshold = self.threshold_control.value
+            if self.threshold_control.automatic:
+                matched = automatic_density_threshold(
+                    self.store.project,
+                    run,
+                    mesh_index,
+                    density,
+                    volumes,
+                )
+                if matched is not None:
+                    threshold, achieved, limit = matched
+                    self.threshold_control.show_automatic_result(
+                        threshold,
+                        achieved,
+                        limit,
+                        approximate=volumes is None,
+                    )
+                else:
+                    threshold = 0.0
+                    self.threshold_control.show_automatic_unavailable()
+            else:
+                self.threshold_control.show_manual_result()
             self.overlay.show(
                 self.viewport,
                 run,
                 iteration,
                 mesh_index,
                 density,
-                threshold=0.0,
+                threshold=threshold,
             )
         except Exception as exc:
             self.phase.setText(f"Live visualization failed: {exc}")
