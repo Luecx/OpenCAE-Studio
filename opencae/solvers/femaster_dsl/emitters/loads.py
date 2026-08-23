@@ -1,15 +1,27 @@
+"""Writes FEMaster load and support collectors from current region definitions."""
+
 from __future__ import annotations
 
 from opencae.model.entities.loads import (
-    BodyLoad, ConcentratedLoad, DistributedLoad, ForceLoad, GravityLoad,
-    InertiaLoad, MomentLoad, PressureLoad, TemperatureLoad, VolumeLoad,
+    BodyLoad,
+    ConcentratedLoad,
+    DistributedLoad,
+    ForceLoad,
+    GravityLoad,
+    InertiaLoad,
+    MomentLoad,
+    PressureLoad,
+    TemperatureLoad,
+    VolumeLoad,
 )
 from opencae.model.selection import NodalLoadDistribution, RegionProjection
+
 from ..command import command
 from .region_materialization import materialize_region
 
 
 def write_support(support, writer, context):
+    """Write one support collector."""
     target = materialize_region(
         support.target,
         RegionProjection.NODES,
@@ -21,7 +33,9 @@ def write_support(support, writer, context):
     ).name
     values = list(getattr(support, "components", ()) or ())
     if len(values) != 6:
-        raise ValueError(f"Support '{support.name}' must define exactly six components")
+        raise ValueError(
+            f"Support '{support.name}' must define exactly six components"
+        )
     command(
         writer,
         "SUPPORT",
@@ -32,8 +46,12 @@ def write_support(support, writer, context):
 
 
 def write_load(load, writer, context):
+    """Dispatch one Load entity to its FEMaster representation."""
     collector = context.solver_name(load, load.name)
-    orientation = _orientation(getattr(load, "coordinate_system_ref", None), context)
+    orientation = _orientation(
+        getattr(load, "coordinate_system_ref", None),
+        context,
+    )
 
     if isinstance(load, TemperatureLoad):
         _write_temperature(load, writer, context, collector)
@@ -50,19 +68,39 @@ def write_load(load, writer, context):
             cache_key=("load-target", load.id),
         )
         components = _nodal_components(load)
-        if isinstance(load, ConcentratedLoad) and load.distribution == NodalLoadDistribution.TOTAL_UNIFORM:
+        if (
+            isinstance(load, ConcentratedLoad)
+            and load.distribution == NodalLoadDistribution.TOTAL_UNIFORM
+        ):
             components = [value / materialized.count for value in components]
-        command(writer, "CLOAD", [(materialized.name, *components)], LOAD_COLLECTOR=collector, ORIENTATION=orientation)
+        command(
+            writer,
+            "CLOAD",
+            [(materialized.name, *components)],
+            LOAD_COLLECTOR=collector,
+            ORIENTATION=orientation,
+        )
         return
 
     if isinstance(load, DistributedLoad):
         target = _materialize(load, RegionProjection.FACETS, writer, context)
-        command(writer, "DLOAD", [(target, *_components(load, 3))], LOAD_COLLECTOR=collector, ORIENTATION=orientation)
+        command(
+            writer,
+            "DLOAD",
+            [(target, *_components(load, 3))],
+            LOAD_COLLECTOR=collector,
+            ORIENTATION=orientation,
+        )
         return
 
     if isinstance(load, PressureLoad):
         target = _materialize(load, RegionProjection.FACETS, writer, context)
-        command(writer, "PLOAD", [(target, getattr(load, "pressure", getattr(load, "magnitude", 0.0)))], LOAD_COLLECTOR=collector)
+        command(
+            writer,
+            "PLOAD",
+            [(target, getattr(load, "pressure", getattr(load, "magnitude", 0.0)))],
+            LOAD_COLLECTOR=collector,
+        )
         return
 
     if isinstance(load, (VolumeLoad, GravityLoad, BodyLoad)):
@@ -71,13 +109,31 @@ def write_load(load, writer, context):
         if isinstance(load, (GravityLoad, BodyLoad)):
             vector = [0.0] * 3
             vector[_direction_index(load.direction)] = load.magnitude
-        command(writer, "VLOAD", [(target, *vector)], LOAD_COLLECTOR=collector, ORIENTATION=orientation)
+        command(
+            writer,
+            "VLOAD",
+            [(target, *vector)],
+            LOAD_COLLECTOR=collector,
+            ORIENTATION=orientation,
+        )
         return
 
     if isinstance(load, InertiaLoad):
         target = _materialize(load, RegionProjection.ELEMENTS, writer, context)
-        row = (target, *load.center, *load.center_acceleration, *load.angular_velocity, *load.angular_acceleration)
-        command(writer, "INERTIALOAD", [row], LOAD_COLLECTOR=collector, CONSIDER_POINT_MASSES=load.consider_point_masses)
+        row = (
+            target,
+            *load.center,
+            *load.center_acceleration,
+            *load.angular_velocity,
+            *load.angular_acceleration,
+        )
+        command(
+            writer,
+            "INERTIALOAD",
+            [row],
+            LOAD_COLLECTOR=collector,
+            CONSIDER_POINT_MASSES=load.consider_point_masses,
+        )
         return
 
     raise ValueError(f"Load class '{type(load).__name__}' has no FEMaster mapping")
@@ -98,13 +154,16 @@ def _materialize(load, projection, writer, context):
 def _write_temperature(load, writer, context, collector):
     field = context.resolve(load.temperature_field_ref)
     if field is None:
-        legacy = load.temperature_field_ref.legacy_name if load.temperature_field_ref else ""
-        if not legacy:
-            raise ValueError(f"Temperature load '{load.name}' has no valid temperature field")
-        field_name = legacy
-    else:
-        field_name = context.solver_name(field, field.name)
-    command(writer, "TLOAD", LOAD_COLLECTOR=collector, TEMPERATUREFIELD=field_name, REFERENCETEMPERATURE=load.reference_temperature)
+        raise ValueError(
+            f"Temperature load '{load.name}' has no valid temperature field"
+        )
+    command(
+        writer,
+        "TLOAD",
+        LOAD_COLLECTOR=collector,
+        TEMPERATUREFIELD=context.solver_name(field, field.name),
+        REFERENCETEMPERATURE=load.reference_temperature,
+    )
 
 
 def _nodal_components(load):
