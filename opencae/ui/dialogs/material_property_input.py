@@ -1,48 +1,12 @@
-"""Provides the numeric material-property editor with an optional unit segment."""
+"""Compatibility name for the canonical numeric unit input used by Materials."""
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QLabel, QWidget
-
-from opencae.ui.templates import apply_primary_control_height
+from opencae.ui.templates import NumericUnitInput
 
 
-class MaterialPropertyInput(QWidget):
-    """Edit one numeric material value and display its unit as a fixed suffix cell."""
+class MaterialPropertyInput(NumericUnitInput):
+    """Preserve the Material-dialog type name while using shared control metrics."""
 
     def __init__(self, value: float, unit: str = "", parent=None):
-        super().__init__(parent)
-        self.setObjectName("MaterialPropertyInput")
-        apply_primary_control_height(self)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        self.editor = QDoubleSpinBox()
-        self.editor.setObjectName(
-            "MaterialPropertySpinWithUnit" if unit else "MaterialPropertySpin"
-        )
-        self.editor.setRange(-1e30, 1e30)
-        self.editor.setDecimals(8)
-        self.editor.setValue(float(value))
-        apply_primary_control_height(self.editor)
-        layout.addWidget(self.editor, 1)
-
-        self.unit_label = None
-        if unit:
-            # Units are presentation metadata, not another editable model value.
-            self.unit_label = QLabel(unit)
-            self.unit_label.setObjectName("MaterialPropertyUnit")
-            self.unit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            apply_primary_control_height(self.unit_label)
-            layout.addWidget(self.unit_label)
-
-    def value(self) -> float:
-        """Return the current numeric value in project display units."""
-        return self.editor.value()
-
-    def setValue(self, value: float) -> None:
-        """Replace the displayed numeric value."""
-        self.editor.setValue(float(value))
+        super().__init__(value=value, unit=unit, parent=parent)
