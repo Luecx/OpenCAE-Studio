@@ -6,6 +6,7 @@ from .control_metrics import (
     FIELD_LABEL_SPACING,
     PRIMARY_CONTROL_HEIGHT,
     apply_primary_control_height,
+    apply_primary_square_button,
 )
 from .dialogs import (
     DialogScaffold,
@@ -28,6 +29,7 @@ from .layouts import (
     vertical_group,
 )
 from .menus import action_group_button
+from .numeric_unit_input import NumericUnitInput
 from .primitives import (
     action_button,
     button,
@@ -43,6 +45,7 @@ __all__ = [
     "LabelRole",
     "LabelSpec",
     "DialogScaffold",
+    "NumericUnitInput",
     "button",
     "label",
     "action_button",
@@ -66,4 +69,5 @@ __all__ = [
     "PRIMARY_CONTROL_HEIGHT",
     "FIELD_LABEL_SPACING",
     "apply_primary_control_height",
+    "apply_primary_square_button",
 ]
