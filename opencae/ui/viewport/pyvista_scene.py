@@ -1,4 +1,4 @@
-"""Owns model, mesh and result actors for the PyVista viewport."""
+"""Own model, mesh and result actors for the PyVista viewport."""
 
 from opencae.geometry.cache import CACHE
 from opencae.geometry.errors import GeometryError
@@ -9,7 +9,11 @@ from .coordinate_system_overlay import CoordinateSystemOverlay
 from .coupling_overlay import CouplingOverlay
 from .datum_overlay import DatumOverlay
 from .orientation_overlay import OrientationOverlay
-from .pyvista_geometry import add_geometry
+from .pyvista_geometry import (
+    add_geometry,
+    forget_actor_colors,
+    surface_is_hidden,
+)
 from .pyvista_mesh import add_mesh
 from .reference_point_overlay import ReferencePointOverlay
 from .region_overlay import RegionOverlay
@@ -21,6 +25,8 @@ from .topology_overlay import TopologyDensityOverlay
 
 
 class PyVistaScene(SceneDisplayMixin):
+    """Own the persistent VTK actors representing the active display context."""
+
     def __init__(self, owner):
         self.owner = owner
         self.snapshot = None
@@ -56,6 +62,7 @@ class PyVistaScene(SceneDisplayMixin):
         self.result_undeformed_actor = None
 
     def refresh(self, part, fit=False):
+        """Rebuild the active base scene while preserving camera state when possible."""
         camera = camera_position(self.owner.plotter)
         previous = self._context_key()
         self.clear(render=False)
@@ -69,9 +76,12 @@ class PyVistaScene(SceneDisplayMixin):
             self.fit()
         else:
             restore_camera(self.owner.plotter, camera)
-        self.owner.plotter.render()
+        # Rendering is owned by PyVistaViewport._perform_refresh(), which first
+        # restores dialog/selection overlays. This avoids drawing the same base
+        # scene once here and immediately again in the caller.
 
     def clear(self, render=True):
+        """Remove all scene-owned actors and release their auxiliary references."""
         self.owner.section_view.clear_scene()
         self.topology_overlay.clear(self.owner, render=False)
         self.seed_overlay.clear(self.owner.plotter, render=False)
@@ -83,6 +93,7 @@ class PyVistaScene(SceneDisplayMixin):
         self.boundary_overlay.clear(self.owner.plotter)
         self.region_overlay.clear(self.owner.plotter)
         self.selection_preview_overlay.clear(self.owner.plotter)
+        forget_actor_colors(self.face_actors)
         self.owner.plotter.clear()
         self.owner.plotter.set_background(PALETTE["viewport"])
         self.owner.canvas.meshability.hide()
@@ -140,6 +151,8 @@ class PyVistaScene(SceneDisplayMixin):
         self.datum_overlay.show_part(self.owner.plotter, part, self)
         self.owner.plotter.add_axes(color="#dce3e8")
         self.owner.picker.configure()
+        if self.snapshot is not None and self.owner.display_mode == "geometry":
+            self._apply_cad_visibility(part.id, render=False)
 
     def _show_assembly(self):
         project = self.owner.store.project
@@ -247,6 +260,66 @@ class PyVistaScene(SceneDisplayMixin):
         self.edge_actors.update(edges)
         self.vertex_actors.update(vertices)
 
+    def apply_topology_visibility(self, owner_id: str, kind: str) -> bool:
+        """Apply a visibility edit in-place when the current scene supports it.
+
+        Returns True when no full scene rebuild is required. Mesh element hiding
+        still rebuilds its inexpensive combined mesh actor; CAD face/cell hiding
+        updates the persistent face actors directly.
+        """
+        owner_id = str(owner_id or "")
+        category = str(kind or "").strip().lower()
+        aliases = {"face": "faces", "cell": "cells", "element": "elements"}
+        category = aliases.get(category, category)
+
+        # Part topology state is not rendered directly in Assembly/Results. A
+        # later context build will consume the state, so rebuilding now is waste.
+        if self._uses_assembly() or self.owner.stage == "RESULTS":
+            return True
+        if owner_id != str(self.part_id or ""):
+            return True
+        if category in {"faces", "cells"}:
+            if self.owner.display_mode != "geometry" or self.snapshot is None:
+                return True
+            self._apply_cad_visibility(owner_id, render=True)
+            return True
+        if category == "elements":
+            return self.owner.display_mode != "mesh"
+        return False
+
+    def _apply_cad_visibility(self, owner_id: str, *, render: bool) -> None:
+        """Synchronize current Part face/edge props from session visibility state."""
+        if self.snapshot is None:
+            return
+        hidden_faces = self._hidden(owner_id, "faces")
+        hidden_cells = self._hidden(owner_id, "cells")
+        any_surface_visible = False
+        for actor, reference in self.face_actors.items():
+            if reference.instance_id is not None:
+                continue
+            hidden = surface_is_hidden(
+                self.snapshot,
+                reference.tag,
+                hidden_faces,
+                hidden_cells,
+            )
+            actor.SetVisibility(not hidden)
+            any_surface_visible = any_surface_visible or not hidden
+
+        for actor, reference in self.edge_actors.items():
+            if reference.instance_id is None:
+                actor.SetVisibility(any_surface_visible)
+
+        # Picker configuration owns normal vertex visibility. Run it before the
+        # Hide-All override so points cannot remain visible without any surface.
+        self.owner.picker.configure()
+        if not any_surface_visible:
+            for actor, reference in self.vertex_actors.items():
+                if reference.instance_id is None:
+                    actor.SetVisibility(False)
+        if render:
+            self.owner.plotter.render()
+
     def _hidden(self, owner_id, kind):
         visibility = getattr(self.owner, "visibility", None)
         return (
@@ -256,10 +329,18 @@ class PyVistaScene(SceneDisplayMixin):
         )
 
     def snapshot_for(self, instance_key):
-        return self.assembly_snapshots.get(instance_key) if instance_key else self.snapshot
+        return (
+            self.assembly_snapshots.get(instance_key)
+            if instance_key
+            else self.snapshot
+        )
 
     def instance_for(self, instance_key):
-        return self.assembly_instances.get(instance_key) if instance_key else None
+        return (
+            self.assembly_instances.get(instance_key)
+            if instance_key
+            else None
+        )
 
     def _uses_assembly(self):
         return self.owner.stage in {
