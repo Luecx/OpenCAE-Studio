@@ -2,6 +2,11 @@
 
 from .button_role import ButtonRole
 from .button_spec import ButtonSpec
+from .control_metrics import (
+    FIELD_LABEL_SPACING,
+    PRIMARY_CONTROL_HEIGHT,
+    apply_primary_control_height,
+)
 from .dialogs import (
     DialogScaffold,
     apply_close_buttons,
@@ -58,4 +63,7 @@ __all__ = [
     "FORM_HORIZONTAL_SPACING",
     "FORM_VERTICAL_SPACING",
     "CONTROL_GROUP_SPACING",
+    "PRIMARY_CONTROL_HEIGHT",
+    "FIELD_LABEL_SPACING",
+    "apply_primary_control_height",
 ]
