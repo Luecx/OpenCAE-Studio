@@ -4,9 +4,10 @@ from enum import StrEnum
 
 
 class MeshStatus(StrEnum):
-    """Canonical validity state for generated/imported mesh data."""
+    """Canonical validity state for generated, imported, or authored mesh data."""
 
     NOT_GENERATED = "Not generated"
+    AUTHORED = "Authored"
     CURRENT = "Current"
     OUTDATED = "Outdated"
 
