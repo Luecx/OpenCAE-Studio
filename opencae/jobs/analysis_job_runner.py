@@ -34,6 +34,8 @@ class AnalysisJobRunner(QObject):
         extra_arguments,
         directory,
         parent=None,
+        *,
+        deck_profile=None,
     ):
         super().__init__(parent)
         self.project = deepcopy(project_snapshot)
@@ -42,6 +44,7 @@ class AnalysisJobRunner(QObject):
         self.executable = str(executable)
         self.extra_arguments = str(extra_arguments or "")
         self.directory = Path(directory)
+        self.deck_profile = deepcopy(deck_profile)
         self.output_base = self.directory / "results"
         self.process = None
         self._stopping = False
@@ -52,10 +55,12 @@ class AnalysisJobRunner(QObject):
             self.directory.mkdir(parents=True, exist_ok=True)
             extension = str(getattr(self.adapter, "deck_extension", ".inp"))
             deck_path = self.directory / f"analysis{extension}"
-            deck_path.write_text(
-                self.adapter.write_deck_text(self.project, analysis),
-                encoding="utf-8",
+            text = self.adapter.write_deck_text(
+                self.project,
+                analysis,
+                profile=self.deck_profile,
             )
+            deck_path.write_text(text, encoding=_profile_encoding(self.deck_profile))
             command = self.adapter.build_command(
                 self.executable,
                 deck_path,
@@ -121,3 +126,9 @@ class AnalysisJobRunner(QObject):
             self.process = None
             process.deleteLater()
             self.finished.emit(str(self.output_base), 1)
+
+
+def _profile_encoding(profile) -> str:
+    if profile is not None and str(profile.settings.get("encoding", "")).upper() == "ASCII":
+        return "ascii"
+    return "utf-8"
