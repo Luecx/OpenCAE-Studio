@@ -14,6 +14,8 @@ class FEMasterAdapter(SolverAdapter):
     """Render and execute FEMaster input decks."""
 
     name = "FEMaster"
+    accepted_deck_formats = ("FEMaster",)
+    custom_profile_formats = ("FEMaster",)
 
     def write_deck_text(self, project, analysis, profile=None):
         """Render a validated deck through the built-in or selected custom profile."""
