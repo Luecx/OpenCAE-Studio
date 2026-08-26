@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from PyQt6.QtCore import QPointF, QTimer, Qt
 from PyQt6.QtWidgets import QApplication, QDialog
 
+from opencae.deck_formats.selection import builtin_profile_id
 from opencae.model.core import EntityRef
 from opencae.model.entities.analysis import Analysis, AnalysisStep
 from opencae.solvers.registry import available_solvers
@@ -156,7 +157,7 @@ def test_analysis_dialog_remains_usable_after_exec_returns():
     candidate = dialog.result()
     assert candidate.name == "Analysis-1"
     assert candidate.solver == "FEMaster"
-    assert candidate.deck_profile == "FEMaster"
+    assert candidate.deck_profile_id == builtin_profile_id("FEMaster")
     assert [reference.entity_id for reference in candidate.step_refs] == [step.id]
     dialog.deleteLater()
     app.processEvents()
