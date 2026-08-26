@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from opencae.deck_formats import DeckProfile, DeckRecordProfile
+from opencae.deck_formats import DeckProfile, DeckRecordProfile, new_profile_id
 
 from .template_catalog import TEMPLATE_SPECS
 
@@ -26,6 +26,8 @@ def build_profile(
     order: dict[str, tuple[str, ...]],
     settings: dict[str, object],
     supported: dict[str, bool] | None = None,
+    *,
+    profile_id: str = "",
 ) -> DeckProfile:
     """Build a complete runtime profile from current editor state.
 
@@ -48,6 +50,7 @@ def build_profile(
     return DeckProfile(
         name=str(name),
         format_name=str(format_name),
+        profile_id=str(profile_id or new_profile_id()),
         records=records,
         order={key: tuple(values) for key, values in order.items()},
         settings=dict(settings),
