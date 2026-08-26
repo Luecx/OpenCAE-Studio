@@ -1,7 +1,19 @@
 from __future__ import annotations
 
 
-def command(writer, name, data=(), *, flags=(), **keywords):
+def command(writer, name, data=(), *, flags=(), record_key="", **keywords):
+    """Emit one native command through a semantic writer when available."""
+    semantic = getattr(writer, "command", None)
+    if callable(semantic):
+        semantic(
+            name,
+            data,
+            flags=flags,
+            keywords=keywords,
+            record_key=record_key,
+        )
+        return
+
     options = [str(flag).upper() for flag in flags if str(flag).strip()]
     options.extend(
         f"{key.upper()}={format_value(value)}"
