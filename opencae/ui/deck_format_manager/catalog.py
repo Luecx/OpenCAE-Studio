@@ -16,12 +16,22 @@ GLOBAL_PAGES = {
 }
 
 
-def template_spec(key: str, _label: str = "") -> dict:
-    """Return the explicit template specification for one concrete tree leaf."""
+def template_spec(
+    key: str,
+    _label: str = "",
+    format_name: str = "FEMaster",
+) -> dict:
+    """Return the concrete template specification for one format and tree leaf."""
     try:
-        return TEMPLATE_SPECS[key]
+        result = deepcopy(TEMPLATE_SPECS[key])
     except KeyError as exc:
         raise KeyError(f"No deck template is registered for '{key}'") from exc
+
+    variants = dict(result.pop("formats", {}))
+    override = variants.get(str(format_name))
+    if isinstance(override, dict):
+        result.update(deepcopy(override))
+    return result
 
 
 def format_preview_value(value: object, float_format: str = ".6g") -> str:
