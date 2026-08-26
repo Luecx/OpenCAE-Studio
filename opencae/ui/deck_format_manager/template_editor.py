@@ -43,6 +43,7 @@ class DeckTemplateEditor(QWidget):
         """Build the unified template editor, input browser and output preview."""
         super().__init__(parent)
         self._key = ""
+        self._format_name = "FEMaster"
         self._spec: dict = {"fields": (), "loops": ()}
         self._editable = True
         self._supported = True
@@ -85,10 +86,12 @@ class DeckTemplateEditor(QWidget):
         state: dict | None = None,
         *,
         supported: bool = True,
+        format_name: str = "FEMaster",
     ) -> None:
-        """Load one explicit record spec and optional profile-local editor state."""
+        """Load one format-specific record spec and optional profile-local state."""
         self._key = key
-        self._spec = template_spec(key, label_text)
+        self._format_name = str(format_name)
+        self._spec = template_spec(key, label_text, self._format_name)
         self._supported = bool(supported)
         state = dict(state or {})
 
@@ -224,9 +227,7 @@ class DeckTemplateEditor(QWidget):
         helper.setWordWrap(True)
         layout.addWidget(helper)
         self.fields = QTreeWidget()
-        self.fields.setHeaderLabels(
-            ("Field / Syntax", "Meaning", "Scope", "Example")
-        )
+        self.fields.setHeaderLabels(("Field / Syntax", "Meaning", "Scope", "Example"))
         self.fields.setRootIsDecorated(True)
         self.fields.setAlternatingRowColors(True)
         self.fields.setColumnWidth(0, 220)
@@ -305,6 +306,4 @@ class DeckTemplateEditor(QWidget):
         )
         if self._key.startswith("materials.") and self._key != "materials.header":
             text = "*MATERIAL, NAME=STEEL\n" + text
-        self.preview.setPlainText(
-            text if self.enabled.isChecked() else "<record disabled>"
-        )
+        self.preview.setPlainText(text if self.enabled.isChecked() else "<record disabled>")
