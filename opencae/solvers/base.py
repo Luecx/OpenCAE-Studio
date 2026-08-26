@@ -13,6 +13,8 @@ class SolverAdapter(ABC):
 
     name: str = "Generic"
     deck_extension: str = ".inp"
+    accepted_deck_formats: tuple[str, ...] = ()
+    custom_profile_formats: tuple[str, ...] = ()
 
     @abstractmethod
     def write_deck_text(
