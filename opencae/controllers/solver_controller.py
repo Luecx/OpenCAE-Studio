@@ -37,7 +37,7 @@ class SolverController:
         return self.solvers.get(value.solver) if isinstance(value, Analysis) else None
 
     def _deck_profile(self, analysis=None):
-        """Resolve the custom profile stored on the Analysis, if one is selected."""
+        """Resolve the custom profile referenced by the Analysis stable ID."""
         value = analysis or self._analysis()
         adapter = self._adapter(value)
         if not isinstance(value, Analysis) or adapter is None:
@@ -45,7 +45,7 @@ class SolverController:
         return resolve_profile(
             self.settings,
             adapter,
-            getattr(value, "deck_profile", ""),
+            getattr(value, "deck_profile_id", ""),
         )
 
     def deck_text(self):
@@ -123,6 +123,9 @@ class SolverController:
 
 def _profile_encoding(profile) -> str:
     """Translate the formatter's presentation label into a Python codec name."""
-    if profile is not None and str(profile.settings.get("encoding", "")).upper() == "ASCII":
+    if (
+        profile is not None
+        and str(profile.settings.get("encoding", "")).upper() == "ASCII"
+    ):
         return "ascii"
     return "utf-8"
