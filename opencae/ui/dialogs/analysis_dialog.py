@@ -6,6 +6,11 @@ from copy import deepcopy
 
 from PyQt6.QtWidgets import QMessageBox
 
+from opencae.deck_formats.selection import (
+    compatible_profile_names,
+    default_profile_name,
+    normalized_profile_name,
+)
 from opencae.model.core import EntityRef
 from opencae.ui.core.named_entity_dialog import NamedEntityDialog
 from opencae.ui.core.widgets import ChevronComboBox
@@ -19,12 +24,13 @@ class AnalysisDialog(NamedEntityDialog):
         self,
         value,
         steps,
-        solvers,
+        solver_adapters,
+        settings,
         *,
         existing_names=(),
         parent=None,
     ):
-        """Build solver selection and one checked list of referenced shared steps."""
+        """Build solver/profile selection and an ordered list of referenced steps."""
         super().__init__(
             "Analysis",
             value,
@@ -33,16 +39,34 @@ class AnalysisDialog(NamedEntityDialog):
             width=620,
         )
         self._steps = tuple(steps)
+        self._solver_adapters = dict(solver_adapters)
+        self._settings = settings
         selected = {ref.entity_id for ref in value.step_refs}
 
         self.solver = ChevronComboBox()
         self.solver.setMinimumWidth(0)
-        for solver in tuple(solvers or ("FEMaster",)):
-            self.solver.addItem(str(solver), str(solver))
+        for name in self._solver_adapters:
+            self.solver.addItem(str(name), str(name))
         index = self.solver.findData(value.solver)
         self.solver.setCurrentIndex(max(index, 0))
         apply_primary_control_height(self.solver)
         self.form.addRow("Solver", self.solver)
+
+        self.deck_profile = ChevronComboBox()
+        self.deck_profile.setMinimumWidth(0)
+        apply_primary_control_height(self.deck_profile)
+        self.form.addRow("Input Deck Profile", self.deck_profile)
+        self._refresh_profiles(reset=False)
+        current_profile = normalized_profile_name(
+            self._settings,
+            self._current_adapter(),
+            getattr(value, "deck_profile", ""),
+        )
+        profile_index = self.deck_profile.findData(current_profile)
+        self.deck_profile.setCurrentIndex(max(profile_index, 0))
+        self.solver.currentIndexChanged.connect(
+            lambda _index: self._refresh_profiles(reset=True)
+        )
 
         self.add_widget(SectionHeading("Referenced Steps"))
         step_options = [
@@ -54,15 +78,38 @@ class AnalysisDialog(NamedEntityDialog):
         self.add_widget(self.step_list)
         self.finish()
 
+    def _current_adapter(self):
+        """Return the adapter selected by the solver control."""
+        return self._solver_adapters[str(self.solver.currentData() or self.solver.currentText())]
+
+    def _refresh_profiles(self, *, reset: bool) -> None:
+        """Show only profiles compatible with the selected solver."""
+        adapter = self._current_adapter()
+        previous = str(self.deck_profile.currentData() or "")
+        self.deck_profile.blockSignals(True)
+        try:
+            self.deck_profile.clear()
+            for name in compatible_profile_names(self._settings, adapter):
+                self.deck_profile.addItem(name, name)
+            selected = default_profile_name(adapter) if reset else previous
+            index = self.deck_profile.findData(selected)
+            self.deck_profile.setCurrentIndex(max(index, 0))
+        finally:
+            self.deck_profile.blockSignals(False)
+
     def result(self):
         """Return a detached Analysis candidate referencing checked shared steps in order."""
         candidate = self.apply_name(deepcopy(self.value))
         candidate.solver = str(self.solver.currentData() or "FEMaster")
+        candidate.deck_profile = normalized_profile_name(
+            self._settings,
+            self._current_adapter(),
+            str(self.deck_profile.currentData() or ""),
+        )
         candidate.step_refs = [
             EntityRef(str(step_id), "AnalysisStep")
             for step_id in self.step_list.selected_values()
         ]
-        candidate.steps = []
         return candidate
 
     def validate(self) -> bool:
