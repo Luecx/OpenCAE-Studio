@@ -1,4 +1,4 @@
-"""Define native FEMaster amplitude, support and load record templates."""
+"""Define native amplitude, support and load record templates per deck format."""
 
 from __future__ import annotations
 
@@ -6,22 +6,50 @@ from __future__ import annotations
 _SUPPORT_FIELDS = (
     ("support_collector", "Destination support collector", "BC"),
     ("target", "Node ID or node-set target", "FIXED"),
-    ("ux", "Prescribed Ux; NAN means free", 0.0),
-    ("uy", "Prescribed Uy; NAN means free", 0.0),
-    ("uz", "Prescribed Uz; NAN means free", 0.0),
-    ("rx", "Prescribed Rx; NAN means free", "NAN"),
-    ("ry", "Prescribed Ry; NAN means free", "NAN"),
-    ("rz", "Prescribed Rz; NAN means free", "NAN"),
+    ("ux", "Prescribed Ux; none means free", 0.0),
+    ("uy", "Prescribed Uy; none means free", None),
+    ("uz", "Prescribed Uz; none means free", -2.5),
+    ("rx", "Prescribed Rx; none means free", None),
+    ("ry", "Prescribed Ry; none means free", 0.0),
+    ("rz", "Prescribed Rz; none means free", None),
     ("orientation", "Optional local coordinate-system name", "LOCAL-1"),
 )
 
 
 def _support_template(values: tuple[str, ...]) -> str:
-    """Build one SUPPORT row with six generalized components."""
+    """Build one FEMaster SUPPORT row with six generalized components."""
     return (
         "*SUPPORT, SUPPORT_COLLECTOR={support_collector}\n"
         "{target}, " + ", ".join(values)
     )
+
+
+def _boundary_template() -> str:
+    """Return an Abaqus-family BOUNDARY template driven by explicit DOF conditions."""
+    lines = ["*BOUNDARY"]
+    for dof, field in enumerate(("ux", "uy", "uz", "rx", "ry", "rz"), 1):
+        lines.extend(
+            (
+                f"{{if {field} is not none}}",
+                f"{{target}}, {dof}, {dof}, {{{field}}}",
+                "{endif}",
+            )
+        )
+    return "\n".join(lines)
+
+
+_BOUNDARY_VARIANTS = {
+    "Abaqus": {
+        "template": _boundary_template(),
+        "fields": _SUPPORT_FIELDS,
+        "commands": ("BOUNDARY",),
+    },
+    "CalculiX": {
+        "template": _boundary_template(),
+        "fields": _SUPPORT_FIELDS,
+        "commands": ("BOUNDARY",),
+    },
+}
 
 
 TEMPLATE_SPECS = {
@@ -59,6 +87,7 @@ TEMPLATE_SPECS = {
         "fields": _SUPPORT_FIELDS,
         "loops": (),
         "commands": ("SUPPORT",),
+        "formats": _BOUNDARY_VARIANTS,
     },
     "boundary_conditions.displacement": {
         "template": _support_template(
@@ -67,6 +96,7 @@ TEMPLATE_SPECS = {
         "fields": _SUPPORT_FIELDS,
         "loops": (),
         "commands": ("SUPPORT",),
+        "formats": _BOUNDARY_VARIANTS,
     },
     "boundary_conditions.symmetry": {
         "template": _support_template(
@@ -75,6 +105,7 @@ TEMPLATE_SPECS = {
         "fields": _SUPPORT_FIELDS,
         "loops": (),
         "commands": ("SUPPORT",),
+        "formats": _BOUNDARY_VARIANTS,
     },
     "loads.concentrated": {
         "template": (
