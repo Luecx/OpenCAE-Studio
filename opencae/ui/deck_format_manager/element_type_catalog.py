@@ -61,12 +61,18 @@ def element_template_specs() -> dict[str, dict]:
     return {
         f"mesh.elements.{element.key}": {
             "template": (
-                f"*ELEMENT, TYPE={element.code}\n"
+                f"*ELEMENT, TYPE={element.code}, ELSET={{element_set}}\n"
                 "{for element in elements}\n"
                 "{element.id}, {element.connectivity}\n"
                 "{endfor}"
             ),
-            "fields": (),
+            "fields": (
+                (
+                    "element_set",
+                    "Generated element-set name for this flattened block",
+                    "PART_E1",
+                ),
+            ),
             "loops": (
                 {
                     "collection": "elements",
