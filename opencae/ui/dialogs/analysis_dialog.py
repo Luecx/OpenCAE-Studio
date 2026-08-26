@@ -7,9 +7,9 @@ from copy import deepcopy
 from PyQt6.QtWidgets import QMessageBox
 
 from opencae.deck_formats.selection import (
-    compatible_profile_names,
-    default_profile_name,
-    normalized_profile_name,
+    default_profile_id,
+    normalized_profile_id,
+    profile_choices,
 )
 from opencae.model.core import EntityRef
 from opencae.ui.core.named_entity_dialog import NamedEntityDialog
@@ -57,10 +57,10 @@ class AnalysisDialog(NamedEntityDialog):
         apply_primary_control_height(self.deck_profile)
         self.form.addRow("Input Deck Profile", self.deck_profile)
         self._refresh_profiles(reset=False)
-        current_profile = normalized_profile_name(
+        current_profile = normalized_profile_id(
             self._settings,
             self._current_adapter(),
-            getattr(value, "deck_profile", ""),
+            getattr(value, "deck_profile_id", ""),
         )
         profile_index = self.deck_profile.findData(current_profile)
         self.deck_profile.setCurrentIndex(max(profile_index, 0))
@@ -80,7 +80,9 @@ class AnalysisDialog(NamedEntityDialog):
 
     def _current_adapter(self):
         """Return the adapter selected by the solver control."""
-        return self._solver_adapters[str(self.solver.currentData() or self.solver.currentText())]
+        return self._solver_adapters[
+            str(self.solver.currentData() or self.solver.currentText())
+        ]
 
     def _refresh_profiles(self, *, reset: bool) -> None:
         """Show only profiles compatible with the selected solver."""
@@ -89,9 +91,9 @@ class AnalysisDialog(NamedEntityDialog):
         self.deck_profile.blockSignals(True)
         try:
             self.deck_profile.clear()
-            for name in compatible_profile_names(self._settings, adapter):
-                self.deck_profile.addItem(name, name)
-            selected = default_profile_name(adapter) if reset else previous
+            for profile_id, name in profile_choices(self._settings, adapter):
+                self.deck_profile.addItem(name, profile_id)
+            selected = default_profile_id(adapter) if reset else previous
             index = self.deck_profile.findData(selected)
             self.deck_profile.setCurrentIndex(max(index, 0))
         finally:
@@ -101,7 +103,7 @@ class AnalysisDialog(NamedEntityDialog):
         """Return a detached Analysis candidate referencing checked shared steps in order."""
         candidate = self.apply_name(deepcopy(self.value))
         candidate.solver = str(self.solver.currentData() or "FEMaster")
-        candidate.deck_profile = normalized_profile_name(
+        candidate.deck_profile_id = normalized_profile_id(
             self._settings,
             self._current_adapter(),
             str(self.deck_profile.currentData() or ""),
