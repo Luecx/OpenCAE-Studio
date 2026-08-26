@@ -32,6 +32,9 @@ from .template_catalog import TEMPLATE_SPECS
 from .template_editor import DeckTemplateEditor
 
 
+_BUILTIN_PROFILE_NAMES = frozenset(("FEMaster", "Abaqus", "CalculiX"))
+
+
 class DeckFormatManagerDialog(QDialog):
     """Edit and persist deck profiles consumed by the normal export pipeline."""
 
@@ -138,13 +141,9 @@ class DeckFormatManagerDialog(QDialog):
                 profile = DeckProfile.from_dict(raw)
                 if profile is None:
                     continue
-                if self.profile_toolbar.register_profile(
-                    profile.name, profile.format_name
-                ):
+                if self.profile_toolbar.register_profile(profile.name, profile.format_name):
                     self._session_ids[profile.name] = profile.profile_id
-                    self._session_records[profile.name] = record_states_from_profile(
-                        profile
-                    )
+                    self._session_records[profile.name] = record_states_from_profile(profile)
                     self._session_orders[profile.name] = dict(profile.order)
                     self._session_globals[profile.name] = dict(profile.settings)
 
@@ -176,13 +175,13 @@ class DeckFormatManagerDialog(QDialog):
         self._loading = True
         self._current_template_key = key
         state = self._session_records.get(self._active_profile, {}).get(key)
+        format_name = self.profile_toolbar.format_name()
         self.template_page.load_record(
             key,
             label_text,
             state,
-            supported=self.navigation.is_supported(
-                key, self.profile_toolbar.format_name()
-            ),
+            supported=self.navigation.is_supported(key, format_name),
+            format_name=format_name,
         )
         self._loading = False
         self.stack.setCurrentWidget(self.template_page)
@@ -205,9 +204,7 @@ class DeckFormatManagerDialog(QDialog):
     def _profile_copied(self, source: str, target: str) -> None:
         self._store_current_profile_state(source)
         self._session_ids[target] = new_profile_id()
-        self._session_records[target] = deepcopy(
-            self._session_records.get(source, {})
-        )
+        self._session_records[target] = deepcopy(self._session_records.get(source, {}))
         self._session_orders[target] = deepcopy(
             self._session_orders.get(source, self._default_order)
         )
@@ -305,7 +302,7 @@ class DeckFormatManagerDialog(QDialog):
         target = profile or self._active_profile
         if not target or not self._current_template_key:
             return
-        if target in {"FEMaster", "Abaqus"}:
+        if target in _BUILTIN_PROFILE_NAMES:
             return
         self._session_records.setdefault(target, {})[
             self._current_template_key
