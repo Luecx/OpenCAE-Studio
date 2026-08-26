@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QApplication, QDialog
 
 from opencae.model.core import EntityRef
 from opencae.model.entities.analysis import Analysis, AnalysisStep
+from opencae.solvers.registry import available_solvers
 from opencae.ui.core.icons.factory import _ICON_MAP, _x_icon, make_icon
 from opencae.ui.core.icons.kinds import IconKind
 from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
@@ -138,10 +139,12 @@ def test_analysis_dialog_remains_usable_after_exec_returns():
         name="Analysis-1",
         step_refs=[EntityRef.of(step, "AnalysisStep")],
     )
+    settings = SimpleNamespace(deck_profiles={})
     dialog = AnalysisDialog(
         analysis,
         [step],
-        ["FEMaster"],
+        available_solvers(),
+        settings,
         existing_names=(),
     )
 
@@ -152,6 +155,8 @@ def test_analysis_dialog_remains_usable_after_exec_returns():
     assert dialog.validate()
     candidate = dialog.result()
     assert candidate.name == "Analysis-1"
+    assert candidate.solver == "FEMaster"
+    assert candidate.deck_profile == "FEMaster"
     assert [reference.entity_id for reference in candidate.step_refs] == [step.id]
     dialog.deleteLater()
     app.processEvents()
