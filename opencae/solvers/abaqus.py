@@ -9,6 +9,8 @@ from .base import SolverAdapter
 
 class AbaqusAdapter(SolverAdapter):
     name = "Abaqus"
+    accepted_deck_formats = ("Abaqus",)
+    custom_profile_formats = ()
 
     def write_deck_text(self, project, analysis, profile=None):
         """Render the native Abaqus deck; custom Abaqus profiles are not wired yet."""
