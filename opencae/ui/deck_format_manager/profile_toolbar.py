@@ -31,6 +31,7 @@ class DeckProfileToolbar(QWidget):
         self._profile_meta: dict[str, tuple[str, bool]] = {
             "FEMaster": ("FEMaster", True),
             "Abaqus": ("Abaqus", True),
+            "CalculiX": ("CalculiX", True),
         }
 
         layout = QHBoxLayout(self)
