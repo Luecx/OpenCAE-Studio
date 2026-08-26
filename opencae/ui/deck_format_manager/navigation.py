@@ -25,6 +25,7 @@ from .navigation_tree import order_state, populate_tree, restore_order_state
 _KEY_ROLE = int(Qt.ItemDataRole.UserRole)
 _FIXED_ROLE = _KEY_ROLE + 1
 _SUPPORTED_FORMATS_ROLE = _FIXED_ROLE + 1
+_FORMAT_LABELS_ROLE = _SUPPORTED_FORMATS_ROLE + 1
 
 
 class DeckFormatNavigation(QWidget):
@@ -107,9 +108,20 @@ class DeckFormatNavigation(QWidget):
         return (format_name or self._format_name) in supported
 
     def set_format(self, format_name: str) -> None:
-        """Store the selected underlying format without decorating unsupported rows."""
+        """Apply native labels and capability state for the selected dialect."""
         self._format_name = str(format_name)
         for item in self._items.values():
+            labels = dict(item.data(0, _FORMAT_LABELS_ROLE) or {})
+            if labels:
+                item.setText(
+                    0,
+                    str(
+                        labels.get(
+                            self._format_name,
+                            labels.get("FEMaster", item.text(0)),
+                        )
+                    ),
+                )
             item.setToolTip(0, "")
             font = item.font(0)
             font.setItalic(False)
@@ -167,6 +179,7 @@ class DeckFormatNavigation(QWidget):
             _SUPPORTED_FORMATS_ROLE,
             tuple(node.get("supported_formats", ())),
         )
+        item.setData(0, _FORMAT_LABELS_ROLE, dict(node.get("format_labels", {})))
         item.setIcon(0, make_icon(deck_record_icon_kind(node["key"]), 18))
         self._items[node["key"]] = item
         return item
