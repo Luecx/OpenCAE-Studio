@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from opencae.deck_formats import DeckProfile, DeckRecordProfile, new_profile_id
 
+from .catalog import template_spec
 from .template_catalog import TEMPLATE_SPECS
 
 
@@ -31,13 +32,13 @@ def build_profile(
 ) -> DeckProfile:
     """Build a complete runtime profile from current editor state.
 
-    ``binding_template`` always remains the immutable catalog template. User edits
-    change only textual rendering, never the semantic contract used to bind
-    lowered command values to named placeholders.
+    ``binding_template`` is always the immutable native template for the selected
+    format. User edits alter rendering only, never the semantic binding contract.
     """
     support = supported or {}
     records: dict[str, DeckRecordProfile] = {}
-    for key, spec in TEMPLATE_SPECS.items():
+    for key in TEMPLATE_SPECS:
+        spec = template_spec(key, format_name=format_name)
         state = dict(record_states.get(key, {}))
         allowed = bool(support.get(key, True))
         records[key] = DeckRecordProfile(
