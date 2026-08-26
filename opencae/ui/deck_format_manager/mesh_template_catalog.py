@@ -18,12 +18,12 @@ TEMPLATE_SPECS = {
     },
     "mesh.nodes": {
         "template": (
-            "*NODE\n"
+            "*NODE, NSET={node_set}\n"
             "{for node in nodes}\n"
             "{node.id}, {node.x}, {node.y}, {node.z}\n"
             "{endfor}"
         ),
-        "fields": (("node_set", "Optional NSET added on the NODE keyword", "NALL"),),
+        "fields": (("node_set", "NSET generated for this flattened node block", "NALL"),),
         "loops": (
             {
                 "collection": "nodes",
