@@ -52,6 +52,7 @@ def run_analysis(manager, analysis_id: str) -> None:
         return
 
     config = manager.settings.solver_config(analysis.solver)
+    deck_profile = manager.settings.active_deck_profile(analysis.solver)
     directory = job_directory(project, analysis.name)
     job = create_job(
         project,
@@ -69,16 +70,17 @@ def run_analysis(manager, analysis_id: str) -> None:
     job = manager.store.project.resolve(job.id)
     manager.select_job(job.id)
 
-    # The runner receives an immutable project snapshot so edits made while a
-    # solver is running cannot silently alter the submitted calculation.
+    # Both the model and formatter are snapshotted. Changing a custom profile
+    # while the solver is running must not alter the submitted calculation.
     runner = AnalysisJobRunner(
         deepcopy(manager.store.project),
         analysis.id,
         adapter,
         str(config.get("executable", "")),
-        str(config.get("arguments", "")),
+        str(config.get("arguments", config.get("extra_arguments", ""))),
         directory,
         manager,
+        deck_profile=deck_profile,
     )
     manager._runners[job.id] = runner
     runner.output.connect(
