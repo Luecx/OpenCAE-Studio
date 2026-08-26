@@ -35,7 +35,15 @@ class SolverController:
         value = analysis or self._analysis()
         return self.solvers.get(value.solver) if isinstance(value, Analysis) else None
 
+    def _deck_profile(self, analysis=None):
+        """Return the custom profile selected for the Analysis solver, if any."""
+        value = analysis or self._analysis()
+        if not isinstance(value, Analysis):
+            return None
+        return self.settings.active_deck_profile(value.solver)
+
     def deck_text(self):
+        """Render the active Analysis through its selected input-deck profile."""
         analysis = self._analysis()
         adapter = self._adapter(analysis)
         if analysis is None:
@@ -51,7 +59,11 @@ class SolverController:
             raise ValueError(
                 "Create at least one assembly instance before exporting an Analysis"
             )
-        return adapter.write_deck_text(self.store.project, analysis)
+        return adapter.write_deck_text(
+            self.store.project,
+            analysis,
+            profile=self._deck_profile(analysis),
+        )
 
     def validate(self):
         analysis = self._analysis()
@@ -61,8 +73,8 @@ class SolverController:
         self.parent.controllers.jobs.validate_analysis(analysis.id)
 
     def format_manager(self):
-        """Open the UI-only input deck format/profile editor prototype."""
-        DeckFormatManagerDialog(self.parent).exec()
+        """Open the persistent input-deck format/profile manager."""
+        DeckFormatManagerDialog(self.parent, settings=self.settings).exec()
 
     def preview(self):
         try:
@@ -85,7 +97,9 @@ class SolverController:
         if not path:
             return
         try:
-            Path(path).write_text(self.deck_text(), encoding="utf-8")
+            profile = self._deck_profile(analysis)
+            encoding = _profile_encoding(profile)
+            Path(path).write_text(self.deck_text(), encoding=encoding)
         except Exception as exc:
             QMessageBox.critical(self.parent, "Deck export failed", str(exc))
             return
@@ -99,3 +113,10 @@ class SolverController:
 
     def result_placeholder(self):
         self.parent.controllers.jobs.open_selected_results()
+
+
+def _profile_encoding(profile) -> str:
+    """Translate the formatter's presentation label into a Python codec name."""
+    if profile is not None and str(profile.settings.get("encoding", "")).upper() == "ASCII":
+        return "ascii"
+    return "utf-8"
