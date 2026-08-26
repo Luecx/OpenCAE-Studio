@@ -6,7 +6,7 @@ from copy import deepcopy
 
 from PyQt6.QtWidgets import QDialog
 
-from opencae.deck_formats.selection import default_profile_name
+from opencae.deck_formats.selection import default_profile_id
 from opencae.model.core import EntityRef
 from opencae.model.entities.analysis import Analysis, AnalysisStep
 from opencae.model.naming import next_name_from_names
@@ -193,7 +193,11 @@ class AnalysisController:
                 [item.name for item in project.analyses],
             ),
             solver=solver,
-            deck_profile=default_profile_name(adapter) if adapter is not None else solver,
+            deck_profile_id=(
+                default_profile_id(adapter)
+                if adapter is not None
+                else "builtin:femaster"
+            ),
         )
         self._analysis_dialog(value, None)
 
@@ -259,11 +263,11 @@ class AnalysisController:
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        solver, deck_profile = dialog.values()
-        if solver != analysis.solver or deck_profile != analysis.deck_profile:
+        solver, profile_id = dialog.values()
+        if solver != analysis.solver or profile_id != analysis.deck_profile_id:
             candidate = deepcopy(analysis)
             candidate.solver = solver
-            candidate.deck_profile = deck_profile
+            candidate.deck_profile_id = profile_id
             self.store.replace_entity(
                 f"Updated run configuration for {analysis.name}",
                 self.store.project.id,
