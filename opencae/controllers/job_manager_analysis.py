@@ -12,6 +12,7 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QMessageBox
 
+from opencae.deck_formats.selection import normalized_profile_name, resolve_profile
 from opencae.jobs import AnalysisJobRunner
 from opencae.model.core import EntityRef
 from opencae.model.entities.analysis import Analysis
@@ -52,7 +53,12 @@ def run_analysis(manager, analysis_id: str) -> None:
         return
 
     config = manager.settings.solver_config(analysis.solver)
-    deck_profile = manager.settings.active_deck_profile(analysis.solver)
+    profile_name = normalized_profile_name(
+        manager.settings,
+        adapter,
+        getattr(analysis, "deck_profile", ""),
+    )
+    deck_profile = resolve_profile(manager.settings, adapter, profile_name)
     directory = job_directory(project, analysis.name)
     job = create_job(
         project,
@@ -61,6 +67,9 @@ def run_analysis(manager, analysis_id: str) -> None:
         analysis.solver,
         directory,
     )
+    job.settings["deck_profile"] = profile_name
+    if deck_profile is not None:
+        job.settings["deck_profile_snapshot"] = deck_profile.to_dict()
     manager.store.add_entity(
         f"Created job {job.name}",
         project.id,
@@ -171,6 +180,7 @@ def _attach_solver_result(manager, job: Job, source: Path) -> None:
         metadata={
             "result_kind": "solver",
             "step_names": [step.name for step in steps],
+            "deck_profile": str(job.settings.get("deck_profile", "")),
         },
     )
     persist_result(manager.store, job.id, result)
