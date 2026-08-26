@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from opencae.deck_formats.selection import compatible_profile_names
+from opencae.deck_formats.selection import (
+    compatible_profile_ids,
+    profile_display_name,
+)
 from opencae.model.entities.analysis import Analysis
 from opencae.model.entities.optimization import TopologyOptimization
 from opencae.model.validation import validate_project
@@ -28,10 +31,11 @@ def analysis_errors(project, analysis_id, settings, solvers) -> list[str]:
     else:
         if analysis.solver not in settings.enabled_solvers():
             errors.append(f"Solver '{analysis.solver}' is disabled")
-        selected_profile = str(getattr(analysis, "deck_profile", ""))
-        if selected_profile not in compatible_profile_names(settings, adapter):
+        selected_profile = str(getattr(analysis, "deck_profile_id", ""))
+        if selected_profile not in compatible_profile_ids(settings, adapter):
+            display = profile_display_name(settings, selected_profile)
             errors.append(
-                f"Input deck profile '{selected_profile or '<not selected>'}' "
+                f"Input deck profile '{display or '<not selected>'}' "
                 f"is not compatible with solver '{analysis.solver}'"
             )
 
