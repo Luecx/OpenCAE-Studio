@@ -38,5 +38,7 @@ jobs:
           tests/test_deck_format_manager.py
           tests/test_deck_profile_pipeline.py
           tests/test_analysis_deck_profile_selection.py
+          tests/test_workflow_ui_regressions.py
+          tests/test_static_architecture.py
       - name: Diagnose remaining full-suite regressions
         run: python -m pytest -vv --maxfail=20 tests
