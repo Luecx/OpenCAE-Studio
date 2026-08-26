@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
+from opencae.deck_formats.selection import resolve_profile
 from opencae.model.entities.analysis import Analysis
 from opencae.ui.deck_format_manager import DeckFormatManagerDialog
 from opencae.ui.dialogs.deck_preview import DeckPreviewDialog
@@ -36,11 +37,16 @@ class SolverController:
         return self.solvers.get(value.solver) if isinstance(value, Analysis) else None
 
     def _deck_profile(self, analysis=None):
-        """Return the custom profile selected for the Analysis solver, if any."""
+        """Resolve the custom profile stored on the Analysis, if one is selected."""
         value = analysis or self._analysis()
-        if not isinstance(value, Analysis):
+        adapter = self._adapter(value)
+        if not isinstance(value, Analysis) or adapter is None:
             return None
-        return self.settings.active_deck_profile(value.solver)
+        return resolve_profile(
+            self.settings,
+            adapter,
+            getattr(value, "deck_profile", ""),
+        )
 
     def deck_text(self):
         """Render the active Analysis through its selected input-deck profile."""
@@ -49,7 +55,7 @@ class SolverController:
         if analysis is None:
             raise ValueError("Select an Analysis first")
         if adapter is None:
-            raise ValueError(f"The Analysis solver {analysis.solver!r} is disabled")
+            raise ValueError(f"The Analysis solver {analysis.solver!r} is unavailable")
         if not analysis.resolved_steps(self.store.project):
             raise ValueError("The Analysis references no existing Steps")
         if not any(
