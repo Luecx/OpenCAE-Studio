@@ -10,7 +10,7 @@ from opencae.model.core import decode_model, encode_model
 from opencae.model.project import Project
 
 PROJECT_FORMAT = "opencae-project"
-CURRENT_SCHEMA_VERSION = 22
+CURRENT_SCHEMA_VERSION = 23
 _ENVELOPE_FIELDS = {"format", "schema_version", "project"}
 
 
