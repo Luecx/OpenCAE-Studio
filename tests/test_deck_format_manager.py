@@ -134,12 +134,13 @@ def test_element_leaf_uses_explicit_for_loop_without_element_type_field(manager)
     assert manager.select_key("mesh.elements.c3d4")
     page = manager.template_page
     assert page.template_text() == (
-        "*ELEMENT, TYPE=C3D4\n"
+        "*ELEMENT, TYPE=C3D4, ELSET={element_set}\n"
         "{for element in elements}\n"
         "{element.id}, {element.connectivity}\n"
         "{endfor}"
     )
     assert page.available_field_names() == (
+        "element_set",
         "element.id",
         "element.connectivity",
     )
