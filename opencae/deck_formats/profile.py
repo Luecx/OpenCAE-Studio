@@ -3,6 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from uuid import NAMESPACE_URL, uuid4, uuid5
+
+
+def new_profile_id() -> str:
+    """Return a new stable identity for one user-created deck profile."""
+    return f"custom:{uuid4()}"
+
+
+def legacy_profile_id(name: str, format_name: str) -> str:
+    """Return a deterministic ID for settings created before profile IDs existed."""
+    token = uuid5(NAMESPACE_URL, f"opencae:deck-profile:{format_name}:{name}")
+    return f"custom:{token}"
 
 
 @dataclass(frozen=True)
@@ -40,10 +52,11 @@ class DeckRecordProfile:
 
 @dataclass(frozen=True)
 class DeckProfile:
-    """Complete user-selectable deck formatter profile."""
+    """Complete user-selectable deck formatter profile with stable identity."""
 
     name: str
     format_name: str
+    profile_id: str = field(default_factory=new_profile_id)
     records: dict[str, DeckRecordProfile] = field(default_factory=dict)
     order: dict[str, tuple[str, ...]] = field(default_factory=dict)
     settings: dict[str, object] = field(default_factory=dict)
@@ -55,6 +68,7 @@ class DeckProfile:
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-safe profile snapshot suitable for application settings."""
         return {
+            "profile_id": self.profile_id,
             "name": self.name,
             "format_name": self.format_name,
             "records": {key: value.to_dict() for key, value in self.records.items()},
@@ -71,6 +85,9 @@ class DeckProfile:
         format_name = str(value.get("format_name", "")).strip()
         if not name or not format_name:
             return None
+        profile_id = str(value.get("profile_id", "")).strip() or legacy_profile_id(
+            name, format_name
+        )
         records = {
             str(key): DeckRecordProfile.from_dict(item)
             for key, item in dict(value.get("records", {})).items()
@@ -81,5 +98,9 @@ class DeckProfile:
             for key, items in dict(value.get("order", {})).items()
             if isinstance(items, (list, tuple))
         }
-        settings = dict(value.get("settings", {})) if isinstance(value.get("settings", {}), dict) else {}
-        return cls(name, format_name, records, order, settings)
+        settings = (
+            dict(value.get("settings", {}))
+            if isinstance(value.get("settings", {}), dict)
+            else {}
+        )
+        return cls(name, format_name, profile_id, records, order, settings)
