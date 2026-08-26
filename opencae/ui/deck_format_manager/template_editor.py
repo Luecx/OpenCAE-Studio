@@ -203,8 +203,9 @@ class DeckTemplateEditor(QWidget):
         layout.setContentsMargins(0, 0, 8, 0)
         layout.addWidget(SectionHeading("Template Editor"))
         helper = label(
-            "Use {for item in collection} ... {endfor} to repeat deck lines. "
-            "Placeholders may be used in keyword options or data lines.",
+            "Use {for item in collection} ... {endfor} for repeated rows and "
+            "{if field is not none} ... {elif ...} ... {else} ... {endif} for "
+            "conditional syntax. Placeholders work in keyword options and data lines.",
             role=LabelRole.MUTED,
         )
         helper.setWordWrap(True)
@@ -221,7 +222,8 @@ class DeckTemplateEditor(QWidget):
         layout.addWidget(SectionHeading("Available Fields"))
         helper = label(
             "Loop rows show valid {for ...} syntax. Expand them to see the "
-            "fields available inside that loop.",
+            "fields available inside that loop. Any field can also be used in "
+            "an {if ...} expression.",
             role=LabelRole.MUTED,
         )
         helper.setWordWrap(True)
