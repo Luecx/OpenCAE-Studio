@@ -8,6 +8,7 @@ from .profile import DeckProfile
 _BUILTIN_IDS = {
     "FEMaster": "builtin:femaster",
     "Abaqus": "builtin:abaqus",
+    "CalculiX": "builtin:calculix",
 }
 
 
