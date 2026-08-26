@@ -10,6 +10,13 @@ _FOR_PATTERN = re.compile(
     r"^\s*\{for\s+(?P<item>[A-Za-z_]\w*)\s+in\s+(?P<collection>[A-Za-z_]\w*)\}\s*$"
 )
 _END_PATTERN = re.compile(r"^\s*\{endfor\}\s*$")
+_IF_PATTERN = re.compile(r"^\s*\{if\s+(?P<expression>.+?)\}\s*$")
+_ELIF_PATTERN = re.compile(r"^\s*\{elif\s+(?P<expression>.+?)\}\s*$")
+_ELSE_PATTERN = re.compile(r"^\s*\{else\}\s*$")
+_ENDIF_PATTERN = re.compile(r"^\s*\{endif\}\s*$")
+_COMPARISON_PATTERN = re.compile(
+    r"^(?P<left>.+?)\s+(?P<operator>is not|is|==|!=|>=|<=|>|<)\s+(?P<right>.+?)$"
+)
 
 
 @dataclass(frozen=True)
@@ -88,6 +95,32 @@ def _render_lines(lines, index, context, collections, *, stop_at_end):
             if not stop_at_end:
                 raise ValueError("Unexpected {endfor}")
             return output, index + 1
+        if _ENDIF_PATTERN.match(line) or _ELSE_PATTERN.match(line) or _ELIF_PATTERN.match(line):
+            raise ValueError("Unexpected conditional terminator")
+
+        condition = _IF_PATTERN.match(line)
+        if condition is not None:
+            branches, next_index = _collect_if_branches(
+                lines,
+                index + 1,
+                condition.group("expression"),
+            )
+            selected = next(
+                (
+                    body
+                    for expression, body in branches
+                    if expression is None or _evaluate_expression(expression, context)
+                ),
+                (),
+            )
+            rendered, consumed = _render_lines(
+                list(selected), 0, context, collections, stop_at_end=False
+            )
+            if consumed != len(selected):
+                raise ValueError("Invalid conditional body")
+            output.extend(rendered)
+            index = next_index
+            continue
 
         match = _FOR_PATTERN.match(line)
         if match is None:
@@ -128,6 +161,141 @@ def _collect_loop_body(lines: list[str], index: int) -> tuple[list[str], int]:
         body.append(line)
         index += 1
     raise ValueError("Missing {endfor}")
+
+
+def _collect_if_branches(
+    lines: list[str],
+    index: int,
+    first_expression: str,
+) -> tuple[list[tuple[str | None, tuple[str, ...]]], int]:
+    """Collect one if/elif/else block while preserving nested structures."""
+    depth = 1
+    expression: str | None = first_expression
+    body: list[str] = []
+    branches: list[tuple[str | None, tuple[str, ...]]] = []
+    while index < len(lines):
+        line = lines[index]
+        if _IF_PATTERN.match(line):
+            depth += 1
+        elif _ENDIF_PATTERN.match(line):
+            depth -= 1
+            if depth == 0:
+                branches.append((expression, tuple(body)))
+                return branches, index + 1
+        elif depth == 1:
+            match = _ELIF_PATTERN.match(line)
+            if match is not None:
+                if expression is None:
+                    raise ValueError("{elif} cannot follow {else}")
+                branches.append((expression, tuple(body)))
+                expression = match.group("expression")
+                body = []
+                index += 1
+                continue
+            if _ELSE_PATTERN.match(line):
+                if expression is None:
+                    raise ValueError("Duplicate {else}")
+                branches.append((expression, tuple(body)))
+                expression = None
+                body = []
+                index += 1
+                continue
+        body.append(line)
+        index += 1
+    raise ValueError("Missing {endif}")
+
+
+def _evaluate_expression(expression: str, context: TemplateContext) -> bool:
+    """Evaluate a small safe boolean expression without Python ``eval``."""
+    text = expression.strip()
+    or_parts = _split_boolean(text, "or")
+    if len(or_parts) > 1:
+        return any(_evaluate_expression(part, context) for part in or_parts)
+    and_parts = _split_boolean(text, "and")
+    if len(and_parts) > 1:
+        return all(_evaluate_expression(part, context) for part in and_parts)
+    if text.startswith("not "):
+        return not _evaluate_expression(text[4:], context)
+
+    match = _COMPARISON_PATTERN.match(text)
+    if match is None:
+        return bool(_resolve_value(text, context))
+
+    left = _resolve_value(match.group("left"), context)
+    right = _resolve_value(match.group("right"), context)
+    operator = match.group("operator")
+    if operator == "is":
+        return left is right
+    if operator == "is not":
+        return left is not right
+    if operator == "==":
+        return left == right
+    if operator == "!=":
+        return left != right
+    try:
+        if operator == ">=":
+            return left >= right
+        if operator == "<=":
+            return left <= right
+        if operator == ">":
+            return left > right
+        if operator == "<":
+            return left < right
+    except TypeError:
+        return False
+    raise ValueError(f"Unsupported template operator: {operator}")
+
+
+def _split_boolean(expression: str, operator: str) -> list[str]:
+    """Split a simple boolean expression outside quoted string literals."""
+    token = f" {operator} "
+    quote: str | None = None
+    start = 0
+    parts: list[str] = []
+    index = 0
+    while index <= len(expression) - len(token):
+        char = expression[index]
+        if char in {"'", '"'}:
+            quote = None if quote == char else char if quote is None else quote
+            index += 1
+            continue
+        if quote is None and expression[index : index + len(token)] == token:
+            parts.append(expression[start:index].strip())
+            start = index + len(token)
+            index = start
+            continue
+        index += 1
+    if parts:
+        parts.append(expression[start:].strip())
+        return parts
+    return [expression]
+
+
+def _resolve_value(token: str, context: TemplateContext):
+    """Resolve literals and dotted context references used by conditions."""
+    text = token.strip()
+    lowered = text.casefold()
+    if lowered in {"none", "null"}:
+        return None
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if (len(text) >= 2) and text[0] == text[-1] and text[0] in {"'", '"'}:
+        return text[1:-1]
+    try:
+        return float(text) if any(char in text for char in ".eE") else int(text)
+    except ValueError:
+        pass
+
+    parts = text.split(".")
+    value = context[parts[0]]
+    for name in parts[1:]:
+        if isinstance(value, dict):
+            value = value.get(name, "")
+        else:
+            value = getattr(value, name, "")
+    return value
 
 
 def _format_line(line: str, context: TemplateContext) -> str:
