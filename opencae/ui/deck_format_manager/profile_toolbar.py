@@ -18,7 +18,7 @@ from opencae.ui.templates import (
 
 
 class DeckProfileToolbar(QWidget):
-    """Select built-in/user profiles and manage session-only user copies."""
+    """Select immutable built-ins and persisted editable deck-profile copies."""
 
     save_requested = pyqtSignal()
     selection_changed = pyqtSignal()
@@ -27,7 +27,6 @@ class DeckProfileToolbar(QWidget):
     profile_deleted = pyqtSignal(str)
 
     def __init__(self, parent=None):
-        """Build one canonical profile selector plus same-height action buttons."""
         super().__init__(parent)
         self._profile_meta: dict[str, tuple[str, bool]] = {
             "FEMaster": ("FEMaster", True),
@@ -91,23 +90,43 @@ class DeckProfileToolbar(QWidget):
         self._refresh_actions()
 
     def profile_name(self) -> str:
-        """Return the selected profile name."""
         return self.profile_combo.currentText()
 
     def format_name(self) -> str:
-        """Return the built-in format that underlies the selected profile."""
         return self._profile_meta.get(self.profile_name(), ("FEMaster", True))[0]
 
     def is_builtin(self) -> bool:
-        """Return whether the selected profile is a read-only built-in format."""
         return self._profile_meta.get(self.profile_name(), ("", False))[1]
 
     def is_editable(self) -> bool:
-        """Return whether profile settings may be changed."""
         return bool(self.profile_name()) and not self.is_builtin()
 
+    def register_profile(self, name: str, format_name: str) -> bool:
+        """Register one persisted editable profile without changing selection."""
+        name = str(name).strip()
+        format_name = str(format_name).strip()
+        if not name or not format_name or name in self._profile_meta:
+            return False
+        self._profile_meta[name] = (format_name, False)
+        self.profile_combo.addItem(name)
+        self._refresh_actions()
+        return True
+
+    def set_profile(self, name: str) -> bool:
+        """Select a known built-in or user profile by name."""
+        if name not in self._profile_meta:
+            return False
+        self.profile_combo.setCurrentText(name)
+        return True
+
+    def profile_names(self) -> tuple[str, ...]:
+        """Return profile names in selector order."""
+        return tuple(
+            self.profile_combo.itemText(index)
+            for index in range(self.profile_combo.count())
+        )
+
     def copy_profile(self) -> str:
-        """Copy the selected profile and return the new editable profile name."""
         source = self.profile_name() or "FEMaster"
         candidate = self._unique_name(source + " Copy")
         self._profile_meta[candidate] = (self.format_name(), False)
@@ -117,7 +136,6 @@ class DeckProfileToolbar(QWidget):
         return candidate
 
     def delete_profile(self) -> None:
-        """Delete the selected user profile; built-in profiles remain immutable."""
         name = self.profile_name()
         if not name or self.is_builtin():
             return
@@ -136,7 +154,6 @@ class DeckProfileToolbar(QWidget):
         *,
         role: ButtonRole = ButtonRole.DEFAULT,
     ):
-        """Create one canonical primary-height toolbar button."""
         control = button(
             ButtonSpec(
                 text,
@@ -149,7 +166,6 @@ class DeckProfileToolbar(QWidget):
         return apply_primary_control_height(control)
 
     def _new_profile(self) -> None:
-        """Create an editable profile based on the selected profile's format."""
         base_format = self.format_name()
         default_name = self._unique_name(base_format + " - Custom")
         name, ok = QInputDialog.getText(
@@ -169,7 +185,6 @@ class DeckProfileToolbar(QWidget):
         self.profile_combo.setCurrentText(profile)
 
     def _unique_name(self, base: str) -> str:
-        """Return a profile name that does not collide with an existing entry."""
         if base not in self._profile_meta:
             return base
         number = 2
@@ -178,12 +193,10 @@ class DeckProfileToolbar(QWidget):
         return f"{base} {number}"
 
     def _selection_changed(self, _name: str) -> None:
-        """Refresh action state and publish the new profile selection."""
         self._refresh_actions()
         self.selection_changed.emit()
 
     def _refresh_actions(self) -> None:
-        """Keep destructive/save actions disabled for immutable built-ins."""
         editable = self.is_editable()
         self.delete_button.setEnabled(editable)
         self.save_button.setEnabled(editable)
