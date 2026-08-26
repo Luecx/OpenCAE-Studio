@@ -1,4 +1,4 @@
-"""Define FEMaster section-assignment templates, including the full ABD form."""
+"""Define section-assignment templates and native dialect equivalents."""
 
 from __future__ import annotations
 
@@ -39,14 +39,36 @@ def _abd_data_template() -> str:
     return "\n".join(rows)
 
 
+_SOLID_FIELDS = (
+    ("element_set", "Assigned solid/truss element set", "SOLID"),
+    ("material_name", "Referenced material name", "STEEL"),
+    ("orientation", "Optional material orientation name", "MAT_AXES"),
+)
+
+_SHELL_FIELDS = (
+    ("element_set", "Assigned shell element set", "SKIN"),
+    ("material_name", "Referenced material name", "ALUMINIUM"),
+    ("thickness", "Physical shell thickness", 2.0),
+    ("orientation", "Optional section/material orientation", "MAT_AXES"),
+    ("integration_points", "Through-thickness integration points", 5),
+)
+
+_BEAM_FIELDS = (
+    ("element_set", "Assigned beam element set", "BEAMS"),
+    ("material_name", "Referenced material name", "STEEL"),
+    ("profile_name", "Referenced OpenCAE profile", "BEAM_PROFILE"),
+    ("section_type", "Native inline beam-profile type", "RECT"),
+    ("profile_data", "Native comma-separated profile dimensions", "40.0, 20.0"),
+    ("orientation_x", "Section direction X component", 0.0),
+    ("orientation_y", "Section direction Y component", 1.0),
+    ("orientation_z", "Section direction Z component", 0.0),
+)
+
+
 TEMPLATE_SPECS = {
     "sections.solid": {
         "template": "*SOLID SECTION, ELSET={element_set}, MATERIAL={material_name}",
-        "fields": (
-            ("element_set", "Assigned solid element set", "SOLID"),
-            ("material_name", "Referenced material name", "STEEL"),
-            ("orientation", "Optional material orientation name", "MAT_AXES"),
-        ),
+        "fields": _SOLID_FIELDS,
         "loops": (),
         "commands": ("SOLID SECTION",),
     },
@@ -55,16 +77,17 @@ TEMPLATE_SPECS = {
             "*SHELL SECTION, ELSET={element_set}, MATERIAL={material_name}, "
             "TYPE=INTEGRATED\n{thickness}"
         ),
-        "fields": (
-            ("element_set", "Assigned shell element set", "SKIN"),
-            ("material_name", "Referenced material name", "ALUMINIUM"),
-            ("thickness", "Physical shell thickness", 2.0),
-            ("orientation", "Optional section/material orientation", "MAT_AXES"),
-            ("csys_axis", "Coordinate-system axis used in the shell plane", 1),
-            ("nominal_thickness", "Optional THICKNESS keyword parameter", 2.0),
-        ),
+        "fields": _SHELL_FIELDS,
         "loops": (),
         "commands": ("SHELL SECTION",),
+        "formats": {
+            "Abaqus": {
+                "template": "*SHELL SECTION, ELSET={element_set}, MATERIAL={material_name}\n{thickness}",
+            },
+            "CalculiX": {
+                "template": "*SHELL SECTION, ELSET={element_set}, MATERIAL={material_name}\n{thickness}",
+            },
+        },
     },
     "sections.shell.abd": {
         "template": (
@@ -85,27 +108,40 @@ TEMPLATE_SPECS = {
             "*BEAM SECTION, ELSET={element_set}, MATERIAL={material_name}, "
             "PROFILE={profile_name}\n{orientation_x}, {orientation_y}, {orientation_z}"
         ),
-        "fields": (
-            ("element_set", "Assigned beam element set", "BEAMS"),
-            ("material_name", "Referenced material name", "STEEL"),
-            ("profile_name", "Referenced FEMaster profile name", "BEAM_PROFILE"),
-            ("orientation_x", "Section direction X component", 0.0),
-            ("orientation_y", "Section direction Y component", 1.0),
-            ("orientation_z", "Section direction Z component", 0.0),
-        ),
+        "fields": _BEAM_FIELDS,
         "loops": (),
         "commands": ("BEAM SECTION",),
+        "formats": {
+            "Abaqus": {
+                "template": (
+                    "*BEAM SECTION, ELSET={element_set}, MATERIAL={material_name}, "
+                    "SECTION={section_type}\n{profile_data}\n"
+                    "{orientation_x}, {orientation_y}, {orientation_z}"
+                ),
+            },
+            "CalculiX": {
+                "template": (
+                    "*BEAM SECTION, ELSET={element_set}, MATERIAL={material_name}, "
+                    "SECTION={section_type}\n{profile_data}\n"
+                    "{orientation_x}, {orientation_y}, {orientation_z}"
+                ),
+            },
+        },
     },
     "sections.truss": {
-        "template": (
-            "*TRUSS SECTION, ELSET={element_set}, MATERIAL={material_name}\n{area}"
-        ),
-        "fields": (
-            ("element_set", "Assigned truss element set", "BARS"),
-            ("material_name", "Referenced material name", "STEEL"),
-            ("area", "Positive truss cross-sectional area", 100.0),
-        ),
+        "template": "*TRUSS SECTION, ELSET={element_set}, MATERIAL={material_name}\n{area}",
+        "fields": _SOLID_FIELDS + (("area", "Positive truss cross-sectional area", 100.0),),
         "loops": (),
-        "commands": ("TRUSS SECTION",),
+        "commands": ("TRUSS SECTION", "SOLID SECTION"),
+        "formats": {
+            "Abaqus": {
+                "template": "*SOLID SECTION, ELSET={element_set}, MATERIAL={material_name}\n{area}",
+                "commands": ("SOLID SECTION",),
+            },
+            "CalculiX": {
+                "template": "*SOLID SECTION, ELSET={element_set}, MATERIAL={material_name}\n{area}",
+                "commands": ("SOLID SECTION",),
+            },
+        },
     },
 }
