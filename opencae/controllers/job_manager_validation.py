@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from opencae.deck_formats.selection import compatible_profile_names
 from opencae.model.entities.analysis import Analysis
 from opencae.model.entities.optimization import TopologyOptimization
 from opencae.model.validation import validate_project
@@ -21,10 +22,18 @@ def analysis_errors(project, analysis_id, settings, solvers) -> list[str]:
         errors.append("The Analysis does not reference any Steps")
     errors.extend(validate_project(project, analysis=analysis))
 
-    if analysis.solver not in solvers:
+    adapter = solvers.get(analysis.solver)
+    if adapter is None:
         errors.append(f"Solver adapter '{analysis.solver}' is unavailable")
-    elif analysis.solver not in settings.enabled_solvers():
-        errors.append(f"Solver '{analysis.solver}' is disabled")
+    else:
+        if analysis.solver not in settings.enabled_solvers():
+            errors.append(f"Solver '{analysis.solver}' is disabled")
+        selected_profile = str(getattr(analysis, "deck_profile", ""))
+        if selected_profile not in compatible_profile_names(settings, adapter):
+            errors.append(
+                f"Input deck profile '{selected_profile or '<not selected>'}' "
+                f"is not compatible with solver '{analysis.solver}'"
+            )
 
     executable = str(
         settings.solver_config(analysis.solver).get("executable", "")
