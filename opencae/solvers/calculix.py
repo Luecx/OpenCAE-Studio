@@ -9,6 +9,8 @@ from .base import SolverAdapter
 
 class CalculiXAdapter(SolverAdapter):
     name = "CalculiX"
+    accepted_deck_formats = ("Abaqus",)
+    custom_profile_formats = ()
 
     def write_deck_text(self, project, analysis, profile=None):
         """Render the native Abaqus-compatible CalculiX deck."""
