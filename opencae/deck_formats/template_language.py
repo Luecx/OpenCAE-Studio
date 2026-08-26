@@ -314,7 +314,14 @@ def _resolve_value(token: str, context: TemplateContext):
 
 def _raw_value(value: object) -> object:
     """Return semantic content from a formatted template value."""
-    return value.raw if isinstance(value, TemplateValue) else value
+    if isinstance(value, TemplateValue):
+        return value.raw
+    # The current command writer renders a free generalized DOF as NAN. Treat
+    # that established deck sentinel as null for condition evaluation so a
+    # template can use ``{if ux is not none}`` without pre-filtering the data.
+    if isinstance(value, str) and value.strip().casefold() == "nan":
+        return None
+    return value
 
 
 def _format_line(line: str, context: TemplateContext) -> str:
