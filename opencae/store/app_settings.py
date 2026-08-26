@@ -69,7 +69,7 @@ class AppSettings:
 
     @property
     def deck_profiles(self) -> dict[str, dict]:
-        """Return persisted user deck profiles keyed by profile name."""
+        """Return persisted user deck profiles keyed by display name."""
         value = self._json_value("deck_formats/profiles", {})
         return {
             str(name): dict(profile)
@@ -83,7 +83,7 @@ class AppSettings:
 
     @property
     def active_deck_profiles(self) -> dict[str, str]:
-        """Return the selected profile name for each underlying format."""
+        """Return the selected manager profile name for each underlying format."""
         value = self._json_value("deck_formats/active", {})
         return {str(key): str(name) for key, name in value.items()}
 
@@ -92,10 +92,27 @@ class AppSettings:
         self.set_value("deck_formats/active", json.dumps(values))
 
     def save_deck_profile(self, profile: DeckProfile) -> None:
-        """Persist one editable deck profile."""
+        """Persist one editable profile while preserving its stable identity."""
         profiles = self.deck_profiles
+        for name, raw in tuple(profiles.items()):
+            existing = DeckProfile.from_dict(raw)
+            if (
+                existing is not None
+                and existing.profile_id == profile.profile_id
+                and name != profile.name
+            ):
+                profiles.pop(name, None)
         profiles[profile.name] = profile.to_dict()
         self.deck_profiles = profiles
+
+    def deck_profile_by_id(self, profile_id: str) -> DeckProfile | None:
+        """Resolve one custom profile by stable identity rather than display name."""
+        identity = str(profile_id or "")
+        for raw in self.deck_profiles.values():
+            profile = DeckProfile.from_dict(raw)
+            if profile is not None and profile.profile_id == identity:
+                return profile
+        return None
 
     def delete_deck_profile(self, name: str) -> None:
         """Delete one user profile and fall back to its built-in base format."""
@@ -109,17 +126,17 @@ class AppSettings:
         self.active_deck_profiles = active
 
     def set_active_deck_profile(self, format_name: str, profile_name: str) -> None:
-        """Choose the formatter profile used by previews, exports and solver jobs."""
+        """Choose the profile highlighted when the format manager opens."""
         active = self.active_deck_profiles
         active[str(format_name)] = str(profile_name)
         self.active_deck_profiles = active
 
     def active_deck_profile_name(self, format_name: str) -> str:
-        """Return the selected profile name, defaulting to the immutable built-in."""
+        """Return the manager selection, defaulting to the immutable built-in."""
         return self.active_deck_profiles.get(str(format_name), str(format_name))
 
     def active_deck_profile(self, format_name: str) -> DeckProfile | None:
-        """Return the active custom profile, or ``None`` for the built-in format."""
+        """Return the manager-selected custom profile, or ``None`` for built-in."""
         name = self.active_deck_profile_name(format_name)
         if name == format_name:
             return None
