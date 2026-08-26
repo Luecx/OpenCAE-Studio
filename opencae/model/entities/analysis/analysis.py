@@ -14,7 +14,7 @@ class Analysis(Entity):
     analysis_type: str = "General"
     step_refs: list[EntityRef] = field(default_factory=list)
     solver: str = "FEMaster"
-    deck_profile: str = "FEMaster"
+    deck_profile_id: str = "builtin:femaster"
     settings: dict[str, str] = field(default_factory=dict)
 
     def resolved_steps(self, project) -> tuple[AnalysisStep, ...]:
