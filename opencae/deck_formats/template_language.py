@@ -30,6 +30,20 @@ class TemplateLoop:
     examples: tuple[dict[str, object], ...]
 
 
+@dataclass(frozen=True)
+class TemplateValue:
+    """Keep one raw semantic value while exposing its formatted deck text."""
+
+    raw: object
+    text: str
+
+    def __str__(self) -> str:
+        return self.text
+
+    def __format__(self, _spec: str) -> str:
+        return self.text
+
+
 class TemplateObject:
     """Expose dictionary values through dotted template placeholders."""
 
@@ -219,10 +233,10 @@ def _evaluate_expression(expression: str, context: TemplateContext) -> bool:
 
     match = _COMPARISON_PATTERN.match(text)
     if match is None:
-        return bool(_resolve_value(text, context))
+        return bool(_raw_value(_resolve_value(text, context)))
 
-    left = _resolve_value(match.group("left"), context)
-    right = _resolve_value(match.group("right"), context)
+    left = _raw_value(_resolve_value(match.group("left"), context))
+    right = _raw_value(_resolve_value(match.group("right"), context))
     operator = match.group("operator")
     if operator == "is":
         return left is right
@@ -296,6 +310,11 @@ def _resolve_value(token: str, context: TemplateContext):
         else:
             value = getattr(value, name, "")
     return value
+
+
+def _raw_value(value: object) -> object:
+    """Return semantic content from a formatted template value."""
+    return value.raw if isinstance(value, TemplateValue) else value
 
 
 def _format_line(line: str, context: TemplateContext) -> str:
