@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from opencae.deck_formats import DeckProfile
+from opencae.deck_formats import DeckProfile, new_profile_id
 from opencae.ui.templates import (
     LabelRole,
     SectionHeading,
@@ -48,6 +48,7 @@ class DeckFormatManagerDialog(QDialog):
         self._session_records: dict[str, dict[str, dict[str, object]]] = {}
         self._session_orders: dict[str, dict[str, tuple[str, ...]]] = {}
         self._session_globals: dict[str, dict[str, object]] = {}
+        self._session_ids: dict[str, str] = {}
         self._current_template_key = ""
         self._loading = False
 
@@ -140,6 +141,7 @@ class DeckFormatManagerDialog(QDialog):
                 if self.profile_toolbar.register_profile(
                     profile.name, profile.format_name
                 ):
+                    self._session_ids[profile.name] = profile.profile_id
                     self._session_records[profile.name] = record_states_from_profile(
                         profile
                     )
@@ -202,6 +204,7 @@ class DeckFormatManagerDialog(QDialog):
 
     def _profile_copied(self, source: str, target: str) -> None:
         self._store_current_profile_state(source)
+        self._session_ids[target] = new_profile_id()
         self._session_records[target] = deepcopy(
             self._session_records.get(source, {})
         )
@@ -213,11 +216,13 @@ class DeckFormatManagerDialog(QDialog):
         )
 
     def _profile_created(self, name: str, _format_name: str) -> None:
+        self._session_ids[name] = new_profile_id()
         self._session_records[name] = {}
         self._session_orders[name] = deepcopy(self._default_order)
         self._session_globals[name] = dict(DEFAULT_GLOBAL_SETTINGS)
 
     def _profile_deleted(self, name: str) -> None:
+        self._session_ids.pop(name, None)
         self._session_records.pop(name, None)
         self._session_orders.pop(name, None)
         self._session_globals.pop(name, None)
@@ -251,6 +256,7 @@ class DeckFormatManagerDialog(QDialog):
             self._session_orders.get(name, self._default_order),
             self._session_globals.get(name, DEFAULT_GLOBAL_SETTINGS),
             support,
+            profile_id=self._session_ids.setdefault(name, new_profile_id()),
         )
 
     def _persist_active_selection(self) -> None:
