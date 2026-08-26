@@ -22,6 +22,7 @@ def write_part_mesh(part, writer, context, instance=None, node_offset=0, element
         writer,
         "NODE",
         [(node_map[int(old)], *_apply(transform, point)) for old, point in zip(nodes.ids, nodes.coordinates)],
+        record_key="mesh.nodes",
         NSET=f"{prefix}_NALL",
     )
     context.options.setdefault("instance_node_maps", {})[occurrence_id] = node_map
@@ -38,7 +39,13 @@ def write_part_mesh(part, writer, context, instance=None, node_offset=0, element
         legacy_reference_map[point.name] = next_node
         legacy_reference_map[f"RP-{point.name}"] = next_node
     if reference_rows:
-        command(writer, "NODE", reference_rows, NSET=f"{prefix}_REFERENCE_POINTS")
+        command(
+            writer,
+            "NODE",
+            reference_rows,
+            record_key="mesh.nodes",
+            NSET=f"{prefix}_REFERENCE_POINTS",
+        )
     legacy_reference_maps[occurrence_id] = legacy_reference_map
     legacy_reference_maps[prefix] = legacy_reference_map
 
