@@ -1,4 +1,4 @@
-"""Define material-property templates used by the deck-format editor."""
+"""Define material-property templates and native dialect equivalents."""
 
 from __future__ import annotations
 
@@ -19,6 +19,14 @@ TEMPLATE_SPECS = {
         ),
         "loops": (),
         "commands": ("ELASTIC",),
+        "formats": {
+            "Abaqus": {
+                "template": "*ELASTIC\n{youngs_modulus}, {poisson_ratio}",
+            },
+            "CalculiX": {
+                "template": "*ELASTIC, TYPE=ISO\n{youngs_modulus}, {poisson_ratio}",
+            },
+        },
     },
     "materials.elastic.generalised_isotropic": {
         "template": (
@@ -52,6 +60,22 @@ TEMPLATE_SPECS = {
         ),
         "loops": (),
         "commands": ("ELASTIC",),
+        "formats": {
+            "Abaqus": {
+                "template": (
+                    "*ELASTIC, TYPE=ENGINEERING CONSTANTS\n"
+                    "{e1}, {e2}, {e3}, {nu12}, {nu13}, {nu23}, {g12}, {g13}\n"
+                    "{g23}"
+                ),
+            },
+            "CalculiX": {
+                "template": (
+                    "*ELASTIC, TYPE=ENGINEERING CONSTANTS\n"
+                    "{e1}, {e2}, {e3}, {nu12}, {nu13}, {nu23}, {g12}, {g13}\n"
+                    "{g23}"
+                ),
+            },
+        },
     },
     "materials.elastic.orthotropic_stiffness": {
         "template": (
@@ -72,6 +96,22 @@ TEMPLATE_SPECS = {
         ),
         "loops": (),
         "commands": ("ELASTIC",),
+        "formats": {
+            "Abaqus": {
+                "template": (
+                    "*ELASTIC, TYPE=ORTHOTROPIC\n"
+                    "{d1111}, {d1122}, {d2222}, {d1133}, {d2233}, {d3333}, {d1212}, {d1313}\n"
+                    "{d2323}"
+                ),
+            },
+            "CalculiX": {
+                "template": (
+                    "*ELASTIC, TYPE=ORTHO\n"
+                    "{d1111}, {d1122}, {d2222}, {d1133}, {d2233}, {d3333}, {d1212}, {d1313}\n"
+                    "{d2323}"
+                ),
+            },
+        },
     },
     "materials.hyperelastic.neo_hooke": {
         "template": "*HYPERELASTIC, NEOHOOKE\n{c10}, {d1}",
@@ -81,6 +121,14 @@ TEMPLATE_SPECS = {
         ),
         "loops": (),
         "commands": ("HYPERELASTIC",),
+        "formats": {
+            "Abaqus": {
+                "template": "*HYPERELASTIC, NEO HOOKE\n{c10}, {d1}",
+            },
+            "CalculiX": {
+                "template": "*HYPERELASTIC, NEO HOOKE\n{c10}, {d1}",
+            },
+        },
     },
     "materials.density": {
         "template": "*DENSITY\n{density}",
@@ -92,9 +140,20 @@ TEMPLATE_SPECS = {
         "template": "*THERMALEXPANSION\n{thermal_expansion}",
         "fields": (
             ("thermal_expansion", "Constant isotropic expansion coefficient", 1.2e-5),
+            ("reference_temperature", "Stress-free reference temperature", 20.0),
         ),
         "loops": (),
-        "commands": ("THERMALEXPANSION",),
+        "commands": ("THERMALEXPANSION", "EXPANSION"),
+        "formats": {
+            "Abaqus": {
+                "template": "*EXPANSION, ZERO={reference_temperature}\n{thermal_expansion}",
+                "commands": ("EXPANSION",),
+            },
+            "CalculiX": {
+                "template": "*EXPANSION, ZERO={reference_temperature}\n{thermal_expansion}",
+                "commands": ("EXPANSION",),
+            },
+        },
     },
     "materials.plasticity": {
         "template": (
@@ -108,7 +167,7 @@ TEMPLATE_SPECS = {
             {
                 "collection": "points",
                 "item": "point",
-                "description": "Abaqus plastic hardening points.",
+                "description": "Piecewise-linear isotropic hardening points.",
                 "fields": (
                     ("yield_stress", "Yield stress", 355.0),
                     ("plastic_strain", "Equivalent plastic strain", 0.0),
