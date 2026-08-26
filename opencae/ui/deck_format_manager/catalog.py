@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from .format_capabilities import ABAQUS_FAMILY, ALL_FORMATS, FEMASTER_ONLY
 from .template_catalog import TEMPLATE_SPECS
 from .template_language import loop_from_spec, render_template
-from .tree_catalog import TREE_SPEC
+from .tree_catalog import TREE_SPEC as _RAW_TREE_SPEC
 
 
 GLOBAL_PAGES = {
@@ -14,6 +15,75 @@ GLOBAL_PAGES = {
     "general.comments": "Comments",
     "general.output": "Output Style",
 }
+
+# The tree is organized by OpenCAE semantics. Format support belongs here rather
+# than in the FEMaster-originating catalog: a record stays enabled whenever the
+# target dialect has a native equivalent, even when the keyword itself differs.
+_NATIVE_SUPPORT = {
+    "mesh.nodes": ALL_FORMATS,
+    "node_sets": ALL_FORMATS,
+    "element_sets": ALL_FORMATS,
+    "surfaces.definition": ALL_FORMATS,
+    "surfaces.set": FEMASTER_ONLY,
+    "materials.header": ALL_FORMATS,
+    "materials.elastic.isotropic": ALL_FORMATS,
+    "materials.elastic.generalised_isotropic": FEMASTER_ONLY,
+    "materials.elastic.engineering_constants": ALL_FORMATS,
+    "materials.elastic.orthotropic_stiffness": ALL_FORMATS,
+    "materials.hyperelastic.neo_hooke": ALL_FORMATS,
+    "materials.density": ALL_FORMATS,
+    "materials.thermal_expansion": ALL_FORMATS,
+    "materials.plasticity": ABAQUS_FAMILY,
+    "sections.solid": ALL_FORMATS,
+    "sections.shell.integrated": ALL_FORMATS,
+    "sections.shell.abd": FEMASTER_ONLY,
+    "sections.beam": ALL_FORMATS,
+    "sections.truss": ALL_FORMATS,
+    "coordinate_systems.rectangular": ALL_FORMATS,
+    "coordinate_systems.cylindrical": ALL_FORMATS,
+    "reference_points": ALL_FORMATS,
+    "constraints.kinematic.surface": ALL_FORMATS,
+    "constraints.distributing.surface": ALL_FORMATS,
+    "constraints.tie": ALL_FORMATS,
+    "constraints.rigid": ALL_FORMATS,
+    "constraints.equation": ALL_FORMATS,
+    "boundary_conditions.fixed": ALL_FORMATS,
+    "boundary_conditions.displacement": ALL_FORMATS,
+    "boundary_conditions.symmetry": ALL_FORMATS,
+    "loads.amplitude": ALL_FORMATS,
+    "loads.concentrated": ALL_FORMATS,
+    "loads.distributed": ("FEMaster", "Abaqus"),
+    "loads.pressure": ALL_FORMATS,
+    "loads.volume": ("FEMaster", "Abaqus"),
+    "loads.inertia": ("FEMaster", "Abaqus"),
+    "loads.temperature": ALL_FORMATS,
+    "analysis.loadcases.linear_static": ALL_FORMATS,
+    "analysis.loadcases.nonlinear_static": ALL_FORMATS,
+    "analysis.loadcases.linear_buckling": ALL_FORMATS,
+    "analysis.loadcases.topology_static": FEMASTER_ONLY,
+    "analysis.loadcases.eigenfrequency": ALL_FORMATS,
+    "analysis.loadcases.linear_transient": ALL_FORMATS,
+    "analysis.loadcases.linear_harmonic": FEMASTER_ONLY,
+    "analysis.end": ALL_FORMATS,
+}
+
+
+def _native_tree(nodes: tuple[dict, ...]) -> tuple[dict, ...]:
+    """Apply native support overrides recursively without mutating source specs."""
+    result = []
+    for source in nodes:
+        node = deepcopy(source)
+        key = str(node.get("key", ""))
+        if key in _NATIVE_SUPPORT:
+            node["supported_formats"] = tuple(_NATIVE_SUPPORT[key])
+        children = tuple(node.get("children", ()))
+        if children:
+            node["children"] = _native_tree(children)
+        result.append(node)
+    return tuple(result)
+
+
+TREE_SPEC = _native_tree(_RAW_TREE_SPEC)
 
 
 def template_spec(
