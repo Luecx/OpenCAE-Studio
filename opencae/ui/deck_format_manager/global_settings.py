@@ -81,7 +81,9 @@ class DeckGlobalSettings(QWidget):
         self.set_section(current)
 
     def set_editable(self, editable: bool) -> None:
+        """Enable profile inputs while keeping built-in format pages view-only."""
         self._editable = bool(editable)
+        self.form.setEnabled(self._editable)
         for editor in self._editors.values():
             editor.setEnabled(self._editable)
 
