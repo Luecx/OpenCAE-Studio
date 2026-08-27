@@ -4,9 +4,8 @@ from copy import deepcopy
 from dataclasses import fields, is_dataclass, replace
 
 from .entity import Entity
+from .persistent_model_field import is_persistent_model_field
 from .reference import EntityRef
-
-_RUNTIME_FIELDS = {"_project", "_index", "reference_errors"}
 
 
 def entity_with_replaced_references(entity: Entity, old_id: str, new_entity):
@@ -19,7 +18,7 @@ def entity_with_replaced_references(entity: Entity, old_id: str, new_entity):
     clone = deepcopy(entity)
     changed = False
     for info in fields(clone):
-        if info.name == "id" or info.name in _RUNTIME_FIELDS:
+        if info.name == "id" or not is_persistent_model_field(info):
             continue
         updated, did_change = _replace_value(getattr(clone, info.name), old_id, replacement)
         if did_change:
@@ -39,7 +38,7 @@ def replace_references(project, old_id: str, new_entity) -> int:
     changed = 0
     for entity in tuple(project.index.by_id.values()):
         for info in fields(entity):
-            if info.name == "id" or info.name in _RUNTIME_FIELDS:
+            if info.name == "id" or not is_persistent_model_field(info):
                 continue
             value = getattr(entity, info.name)
             updated, did_change = _replace_value(value, old_id, replacement)
@@ -59,7 +58,7 @@ def remap_entity_graph(root: Entity, id_map: dict[str, str]) -> Entity:
             object.__setattr__(entity, "id", id_map[old_id])
     for entity in entities:
         for info in fields(entity):
-            if info.name == "id" or info.name in _RUNTIME_FIELDS:
+            if info.name == "id" or not is_persistent_model_field(info):
                 continue
             value = getattr(entity, info.name)
             updated, changed = _remap_value(value, id_map)
@@ -70,7 +69,6 @@ def remap_entity_graph(root: Entity, id_map: dict[str, str]) -> Entity:
 
 
 def clone_entity_graph(root: Entity):
-    from copy import deepcopy
     from opencae.core.ids import new_id
 
     clone = deepcopy(root)
@@ -79,7 +77,7 @@ def clone_entity_graph(root: Entity):
 
 
 def _entities_in(root):
-    """Yield every persistent Entity below *root*, excluding runtime bindings."""
+    """Yield every Entity reachable through persistent model fields."""
     seen = set()
 
     def walk(value):
@@ -89,7 +87,7 @@ def _entities_in(root):
             seen.add(id(value))
             yield value
             for info in fields(value):
-                if info.name in _RUNTIME_FIELDS:
+                if not is_persistent_model_field(info):
                     continue
                 yield from walk(getattr(value, info.name))
             return
@@ -98,6 +96,8 @@ def _entities_in(root):
                 return
             seen.add(id(value))
             for info in fields(value):
+                if not is_persistent_model_field(info):
+                    continue
                 yield from walk(getattr(value, info.name))
         elif isinstance(value, (list, tuple)):
             if id(value) in seen:
@@ -119,9 +119,9 @@ def remove_entity(project, entity_id: str) -> bool:
     """Remove an entity from its owning mutable collection.
 
     Entity collections can be nested in value dataclasses such as ``MeshState``;
-    traversal therefore follows every dataclass rather than only direct Entity
-    children. Direct singleton fields (notably ``Project.assembly``) are not
-    deleted implicitly.
+    traversal therefore follows every persistent dataclass field rather than
+    only direct Entity children. Direct singleton fields (notably
+    ``Project.assembly``) are not deleted implicitly.
     """
     target = project.try_resolve(entity_id)
     if target is None or target is project:
@@ -131,7 +131,7 @@ def remove_entity(project, entity_id: str) -> bool:
         if not is_dataclass(owner):
             return False
         for info in fields(owner):
-            if info.name in _RUNTIME_FIELDS:
+            if not is_persistent_model_field(info):
                 continue
             value = getattr(owner, info.name)
             if isinstance(value, list):
@@ -291,6 +291,8 @@ def _replace_value(value, old_id, replacement):
     if is_dataclass(value):
         changes = {}
         for info in fields(value):
+            if not is_persistent_model_field(info):
+                continue
             updated, changed = _replace_value(getattr(value, info.name), old_id, replacement)
             if changed:
                 changes[info.name] = updated
@@ -331,6 +333,8 @@ def _remap_value(value, id_map):
     if is_dataclass(value):
         changes = {}
         for info in fields(value):
+            if not is_persistent_model_field(info):
+                continue
             updated, changed = _remap_value(getattr(value, info.name), id_map)
             if changed:
                 changes[info.name] = updated
@@ -339,18 +343,21 @@ def _remap_value(value, id_map):
         result, changed = [], False
         for item in value:
             updated, item_changed = _remap_value(item, id_map)
-            result.append(updated); changed |= item_changed
+            result.append(updated)
+            changed |= item_changed
         return (result, True) if changed else (value, False)
     if isinstance(value, tuple):
         result, changed = [], False
         for item in value:
             updated, item_changed = _remap_value(item, id_map)
-            result.append(updated); changed |= item_changed
+            result.append(updated)
+            changed |= item_changed
         return (tuple(result), True) if changed else (value, False)
     if isinstance(value, dict):
         result, changed = {}, False
         for key, item in value.items():
             updated, item_changed = _remap_value(item, id_map)
-            result[key] = updated; changed |= item_changed
+            result[key] = updated
+            changed |= item_changed
         return (result, True) if changed else (value, False)
     return value, False
