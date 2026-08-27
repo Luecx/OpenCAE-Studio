@@ -9,6 +9,7 @@ from opencae.model.core import DeckWriter
 from opencae.model.entities.analysis import AnalysisStep
 from opencae.solvers.femaster_dsl.emitters.loadcase import write_step
 from opencae.ui.deck_format_manager.template_catalog import TEMPLATE_SPECS
+from opencae.ui.deck_format_manager.tree_catalog import TREE_SPEC
 from opencae.ui.dialogs.step import StepDialog
 
 
@@ -37,6 +38,16 @@ class _SemanticWriter:
         self.commands.append(
             (name, tuple(data), tuple(flags), dict(keywords or {}), record_key)
         )
+
+
+def _tree_node(key, nodes=TREE_SPEC):
+    for node in nodes:
+        if node.get("key") == key:
+            return node
+        found = _tree_node(key, tuple(node.get("children", ())))
+        if found is not None:
+            return found
+    return None
 
 
 def test_nonlinear_step_dialog_exposes_load_and_path_control_pages():
@@ -79,7 +90,7 @@ def test_nonlinear_step_dialog_exposes_load_and_path_control_pages():
         app.processEvents()
 
 
-def test_abaqus_nonlinear_load_control_emits_increment_settings():
+def test_abaqus_nonlinear_load_control_emits_increment_settings_directly_after_step():
     step = AnalysisStep(
         name="NL Load",
         step_type="Nonlinear Static",
@@ -95,10 +106,11 @@ def test_abaqus_nonlinear_load_control_emits_increment_settings():
     )
     writer = DeckWriter()
     step.write_abaqus(writer, _Context("Abaqus"))
-    text = writer.text()
-    assert "*STEP, NAME=NL Load, NLGEOM=YES, INC=240" in text
-    assert "*STATIC\n0.05, 2, 1e-07, 0.2" in text
-    assert "*END STEP" in text
+    lines = writer.text().splitlines()
+    assert lines[0] == "*STEP, NAME=NL Load, NLGEOM=YES, INC=240"
+    assert lines[1] == "*STATIC"
+    assert lines[2] == "0.05, 2, 1e-07, 0.2"
+    assert lines[-1] == "*END STEP"
 
 
 def test_abaqus_path_control_emits_riks_arc_length_settings():
@@ -131,7 +143,7 @@ def test_calculix_rejects_path_control_instead_of_writing_invalid_riks_syntax():
         step.write_abaqus(DeckWriter(), _Context("CalculiX"))
 
 
-def test_femaster_nonlinear_emitter_carries_adaptive_and_path_parameters():
+def test_femaster_nonlinear_emitter_uses_portable_keyword_surface():
     step = AnalysisStep(
         name="NL",
         step_type="Nonlinear Static",
@@ -157,14 +169,22 @@ def test_femaster_nonlinear_emitter_carries_adaptive_and_path_parameters():
     keywords = nonlinear[3]
     assert keywords["CONTROL"] == "ARC_LENGTH"
     assert keywords["INITIAL_INCREMENT"] == pytest.approx(0.02)
+    assert keywords["MINIMUM_INCREMENT"] == pytest.approx(1.0e-6)
+    assert keywords["MAXIMUM_INCREMENT"] == pytest.approx(0.08)
+    assert keywords["MAX_INCREMENTS"] == 300
     assert keywords["ARC_LENGTH_PSI"] == pytest.approx(0.7)
-    assert keywords["GROWTH_FACTOR"] == pytest.approx(1.8)
-    assert keywords["CUTBACK_FACTOR"] == pytest.approx(0.4)
-    assert keywords["MAXIMUM_CUTBACKS"] == 16
-    assert keywords["REGULARIZATION_ALPHA"] == pytest.approx(2.0e-4)
+    assert keywords["REGULARIZE_ZERO_ROWS"] is True
+    assert {
+        "GROWTH_FACTOR",
+        "CUTBACK_FACTOR",
+        "FAST_ITERATIONS",
+        "SLOW_ITERATIONS",
+        "MAXIMUM_CUTBACKS",
+        "REGULARIZATION_ALPHA",
+    }.isdisjoint(keywords)
 
 
-def test_deck_format_record_exposes_complete_nonlinear_controls():
+def test_deck_format_record_exposes_complete_nonlinear_semantic_controls():
     spec = TEMPLATE_SPECS["analysis.controls.nonlinear"]
     fields = {name for name, _description, _example in spec["fields"]}
     assert {
@@ -185,3 +205,31 @@ def test_deck_format_record_exposes_complete_nonlinear_controls():
         "regularize_zero_rows",
         "regularization_alpha",
     } <= fields
+    template = spec["template"]
+    assert all(
+        keyword not in template
+        for keyword in (
+            "GROWTH_FACTOR",
+            "CUTBACK_FACTOR",
+            "FAST_ITERATIONS",
+            "SLOW_ITERATIONS",
+            "MAXIMUM_CUTBACKS",
+            "REGULARIZATION_ALPHA",
+        )
+    )
+
+
+def test_deck_format_nonlinear_controls_are_nested_under_nonlinear_static():
+    nonlinear = _tree_node("analysis.nonlinear_static")
+    assert nonlinear is not None
+    child_keys = [child["key"] for child in nonlinear["children"]]
+    assert child_keys == [
+        "analysis.loadcases.nonlinear_static",
+        "analysis.controls.nonlinear",
+    ]
+
+    numerical = _tree_node("analysis.controls")
+    assert numerical is not None
+    assert "analysis.controls.nonlinear" not in {
+        child["key"] for child in numerical["children"]
+    }
