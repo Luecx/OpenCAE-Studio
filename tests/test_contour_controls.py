@@ -64,6 +64,12 @@ def test_result_range_button_uses_checkboxes_and_full_contour_configuration():
         assert isinstance(button.continuous, QCheckBox)
         assert isinstance(button.outside_colors, QCheckBox)
         assert button.levels.maximum() == 52
+        assert button.below_color.text() == ""
+        assert button.above_color.text() == ""
+        assert button.below_color.toolTip() == "Below-range color"
+        assert button.above_color.toolTip() == "Above-range color"
+        assert button.below_color.width() <= 40
+        assert button.above_color.width() <= 40
         button.set_data_range(-3.0, 12.0)
         assert button.values()["minimum"] == -3.0
         assert button.values()["maximum"] == 12.0
