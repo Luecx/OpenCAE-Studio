@@ -7,6 +7,7 @@ import pyvista as pv
 
 from opencae.geometry.cache import CACHE
 from opencae.geometry.orphan_mesh import snapshot_from_part
+from .contour_mapping import contour_plot_kwargs
 from .pyvista_mesh import build_grid
 from .scalar_bar import scalar_bar_args
 from .vtk_cell_data import cell_array
@@ -121,6 +122,7 @@ def add_topology_presentation(
             minimum, maximum = maximum, minimum
         if minimum == maximum:
             maximum = minimum + max(abs(minimum), 1.0) * 1.0e-12
+        mapping = contour_plot_kwargs(scalar_range)
         actor_name = f"{name_prefix}-surface"
         actor = plotter.add_mesh(
             grid,
@@ -128,7 +130,9 @@ def add_topology_presentation(
             preference="cell",
             clim=(minimum, maximum),
             cmap="viridis",
-            n_colors=18,
+            n_colors=mapping["n_colors"],
+            below_color=mapping["below_color"],
+            above_color=mapping["above_color"],
             show_edges=False,
             lighting=True,
             ambient=0.72,
