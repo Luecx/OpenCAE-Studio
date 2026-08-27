@@ -26,18 +26,15 @@ from .time_manager_plot import TimeManagerPlot
 
 
 def frame_axis(values):
-    """Return a monotonic frame axis and whether solver frame values are usable as time."""
+    """Return a unit-spaced 1..N frame axis and whether values form a time axis."""
     raw = [float(value) for value in values]
-    if len(raw) <= 1:
-        return ([0.0] if raw else []), False
-    strictly_increasing = all(
+    if not raw:
+        return [], False
+    strictly_increasing = len(raw) > 1 and all(
         raw[index + 1] > raw[index] + 1.0e-14
         for index in range(len(raw) - 1)
     )
-    if strictly_increasing:
-        return raw, True
-    denominator = max(1, len(raw) - 1)
-    return [index / denominator for index in range(len(raw))], False
+    return [float(index + 1) for index in range(len(raw))], strictly_increasing
 
 
 def frame_bracket(axis, value):
@@ -269,7 +266,8 @@ class TimeManagerPanel(QWidget):
             compatible.append((frame_id, float(value), display, combo_index))
 
         self._frames = compatible
-        self._axis, self._has_time_axis = frame_axis([item[1] for item in compatible])
+        frame_values = [item[1] for item in compatible]
+        self._axis, self._has_time_axis = frame_axis(frame_values)
         self._current_index = next(
             (index for index, item in enumerate(compatible) if item[0] == current_frame_id),
             0 if compatible else -1,
@@ -278,10 +276,10 @@ class TimeManagerPanel(QWidget):
         self._update_current_label(self._current_index)
         self.plot.set_series(
             self._axis,
-            self._axis,
+            frame_values,
             current_index=self._current_index,
-            x_label="Time (s)" if self._has_time_axis else "Frame progress",
-            y_label="Value",
+            x_label="Frame",
+            y_label="Time (s)" if self._has_time_axis else "Solver frame value",
         )
         self._set_available(bool(compatible))
         self._update_navigation()
@@ -375,6 +373,9 @@ class TimeManagerPanel(QWidget):
         elapsed = 0.0 if initial else min(max(self._clock.restart() / 1000.0, 0.0), 0.25)
         rate = float(self.speed.value())
         if self.across_frames.isChecked():
+            # The playback coordinate is an ordinal frame coordinate.  One
+            # axis unit is always exactly one result frame, independent of the
+            # solver's physical time spacing.
             self._play_position += elapsed * rate
             end = self._axis[-1]
             if self._play_position > end + 1.0e-12:
