@@ -15,6 +15,7 @@ def add_result(plotter, result, field=None, options=None):
     step_id = field.metadata.get("step_id") if field else None
     frame_id = field.metadata.get("frame_id") if field else None
     original = _LOADER.pyvista_grid(result.source_file, step_id, frame_id)
+    original = _animated_grid(original, result, field, options)
     grid = _deformed(original, options)
     scalar = _scalar_name(field)
     range_settings = options.get("range", {})
@@ -66,6 +67,16 @@ def add_result(plotter, result, field=None, options=None):
     return actor, grid, mesh_edges, boundary, undeformed
 
 
+def interpolate_values(first, second, alpha):
+    """Linearly interpolate equal-shaped result arrays without mutating either frame."""
+    left = np.asarray(first, dtype=float)
+    right = np.asarray(second, dtype=float)
+    if left.shape != right.shape:
+        raise ValueError("Result frames have incompatible value shapes")
+    weight = min(max(float(alpha), 0.0), 1.0)
+    return left + weight * (right - left)
+
+
 def auto_deformation_scale(result, field=None, target_fraction=0.10):
     """Return a scale that makes maximum displacement a fraction of model size."""
     if result is None or not getattr(result, "source_file", None):
@@ -89,6 +100,79 @@ def auto_deformation_scale(result, field=None, target_fraction=0.10):
     if diagonal <= 1.0e-14:
         diagonal = 1.0
     return target_fraction * diagonal / maximum
+
+
+def _animated_grid(grid, result, field, options):
+    """Return a transient frame with only displayed scalars/displacements animated."""
+    animation = dict(options.get("_animation", {}) or {})
+    mode = str(animation.get("mode", ""))
+    if not mode or field is None:
+        return grid
+    scalar = _scalar_name(field)
+    if mode == "factor":
+        factor = min(max(float(animation.get("factor", 1.0)), 0.0), 1.0)
+        animated = grid.copy(deep=True)
+        scaled = set()
+        if scalar and scalar in animated.point_data:
+            animated.point_data[scalar] = np.asarray(animated.point_data[scalar], dtype=float) * factor
+            scaled.add(scalar)
+        keys = _displacement_keys(animated)
+        if keys is not None:
+            for key in keys:
+                if key not in scaled:
+                    animated.point_data[key] = np.asarray(animated.point_data[key], dtype=float) * factor
+        return animated
+    if mode != "interpolate":
+        return grid
+
+    next_field = animation.get("next_field")
+    if next_field is None:
+        return grid
+    next_grid = _LOADER.pyvista_grid(
+        result.source_file,
+        next_field.metadata.get("step_id"),
+        next_field.metadata.get("frame_id"),
+    )
+    if not _compatible_frames(grid, next_grid):
+        return grid
+    alpha = min(max(float(animation.get("alpha", 0.0)), 0.0), 1.0)
+    animated = grid.copy(deep=True)
+    next_scalar = _scalar_name(next_field)
+    if (
+        scalar
+        and next_scalar
+        and scalar in animated.point_data
+        and next_scalar in next_grid.point_data
+    ):
+        animated.point_data[scalar] = interpolate_values(
+            animated.point_data[scalar],
+            next_grid.point_data[next_scalar],
+            alpha,
+        )
+
+    keys = _displacement_keys(animated)
+    next_keys = _displacement_keys(next_grid)
+    if keys is not None and next_keys is not None:
+        for key, next_key in zip(keys, next_keys):
+            animated.point_data[key] = interpolate_values(
+                animated.point_data[key],
+                next_grid.point_data[next_key],
+                alpha,
+            )
+    return animated
+
+
+def _compatible_frames(first, second):
+    if first.n_points != second.n_points or first.n_cells != second.n_cells:
+        return False
+    if "node_id" in first.point_data and "node_id" in second.point_data:
+        return bool(
+            np.array_equal(
+                np.asarray(first.point_data["node_id"]),
+                np.asarray(second.point_data["node_id"]),
+            )
+        )
+    return bool(np.allclose(first.points, second.points, equal_nan=True))
 
 
 def _mesh_edges(plotter, grid, name):
