@@ -72,7 +72,7 @@ def build_viewport(window):
 
 
 def build_docks(window):
-    """Create the project and Job docks and connect stage/result navigation."""
+    """Create the project and lower workspace docks and connect result navigation."""
     store = window.context.store
     window.project_dock = ProjectDock(
         store,
@@ -85,6 +85,8 @@ def build_docks(window):
         window.controllers.jobs,
         window.actions,
         window,
+        results_page=window.ribbon.results_page,
+        viewport=window.viewport,
     )
     window.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, window.project_dock)
     window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, window.output_dock)
@@ -114,7 +116,7 @@ def build_docks(window):
     )
     window.resizeDocks(
         [window.output_dock],
-        [205],
+        [300],
         Qt.Orientation.Vertical,
     )
     _sync_viewport_guidance(window)
