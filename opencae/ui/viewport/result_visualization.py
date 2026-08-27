@@ -12,11 +12,7 @@ _LOADER = FrdLoader()
 def add_result(plotter, result, field=None, options=None):
     """Add the primary pickable result actor plus non-pickable visual overlays."""
     options = options or {}
-    step_id = field.metadata.get("step_id") if field else None
-    frame_id = field.metadata.get("frame_id") if field else None
-    original = _LOADER.pyvista_grid(result.source_file, step_id, frame_id)
-    original = _animated_grid(original, result, field, options)
-    grid = _deformed(original, options)
+    original, grid = _result_grids(result, field, options)
     scalar = _scalar_name(field)
     range_settings = options.get("range", {})
     clim = _clim(grid, scalar, range_settings)
@@ -65,6 +61,86 @@ def add_result(plotter, result, field=None, options=None):
         else None
     )
     return actor, grid, mesh_edges, boundary, undeformed
+
+
+def update_result(
+    result_actor,
+    mesh_actor,
+    boundary_actor,
+    undeformed_actor,
+    result,
+    field=None,
+    options=None,
+):
+    """Update persistent result actors in-place for one animation frame.
+
+    Animation previously cleared the complete plotter for every timer tick.  Keeping
+    the actors and lookup table alive avoids the blank intermediate frame that made
+    playback visibly flicker, while still replacing deformed geometry and scalars.
+    """
+    if result_actor is None:
+        return None
+    options = options or {}
+    original, grid = _result_grids(result, field, options)
+    scalar = _scalar_name(field)
+
+    mapper = _replace_actor_input(result_actor, grid)
+    if mapper is None:
+        return None
+    if scalar and scalar in grid.point_data:
+        try:
+            mapper.SetScalarModeToUsePointFieldData()
+            mapper.SelectColorArray(scalar)
+            mapper.ScalarVisibilityOn()
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+        clim = _clim(grid, scalar, options.get("range", {}))
+        if clim is not None:
+            try:
+                mapper.SetScalarRange(*clim)
+                lookup = mapper.GetLookupTable()
+                if lookup is not None:
+                    lookup.SetRange(*clim)
+                    lookup.Modified()
+            except (AttributeError, RuntimeError, TypeError):
+                pass
+    else:
+        try:
+            mapper.ScalarVisibilityOff()
+        except (AttributeError, RuntimeError):
+            pass
+
+    if mesh_actor is not None:
+        _replace_actor_input(mesh_actor, _mesh_edge_grid(grid))
+    if boundary_actor is not None:
+        _replace_actor_input(boundary_actor, _boundary_grid(grid))
+    if undeformed_actor is not None:
+        _replace_actor_input(undeformed_actor, _boundary_grid(original))
+    return grid
+
+
+def _result_grids(result, field, options):
+    step_id = field.metadata.get("step_id") if field else None
+    frame_id = field.metadata.get("frame_id") if field else None
+    original = _LOADER.pyvista_grid(result.source_file, step_id, frame_id)
+    original = _animated_grid(original, result, field, options)
+    return original, _deformed(original, options)
+
+
+def _replace_actor_input(actor, dataset):
+    """Replace one actor's dataset without destroying the actor or its render state."""
+    try:
+        mapper = actor.GetMapper()
+    except (AttributeError, RuntimeError):
+        mapper = getattr(actor, "mapper", None)
+    if mapper is None:
+        return None
+    try:
+        mapper.SetInputData(dataset)
+        mapper.Modified()
+    except (AttributeError, RuntimeError, TypeError):
+        return None
+    return mapper
 
 
 def interpolate_values(first, second, alpha):
@@ -175,25 +251,40 @@ def _compatible_frames(first, second):
     return bool(np.allclose(first.points, second.points, equal_nan=True))
 
 
-def _mesh_edges(plotter, grid, name):
+def _mesh_edge_grid(grid):
     try:
-        edges = grid.extract_all_edges()
+        return grid.extract_all_edges()
     except (AttributeError, RuntimeError, TypeError, ValueError):
-        edges = grid.extract_surface(algorithm="dataset_surface").extract_feature_edges(
+        return grid.extract_surface(algorithm="dataset_surface").extract_feature_edges(
             boundary_edges=True,
             feature_edges=True,
             manifold_edges=True,
             non_manifold_edges=True,
             feature_angle=1,
         )
+
+
+def _mesh_edges(plotter, grid, name):
     return plotter.add_mesh(
-        edges,
+        _mesh_edge_grid(grid),
         color="#182129",
         line_width=1.0,
         lighting=False,
         name=name,
         pickable=False,
         render=False,
+    )
+
+
+def _boundary_grid(grid):
+    return grid.extract_surface(
+        algorithm="dataset_surface"
+    ).extract_feature_edges(
+        boundary_edges=True,
+        feature_edges=True,
+        manifold_edges=False,
+        non_manifold_edges=True,
+        feature_angle=32,
     )
 
 
@@ -205,17 +296,8 @@ def _boundary(
     width=1.6,
     opacity=1.0,
 ):
-    edges = grid.extract_surface(
-        algorithm="dataset_surface"
-    ).extract_feature_edges(
-        boundary_edges=True,
-        feature_edges=True,
-        manifold_edges=False,
-        non_manifold_edges=True,
-        feature_angle=32,
-    )
     return plotter.add_mesh(
-        edges,
+        _boundary_grid(grid),
         color=color,
         opacity=opacity,
         line_width=width,
