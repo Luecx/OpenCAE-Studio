@@ -59,9 +59,9 @@ def frame_bracket(axis, value):
 
 
 def current_frame_amplitude(phase):
-    """Animate one selected frame from zero to full response and back to zero."""
+    """Run one full signed response cycle: 0 -> +1 -> 0 -> -1 -> 0."""
     value = min(max(float(phase), 0.0), 1.0)
-    return sin(pi * value)
+    return sin(2.0 * pi * value)
 
 
 class TimeManagerPanel(QWidget):
