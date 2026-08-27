@@ -6,6 +6,8 @@ from dataclasses import fields, is_dataclass, replace
 from .entity import Entity
 from .reference import EntityRef
 
+_RUNTIME_FIELDS = {"_project", "_index", "reference_errors"}
+
 
 def entity_with_replaced_references(entity: Entity, old_id: str, new_entity):
     """Return a copied entity with references to *old_id* replaced.
@@ -17,7 +19,7 @@ def entity_with_replaced_references(entity: Entity, old_id: str, new_entity):
     clone = deepcopy(entity)
     changed = False
     for info in fields(clone):
-        if info.name in {"id", "_index", "reference_errors"}:
+        if info.name == "id" or info.name in _RUNTIME_FIELDS:
             continue
         updated, did_change = _replace_value(getattr(clone, info.name), old_id, replacement)
         if did_change:
@@ -37,7 +39,7 @@ def replace_references(project, old_id: str, new_entity) -> int:
     changed = 0
     for entity in tuple(project.index.by_id.values()):
         for info in fields(entity):
-            if info.name in {"id", "_index", "reference_errors"}:
+            if info.name == "id" or info.name in _RUNTIME_FIELDS:
                 continue
             value = getattr(entity, info.name)
             updated, did_change = _replace_value(value, old_id, replacement)
@@ -57,12 +59,13 @@ def remap_entity_graph(root: Entity, id_map: dict[str, str]) -> Entity:
             object.__setattr__(entity, "id", id_map[old_id])
     for entity in entities:
         for info in fields(entity):
-            if info.name in {"id", "_index", "reference_errors"}:
+            if info.name == "id" or info.name in _RUNTIME_FIELDS:
                 continue
             value = getattr(entity, info.name)
             updated, changed = _remap_value(value, id_map)
             if changed:
                 setattr(entity, info.name, updated)
+        object.__setattr__(entity, "_project", None)
     return root
 
 
@@ -76,7 +79,7 @@ def clone_entity_graph(root: Entity):
 
 
 def _entities_in(root):
-    """Yield every Entity below *root*, including entities nested in value dataclasses."""
+    """Yield every persistent Entity below *root*, excluding runtime bindings."""
     seen = set()
 
     def walk(value):
@@ -86,17 +89,26 @@ def _entities_in(root):
             seen.add(id(value))
             yield value
             for info in fields(value):
-                if info.name in {"_index", "reference_errors"}:
+                if info.name in _RUNTIME_FIELDS:
                     continue
                 yield from walk(getattr(value, info.name))
             return
         if is_dataclass(value):
+            if id(value) in seen:
+                return
+            seen.add(id(value))
             for info in fields(value):
                 yield from walk(getattr(value, info.name))
         elif isinstance(value, (list, tuple)):
+            if id(value) in seen:
+                return
+            seen.add(id(value))
             for item in value:
                 yield from walk(item)
         elif isinstance(value, dict):
+            if id(value) in seen:
+                return
+            seen.add(id(value))
             for item in value.values():
                 yield from walk(item)
 
@@ -119,7 +131,7 @@ def remove_entity(project, entity_id: str) -> bool:
         if not is_dataclass(owner):
             return False
         for info in fields(owner):
-            if info.name in {"_index", "reference_errors"}:
+            if info.name in _RUNTIME_FIELDS:
                 continue
             value = getattr(owner, info.name)
             if isinstance(value, list):
