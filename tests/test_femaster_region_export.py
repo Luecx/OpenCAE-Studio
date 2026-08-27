@@ -47,7 +47,7 @@ def test_per_node_cload_preserves_component(project_factory):
         distribution=NodalLoadDistribution.PER_NODE,
     )
     data["project"].loads = [load]
-    data["analysis"].steps[0].load_refs = [EntityRef.of(load, "Load")]
+    data["step"].load_refs = [EntityRef.of(load, "Load")]
     data["project"].rebuild_index()
     deck = data["project"].render_deck("FEMaster", data["analysis"])
     lines = deck.splitlines(); index = next(i for i, line in enumerate(lines) if line.startswith("*CLOAD"))
@@ -76,7 +76,7 @@ def test_pressure_mesh_facet_exports_only_clicked_local_face(project_factory):
         pressure=3.0,
     )
     data["project"].loads = [pressure]
-    data["analysis"].steps[0].load_refs = [EntityRef.of(pressure, "Load")]
+    data["step"].load_refs = [EntityRef.of(pressure, "Load")]
     data["project"].rebuild_index()
     deck = data["project"].render_deck("FEMaster", data["analysis"])
     lines = deck.splitlines()
