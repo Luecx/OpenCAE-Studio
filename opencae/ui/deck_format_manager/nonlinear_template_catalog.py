@@ -4,17 +4,19 @@ from __future__ import annotations
 
 
 def nonlinear_template_spec() -> dict:
-    """Return the FEMaster nonlinear record with all persisted control fields."""
+    """Return the portable FEMaster record plus all persisted semantic fields.
+
+    Some newer FEMaster parsers expose additional adaptive tuning keywords.  The
+    editable Step state keeps those values, but the built-in FEMaster template only
+    writes the keyword surface accepted by the minimum supported executable.
+    """
     return {
         "template": (
             "*NONLINEAR, CONTROL={control}, MAX_INCREMENTS={max_increments}, "
             "INITIAL_INCREMENT={initial_increment}, MINIMUM_INCREMENT={minimum_increment}, "
             "MAXIMUM_INCREMENT={maximum_increment}, MAXITER={max_iterations}, "
-            "TOL={tolerance}, ADAPTIVE={adaptive}, GROWTH_FACTOR={growth_factor}, "
-            "CUTBACK_FACTOR={cutback_factor}, FAST_ITERATIONS={fast_iterations}, "
-            "SLOW_ITERATIONS={slow_iterations}, MAXIMUM_CUTBACKS={maximum_cutbacks}, "
-            "REGULARIZE_ZERO_ROWS={regularize_zero_rows}, "
-            "REGULARIZATION_ALPHA={regularization_alpha}, ARC_LENGTH_PSI={arc_length_psi}"
+            "TOL={tolerance}, ADAPTIVE={adaptive}, "
+            "REGULARIZE_ZERO_ROWS={regularize_zero_rows}, ARC_LENGTH_PSI={arc_length_psi}"
         ),
         "fields": (
             ("control", "LOAD or ARC_LENGTH", "LOAD"),
