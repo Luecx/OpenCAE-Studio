@@ -29,17 +29,15 @@ class CoordinateSystemOverlay:
 
     def show_part(self, plotter, part, scene=None):
         self._observe_camera(plotter)
-        self._clear_actors(plotter)
-        self._records = [
+        records = [
             (system, f"part-{index}", None)
             for index, system in enumerate(getattr(part, "coordinate_systems", ()))
             if _visible(scene, system)
         ]
-        self._redraw(plotter)
+        self._replace_records(plotter, records)
 
     def show_assembly(self, plotter, project, scene):
         self._observe_camera(plotter)
-        self._clear_actors(plotter)
         records = [
             (system, f"assembly-{index}", None)
             for index, system in enumerate(project.assembly.coordinate_systems)
@@ -54,8 +52,19 @@ class CoordinateSystemOverlay:
                 for index, system in enumerate(part.coordinate_systems)
                 if _visible(scene, system)
             )
-        self._records = records
-        self._redraw(plotter)
+        self._replace_records(plotter, records)
+
+    def _replace_records(self, plotter, records):
+        """Replace visible systems without reacting to camera events caused by actors."""
+        if self._rescaling:
+            return
+        self._rescaling = True
+        try:
+            self._clear_actors(plotter)
+            self._records = list(records)
+            self._redraw(plotter)
+        finally:
+            self._rescaling = False
 
     def _observe_camera(self, plotter):
         camera = getattr(plotter, "camera", None)
