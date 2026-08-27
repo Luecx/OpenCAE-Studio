@@ -9,11 +9,14 @@ from .screen_scale import world_size_for_pixels
 
 
 class CoordinateSystemOverlay:
-    """Draw visible coordinate systems and rescale them after camera zooms."""
+    """Draw visible coordinate systems and keep them constant in screen space."""
 
     def __init__(self):
         self._names = []
         self._records = []
+        self._camera = None
+        self._observer_id = None
+        self._rescaling = False
 
     def _clear_actors(self, plotter):
         for name in self._names:
@@ -25,6 +28,7 @@ class CoordinateSystemOverlay:
         self._records.clear()
 
     def show_part(self, plotter, part, scene=None):
+        self._observe_camera(plotter)
         self._clear_actors(plotter)
         self._records = [
             (system, f"part-{index}", None)
@@ -34,6 +38,7 @@ class CoordinateSystemOverlay:
         self._redraw(plotter)
 
     def show_assembly(self, plotter, project, scene):
+        self._observe_camera(plotter)
         self._clear_actors(plotter)
         records = [
             (system, f"assembly-{index}", None)
@@ -52,12 +57,35 @@ class CoordinateSystemOverlay:
         self._records = records
         self._redraw(plotter)
 
+    def _observe_camera(self, plotter):
+        camera = getattr(plotter, "camera", None)
+        if camera is None or camera is self._camera:
+            return
+        if self._camera is not None and self._observer_id is not None:
+            try:
+                self._camera.RemoveObserver(self._observer_id)
+            except (AttributeError, RuntimeError, TypeError, ValueError):
+                pass
+        self._camera = camera
+        self._observer_id = None
+        try:
+            self._observer_id = camera.AddObserver(
+                "ModifiedEvent",
+                lambda *_args: self.refresh_scale(plotter),
+            )
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            self._observer_id = None
+
     def refresh_scale(self, plotter):
         """Rebuild only coordinate-system actors using the current camera zoom."""
-        if not self._records:
+        if not self._records or self._rescaling:
             return False
-        self._clear_actors(plotter)
-        self._redraw(plotter)
+        self._rescaling = True
+        try:
+            self._clear_actors(plotter)
+            self._redraw(plotter)
+        finally:
+            self._rescaling = False
         return True
 
     def _redraw(self, plotter):
