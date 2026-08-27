@@ -48,32 +48,28 @@ class FEMasterDslTest(unittest.TestCase):
         project = _project()
         part = project.parts[0]
         instance = project.assembly.instances[0]
-        part_node_set = part.node_sets[0]
-        part_element_set = part.element_sets[0]
-        part_surface = part.surfaces[0]
+        part_node_set, part_element_set, part_surface = part.regions
 
-        project.assembly.node_sets.append(
-            Region(
-                name="ASM_NODES",
-                scope=RegionScope.ASSEMBLY,
-                definition=named_region_definition(part_node_set, instance),
-                preferred_projection=RegionProjection.NODES,
-            )
-        )
-        project.assembly.element_sets.append(
-            Region(
-                name="ASM_ELEMENTS",
-                scope=RegionScope.ASSEMBLY,
-                definition=named_region_definition(part_element_set, instance),
-                preferred_projection=RegionProjection.ELEMENTS,
-            )
-        )
-        project.assembly.surfaces.append(
-            Region(
-                name="ASM_SURFACE",
-                scope=RegionScope.ASSEMBLY,
-                definition=named_region_definition(part_surface, instance),
-                preferred_projection=RegionProjection.FACETS,
+        project.assembly.regions.extend(
+            (
+                Region(
+                    name="ASM_NODES",
+                    scope=RegionScope.ASSEMBLY,
+                    definition=named_region_definition(part_node_set, instance),
+                    preferred_projection=RegionProjection.NODES,
+                ),
+                Region(
+                    name="ASM_ELEMENTS",
+                    scope=RegionScope.ASSEMBLY,
+                    definition=named_region_definition(part_element_set, instance),
+                    preferred_projection=RegionProjection.ELEMENTS,
+                ),
+                Region(
+                    name="ASM_SURFACE",
+                    scope=RegionScope.ASSEMBLY,
+                    definition=named_region_definition(part_surface, instance),
+                    preferred_projection=RegionProjection.FACETS,
+                ),
             )
         )
         project.rebuild_index(strict=True)
@@ -127,9 +123,7 @@ def _project():
         definition=definition_from_local_labels(part, ["Face-1"]),
         preferred_projection=RegionProjection.FACETS,
     )
-    part.node_sets = [part_node_set]
-    part.element_sets = [part_element_set]
-    part.surfaces = [part_surface]
+    part.regions = [part_node_set, part_element_set, part_surface]
     part.section_assignments = [
         SectionAssignment(
             name="Section Assignment",
@@ -159,9 +153,9 @@ def _project():
         definition=named_region_definition(part_surface, instance),
         preferred_projection=RegionProjection.FACETS,
     )
-    project.assembly.node_sets.append(assembly_node_set)
-    project.assembly.element_sets.append(assembly_element_set)
-    project.assembly.surfaces.append(assembly_surface)
+    project.assembly.regions.extend(
+        (assembly_node_set, assembly_element_set, assembly_surface)
+    )
 
     support = FixedSupport(
         name="BC",
