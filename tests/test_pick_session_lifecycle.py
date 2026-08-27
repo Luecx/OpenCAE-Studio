@@ -27,11 +27,22 @@ class _Messages:
         self.values.append(value)
 
 
+class _Toolbar:
+    def __init__(self):
+        self.enabled = False
+        self.allowed_modes = ()
+
+    def set_selection_enabled(self, enabled, allowed_modes=()):
+        self.enabled = bool(enabled)
+        self.allowed_modes = tuple(allowed_modes)
+
+
 class _Owner:
     def __init__(self):
         self.selection_mode = "auto"
         self.display_mode = "geometry"
         self.message = _Messages()
+        self.toolbar = _Toolbar()
         self.modes = []
 
     def set_selection_mode(self, value):
@@ -59,7 +70,8 @@ def test_single_pick_finishes_after_first_hit():
     assert len(selected) == 1
     assert finished == [True]
     assert manager.active is False
-    assert owner.selection_mode == "auto"
+    assert owner.selection_mode == "none"
+    assert owner.toolbar.enabled is False
 
 
 def test_starting_another_field_finishes_previous_session():
@@ -74,6 +86,7 @@ def test_starting_another_field_finishes_previous_session():
     assert second_finished == []
     assert manager.active is True
     assert manager.policy.multiplicity == SelectionMultiplicity.SINGLE
+    assert owner.toolbar.enabled is True
 
 
 def test_single_region_pick_always_replaces_even_with_shift_operation():
@@ -117,18 +130,19 @@ def test_region_widget_defers_resolution_and_dialogs_keep_previews():
     widget = (root / "opencae/ui/core/widgets/region_selection.py").read_text()
     compact = (root / "opencae/ui/core/widgets/compact_region_selector.py").read_text()
     constraint = (root / "opencae/ui/dialogs/constraint.py").read_text()
-    assembly = (root / "opencae/controllers/assembly_controller.py").read_text()
+    assembly_constraints = (root / "opencae/controllers/assembly_controller_constraints.py").read_text()
     sections = (root / "opencae/controllers/part/regions.py").read_text()
     section_dialog = (root / "opencae/ui/dialogs/section_assignment.py").read_text()
 
     assert "RegionResolver" not in widget
-    assert "Projection to nodes, elements or facets is checked on Apply/OK" in widget
+    assert "RegionDefinition.from_values(value)" in widget
     assert "QPushButton:checked" in compact
-    assert "Select in View" in compact and "Extended…" in compact
+    assert "Select this region in the viewport" in compact
+    assert "Finish selecting this region" in compact
     assert "RegionResolver" not in compact
     assert "preview_changed" in constraint
     assert "set_extended_visible(tie)" in constraint
-    assert "constraint-dialog-" in assembly
+    assert "constraint-dialog-" in assembly_constraints
     assert "section-assignment-dialog-" in sections
     assert "value_changed.connect(self._filter_sections)" not in section_dialog
 
