@@ -22,7 +22,7 @@ class TimeManagerPlot(QWidget):
         self._y = []
         self._current_index = -1
         self._cursor_x = None
-        self._x_label = "Time (s)"
+        self._x_label = "Frame"
         self._y_label = "Value"
         self._screen_points = []
         self.setMouseTracking(True)
@@ -36,7 +36,7 @@ class TimeManagerPlot(QWidget):
         *,
         current_index=-1,
         cursor_x=None,
-        x_label="Time (s)",
+        x_label="Frame",
         y_label="Value",
     ) -> None:
         """Replace the plotted frame series and current-playhead state."""
@@ -121,10 +121,15 @@ class TimeManagerPlot(QWidget):
             painter.setPen(grid_pen)
             painter.drawLine(QPointF(px, plot.top()), QPointF(px, plot.bottom()))
             painter.setPen(text_color)
+            label = (
+                str(int(round(value)))
+                if abs(value - round(value)) <= 1.0e-9
+                else f"{value:.4g}"
+            )
             painter.drawText(
                 QRectF(px - 34.0, plot.bottom() + 5.0, 68.0, 18.0),
                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
-                f"{value:.4g}",
+                label,
             )
 
         painter.setPen(QColor(PALETTE["muted"]))
@@ -134,7 +139,7 @@ class TimeManagerPlot(QWidget):
             self._x_label,
         )
         painter.drawText(
-            QRectF(plot.left() + 8.0, plot.top() + 4.0, 100.0, 18.0),
+            QRectF(plot.left() + 8.0, plot.top() + 4.0, 120.0, 18.0),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
             self._y_label,
         )
@@ -190,7 +195,7 @@ class TimeManagerPlot(QWidget):
         else:
             QToolTip.showText(
                 event.globalPosition().toPoint(),
-                f"Time: {self._x[index]:.6g}\nFrame: {index + 1}",
+                f"Frame: {index + 1}\n{self._y_label}: {self._y[index]:.6g}",
                 self,
             )
         super().mouseMoveEvent(event)
