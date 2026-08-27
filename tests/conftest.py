@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from opencae.model.core import EntityRef
@@ -32,6 +34,19 @@ from opencae.model.selection import (
     RegionScope,
     RegionSelectionItem,
 )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def qapplication():
+    """Keep one QApplication alive for every UI-bearing test in the full suite."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    try:
+        from PyQt6.QtWidgets import QApplication
+    except ImportError:
+        yield None
+        return
+    application = QApplication.instance() or QApplication([])
+    yield application
 
 
 def definition(*operands):
@@ -87,7 +102,11 @@ def project_factory():
             status=MeshStatus.CURRENT,
             revision="mesh-r1",
         )
-        part_rp = ReferencePoint(name="PART_RP", position=(0.25, 0.25, 0.25), scope="Part")
+        part_rp = ReferencePoint(
+            name="PART_RP",
+            position=(0.25, 0.25, 0.25),
+            scope="Part",
+        )
         part = Part(name="PART", mesh=mesh, reference_points=[part_rp])
         vertex_region = Region(
             name="VERTEX_SET",
@@ -119,11 +138,26 @@ def project_factory():
                 translation=(2.0, 0.0, 0.0),
             )
             instances.append(instance_2)
-        assembly_rp = ReferencePoint(name="ASSEMBLY_RP", position=(0.0, 0.0, 0.0), scope="Assembly")
-        assembly = Assembly(name="ASSEMBLY", instances=instances, reference_points=[assembly_rp])
+        assembly_rp = ReferencePoint(
+            name="ASSEMBLY_RP",
+            position=(0.0, 0.0, 0.0),
+            scope="Assembly",
+        )
+        assembly = Assembly(
+            name="ASSEMBLY",
+            instances=instances,
+            reference_points=[assembly_rp],
+        )
 
-        material = Material(name="STEEL", youngs_modulus=210000.0, poisson_ratio=0.3)
-        section = SolidSection(name="SOLID", material_ref=EntityRef.of(material, "Material"))
+        material = Material(
+            name="STEEL",
+            youngs_modulus=210000.0,
+            poisson_ratio=0.3,
+        )
+        section = SolidSection(
+            name="SOLID",
+            material_ref=EntityRef.of(material, "Material"),
+        )
         assignment = SectionAssignment(
             name="SECTION_ASSIGNMENT",
             section_ref=EntityRef.of(section, "Section"),
@@ -138,8 +172,16 @@ def project_factory():
         cload = ConcentratedLoad(
             name="CLOAD",
             target=definition(
-                NamedRegionOperand(EntityRef.of(vertex_region, "Region"), EntityRef.of(instance_1, "Instance")),
-                MeshNodeOperand(EntityRef.of(part, "Part"), 2, EntityRef.of(instance_1, "Instance"), mesh.revision),
+                NamedRegionOperand(
+                    EntityRef.of(vertex_region, "Region"),
+                    EntityRef.of(instance_1, "Instance"),
+                ),
+                MeshNodeOperand(
+                    EntityRef.of(part, "Part"),
+                    2,
+                    EntityRef.of(instance_1, "Instance"),
+                    mesh.revision,
+                ),
             ),
             components=[100.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             distribution=NodalLoadDistribution.TOTAL_UNIFORM,
@@ -159,7 +201,15 @@ def project_factory():
             tie = TieConstraint(
                 name="TIE",
                 master=definition(geometry(part, 2, 1, instance_1)),
-                slave=definition(MeshFacetOperand(EntityRef.of(part, "Part"), 1, "S2", EntityRef.of(instance_1, "Instance"), mesh.revision)),
+                slave=definition(
+                    MeshFacetOperand(
+                        EntityRef.of(part, "Part"),
+                        1,
+                        "S2",
+                        EntityRef.of(instance_1, "Instance"),
+                        mesh.revision,
+                    )
+                ),
                 adjust=True,
                 distance=0.1,
             )
@@ -173,7 +223,8 @@ def project_factory():
             load_refs=[EntityRef.of(cload, "Load"), EntityRef.of(pressure, "Load")],
             support_refs=[EntityRef.of(support, "Support")],
         )
-        analysis = LinearStaticAnalysis(name="ANALYSIS", steps=[step])
+        analysis = LinearStaticAnalysis(name="ANALYSIS")
+        analysis.bind_steps([step])
         project = Project(
             name="TEST",
             parts=[part],
@@ -182,8 +233,10 @@ def project_factory():
             loads=[cload, pressure],
             materials=[material],
             sections=[section],
+            steps=[step],
             analyses=[analysis],
         )
+        project.rebuild_index(strict=True)
         return {
             "project": project,
             "part": part,
@@ -202,6 +255,7 @@ def project_factory():
             "material": material,
             "section": section,
             "assignment": assignment,
+            "step": step,
             "analysis": analysis,
         }
     return create

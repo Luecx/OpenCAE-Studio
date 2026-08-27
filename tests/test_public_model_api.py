@@ -20,8 +20,8 @@ def test_public_relationships_are_python_objects_not_strings():
     assert instance.part is part
     assert section.material_ref.entity_id == material.id
     assert instance.part_ref.entity_id == part.id
-    assert section.material_ref.legacy_name == ""
-    assert instance.part_ref.legacy_name == ""
+    assert not hasattr(section.material_ref, "legacy_name")
+    assert not hasattr(instance.part_ref, "legacy_name")
 
     with pytest.raises(TypeError):
         instance.part = part.name
@@ -70,5 +70,5 @@ def test_named_regions_are_passed_to_load_api_as_objects():
 
     operand = load.target.operands[0]
     assert operand.region_ref.entity_id == node_set.id
-    assert operand.region_ref.legacy_name == ""
+    assert not hasattr(operand.region_ref, "legacy_name")
     model.validate()

@@ -6,11 +6,14 @@ from copy import deepcopy
 
 from PyQt6.QtWidgets import QDialog
 
+from opencae.deck_formats.selection import default_profile_id
 from opencae.model.core import EntityRef
 from opencae.model.entities.analysis import Analysis, AnalysisStep
 from opencae.model.naming import next_name_from_names
+from opencae.solvers.registry import available_solvers
 from opencae.store.commands import UpdateFieldCommand
 from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
+from opencae.ui.dialogs.run_analysis import RunAnalysisDialog
 from opencae.ui.dialogs.solver_settings import SolverSettingsDialog
 from opencae.ui.dialogs.step import StepDialog
 from opencae.ui.dialogs.step_collectors import StepCollectorsDialog
@@ -28,6 +31,12 @@ class AnalysisController:
         self.active_analysis_id = ""
         store.changed.connect(self._repair_active_analysis)
         self._repair_active_analysis()
+
+    def _solver_adapters(self):
+        """Return the runtime solver registry shared with the Job manager."""
+        if self.jobs is not None and getattr(self.jobs, "solvers", None):
+            return self.jobs.solvers
+        return available_solvers()
 
     def active_analysis(self):
         project = self.store.project
@@ -174,11 +183,21 @@ class AnalysisController:
 
     def new_analysis(self):
         project = self.store.project
+        adapters = self._solver_adapters()
+        preferred = self.settings.selected_solver
+        solver = preferred if preferred in adapters else next(iter(adapters), "FEMaster")
+        adapter = adapters.get(solver)
         value = Analysis(
             name=next_name_from_names(
                 "Analysis",
                 [item.name for item in project.analyses],
-            )
+            ),
+            solver=solver,
+            deck_profile_id=(
+                default_profile_id(adapter)
+                if adapter is not None
+                else "builtin:femaster"
+            ),
         )
         self._analysis_dialog(value, None)
 
@@ -201,7 +220,8 @@ class AnalysisController:
         dialog = AnalysisDialog(
             value,
             project.steps,
-            self.settings.enabled_solvers() or ("FEMaster",),
+            self._solver_adapters(),
+            self.settings,
             existing_names=[item.name for item in project.analyses],
             parent=self.parent,
         )
@@ -234,6 +254,27 @@ class AnalysisController:
         if self.jobs is None:
             self.store.message.emit("The job manager is unavailable")
             return
+
+        dialog = RunAnalysisDialog(
+            analysis,
+            self._solver_adapters(),
+            self.settings,
+            self.parent,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        solver, profile_id = dialog.values()
+        if solver != analysis.solver or profile_id != analysis.deck_profile_id:
+            candidate = deepcopy(analysis)
+            candidate.solver = solver
+            candidate.deck_profile_id = profile_id
+            self.store.replace_entity(
+                f"Updated run configuration for {analysis.name}",
+                self.store.project.id,
+                "analyses",
+                candidate,
+            )
+            analysis = self.store.project.resolve(candidate.id)
         self.jobs.run_analysis(analysis.id)
 
     def validate_active(self):

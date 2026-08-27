@@ -18,7 +18,13 @@ def write_assembly_reference_points(project, writer, context, node_offset):
         legacy_mapping[point.name] = next_node
         legacy_mapping[f"RP-{point.name}"] = next_node
     if rows:
-        command(writer, "NODE", rows, NSET="ASSEMBLY_REFERENCE_POINTS")
+        command(
+            writer,
+            "NODE",
+            rows,
+            record_key="mesh.nodes",
+            NSET="ASSEMBLY_REFERENCE_POINTS",
+        )
 
     for point in project.assembly.reference_points:
         node_id = reference_ids[("", point.id)]

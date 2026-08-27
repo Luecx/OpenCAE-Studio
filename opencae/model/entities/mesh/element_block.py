@@ -37,12 +37,22 @@ class ElementBlock(SolverWritable):
     def __post_init__(self) -> None:
         """Normalize public object input or a persisted reference."""
         if self.definition is not None and self.definition_ref is not None:
-            raise TypeError("Pass either definition or definition_ref, not both")
-        source = (
-            self.definition
-            if self.definition is not None
-            else self.definition_ref
-        )
+            runtime_ref = as_entity_ref(self.definition, "ElementDefinition")
+            persisted_ref = as_entity_ref(
+                self.definition_ref,
+                "ElementDefinition",
+            )
+            if runtime_ref.entity_id != persisted_ref.entity_id:
+                raise TypeError(
+                    "Pass either definition or definition_ref, not conflicting both"
+                )
+            source = self.definition
+        else:
+            source = (
+                self.definition
+                if self.definition is not None
+                else self.definition_ref
+            )
         if source is None:
             raise TypeError("ElementBlock requires an element definition")
 

@@ -119,7 +119,7 @@ def test_typed_viewport_selection_replaces_free_form_pick_dictionaries():
 
 
 def test_constraint_requirements_have_one_authoritative_definition():
-    controller = (ROOT / "controllers/assembly_controller.py").read_text(encoding="utf-8")
+    controller = (ROOT / "controllers/assembly_controller_constraints.py").read_text(encoding="utf-8")
     dialog = (ROOT / "ui/dialogs/constraint.py").read_text(encoding="utf-8")
     assert "constraint_selection_policy" in controller
     assert "constraint_region_requirement" in dialog
@@ -290,9 +290,10 @@ def test_region_consumers_use_compact_selector_and_keep_detailed_editor_extended
         assert "CompactRegionSelector" in text
         assert "RegionSelectionWidget" not in text
     compact = (ROOT / "ui/core/widgets/compact_region_selector.py").read_text(encoding="utf-8")
+    extended = (ROOT / "ui/core/widgets/extended_region_dialog.py").read_text(encoding="utf-8")
     detailed = (ROOT / "ui/core/widgets/region_selection.py").read_text(encoding="utf-8")
     assert "ExtendedRegionDialog" in compact
-    assert "show_pick_controls=False" in compact
+    assert "pick_callback=None" in extended
     assert "QTableWidget" not in compact
     assert "QTableWidget" in detailed
 
@@ -300,8 +301,10 @@ def test_region_consumers_use_compact_selector_and_keep_detailed_editor_extended
 def test_compact_region_selector_owns_one_checkable_pick_button_and_deferred_value():
     text = (ROOT / "ui/core/widgets/compact_region_selector.py").read_text(encoding="utf-8")
     assert 'self.pick_button.setCheckable(True)' in text
-    assert 'self.pick_button.setText("Finish Picking" if active else "Select in View")' in text
-    assert "self.pick_callback(self, self.apply_pick, self._session_finished)" in text
+    assert '"Finish selecting this region"' in text
+    assert "self.picking_changed.emit(bool(active))" in text
+    assert "self.apply_pick," in text
+    assert "self._session_finished," in text
     assert "RegionResolver" not in text
     assert "selection_item_label" in text
 
@@ -317,11 +320,11 @@ def test_constraint_control_point_is_direct_single_pick_without_extended_menu():
 
 def test_load_support_and_section_dialogs_keep_persistent_preview_channels():
     loads = (ROOT / "controllers/load_controller.py").read_text(encoding="utf-8")
-    assembly = (ROOT / "controllers/assembly_controller.py").read_text(encoding="utf-8")
+    constraints = (ROOT / "controllers/assembly_controller_constraints.py").read_text(encoding="utf-8")
     sections = (ROOT / "controllers/part/regions.py").read_text(encoding="utf-8")
     assert "load-support-dialog-" in loads
-    assert "constraint-dialog-" in assembly
+    assert "constraint-dialog-" in constraints
     assert "section-assignment-dialog-" in sections
     assert "clear_region_preview" in loads
-    assert "clear_region_previews" in assembly
+    assert "clear_region_previews" in constraints
     assert "clear_region_preview" in sections

@@ -6,7 +6,9 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
+from opencae.deck_formats.selection import resolve_profile
 from opencae.model.entities.analysis import Analysis
+from opencae.ui.deck_format_manager import DeckFormatManagerDialog
 from opencae.ui.dialogs.deck_preview import DeckPreviewDialog
 
 
@@ -34,13 +36,26 @@ class SolverController:
         value = analysis or self._analysis()
         return self.solvers.get(value.solver) if isinstance(value, Analysis) else None
 
+    def _deck_profile(self, analysis=None):
+        """Resolve the custom profile referenced by the Analysis stable ID."""
+        value = analysis or self._analysis()
+        adapter = self._adapter(value)
+        if not isinstance(value, Analysis) or adapter is None:
+            return None
+        return resolve_profile(
+            self.settings,
+            adapter,
+            getattr(value, "deck_profile_id", ""),
+        )
+
     def deck_text(self):
+        """Render the active Analysis through its selected input-deck profile."""
         analysis = self._analysis()
         adapter = self._adapter(analysis)
         if analysis is None:
             raise ValueError("Select an Analysis first")
         if adapter is None:
-            raise ValueError(f"The Analysis solver {analysis.solver!r} is disabled")
+            raise ValueError(f"The Analysis solver {analysis.solver!r} is unavailable")
         if not analysis.resolved_steps(self.store.project):
             raise ValueError("The Analysis references no existing Steps")
         if not any(
@@ -50,7 +65,11 @@ class SolverController:
             raise ValueError(
                 "Create at least one assembly instance before exporting an Analysis"
             )
-        return adapter.write_deck_text(self.store.project, analysis)
+        return adapter.write_deck_text(
+            self.store.project,
+            analysis,
+            profile=self._deck_profile(analysis),
+        )
 
     def validate(self):
         analysis = self._analysis()
@@ -58,6 +77,10 @@ class SolverController:
             self.store.message.emit("Select an Analysis first")
             return
         self.parent.controllers.jobs.validate_analysis(analysis.id)
+
+    def format_manager(self):
+        """Open the persistent input-deck format/profile manager."""
+        DeckFormatManagerDialog(self.parent, settings=self.settings).exec()
 
     def preview(self):
         try:
@@ -80,7 +103,9 @@ class SolverController:
         if not path:
             return
         try:
-            Path(path).write_text(self.deck_text(), encoding="utf-8")
+            profile = self._deck_profile(analysis)
+            encoding = _profile_encoding(profile)
+            Path(path).write_text(self.deck_text(), encoding=encoding)
         except Exception as exc:
             QMessageBox.critical(self.parent, "Deck export failed", str(exc))
             return
@@ -94,3 +119,13 @@ class SolverController:
 
     def result_placeholder(self):
         self.parent.controllers.jobs.open_selected_results()
+
+
+def _profile_encoding(profile) -> str:
+    """Translate the formatter's presentation label into a Python codec name."""
+    if (
+        profile is not None
+        and str(profile.settings.get("encoding", "")).upper() == "ASCII"
+    ):
+        return "ascii"
+    return "utf-8"

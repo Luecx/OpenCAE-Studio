@@ -21,12 +21,45 @@ def test_incompatible_beam_truss_section_is_rejected_before_export():
     from opencae.model.entities.regions.region import Region
     from opencae.model.entities.regions.section_assignment import SectionAssignment
     from opencae.model.entities.sections.truss import TrussSection
+    from opencae.model.selection import (
+        MeshElementOperand,
+        RegionDefinition,
+        RegionProjection,
+        RegionSelectionItem,
+        named_region_definition,
+    )
     from opencae.model.validation import validate_section_assignments
-    project = Project(name="P"); part = _part(); project.parts.append(part); section=TrussSection(name="TRUSS"); project.sections.append(section)
+
+    project = Project(name="P")
+    part = _part()
+    project.parts.append(part)
+    section = TrussSection(name="TRUSS")
+    project.sections.append(section)
     part.mesh.element_blocks = [ElementBlock(BeamElementDefinition(name="B33"), [1], [(1, 2)])]
-    part.element_sets = [Region(name="FRAME", region_type="Element Set", members=["Element-1"])]
-    part.section_assignments = [SectionAssignment(name="A", section_ref=EntityRef.of(section), region_ref=EntityRef.of(part.element_sets[0]))]
+    frame = Region(
+        name="FRAME",
+        definition=RegionDefinition((
+            RegionSelectionItem(
+                MeshElementOperand(
+                    EntityRef.of(part, "Part"),
+                    1,
+                    mesh_revision=part.mesh.revision,
+                )
+            ),
+        )),
+        preferred_projection=RegionProjection.ELEMENTS,
+    )
+    part.regions = [frame]
+    part.section_assignments = [
+        SectionAssignment(
+            name="A",
+            section_ref=EntityRef.of(section),
+            target=named_region_definition(frame),
+        )
+    ]
     project.assembly.instances.append(Instance(name="P-1", part_ref=EntityRef.of(part)))
+    project.rebuild_index(strict=True)
+
     import pytest
     with pytest.raises(ValueError, match="Truss section cannot be assigned to Beam"):
         validate_section_assignments(project)

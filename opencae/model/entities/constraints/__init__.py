@@ -1,6 +1,6 @@
 from .base import Constraint
 from .distributing_coupling import DistributingCoupling
-from .equation import EquationConstraint
+from .equation import EquationConstraint, EquationTerm
 from .factory import create_constraint
 from .kinematic_coupling import KinematicCoupling
 from .mpc import MPCConstraint
@@ -11,6 +11,6 @@ from .types import ConstraintType
 
 __all__ = [
     "Constraint", "ConstraintType",
-    "DistributingCoupling", "EquationConstraint", "KinematicCoupling", "MPCConstraint",
+    "DistributingCoupling", "EquationConstraint", "EquationTerm", "KinematicCoupling", "MPCConstraint",
     "RigidBodyConstraint", "TieConstraint", "create_constraint", "direct_control_point_error",
 ]

@@ -12,6 +12,11 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QMessageBox
 
+from opencae.deck_formats.selection import (
+    normalized_profile_id,
+    profile_display_name,
+    resolve_profile,
+)
 from opencae.jobs import AnalysisJobRunner
 from opencae.model.core import EntityRef
 from opencae.model.entities.analysis import Analysis
@@ -52,6 +57,12 @@ def run_analysis(manager, analysis_id: str) -> None:
         return
 
     config = manager.settings.solver_config(analysis.solver)
+    profile_id = normalized_profile_id(
+        manager.settings,
+        adapter,
+        getattr(analysis, "deck_profile_id", ""),
+    )
+    deck_profile = resolve_profile(manager.settings, adapter, profile_id)
     directory = job_directory(project, analysis.name)
     job = create_job(
         project,
@@ -60,6 +71,12 @@ def run_analysis(manager, analysis_id: str) -> None:
         analysis.solver,
         directory,
     )
+    job.settings["deck_profile_id"] = profile_id
+    job.settings["deck_profile_name"] = profile_display_name(
+        manager.settings, profile_id
+    )
+    if deck_profile is not None:
+        job.settings["deck_profile_snapshot"] = deck_profile.to_dict()
     manager.store.add_entity(
         f"Created job {job.name}",
         project.id,
@@ -69,16 +86,17 @@ def run_analysis(manager, analysis_id: str) -> None:
     job = manager.store.project.resolve(job.id)
     manager.select_job(job.id)
 
-    # The runner receives an immutable project snapshot so edits made while a
-    # solver is running cannot silently alter the submitted calculation.
+    # Both the model and formatter are snapshotted. Changing a custom profile
+    # while the solver is running must not alter the submitted calculation.
     runner = AnalysisJobRunner(
         deepcopy(manager.store.project),
         analysis.id,
         adapter,
         str(config.get("executable", "")),
-        str(config.get("arguments", "")),
+        str(config.get("arguments", config.get("extra_arguments", ""))),
         directory,
         manager,
+        deck_profile=deck_profile,
     )
     manager._runners[job.id] = runner
     runner.output.connect(
@@ -169,6 +187,8 @@ def _attach_solver_result(manager, job: Job, source: Path) -> None:
         metadata={
             "result_kind": "solver",
             "step_names": [step.name for step in steps],
+            "deck_profile_id": str(job.settings.get("deck_profile_id", "")),
+            "deck_profile_name": str(job.settings.get("deck_profile_name", "")),
         },
     )
     persist_result(manager.store, job.id, result)

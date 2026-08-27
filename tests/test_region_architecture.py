@@ -100,10 +100,16 @@ def test_context_picker_reselects_mesh_point_mode_for_mixed_policy():
     class Message:
         def emit(self, _value): pass
 
+    class Toolbar:
+        def __init__(self): self.allowed_modes = ()
+        def set_selection_enabled(self, _enabled, allowed_modes=()):
+            self.allowed_modes = tuple(allowed_modes)
+
     class Owner:
         display_mode = "geometry"
         selection_mode = "auto"
         message = Message()
+        toolbar = Toolbar()
         def set_selection_mode(self, mode): self.selection_mode = mode
 
     owner = Owner()
@@ -118,7 +124,8 @@ def test_context_picker_reselects_mesh_point_mode_for_mixed_policy():
     assert owner.selection_mode == "auto"
     owner.display_mode = "mesh"
     manager.refresh_for_display()
-    assert owner.selection_mode == "point"
+    assert owner.selection_mode == "auto"
+    assert owner.toolbar.allowed_modes == ("auto", "point", "element")
 
 
 def test_mesh_facet_projects_only_its_local_nodes(project_factory):
@@ -295,6 +302,7 @@ def test_reference_point_only_policy_uses_point_picker_in_mesh_display():
         selection_mode = "auto"
         display_mode = "mesh"
         message = SimpleNamespace(emit=lambda *_: None)
+        toolbar = SimpleNamespace(set_selection_enabled=lambda *_: None)
         def set_selection_mode(self, mode): self.selection_mode = mode
 
     owner = Owner()
