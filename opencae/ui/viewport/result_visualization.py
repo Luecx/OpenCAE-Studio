@@ -186,7 +186,10 @@ def _animated_grid(grid, result, field, options):
         return grid
     scalar = _scalar_name(field)
     if mode == "factor":
-        factor = min(max(float(animation.get("factor", 1.0)), 0.0), 1.0)
+        # Current-frame playback uses a full sine cycle.  Negative amplitudes
+        # therefore represent the reversed response and must reach both the
+        # displayed scalar and displacement field unchanged in sign.
+        factor = min(max(float(animation.get("factor", 1.0)), -1.0), 1.0)
         animated = grid.copy(deep=True)
         scaled = set()
         if scalar and scalar in animated.point_data:
