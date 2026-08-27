@@ -86,17 +86,19 @@ def test_preview_reports_elements_outside_target():
 
 def test_element_control_survives_project_roundtrip():
     project = Project(name="P"); part = _part(); project.parts.append(part)
+    part.mesh.element_blocks = [ElementBlock(
+        TetrahedronElementDefinition(name="C3D4"), [1], [(1, 2, 3, 4)],
+    )]
     part.mesh.element_controls.append(ElementControl(
         name="EC",
         target=_element_target(part, 1),
-        topology=ElementTopology.SOLID_HEX,
+        topology=ElementTopology.SOLID_TET,
         order=ElementOrder.SECOND,
-        formulation="Reduced Integration",
     ))
     with TemporaryDirectory() as directory:
         path = Path(directory) / "model.ocae"; save_project(project, path); loaded = load_project(path)
     value = loaded.parts[0].mesh.element_controls[0]
-    assert value.topology == ElementTopology.SOLID_HEX; assert value.order == ElementOrder.SECOND
+    assert value.topology == ElementTopology.SOLID_TET; assert value.order == ElementOrder.SECOND
 
 
 def test_solid_order_propagates_across_tet_wedge_interface():
