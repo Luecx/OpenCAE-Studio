@@ -1,10 +1,14 @@
 """Provides the result contour-range ribbon control and its compact editor flyout."""
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
+    QColorDialog,
     QDoubleSpinBox,
     QHBoxLayout,
+    QLabel,
     QMenu,
+    QSlider,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -17,15 +21,21 @@ from opencae.ui.templates import (
     apply_primary_control_height,
     field_block,
 )
+from opencae.ui.viewport.contour_mapping import (
+    DEFAULT_CONTOUR_LEVELS,
+    DEFAULT_OUTSIDE_COLOR,
+    MAX_CONTOUR_LEVELS,
+    MIN_CONTOUR_LEVELS,
+)
 
 
 class ResultRangeButton(QToolButton):
-    """Open a compact editor for automatic or manual contour limits."""
+    """Open a compact editor for result range and contour color mapping."""
 
     range_changed = pyqtSignal(object)
 
     def __init__(self, parent=None):
-        """Build the ribbon button and its shared-metric minimum/maximum controls."""
+        """Build the ribbon button and its contour presentation controls."""
         super().__init__(parent)
         self.setText("Contour")
         self.setIcon(make_icon(IconKind.RANGE, 28))
@@ -35,16 +45,58 @@ class ResultRangeButton(QToolButton):
         self.setProperty("ribbonButton", True)
         self.setFixedSize(82, 70)
         self._data_range = (0.0, 1.0)
+        self._colors = {
+            "below": DEFAULT_OUTSIDE_COLOR,
+            "above": DEFAULT_OUTSIDE_COLOR,
+        }
 
         panel = QWidget()
-        panel.setMinimumWidth(300)
+        panel.setMinimumWidth(320)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(12)
+
         minimum_row, self.minimum, self.minimum_auto = self._field()
         maximum_row, self.maximum, self.maximum_auto = self._field()
         layout.addWidget(field_block("Minimum", minimum_row))
         layout.addWidget(field_block("Maximum", maximum_row))
+
+        levels_row = QWidget()
+        levels_layout = QHBoxLayout(levels_row)
+        levels_layout.setContentsMargins(0, 0, 0, 0)
+        levels_layout.setSpacing(8)
+        self.levels = QSlider(Qt.Orientation.Horizontal)
+        self.levels.setRange(MIN_CONTOUR_LEVELS, MAX_CONTOUR_LEVELS)
+        self.levels.setValue(DEFAULT_CONTOUR_LEVELS)
+        self.levels.setPageStep(2)
+        self.levels.setTickInterval(2)
+        self.levels.setToolTip("Number of discrete contour color levels")
+        self.level_value = QLabel(str(DEFAULT_CONTOUR_LEVELS))
+        self.level_value.setMinimumWidth(24)
+        self.level_value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        levels_layout.addWidget(self.levels, 1)
+        levels_layout.addWidget(self.level_value)
+        layout.addWidget(field_block("Levels", levels_row))
+
+        self.continuous = QToolButton()
+        self.continuous.setText("Continuous color mapping")
+        self.continuous.setCheckable(True)
+        self.continuous.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
+        self.continuous.setObjectName("ResultContinuousButton")
+        layout.addWidget(field_block("Mapping", self.continuous))
+
+        self.outside_colors = QToolButton()
+        self.outside_colors.setText("Color values outside range")
+        self.outside_colors.setCheckable(True)
+        self.outside_colors.setChecked(True)
+        self.outside_colors.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
+        self.outside_colors.setObjectName("ResultOutsideColorsButton")
+        layout.addWidget(field_block("Outside range", self.outside_colors))
+
+        self.below_color = self._color_button("below")
+        self.above_color = self._color_button("above")
+        layout.addWidget(field_block("Below minimum", self.below_color))
+        layout.addWidget(field_block("Above maximum", self.above_color))
 
         menu = QMenu(self)
         action = QWidgetAction(menu)
@@ -60,6 +112,11 @@ class ResultRangeButton(QToolButton):
         self.maximum_auto.toggled.connect(
             lambda checked: self._auto_changed("maximum", checked)
         )
+        self.levels.valueChanged.connect(self._levels_changed)
+        self.continuous.toggled.connect(self._continuous_changed)
+        self.outside_colors.toggled.connect(self._outside_colors_changed)
+        self.below_color.clicked.connect(lambda: self._choose_color("below"))
+        self.above_color.clicked.connect(lambda: self._choose_color("above"))
         self.minimum_auto.setChecked(True)
         self.maximum_auto.setChecked(True)
 
@@ -88,6 +145,26 @@ class ResultRangeButton(QToolButton):
         row.addWidget(auto)
         return host, spin, auto
 
+    def _color_button(self, name):
+        """Return one compact color chooser for values outside the active range."""
+        button = QToolButton()
+        button.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
+        button.setObjectName("ResultContourColorButton")
+        self._refresh_color_button(button, self._colors[name])
+        return button
+
+    @staticmethod
+    def _refresh_color_button(button, value):
+        color = QColor(value)
+        text = "#10161c" if color.lightnessF() > 0.58 else "#f0f3f6"
+        button.setText(color.name().upper())
+        button.setStyleSheet(
+            "QToolButton {"
+            f"background-color: {color.name()}; color: {text};"
+            "padding: 0 8px; text-align: left;"
+            "}"
+        )
+
     def set_data_range(self, minimum, maximum):
         """Replace the automatic limits with the range of the active result field."""
         self._data_range = (float(minimum), float(maximum))
@@ -95,12 +172,17 @@ class ResultRangeButton(QToolButton):
         self._apply_auto("maximum")
 
     def values(self):
-        """Return manual values together with both automatic-mode flags."""
+        """Return the complete range and contour-mapping configuration."""
         return {
             "minimum": self.minimum.value(),
             "maximum": self.maximum.value(),
             "minimum_auto": self.minimum_auto.isChecked(),
             "maximum_auto": self.maximum_auto.isChecked(),
+            "levels": self.levels.value(),
+            "continuous": self.continuous.isChecked(),
+            "outside_colors": self.outside_colors.isChecked(),
+            "below_color": self._colors["below"],
+            "above_color": self._colors["above"],
         }
 
     def _auto_changed(self, name, checked):
@@ -119,6 +201,36 @@ class ResultRangeButton(QToolButton):
         spin.blockSignals(True)
         spin.setValue(self._data_range[0 if name == "minimum" else 1])
         spin.blockSignals(False)
+
+    def _levels_changed(self, value):
+        self.level_value.setText(str(int(value)))
+        self._emit()
+
+    def _continuous_changed(self, checked):
+        self.levels.setEnabled(not checked)
+        self.level_value.setEnabled(not checked)
+        self._emit()
+
+    def _outside_colors_changed(self, checked):
+        self.below_color.setEnabled(checked)
+        self.above_color.setEnabled(checked)
+        self._emit()
+
+    def _choose_color(self, name):
+        current = QColor(self._colors[name])
+        color = QColorDialog.getColor(
+            current,
+            self,
+            "Below-range color" if name == "below" else "Above-range color",
+        )
+        if not color.isValid():
+            return
+        self._colors[name] = color.name()
+        self._refresh_color_button(
+            self.below_color if name == "below" else self.above_color,
+            self._colors[name],
+        )
+        self._emit()
 
     def _emit(self, *_):
         """Publish the complete contour-range configuration."""
