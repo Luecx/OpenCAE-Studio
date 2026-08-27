@@ -85,20 +85,20 @@ class ResultRangeButton(QToolButton):
         levels_layout.addWidget(self.level_value)
         layout.addWidget(field_block("Number of levels", levels_row))
 
+        outside_row = QWidget()
+        outside_layout = QHBoxLayout(outside_row)
+        outside_layout.setContentsMargins(0, 0, 0, 0)
+        outside_layout.setSpacing(6)
         self.outside_colors = QCheckBox("Color values outside range")
         self.outside_colors.setChecked(True)
         self.outside_colors.setObjectName("ResultOutsideColorsCheckBox")
-        layout.addWidget(self.outside_colors)
-
+        outside_layout.addWidget(self.outside_colors)
+        outside_layout.addStretch(1)
         self.below_color = self._color_button("below")
         self.above_color = self._color_button("above")
-        color_row = QWidget()
-        color_layout = QHBoxLayout(color_row)
-        color_layout.setContentsMargins(0, 0, 0, 0)
-        color_layout.setSpacing(8)
-        color_layout.addWidget(field_block("Below", self.below_color), 1)
-        color_layout.addWidget(field_block("Above", self.above_color), 1)
-        layout.addWidget(color_row)
+        outside_layout.addWidget(self.below_color)
+        outside_layout.addWidget(self.above_color)
+        layout.addWidget(outside_row)
 
         menu = QMenu(self)
         action = QWidgetAction(menu)
@@ -148,23 +148,27 @@ class ResultRangeButton(QToolButton):
         return host, spin, auto
 
     def _color_button(self, name):
-        """Return one compact color chooser for values outside the active range."""
+        """Return one compact colorbar end-cap for values outside the active range."""
         button = QToolButton()
-        button.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
+        button.setFixedSize(38, 22)
         button.setObjectName("ResultContourColorButton")
+        button.setToolTip(
+            "Below-range color" if name == "below" else "Above-range color"
+        )
         self._refresh_color_button(button, self._colors[name])
         return button
 
     @staticmethod
     def _refresh_color_button(button, value):
         color = QColor(value)
-        text = "#10161c" if color.lightnessF() > 0.58 else "#f0f3f6"
-        button.setText(color.name().upper())
+        button.setText("")
         button.setStyleSheet(
             "QToolButton {"
-            f"background-color: {color.name()}; color: {text};"
-            "padding: 0 8px; text-align: left;"
+            f"background-color: {color.name()};"
+            "border: 1px solid rgba(255,255,255,0.28);"
+            "border-radius: 2px; padding: 0;"
             "}"
+            "QToolButton:hover { border: 1px solid rgba(255,255,255,0.72); }"
         )
 
     def set_data_range(self, minimum, maximum):
