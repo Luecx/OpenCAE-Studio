@@ -38,8 +38,8 @@ class CoordinateSystemOverlay:
         label=f"csys-{key}-label"; self._names.append(label)
         plotter.add_point_labels(np.asarray([origin]),[system.name],name=label,point_size=0,font_size=10,text_color="#f0f3f6",shape_color="#20262d",shape_opacity=.82,always_visible=False,render=False)
     def _ring(self,plotter,origin,normal,radius,key):
-        name=f"csys-{key}-ring"; self._names.append(name); circle=pv.Circle(radius=radius,resolution=72,normal=normal)
-        circle.translate(origin,inplace=True); plotter.add_mesh(circle,color="#8fd3ff",line_width=2,lighting=False,pickable=False,name=name,render=False)
+        name=f"csys-{key}-ring"; self._names.append(name); circle=_ring_geometry(origin,normal,radius)
+        plotter.add_mesh(circle,color="#8fd3ff",line_width=2,lighting=False,pickable=False,name=name,render=False)
     @staticmethod
     def _axes(system):
         x=CoordinateSystemOverlay._unit(system.axis_1); y0=np.asarray(system.axis_2,dtype=float); y=CoordinateSystemOverlay._unit(y0-np.dot(y0,x)*x); z=CoordinateSystemOverlay._unit(np.cross(x,y))
@@ -48,6 +48,14 @@ class CoordinateSystemOverlay:
     @staticmethod
     def _unit(value):
         vector=np.asarray(value,dtype=float); norm=np.linalg.norm(vector); return vector/norm if norm>1e-14 else np.asarray((1.,0.,0.))
+
+
+def _ring_geometry(origin, normal, radius):
+    """Build a circular polyline in the plane orthogonal to ``normal``."""
+    center=np.asarray(origin,dtype=float); axis=CoordinateSystemOverlay._unit(normal)
+    reference=np.asarray((1.,0.,0.)) if abs(float(axis[0]))<.9 else np.asarray((0.,1.,0.))
+    polar=CoordinateSystemOverlay._unit(np.cross(axis,reference))*float(radius)
+    return pv.CircularArcFromNormal(center=center,resolution=72,normal=axis,polar=polar,angle=360.0)
 
 
 def _visible(scene,entity):
