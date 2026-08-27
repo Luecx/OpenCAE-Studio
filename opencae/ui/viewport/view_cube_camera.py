@@ -1,4 +1,4 @@
-"""Bind the Qt ViewCube orientation and camera-dependent overlays to one VTK camera."""
+"""Bind the Qt ViewCube orientation and face requests to one VTK camera."""
 
 from __future__ import annotations
 
@@ -11,11 +11,10 @@ LOGGER = logging.getLogger(__name__)
 class ViewCubeCameraController:
     """Synchronize a ViewCube with a plotter camera for its full lifetime."""
 
-    def __init__(self, plotter, cube, camera_modified=None) -> None:
-        """Install a live camera observer and initialize camera-dependent UI."""
+    def __init__(self, plotter, cube) -> None:
+        """Install a live camera observer and initialize the cube orientation."""
         self.plotter = plotter
         self.cube = cube
-        self.camera_modified = camera_modified
         self.camera = getattr(plotter, "camera", None)
         self._observer_id = None
         if self.camera is not None:
@@ -29,7 +28,7 @@ class ViewCubeCameraController:
         self.sync()
 
     def sync(self, *_args) -> None:
-        """Copy the camera basis and notify screen-space overlays of zoom changes."""
+        """Copy the current VTK camera basis into the QPainter cube."""
         if self.camera is None:
             return
         try:
@@ -38,12 +37,10 @@ class ViewCubeCameraController:
                 self.camera.focal_point,
                 self.camera.up,
             )
-            if self.camera_modified is not None:
-                self.camera_modified()
         except (AttributeError, RuntimeError, TypeError, ValueError):
             return
         except Exception:
-            LOGGER.exception("Unexpected failure while synchronizing camera UI")
+            LOGGER.exception("Unexpected failure while synchronizing the ViewCube")
 
     def set_direction(self, normal) -> None:
         """Move the camera onto a clicked main, edge, or corner normal."""
@@ -95,11 +92,7 @@ def _normalized_direction(value):
 
 def _stable_view_up(direction):
     """Return conventional Z-up except for views close to the Z axis."""
-    candidate = (
-        (0.0, 1.0, 0.0)
-        if abs(direction[2]) > 0.92
-        else (0.0, 0.0, 1.0)
-    )
+    candidate = (0.0, 1.0, 0.0) if abs(direction[2]) > 0.92 else (0.0, 0.0, 1.0)
     projection = sum(candidate[index] * direction[index] for index in range(3))
     values = tuple(
         candidate[index] - projection * direction[index] for index in range(3)
