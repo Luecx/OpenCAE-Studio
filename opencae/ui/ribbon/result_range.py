@@ -3,6 +3,7 @@
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QColorDialog,
     QDoubleSpinBox,
     QHBoxLayout,
@@ -51,7 +52,7 @@ class ResultRangeButton(QToolButton):
         }
 
         panel = QWidget()
-        panel.setMinimumWidth(320)
+        panel.setMinimumWidth(360)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(12)
@@ -60,6 +61,10 @@ class ResultRangeButton(QToolButton):
         maximum_row, self.maximum, self.maximum_auto = self._field()
         layout.addWidget(field_block("Minimum", minimum_row))
         layout.addWidget(field_block("Maximum", maximum_row))
+
+        self.continuous = QCheckBox("Continuous color mapping")
+        self.continuous.setObjectName("ResultContinuousCheckBox")
+        layout.addWidget(self.continuous)
 
         levels_row = QWidget()
         levels_layout = QHBoxLayout(levels_row)
@@ -73,30 +78,27 @@ class ResultRangeButton(QToolButton):
         self.levels.setToolTip("Number of discrete contour color levels")
         self.level_value = QLabel(str(DEFAULT_CONTOUR_LEVELS))
         self.level_value.setMinimumWidth(24)
-        self.level_value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.level_value.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         levels_layout.addWidget(self.levels, 1)
         levels_layout.addWidget(self.level_value)
-        layout.addWidget(field_block("Levels", levels_row))
+        layout.addWidget(field_block("Number of levels", levels_row))
 
-        self.continuous = QToolButton()
-        self.continuous.setText("Continuous color mapping")
-        self.continuous.setCheckable(True)
-        self.continuous.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
-        self.continuous.setObjectName("ResultContinuousButton")
-        layout.addWidget(field_block("Mapping", self.continuous))
-
-        self.outside_colors = QToolButton()
-        self.outside_colors.setText("Color values outside range")
-        self.outside_colors.setCheckable(True)
+        self.outside_colors = QCheckBox("Color values outside range")
         self.outside_colors.setChecked(True)
-        self.outside_colors.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
-        self.outside_colors.setObjectName("ResultOutsideColorsButton")
-        layout.addWidget(field_block("Outside range", self.outside_colors))
+        self.outside_colors.setObjectName("ResultOutsideColorsCheckBox")
+        layout.addWidget(self.outside_colors)
 
         self.below_color = self._color_button("below")
         self.above_color = self._color_button("above")
-        layout.addWidget(field_block("Below minimum", self.below_color))
-        layout.addWidget(field_block("Above maximum", self.above_color))
+        color_row = QWidget()
+        color_layout = QHBoxLayout(color_row)
+        color_layout.setContentsMargins(0, 0, 0, 0)
+        color_layout.setSpacing(8)
+        color_layout.addWidget(field_block("Below", self.below_color), 1)
+        color_layout.addWidget(field_block("Above", self.above_color), 1)
+        layout.addWidget(color_row)
 
         menu = QMenu(self)
         action = QWidgetAction(menu)
