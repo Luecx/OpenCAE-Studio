@@ -60,9 +60,11 @@ def test_frame_bracket_interpolates_between_adjacent_frame_ordinals():
     assert np.isclose(alpha, 0.5)
 
 
-def test_current_frame_mode_uses_zero_to_full_to_zero_sinusoid():
+def test_current_frame_mode_runs_complete_signed_sine_cycle():
     assert np.isclose(current_frame_amplitude(0.0), 0.0)
-    assert np.isclose(current_frame_amplitude(0.5), 1.0)
+    assert np.isclose(current_frame_amplitude(0.25), 1.0)
+    assert np.isclose(current_frame_amplitude(0.5), 0.0, atol=1.0e-12)
+    assert np.isclose(current_frame_amplitude(0.75), -1.0)
     assert np.isclose(current_frame_amplitude(1.0), 0.0, atol=1.0e-12)
 
 
@@ -129,6 +131,22 @@ def test_current_frame_factor_scales_values_and_deformation_together():
     assert np.allclose(scaled.point_data["STRESS:SXX"], (2.5, 5.0))
     assert np.allclose(scaled.point_data["DISP:D1"], (0.5, 0.0))
     assert np.allclose(scaled.point_data["DISP:D2"], (0.0, 1.0))
+
+
+def test_current_frame_negative_factor_reverses_values_and_deformation():
+    grid = _grid(
+        (10.0, 20.0),
+        ((2.0, 0.0, 0.0), (0.0, 4.0, 0.0)),
+    )
+    scaled = result_visualization._animated_grid(
+        grid,
+        SimpleNamespace(source_file="dummy.frd"),
+        _field(1),
+        {"_animation": {"mode": "factor", "factor": -0.25}},
+    )
+    assert np.allclose(scaled.point_data["STRESS:SXX"], (-2.5, -5.0))
+    assert np.allclose(scaled.point_data["DISP:D1"], (-0.5, 0.0))
+    assert np.allclose(scaled.point_data["DISP:D2"], (0.0, -1.0))
 
 
 def test_animation_path_updates_existing_result_actor_without_scene_clear():
