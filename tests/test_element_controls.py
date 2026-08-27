@@ -4,10 +4,19 @@ from tempfile import TemporaryDirectory
 from opencae.geometry.element_adjacency import propagation_closure
 from opencae.geometry.element_control_summary import preview, summarize
 from opencae.geometry.element_controls_apply import apply_control
+from opencae.model.core import EntityRef
 from opencae.model.entities.elements import QuadrilateralShellElementDefinition, TetrahedronElementDefinition, TriangleShellElementDefinition
 from opencae.model.entities.mesh import ElementBlock, ElementControl, ElementOrder, ElementTopology, NodeTable
 from opencae.model.entities.parts.part import Part
 from opencae.model.entities.project import Project
+from opencae.model.entities.regions import Region
+from opencae.model.selection import (
+    MeshElementOperand,
+    MeshNodeOperand,
+    RegionDefinition,
+    RegionProjection,
+    RegionSelectionItem,
+)
 from opencae.persistence.project_io import load_project, save_project
 
 
@@ -15,6 +24,19 @@ def _part():
     part = Part(name="P"); part.mesh.nodes = NodeTable(
         ids=list(range(1, 15)), coordinates=[(float(i), float(i % 3), float(i % 5)) for i in range(1, 15)],
     ); return part
+
+
+def _element_target(part, *element_ids):
+    return RegionDefinition(tuple(
+        RegionSelectionItem(
+            MeshElementOperand(
+                EntityRef.of(part, "Part"),
+                element_id,
+                mesh_revision=part.mesh.revision,
+            )
+        )
+        for element_id in element_ids
+    ))
 
 
 def test_mixed_order_is_reported_for_one_topology():
@@ -41,7 +63,12 @@ def test_second_order_conversion_shares_midside_nodes():
     part = _part(); part.mesh.element_blocks = [ElementBlock(
         TetrahedronElementDefinition(name="C3D4"), [1, 2], [(1, 2, 3, 4), (1, 3, 2, 5)],
     )]
-    control = ElementControl(name="EC", targets=["Element-1"], topology=ElementTopology.SOLID_TET, order=ElementOrder.SECOND)
+    control = ElementControl(
+        name="EC",
+        target=_element_target(part, 1),
+        topology=ElementTopology.SOLID_TET,
+        order=ElementOrder.SECOND,
+    )
     selected, affected = apply_control(part, control)
     assert selected == {1} and affected == {1, 2}
     rows = {eid: row for block in part.mesh.element_blocks for eid, row in zip(block.ids, block.connectivity)}
@@ -59,8 +86,13 @@ def test_preview_reports_elements_outside_target():
 
 def test_element_control_survives_project_roundtrip():
     project = Project(name="P"); part = _part(); project.parts.append(part)
-    part.mesh.element_controls.append(ElementControl(name="EC", targets=["Cell-1"], topology=ElementTopology.SOLID_HEX,
-                                                       order=ElementOrder.SECOND, formulation="Reduced Integration"))
+    part.mesh.element_controls.append(ElementControl(
+        name="EC",
+        target=_element_target(part, 1),
+        topology=ElementTopology.SOLID_HEX,
+        order=ElementOrder.SECOND,
+        formulation="Reduced Integration",
+    ))
     with TemporaryDirectory() as directory:
         path = Path(directory) / "model.ocae"; save_project(project, path); loaded = load_project(path)
     value = loaded.parts[0].mesh.element_controls[0]
@@ -85,9 +117,23 @@ def test_second_order_updates_geometry_entity_nodes():
 
 
 def test_first_order_preserves_explicit_nodeset_members():
-    from opencae.model.entities.regions.node_set import NodeSet
     part = _part(); part.mesh.element_blocks = [ElementBlock(
         TetrahedronElementDefinition(name="C3D10", order="Quadratic"), [1], [(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)],
-    )]; part.node_sets = [NodeSet(name="KEEP", members=["Node-5"])]
+    )]
+    part.regions = [
+        Region(
+            name="KEEP",
+            definition=RegionDefinition((
+                RegionSelectionItem(
+                    MeshNodeOperand(
+                        EntityRef.of(part, "Part"),
+                        5,
+                        mesh_revision=part.mesh.revision,
+                    )
+                ),
+            )),
+            preferred_projection=RegionProjection.NODES,
+        )
+    ]
     apply_control(part, ElementControl(name="EC", topology=ElementTopology.SOLID_TET, order=ElementOrder.FIRST))
     assert 5 in part.mesh.nodes.ids
