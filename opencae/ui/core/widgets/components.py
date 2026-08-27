@@ -30,7 +30,10 @@ class ComponentsWidget(QWidget):
 
         layout = QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setHorizontalSpacing(16)
+        # Segmented numeric fields draw their own outer border.  A little more
+        # air than the generic form-grid spacing keeps adjacent X/Y/Z borders
+        # visually distinct on fractional-DPI Qt layouts.
+        layout.setHorizontalSpacing(19)
         layout.setVerticalSpacing(12)
         columns = min(3, max(1, len(labels)))
         for index, label in enumerate(labels):
