@@ -62,4 +62,15 @@ def css(p):
         background: {p['panel_hover']};
         border: 1px solid {p['border_light']};
     }}
+    QToolButton[ribbonButton="true"]::menu-button {{
+        width: 16px;
+        background: transparent;
+        border: none;
+    }}
+    QToolButton[ribbonButton="true"]::menu-indicator {{
+        subcontrol-origin: padding;
+        subcontrol-position: bottom right;
+        right: 3px;
+        bottom: 3px;
+    }}
     """
