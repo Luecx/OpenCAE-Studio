@@ -107,6 +107,7 @@ def _project():
     ]
     part.mesh.entity_nodes = {"Face-1": [1, 2, 3], "Cell-1": [1, 2, 3, 4]}
     part.mesh.entity_elements = {"Cell-1": [1]}
+    part.mesh.entity_facets = {"Face-1": [(1, "S1")]}
 
     part_node_set = Region(
         name="FACE_NODES",
