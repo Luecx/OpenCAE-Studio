@@ -9,7 +9,7 @@ from opencae.model.entities.fields import FieldDefinition
 from opencae.model.entities.jobs import ResultField, ResultSet
 from opencae.model.entities.loads import ConcentratedLoad, TemperatureLoad
 from opencae.model.entities.supports import DisplacementSupport
-from opencae.model.selection import named_region_definition
+from opencae.model.selection import RegionProjection, named_region_definition
 from opencae.persistence.project_io import load_project, save_project
 from tests.test_femaster_dsl import _project
 
@@ -34,7 +34,11 @@ class ProjectRoundTripTest(unittest.TestCase):
     def test_new_load_support_and_result_types_survive_json(self):
         """Current typed loads, supports, fields and result entities round-trip."""
         project = _project()
-        target = project.assembly.node_sets[0]
+        target = next(
+            region
+            for region in project.assembly.regions
+            if region.preferred_projection == RegionProjection.NODES
+        )
         target_definition = named_region_definition(target)
         temperature = FieldDefinition(name="T")
         project.fields.append(temperature)
