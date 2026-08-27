@@ -3,6 +3,7 @@ from opencae.units import UnitSystem, default_systems
 
 def test_mm_n_system_recognizes_engineering_units():
     system = default_systems()[0]
+    assert system.symbol("angle") == "rad"
     assert system.symbol("pressure") == "MPa"
     assert system.symbol("mass") == "t"
     assert system.symbol("density") == "t/mm³"
@@ -12,6 +13,7 @@ def test_mm_n_system_recognizes_engineering_units():
 def test_conversion_to_si_system():
     source, target = default_systems()[:2]
     assert source.conversion_to(target, "length") == (1e-3, 0.0)
+    assert source.conversion_to(target, "angle") == (1.0, 0.0)
     assert source.conversion_to(target, "pressure") == (1e6, 0.0)
     assert source.conversion_to(target, "temperature") == (1.0, 273.15)
 
