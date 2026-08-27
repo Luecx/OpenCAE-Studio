@@ -3,6 +3,7 @@
 import numpy as np
 
 from opencae.results import FrdLoader
+from .contour_mapping import contour_plot_kwargs
 from .scalar_bar import scalar_bar_args
 
 _LOADER = FrdLoader()
@@ -16,14 +17,18 @@ def add_result(plotter, result, field=None, options=None):
     original = _LOADER.pyvista_grid(result.source_file, step_id, frame_id)
     grid = _deformed(original, options)
     scalar = _scalar_name(field)
-    clim = _clim(grid, scalar, options.get("range", {}))
+    range_settings = options.get("range", {})
+    clim = _clim(grid, scalar, range_settings)
+    mapping = contour_plot_kwargs(range_settings)
     show_edges = bool(options.get("mesh_lines", True))
     actor = plotter.add_mesh(
         grid,
         scalars=scalar,
         clim=clim,
         cmap="turbo",
-        n_colors=18,
+        n_colors=mapping["n_colors"],
+        below_color=mapping["below_color"],
+        above_color=mapping["above_color"],
         show_edges=False,
         edge_color="#182129",
         line_width=1.0,
