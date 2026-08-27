@@ -9,6 +9,7 @@ from .field_template_catalog import TEMPLATE_SPECS as FIELD_SPECS
 from .load_template_catalog import TEMPLATE_SPECS as LOAD_SPECS
 from .material_template_catalog import TEMPLATE_SPECS as MATERIAL_SPECS
 from .mesh_template_catalog import TEMPLATE_SPECS as MESH_SPECS
+from .nonlinear_template_catalog import nonlinear_template_spec
 from .profile_record_catalog import profile_template_specs
 from .section_template_catalog import TEMPLATE_SPECS as SECTION_SPECS
 
@@ -35,6 +36,9 @@ TEMPLATE_SPECS = _merge_catalogs(
     CONSTRAINT_SPECS,
     ANALYSIS_SPECS,
 )
+# The dedicated record stays colocated with the nonlinear Step implementation
+# while retaining the stable editor key used by existing profiles.
+TEMPLATE_SPECS["analysis.controls.nonlinear"] = nonlinear_template_spec()
 
 
 def template_command_names() -> frozenset[str]:
