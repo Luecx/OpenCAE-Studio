@@ -136,7 +136,7 @@ def test_region_widget_defers_resolution_and_dialogs_keep_previews():
 
     assert "RegionResolver" not in widget
     assert "RegionDefinition.from_values(value)" in widget
-    assert "QPushButton:checked" in compact
+    assert "self.pick_button.setCheckable(True)" in compact
     assert "Select this region in the viewport" in compact
     assert "Finish selecting this region" in compact
     assert "RegionResolver" not in compact
