@@ -61,6 +61,10 @@ class ProjectRoundTripTest(unittest.TestCase):
                 components=[0.0, None, 1.0, None, None, None],
             ),
         ]
+        project.steps[0].load_refs = [EntityRef.of(load, "Load") for load in project.loads]
+        project.steps[0].support_refs = [
+            EntityRef.of(support, "Support") for support in project.supports
+        ]
         project.results = [
             ResultSet(
                 name="R",
