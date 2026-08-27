@@ -6,10 +6,12 @@ import math
 
 from PyQt6.QtCore import QSignalBlocker, pyqtSignal
 from PyQt6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QHBoxLayout,
     QMenu,
     QPushButton,
+    QRadioButton,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -23,12 +25,12 @@ from .result_widgets import ribbon_button
 
 
 class ResultSectionButton(QToolButton):
-    """Split ribbon button controlling the interactive result clipping plane."""
+    """Open clipping-plane state and geometry settings from one ribbon popup."""
 
     settings_changed = pyqtSignal()
 
     def __init__(self, parent=None):
-        """Build the section toggle and its compact label-above plane editor."""
+        """Build an instant popup with explicit section-view on/off controls."""
         super().__init__(parent)
         template = ribbon_button("Section View", IconKind.SECTION_VIEW, False, 92)
         self.setText(template.text())
@@ -37,8 +39,8 @@ class ResultSectionButton(QToolButton):
         self.setToolButtonStyle(template.toolButtonStyle())
         self.setProperty("ribbonButton", True)
         self.setFixedSize(92, 70)
-        self.setCheckable(True)
-        self.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.setCheckable(False)
+        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
 
         self._origin_is_automatic = True
         panel = QWidget()
@@ -46,6 +48,21 @@ class ResultSectionButton(QToolButton):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(12)
+
+        state_row = QWidget()
+        state_layout = QHBoxLayout(state_row)
+        state_layout.setContentsMargins(0, 0, 0, 0)
+        state_layout.setSpacing(16)
+        self.section_off = QRadioButton("Off")
+        self.section_on = QRadioButton("On")
+        self.section_off.setChecked(True)
+        self.state_group = QButtonGroup(self)
+        self.state_group.addButton(self.section_off)
+        self.state_group.addButton(self.section_on)
+        state_layout.addWidget(self.section_off)
+        state_layout.addWidget(self.section_on)
+        state_layout.addStretch(1)
+        layout.addWidget(field_block("Section view", state_row))
 
         self.origin = Vector3Input()
         self.normal = Vector3Input((1.0, 0.0, 0.0))
@@ -86,7 +103,7 @@ class ResultSectionButton(QToolButton):
         menu.addAction(action)
         self.setMenu(menu)
 
-        self.toggled.connect(self.settings_changed.emit)
+        self.section_on.toggled.connect(self.settings_changed.emit)
         self.origin.changed.connect(self._origin_edited)
         self.normal.changed.connect(self.settings_changed.emit)
         self.invert.toggled.connect(self.settings_changed.emit)
@@ -95,7 +112,7 @@ class ResultSectionButton(QToolButton):
     def values(self) -> dict:
         """Return the clipping-plane state consumed by the result viewport."""
         return {
-            "enabled": self.isChecked(),
+            "enabled": self.section_on.isChecked(),
             "origin": None if self._origin_is_automatic else self.origin.value(),
             "normal": self._normalized(self.normal.value()),
             "invert": self.invert.isChecked(),
@@ -106,12 +123,13 @@ class ResultSectionButton(QToolButton):
         """Receive plane updates from the viewport without re-rendering the result."""
         state = state or {}
         blockers = [
-            QSignalBlocker(self),
+            QSignalBlocker(self.section_on),
+            QSignalBlocker(self.section_off),
             QSignalBlocker(self.invert),
             QSignalBlocker(self.show_plane),
         ]
         if "enabled" in state:
-            self.setChecked(bool(state["enabled"]))
+            (self.section_on if state["enabled"] else self.section_off).setChecked(True)
         origin = state.get("origin")
         if origin is not None:
             self.origin.set_value(origin)
