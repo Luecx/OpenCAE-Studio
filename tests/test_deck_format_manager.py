@@ -41,7 +41,7 @@ def test_primary_format_groups_are_not_wrapped_in_resources(manager):
 
 
 def test_profile_selector_contains_read_only_builtins(manager):
-    """FEMaster/Abaqus remain immutable profiles in one canonical selector."""
+    """FEMaster/Abaqus/CalculiX remain immutable profiles in one canonical selector."""
     from opencae.ui.templates import PRIMARY_CONTROL_HEIGHT
 
     toolbar = manager.profile_toolbar
@@ -49,7 +49,7 @@ def test_profile_selector_contains_read_only_builtins(manager):
     assert [
         toolbar.profile_combo.itemText(i)
         for i in range(toolbar.profile_combo.count())
-    ] == ["FEMaster", "Abaqus"]
+    ] == ["FEMaster", "Abaqus", "CalculiX"]
     assert toolbar.profile_name() == "FEMaster"
     assert toolbar.is_builtin()
     assert not manager.template_page.template.isEnabled()
@@ -124,7 +124,7 @@ def test_femaster_element_tree_uses_requested_concrete_types(manager):
     )
     assert tuple(item.code for item in ELEMENT_TYPES) == expected_codes
     labels = manager.navigation.child_labels("mesh.elements")
-    assert labels == [item.label for item in ELEMENT_TYPES]
+    assert labels == [f"{item.label} — {item.code}" for item in ELEMENT_TYPES]
     assert all("MITC" not in label and "FRT" not in label for label in labels)
     assert all("QSPT" not in label for label in labels)
 
