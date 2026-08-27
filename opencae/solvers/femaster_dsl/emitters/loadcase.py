@@ -103,7 +103,13 @@ def write_step(step, writer, context):
 
 
 def _write_nonlinear(step, settings, writer):
-    """Lower solver-neutral load/path controls into FEMaster NONLINEAR options."""
+    """Lower solver-neutral load/path controls into portable FEMaster options.
+
+    The Step model intentionally retains richer adaptive controls.  They are not
+    written here until the minimum supported FEMaster executable accepts them;
+    emitting a keyword merely because a newer parser knows it makes decks fail on
+    otherwise supported installations during analysis preparation.
+    """
     control = str(settings.get("control", "LOAD")).upper()
     path_control = control in {"PATH", "ARC_LENGTH"}
     initial = (
@@ -130,14 +136,8 @@ def _write_nonlinear(step, settings, writer):
         MAXIMUM_INCREMENT=maximum,
         MAX_INCREMENTS=settings.get("max_increments", 100),
         ADAPTIVE=settings.get("adaptive", True),
-        GROWTH_FACTOR=settings.get("growth_factor", 1.5),
-        CUTBACK_FACTOR=settings.get("cutback_factor", 0.5),
-        FAST_ITERATIONS=settings.get("fast_iterations", 6),
-        SLOW_ITERATIONS=settings.get("slow_iterations", 10),
-        MAXIMUM_CUTBACKS=settings.get("maximum_cutbacks", 20),
         MAXITER=settings.get("max_iterations", 25),
         TOL=settings.get("tolerance", 1e-8),
         REGULARIZE_ZERO_ROWS=settings.get("regularize_zero_rows", False),
-        REGULARIZATION_ALPHA=settings.get("regularization_alpha", 1e-4),
         ARC_LENGTH_PSI=(settings.get("arc_length_psi", 1.0) if path_control else None),
     )
