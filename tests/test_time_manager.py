@@ -44,18 +44,18 @@ def _grid(scalar, displacement):
     return grid
 
 
-def test_frame_axis_uses_solver_values_only_when_they_are_monotonic():
+def test_frame_axis_is_always_one_based_and_unit_spaced():
     axis, has_time = frame_axis((0.0, 0.1, 0.5, 1.0))
     assert has_time is True
-    assert axis == [0.0, 0.1, 0.5, 1.0]
+    assert axis == [1.0, 2.0, 3.0, 4.0]
 
     axis, has_time = frame_axis((1.0, 1.0, 1.0))
     assert has_time is False
-    assert axis == [0.0, 0.5, 1.0]
+    assert axis == [1.0, 2.0, 3.0]
 
 
-def test_frame_bracket_uses_actual_nonuniform_time_spacing():
-    left, right, alpha = frame_bracket((0.0, 0.1, 0.5, 1.0), 0.3)
+def test_frame_bracket_interpolates_between_adjacent_frame_ordinals():
+    left, right, alpha = frame_bracket((1.0, 2.0, 3.0, 4.0), 2.5)
     assert (left, right) == (1, 2)
     assert np.isclose(alpha, 0.5)
 
@@ -131,6 +131,15 @@ def test_current_frame_factor_scales_values_and_deformation_together():
     assert np.allclose(scaled.point_data["DISP:D2"], (0.0, 1.0))
 
 
+def test_animation_path_updates_existing_result_actor_without_scene_clear():
+    source = (ROOT / "opencae/ui/viewport/solution_scene.py").read_text(encoding="utf-8")
+    animation_path = source.split(
+        'animation = dict(options.get("_animation", {}) or {})', 1
+    )[1].split("camera = camera_position", 1)[0]
+    assert "update_result(" in animation_path
+    assert "scene.clear(" not in animation_path
+
+
 def test_time_manager_matches_horizontal_mockup_structure():
     app = QApplication.instance() or QApplication([])
     panel = TimeManagerPanel()
@@ -148,7 +157,9 @@ def test_time_manager_matches_horizontal_mockup_structure():
         app.processEvents()
 
 
-def test_output_dock_contains_output_and_time_manager_tabs():
+def test_output_dock_contains_only_workspace_tabs_as_visible_header():
     source = (ROOT / "opencae/ui/docks/output_dock.py").read_text(encoding="utf-8")
     assert 'addTab(self.tabs, "Output")' in source
     assert 'addTab(self.time_manager, "Time Manager")' in source
+    assert "setTitleBarWidget(title_bar)" in source
+    assert "title_bar.setFixedHeight(0)" in source
