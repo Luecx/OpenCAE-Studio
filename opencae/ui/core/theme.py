@@ -19,12 +19,11 @@ PALETTE = {
     "success": "#49b675",
     "warning": "#d5a442",
     "danger": "#df6262",
-    # Keep a legacy single-color token for small opaque overlays while the
-    # renderer itself uses the calmer two-tone viewport gradient below.
-    "viewport": "#1a2027",
-    "viewport_top": "#1b222a",
-    "viewport_bottom": "#252d36",
-    "viewport_horizon": "#303943",
+    # Keep the 3D view calm and neutral, but lighter than the original nearly
+    # black surface.  Opaque Qt overlays (notably the ViewCube) use this exact
+    # same token so no rectangular background patch is visible.
+    "viewport": "#232a32",
+    "viewport_horizon": "#303942",
     "mesh_lines": "#6d7884",
 }
 
