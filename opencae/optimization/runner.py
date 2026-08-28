@@ -8,8 +8,9 @@ from pathlib import Path
 from time import monotonic
 
 import numpy as np
-from PyQt6.QtCore import QObject, QProcess, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QProcess, QThread, QTimer, pyqtSignal, pyqtSlot
 
+from opencae.controllers.background_task import BackgroundTask
 from opencae.model.entities.optimization import OptimizationIteration, OptimizationRun
 
 from .deck import render_topology_deck
@@ -40,7 +41,9 @@ class TopologyOptimizationRunner(QObject):
     ):
         super().__init__(parent)
         self.store = store
-        self.project = deepcopy(project_snapshot)
+        # JobManager already provides a stable deepcopy. Avoid another expensive
+        # graph copy in the GUI thread when constructing the runner.
+        self.project = project_snapshot
         self.optimization_id = optimization_id
         self.run_id = run_id
         self.adapter = adapter
@@ -48,7 +51,6 @@ class TopologyOptimizationRunner(QObject):
         self.extra_arguments = str(extra_arguments or "")
         self.directory = Path(directory)
         self.process: QProcess | None = None
-        self.reader = ResFieldReader()
         self.stopped = False
         self._finished_state = False
         self.iteration_number = 0
@@ -64,6 +66,8 @@ class TopologyOptimizationRunner(QObject):
         self._log_stream = None
         self._init_thread: QThread | None = None
         self._init_worker: TopologyInitializationWorker | None = None
+        self._launch_task: BackgroundTask | None = None
+        self._consume_task: BackgroundTask | None = None
 
     def start(self):
         optimization = self.project.try_resolve(self.optimization_id)
@@ -122,10 +126,7 @@ class TopologyOptimizationRunner(QObject):
             f"density/constraint radius={self.operators.density_constraint_radius:.6g}, "
             f"sensitivity radius={self.operators.sensitivity_radius:.6g}"
         )
-        try:
-            self._launch_next()
-        except Exception as exc:
-            self._fail(str(exc))
+        self._launch_next()
 
     def _write_run_manifest(self, optimization, controls):
         data = {
@@ -154,28 +155,56 @@ class TopologyOptimizationRunner(QObject):
         self._init_worker = None
 
     def stop(self):
+        """Cancel promptly without blocking Qt while a child process exits."""
+        if self._finished_state:
+            return
         self.stopped = True
+        process = self.process
         if (
-            self.process is not None
-            and self.process.state() != QProcess.ProcessState.NotRunning
+            process is not None
+            and process.state() != QProcess.ProcessState.NotRunning
         ):
-            self.process.terminate()
-            if not self.process.waitForFinished(1500):
-                self.process.kill()
+            process.terminate()
+            QTimer.singleShot(1500, self._kill_if_running)
         self._finish("Cancelled", "Optimization cancelled by the user")
 
+    def _kill_if_running(self):
+        process = self.process
+        if (
+            self.stopped
+            and process is not None
+            and process.state() != QProcess.ProcessState.NotRunning
+        ):
+            process.kill()
+
     def _launch_next(self):
-        if self.stopped:
+        """Prepare the next density file and solver deck on a worker thread."""
+        if self.stopped or self._finished_state or self._launch_task is not None:
             return
-        optimization = self.project.resolve(self.optimization_id)
         self.iteration_number += 1
-        iteration_dir = self.directory / f"iteration-{self.iteration_number:04d}"
+        number = self.iteration_number
+        design = np.asarray(self.design_density, dtype=float).copy()
+        physical = np.asarray(self.physical_density, dtype=float).copy()
+        self.progress.emit(f"Topology iteration {number}: preparing solver input…")
+        task = BackgroundTask(
+            lambda: self._prepare_iteration(number, design, physical),
+            on_result=self._iteration_prepared,
+            on_error=self._launch_failed,
+            parent=self,
+        )
+        self._launch_task = task
+        task.start()
+
+    def _prepare_iteration(self, number, design_density, physical_density):
+        """Write one iteration's compressed density state and deck off-thread."""
+        optimization = self.project.resolve(self.optimization_id)
+        iteration_dir = self.directory / f"iteration-{number:04d}"
         iteration_dir.mkdir(parents=True, exist_ok=True)
         density_file = iteration_dir / "density.npz"
         np.savez_compressed(
             density_file,
-            design=np.asarray(self.design_density, dtype=float),
-            physical=np.asarray(self.physical_density, dtype=float),
+            design=design_density,
+            physical=physical_density,
             solver_ids=self.index.solver_ids,
             source_element_ids=self.index.source_element_ids,
             part_ids=np.asarray(self.index.part_ids),
@@ -187,7 +216,7 @@ class TopologyOptimizationRunner(QObject):
                 self.project,
                 optimization,
                 self.index,
-                self.physical_density,
+                physical_density,
             ),
             encoding="utf-8",
         )
@@ -198,32 +227,52 @@ class TopologyOptimizationRunner(QObject):
             output_base,
             self.extra_arguments,
         )
-        self._current_output_base = output_base
-        self._current_density_file = density_file
-        self._current_started = monotonic()
-        self._log_stream = (iteration_dir / "solver.log").open(
-            "w",
-            encoding="utf-8",
-        )
-        self.progress.emit(
-            f"Topology iteration {self.iteration_number}: starting FEMaster"
-        )
-        process = QProcess(self)
-        self.process = process
-        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-        process.setWorkingDirectory(str(iteration_dir))
-        process.readyReadStandardOutput.connect(self._read_output)
-        process.finished.connect(self._process_finished)
-        process.errorOccurred.connect(
-            lambda error: self._fail(
-                f"FEMaster process error: {error.name}"
+        if not command:
+            raise ValueError("The solver adapter produced an empty command")
+        return {
+            "number": number,
+            "iteration_dir": iteration_dir,
+            "density_file": density_file,
+            "output_base": output_base,
+            "command": tuple(str(value) for value in command),
+        }
+
+    def _iteration_prepared(self, payload):
+        self._launch_task = None
+        if self.stopped or self._finished_state:
+            return
+        try:
+            if int(payload["number"]) != self.iteration_number:
+                raise RuntimeError("Stale topology iteration preparation result")
+            iteration_dir = Path(payload["iteration_dir"])
+            self._current_output_base = Path(payload["output_base"])
+            self._current_density_file = Path(payload["density_file"])
+            self._current_started = monotonic()
+            self._log_stream = (iteration_dir / "solver.log").open(
+                "w",
+                encoding="utf-8",
             )
-            if process.state() == QProcess.ProcessState.NotRunning
-            else None
-        )
-        process.setProgram(command[0])
-        process.setArguments(command[1:])
-        process.start()
+            self.progress.emit(
+                f"Topology iteration {self.iteration_number}: starting FEMaster"
+            )
+            process = QProcess(self)
+            self.process = process
+            process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+            process.setWorkingDirectory(str(iteration_dir))
+            process.readyReadStandardOutput.connect(self._read_output)
+            process.finished.connect(self._process_finished)
+            process.errorOccurred.connect(self._process_error)
+            command = payload["command"]
+            process.setProgram(command[0])
+            process.setArguments(list(command[1:]))
+            process.start()
+        except Exception as exc:
+            self._fail(str(exc))
+
+    def _launch_failed(self, error):
+        self._launch_task = None
+        if not self.stopped and not self._finished_state:
+            self._fail(str(error))
 
     def _read_output(self):
         if self.process is None:
@@ -238,6 +287,15 @@ class TopologyOptimizationRunner(QObject):
             if line.strip():
                 self.progress.emit(line.rstrip())
 
+    def _process_error(self, error):
+        process = self.process
+        if process is None or self.stopped or self._finished_state:
+            return
+        if process.state() == QProcess.ProcessState.NotRunning:
+            self.process = None
+            process.deleteLater()
+            self._fail(f"FEMaster process error: {error.name}")
+
     def _process_finished(self, code, _status):
         process = self.process
         self._read_output()
@@ -247,22 +305,58 @@ class TopologyOptimizationRunner(QObject):
         if self._log_stream is not None:
             self._log_stream.close()
             self._log_stream = None
-        if self.stopped:
+        if self.stopped or self._finished_state:
             return
         if int(code) != 0:
             return self._fail(
                 f"FEMaster failed in iteration {self.iteration_number} "
                 f"with exit code {code}"
             )
-        try:
-            self._consume_iteration()
-        except Exception as exc:
-            self._fail(str(exc))
+        self._start_result_processing()
 
-    def _consume_iteration(self):
+    def _start_result_processing(self):
+        """Parse solver output and compute OC updates away from the GUI thread."""
+        if self._consume_task is not None or self._current_output_base is None:
+            return
+        number = self.iteration_number
+        output_base = Path(self._current_output_base)
+        density_file = Path(self._current_density_file)
+        started = float(self._current_started)
+        design = np.asarray(self.design_density, dtype=float).copy()
+        physical = np.asarray(self.physical_density, dtype=float).copy()
+        previous = self.previous_objective
+        self.progress.emit(f"Topology iteration {number}: processing results…")
+        task = BackgroundTask(
+            lambda: self._compute_iteration_payload(
+                number,
+                output_base,
+                density_file,
+                started,
+                design,
+                physical,
+                previous,
+            ),
+            on_result=self._iteration_consumed,
+            on_error=self._consume_failed,
+            parent=self,
+        )
+        self._consume_task = task
+        task.start()
+
+    def _compute_iteration_payload(
+        self,
+        number,
+        output_base,
+        density_file,
+        started,
+        design_density,
+        physical_density,
+        previous_objective,
+    ):
+        """Read fields, run sensitivities/OC, and perform iteration file I/O off-thread."""
         optimization = self.project.resolve(self.optimization_id)
         controls = optimization.control_settings
-        result_path = self._current_output_base.with_suffix(".res")
+        result_path = output_base.with_suffix(".res")
         if not result_path.exists():
             raise FileNotFoundError(
                 "FEMaster did not write the expected native result file "
@@ -271,107 +365,123 @@ class TopologyOptimizationRunner(QObject):
         fields = read_topology_fields(
             result_path,
             self.index,
-            self.physical_density,
-            self.reader,
+            physical_density,
+            ResFieldReader(),
         )
-        store_density_volumes(self._current_density_file, fields["VOLUME"])
+        store_density_volumes(density_file, fields["VOLUME"])
         calculation = compute_iteration(
             self.project,
             optimization,
             self.index,
             self.masks,
             self.operators,
-            self.design_density,
-            self.physical_density,
-            self.previous_objective,
+            design_density,
+            physical_density,
+            previous_objective,
             fields,
         )
         terminal = bool(
             calculation.converged
-            or self.iteration_number >= controls.maximum_iterations
+            or number >= controls.maximum_iterations
         )
         keep = bool(
             controls.keep_solver_files
-            and (
-                self.iteration_number % controls.save_every == 0
-                or terminal
-            )
+            and (number % controls.save_every == 0 or terminal)
         )
         iteration = OptimizationIteration(
-            name=f"Iteration-{self.iteration_number}",
-            number=self.iteration_number,
+            name=f"Iteration-{number}",
+            number=number,
             objective_value=calculation.objective_value,
             constraint_values={
                 calculation.constraint_id: calculation.constraint_value
             },
             maximum_density_change=calculation.maximum_change,
-            solver_time=max(monotonic() - self._current_started, 0.0),
-            density_file=str(self._current_density_file),
+            solver_time=max(monotonic() - started, 0.0),
+            density_file=str(density_file),
             result_file=str(result_path) if keep else "",
             converged=calculation.converged,
         )
-        self.store.add_entity(
-            f"Completed topology iteration {self.iteration_number}",
-            self.run_id,
-            "iterations",
-            iteration,
-        )
-        self.iteration_ready.emit(
-            self.run_id,
-            iteration.id,
-            self.index,
-            np.asarray(self.physical_density, dtype=float).copy(),
-        )
-        constraint = next(
-            item for item in optimization.constraints if item.active
-        )
-        self._append_history(iteration, calculation, constraint)
-        self.progress.emit(
-            f"Iteration {self.iteration_number}: "
-            f"objective={calculation.objective_value:.8g}, "
-            f"constraint={calculation.constraint_value:.8g} <= {constraint.limit:.8g}, "
-            f"max density change={calculation.maximum_change:.6g}"
-        )
-        if not keep:
-            self._remove_solver_results(result_path)
-        self.previous_objective = calculation.objective_value
-        self.design_density = calculation.next_design_density
-        self.physical_density = calculation.next_physical_density
-        if calculation.converged:
-            return self._finish(
-                "Completed",
-                f"Converged after {self.iteration_number} iterations",
-            )
-        if self.iteration_number >= controls.maximum_iterations:
-            return self._finish(
-                "Completed",
-                f"Reached maximum iteration count ({controls.maximum_iterations})",
-            )
-        self._launch_next()
-
-    def _append_history(self, iteration, calculation, constraint):
+        constraint = next(item for item in optimization.constraints if item.active)
         row = {
-            "iteration": self.iteration_number,
+            "iteration": number,
             "objective": calculation.objective_value,
             "constraint": calculation.constraint_value,
             "constraint_limit": constraint.limit,
             "maximum_density_change": calculation.maximum_change,
             "solver_time": iteration.solver_time,
             "converged": calculation.converged,
-            "density_file": str(self._current_density_file),
+            "density_file": str(density_file),
         }
         with (self.directory / "history.jsonl").open(
             "a",
             encoding="utf-8",
         ) as history:
             history.write(json.dumps(row) + "\n")
+        if not keep:
+            try:
+                result_path.unlink(missing_ok=True)
+                output_base.with_suffix(".frd").unlink(missing_ok=True)
+            except OSError:
+                pass
+        return {
+            "number": number,
+            "iteration": iteration,
+            "calculation": calculation,
+            "constraint_limit": float(constraint.limit),
+            "display_density": physical_density,
+            "maximum_iterations": int(controls.maximum_iterations),
+        }
 
-    def _remove_solver_results(self, result_path):
+    def _iteration_consumed(self, payload):
+        self._consume_task = None
+        if self.stopped or self._finished_state:
+            return
         try:
-            result_path.unlink(missing_ok=True)
-            self._current_output_base.with_suffix(".frd").unlink(missing_ok=True)
-        except OSError:
-            pass
+            number = int(payload["number"])
+            if number != self.iteration_number:
+                raise RuntimeError("Stale topology result-processing result")
+            iteration = payload["iteration"]
+            calculation = payload["calculation"]
+            self.store.add_entity(
+                f"Completed topology iteration {number}",
+                self.run_id,
+                "iterations",
+                iteration,
+            )
+            self.iteration_ready.emit(
+                self.run_id,
+                iteration.id,
+                self.index,
+                np.asarray(payload["display_density"], dtype=float).copy(),
+            )
+            self.progress.emit(
+                f"Iteration {number}: "
+                f"objective={calculation.objective_value:.8g}, "
+                f"constraint={calculation.constraint_value:.8g} <= "
+                f"{payload['constraint_limit']:.8g}, "
+                f"max density change={calculation.maximum_change:.6g}"
+            )
+            self.previous_objective = calculation.objective_value
+            self.design_density = calculation.next_design_density
+            self.physical_density = calculation.next_physical_density
+            if calculation.converged:
+                return self._finish(
+                    "Completed",
+                    f"Converged after {number} iterations",
+                )
+            if number >= int(payload["maximum_iterations"]):
+                return self._finish(
+                    "Completed",
+                    f"Reached maximum iteration count ({payload['maximum_iterations']})",
+                )
+            self._launch_next()
+        except Exception as exc:
+            self._fail(str(exc))
+
+    def _consume_failed(self, error):
+        self._consume_task = None
+        if not self.stopped and not self._finished_state:
+            self._fail(str(error))
 
     def _physical(self, design_density):
         optimization = self.project.resolve(self.optimization_id)
