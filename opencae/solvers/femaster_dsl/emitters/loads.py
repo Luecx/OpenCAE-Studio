@@ -1,4 +1,4 @@
-"""Writes FEMaster load and support collectors from current region definitions."""
+"""Writes FEMaster amplitude, load and support collectors from current definitions."""
 
 from __future__ import annotations
 
@@ -18,6 +18,27 @@ from opencae.model.selection import NodalLoadDistribution, RegionProjection
 
 from ..command import command
 from .region_materialization import materialize_region
+
+
+def write_amplitude(amplitude, writer, context):
+    """Write one reusable scalar amplitude before loads that may reference it."""
+    interpolation = str(amplitude.interpolation)
+    if interpolation == "Smooth Step":
+        rows = amplitude.linearized_points(samples_per_segment=24)
+        native_type = "LINEAR"
+    elif interpolation == "Step":
+        rows = amplitude.points
+        native_type = "STEP"
+    else:
+        rows = amplitude.points
+        native_type = "LINEAR"
+    command(
+        writer,
+        "AMPLITUDE",
+        rows,
+        NAME=context.solver_name(amplitude, amplitude.name),
+        TYPE=native_type,
+    )
 
 
 def write_support(support, writer, context):
@@ -79,6 +100,7 @@ def write_load(load, writer, context):
             [(materialized.name, *components)],
             LOAD_COLLECTOR=collector,
             ORIENTATION=orientation,
+            AMPLITUDE=_amplitude(load, context),
         )
         return
 
@@ -90,6 +112,7 @@ def write_load(load, writer, context):
             [(target, *_components(load, 3))],
             LOAD_COLLECTOR=collector,
             ORIENTATION=orientation,
+            AMPLITUDE=_amplitude(load, context),
         )
         return
 
@@ -100,6 +123,7 @@ def write_load(load, writer, context):
             "PLOAD",
             [(target, getattr(load, "pressure", getattr(load, "magnitude", 0.0)))],
             LOAD_COLLECTOR=collector,
+            AMPLITUDE=_amplitude(load, context),
         )
         return
 
@@ -115,10 +139,15 @@ def write_load(load, writer, context):
             [(target, *vector)],
             LOAD_COLLECTOR=collector,
             ORIENTATION=orientation,
+            AMPLITUDE=_amplitude(load, context),
         )
         return
 
     if isinstance(load, InertiaLoad):
+        if getattr(load, "amplitude_ref", None) is not None:
+            raise ValueError(
+                f"FEMaster does not support AMPLITUDE on inertia load '{load.name}'"
+            )
         target = _materialize(load, RegionProjection.ELEMENTS, writer, context)
         row = (
             target,
@@ -152,6 +181,10 @@ def _materialize(load, projection, writer, context):
 
 
 def _write_temperature(load, writer, context, collector):
+    if getattr(load, "amplitude_ref", None) is not None:
+        raise ValueError(
+            f"FEMaster does not support AMPLITUDE on temperature load '{load.name}'"
+        )
     field = context.resolve(load.temperature_field_ref)
     if field is None:
         raise ValueError(
@@ -184,6 +217,16 @@ def _orientation(ref, context):
     entity = context.resolve(ref)
     if entity is None:
         raise ValueError("Referenced coordinate system no longer exists")
+    return context.solver_name(entity, entity.name)
+
+
+def _amplitude(load, context):
+    ref = getattr(load, "amplitude_ref", None)
+    if ref is None:
+        return None
+    entity = context.resolve(ref)
+    if entity is None:
+        raise ValueError(f"Load '{load.name}' references a missing amplitude")
     return context.solver_name(entity, entity.name)
 
 
