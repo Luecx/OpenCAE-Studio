@@ -12,6 +12,7 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QMessageBox
 
+from opencae.controllers.background_task import BackgroundTask
 from opencae.deck_formats.selection import (
     normalized_profile_id,
     profile_display_name,
@@ -27,6 +28,7 @@ from opencae.model.entities.jobs import (
     ResultSet,
     ResultStatus,
 )
+from opencae.results import FrdLoader
 
 from .job_manager_factory import create_job, job_directory, utc_now
 from .job_manager_results import persist_result
@@ -154,7 +156,7 @@ def finish_analysis(manager, job_id, adapter, output_base, code) -> None:
         None,
     )
     if completed and source and source.suffix.lower() == ".frd":
-        _attach_solver_result(manager, job, source)
+        _attach_solver_result(manager, job.id, source)
 
     manager.progress_changed.emit(
         job.id,
@@ -164,14 +166,61 @@ def finish_analysis(manager, job_id, adapter, output_base, code) -> None:
     manager.parent.refresh_action_states()
 
 
-def _attach_solver_result(manager, job: Job, source: Path) -> None:
-    """Read lightweight FRD metadata and persist one solver ResultSet."""
-    try:
-        fields = manager._result_loader.fields(source)
-    except Exception as exc:
-        fields = []
-        manager._append_output(job.id, f"Result metadata failed: {exc}\n")
+def _attach_solver_result(manager, job_id: str, source: Path) -> None:
+    """Read potentially large FRD metadata on a worker thread."""
+    tasks = getattr(manager, "_result_metadata_tasks", None)
+    if tasks is None:
+        tasks = {}
+        manager._result_metadata_tasks = tasks
 
+    previous = tasks.pop(str(job_id), None)
+    if previous is not None and previous.isRunning():
+        # A Job has one terminal result scan. This is defensive against duplicate
+        # process-finished delivery without ever blocking to wait for the old one.
+        manager._append_output(
+            job_id,
+            "Skipped duplicate result metadata scan while one is already running\n",
+        )
+        tasks[str(job_id)] = previous
+        return
+
+    path = Path(source)
+    task = BackgroundTask(
+        lambda: FrdLoader().fields(path),
+        on_result=lambda fields: _persist_solver_result(
+            manager,
+            str(job_id),
+            path,
+            fields,
+        ),
+        on_error=lambda error: _result_metadata_failed(
+            manager,
+            str(job_id),
+            path,
+            error,
+        ),
+        parent=manager,
+    )
+    tasks[str(job_id)] = task
+    manager._append_output(job_id, "Indexing solver result metadata…\n")
+    task.start()
+
+
+def _result_metadata_failed(manager, job_id, source, error) -> None:
+    """Preserve the available result even when optional metadata indexing fails."""
+    manager._append_output(job_id, f"Result metadata failed: {error}\n")
+    _persist_solver_result(manager, job_id, source, [])
+
+
+def _persist_solver_result(manager, job_id: str, source: Path, fields) -> None:
+    """Create the lightweight ResultSet on Qt's GUI thread after indexing."""
+    tasks = getattr(manager, "_result_metadata_tasks", None)
+    if tasks is not None:
+        tasks.pop(str(job_id), None)
+
+    job = manager.store.project.try_resolve(job_id)
+    if not isinstance(job, Job):
+        return
     analysis = manager.store.project.try_resolve(job.source_ref)
     steps = (
         analysis.resolved_steps(manager.store.project)
@@ -183,7 +232,7 @@ def _attach_solver_result(manager, job: Job, source: Path) -> None:
         job_ref=EntityRef.of(job, "Job"),
         source_file=str(source),
         status=ResultStatus.AVAILABLE,
-        fields=fields,
+        fields=list(fields or ()),
         metadata={
             "result_kind": "solver",
             "step_names": [step.name for step in steps],
@@ -192,3 +241,4 @@ def _attach_solver_result(manager, job: Job, source: Path) -> None:
         },
     )
     persist_result(manager.store, job.id, result)
+    manager.parent.refresh_action_states()
