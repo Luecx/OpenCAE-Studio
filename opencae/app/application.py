@@ -58,8 +58,12 @@ def run() -> int:
     window = MainWindow(context)
     _progress(app, startup, 94, "Finalizing workspace…")
 
-    window.show()
-    app.processEvents()
+    # Do not expose two top-level OpenCAE windows in the same compositor frame.
+    # In particular, an always-on-top/tool splash overlapping the native QVTK
+    # child caused desktop-wide flashing on some X11/XWayland setups.
     startup.set_progress(100, "Ready")
-    startup.close()
+    app.processEvents()
+    startup.hide()
+    window.show()
+    startup.deleteLater()
     return app.exec()
