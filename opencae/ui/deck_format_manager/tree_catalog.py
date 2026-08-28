@@ -18,6 +18,34 @@ def _leaf(key: str, label: str, supported_formats=()) -> dict:
     return node
 
 
+def _loadcase_nodes() -> tuple[dict, ...]:
+    """Return loadcase records with nonlinear controls next to their parent header."""
+    return (
+        _leaf("analysis.loadcases.linear_static", "Linear Static", _FEMASTER_ONLY),
+        {
+            "key": "analysis.nonlinear_static",
+            "label": "Nonlinear Static",
+            "children": (
+                _leaf(
+                    "analysis.loadcases.nonlinear_static",
+                    "Loadcase Header",
+                    _FEMASTER_ONLY,
+                ),
+                _leaf(
+                    "analysis.controls.nonlinear",
+                    "Nonlinear Controls",
+                    _FEMASTER_ONLY,
+                ),
+            ),
+        },
+        _leaf("analysis.loadcases.linear_buckling", "Linear Buckling", _FEMASTER_ONLY),
+        _leaf("analysis.loadcases.topology_static", "Topology Static", _FEMASTER_ONLY),
+        _leaf("analysis.loadcases.eigenfrequency", "Eigenfrequency", _FEMASTER_ONLY),
+        _leaf("analysis.loadcases.linear_transient", "Linear Transient", _FEMASTER_ONLY),
+        _leaf("analysis.loadcases.linear_harmonic", "Linear Harmonic", _FEMASTER_ONLY),
+    )
+
+
 TREE_SPEC = (
     {
         "key": "general",
@@ -193,18 +221,7 @@ TREE_SPEC = (
             {
                 "key": "analysis.loadcases",
                 "label": "Loadcase Type",
-                "children": tuple(
-                    _leaf(f"analysis.loadcases.{key}", label, _FEMASTER_ONLY)
-                    for key, label in (
-                        ("linear_static", "Linear Static"),
-                        ("nonlinear_static", "Nonlinear Static"),
-                        ("linear_buckling", "Linear Buckling"),
-                        ("topology_static", "Topology Static"),
-                        ("eigenfrequency", "Eigenfrequency"),
-                        ("linear_transient", "Linear Transient"),
-                        ("linear_harmonic", "Linear Harmonic"),
-                    )
-                ),
+                "children": _loadcase_nodes(),
             },
             {
                 "key": "analysis.selections",
@@ -222,7 +239,6 @@ TREE_SPEC = (
                     for key, label in (
                         ("solver", "Solver"),
                         ("constraint_method", "Constraint Method"),
-                        ("nonlinear", "Nonlinear Controls"),
                         ("time", "Time"),
                         ("newmark", "Newmark"),
                         ("damping", "Damping"),

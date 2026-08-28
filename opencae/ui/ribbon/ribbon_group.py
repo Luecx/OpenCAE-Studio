@@ -17,7 +17,7 @@ class RibbonGroup(QFrame):
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setStyleSheet(
             "QFrame#RibbonGroup { "
-            "background: rgba(255,255,255,0.012); "
+            "background: transparent; "
             f"border-right: 1px solid {PALETTE['border_light']}; "
             "}"
         )

@@ -5,18 +5,41 @@ import pyvista as pv
 
 from opencae.model.entities.regions import ReferencePoint, Region
 from opencae.model.selection import (
-    GeometryOperand, MeshElementOperand, MeshFacetOperand, MeshNodeOperand,
-    NamedRegionOperand, ReferencePointOperand, RegionDefinition, RegionSelectionItem,
+    GeometryOperand,
+    MeshElementOperand,
+    MeshFacetOperand,
+    MeshNodeOperand,
+    NamedRegionOperand,
+    ReferencePointOperand,
+    RegionDefinition,
+    RegionProjection,
+    RegionRequirement,
+    RegionResolver,
+    RegionSelectionItem,
     WholeModelOperand,
+    element_side_indices,
 )
 from .instance_transform import transform_points, transform_vector
 from .vtk_cell_data import cell_array
 
 
-def region_samples(project, target, scene, maximum=24):
+def region_samples(project, target, scene, maximum=24, projection=None):
+    """Return stable world-space samples for one region-like target.
+
+    Surface loads need more than a generic element center: their direction and
+    attachment point depend on the concrete local element face.  When FACETS is
+    requested, use the same RegionResolver semantics as deck generation so
+    direct facet picks, named Surfaces, CAD-face associations and element-based
+    exterior surfaces all resolve to explicit oriented element faces.
+    """
     definition = _definition(target)
     if definition is None:
         return []
+    requested = RegionProjection.coerce(projection)
+    if requested == RegionProjection.FACETS:
+        samples = _resolved_facet_samples(project, definition, scene)
+        if samples:
+            return _thin(samples, maximum)
     samples = []
     _sample_definition(project, definition, scene, samples, set(), None)
     return _thin(samples, maximum)
@@ -33,6 +56,91 @@ def _definition(target):
         return RegionDefinition((target,))
     if hasattr(target, "kind"):
         return RegionDefinition((RegionSelectionItem(target),))
+    return None
+
+
+def _resolved_facet_samples(project, definition, scene):
+    """Resolve a Surface target and sample each concrete local element face."""
+    requirement = RegionRequirement(
+        projection=RegionProjection.FACETS,
+        allowed_dimensions=(2,),
+        min_count=1,
+    )
+    resolved = RegionResolver(project).resolve(definition, requirement)
+    if not resolved.valid or not resolved.facets:
+        return []
+    result = []
+    for facet in sorted(resolved.facets):
+        sample = _facet_occurrence_sample(project, scene, facet)
+        if sample is not None:
+            result.append(sample)
+    return result
+
+
+def _facet_occurrence_sample(project, scene, facet):
+    """Return center and outward normal for one resolved element-side occurrence."""
+    grid = (
+        scene.mesh_grids.get(facet.instance_id)
+        if facet.instance_id
+        else scene.mesh_grid
+    )
+    if grid is None:
+        return None
+    ids = cell_array(grid, "element_id")
+    hits = np.where(ids == int(facet.element_id))[0]
+    if not len(hits):
+        return None
+    try:
+        cell = grid.get_cell(int(hits[0]))
+    except (AttributeError, RuntimeError, RecursionError, IndexError):
+        return None
+
+    part = project.try_resolve(facet.owner_id)
+    block = _element_block(part, facet.element_id)
+    if block is None:
+        return None
+    points = np.asarray(cell.points, dtype=float)
+    if len(points) < 3:
+        return None
+
+    category = str(block.definition.category)
+    local_face = str(facet.local_face)
+    shell = category in {"Shell Elements", "2D Elements"}
+    if shell:
+        if local_face not in {"SPOS", "SNEG"}:
+            return None
+        face = points
+    else:
+        indices = dict(element_side_indices(block.definition.topology)).get(local_face)
+        if not indices:
+            return None
+        face = points[[index for index in indices if index < len(points)]]
+        if len(face) < 3:
+            return None
+
+    center = np.asarray(face, dtype=float).mean(axis=0)
+    normal = np.cross(face[1] - face[0], face[2] - face[0])
+    normal = _unit(normal)
+    if normal is None:
+        return center, None
+
+    if shell:
+        if local_face == "SNEG":
+            normal = -normal
+    else:
+        cell_center = np.asarray(cell.center, dtype=float)
+        if float(np.dot(normal, center - cell_center)) < 0.0:
+            normal = -normal
+    return center, normal
+
+
+def _element_block(part, element_id):
+    if part is None:
+        return None
+    target = int(element_id)
+    for block in part.mesh.element_blocks:
+        if target in {int(value) for value in block.ids}:
+            return block
     return None
 
 

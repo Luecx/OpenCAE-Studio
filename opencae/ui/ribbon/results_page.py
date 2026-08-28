@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.results import FrdLoader
+from opencae.results.navigation import display_field
 from opencae.ui.actions.ids import A
 from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.viewport.result_visualization import auto_deformation_scale
@@ -40,6 +41,7 @@ class ResultsPage(QWidget):
         self._topology_index = -1
         self._result_groups = []
         self._collapsed_titles = frozenset()
+        self._range_signature = None
         self._build()
         QTimer.singleShot(0, self._refresh_responsive_layout)
 
@@ -200,6 +202,8 @@ class ResultsPage(QWidget):
         self.deform.settings_changed.connect(self._emit)
         self.deform.auto_requested.connect(self._auto_deformation_scale)
         self.range.range_changed.connect(self._emit)
+        self.range.auto_frame_requested.connect(self._auto_contour_frame)
+        self.range.auto_frames_requested.connect(self._auto_contour_frames)
         self.choose.selection_changed.connect(self._field_changed)
         self.choose.navigation_changed.connect(self._field_navigation)
         self.previous_frame.clicked.connect(lambda: self._move_frame(-1))
@@ -242,8 +246,10 @@ class ResultsPage(QWidget):
         )
 
     def set_solution(self, result, field=None):
-        if getattr(result, "id", None) != getattr(self.result, "id", None):
+        changed_result = getattr(result, "id", None) != getattr(self.result, "id", None)
+        if changed_result:
             self.section.reset_for_result()
+            self._range_signature = None
         self.result = result
         metadata = (
             dict(getattr(result, "metadata", {}) or {})
@@ -272,6 +278,7 @@ class ResultsPage(QWidget):
             )
             self.choose.setEnabled(False)
             self.range.set_data_range(0.0, 1.0)
+            self.range.set_range(0.0, 1.0)
             self.save.setEnabled(False)
             for widget in (
                 self.deform,
@@ -342,10 +349,78 @@ class ResultsPage(QWidget):
             return
         field = self.choose.current_field()
         if self.result and field:
-            self.range.set_data_range(
-                *self.loader.scalar_range(self.result.source_file, field)
-            )
+            current_range = self.loader.scalar_range(self.result.source_file, field)
+            self.range.set_data_range(*current_range)
+            signature = self._contour_field_signature(field)
+            if signature != self._range_signature:
+                self._range_signature = signature
+                # Selecting another field/component/step starts from a sensible
+                # current-frame range. Moving only between frames leaves the
+                # concrete range untouched so Auto Frames/manual ranges remain
+                # useful for visual comparison.
+                self.range.set_range(*current_range)
+                return
         self._emit()
+
+    def _contour_field_signature(self, field):
+        if field is None:
+            return None
+        return (
+            getattr(self.result, "id", None),
+            int(field.metadata.get("step_id", 1)),
+            str(field.name),
+            str(field.metadata.get("component", "Magnitude")),
+        )
+
+    def _auto_contour_frame(self):
+        """Set concrete limits from only the currently displayed result frame."""
+        if self._topology_frames:
+            self.range.set_data_range(0.0, 1.0)
+            self.range.set_range(0.0, 1.0)
+            return
+        field = self.choose.current_field()
+        if self.result is None or field is None or not self.result.source_file:
+            return
+        values = self.loader.scalar_range(self.result.source_file, field)
+        self.range.set_data_range(*values)
+        self.range.set_range(*values)
+
+    def _auto_contour_frames(self):
+        """Set concrete limits from the same field/component across current-step frames."""
+        if self._topology_frames:
+            self.range.set_data_range(0.0, 1.0)
+            self.range.set_range(0.0, 1.0)
+            return
+        field = self.choose.current_field()
+        if self.result is None or field is None or not self.result.source_file:
+            return
+        step_id = int(field.metadata.get("step_id", 1))
+        component = str(field.metadata.get("component", "Magnitude"))
+        ranges = []
+        seen_frames = set()
+        for source in tuple(getattr(self.choose, "fields", ()) or ()):
+            if source.name != field.name:
+                continue
+            if int(source.metadata.get("step_id", 1)) != step_id:
+                continue
+            frame_id = int(source.metadata.get("frame_id", 1))
+            if frame_id in seen_frames:
+                continue
+            seen_frames.add(frame_id)
+            candidate = display_field(source, component)
+            try:
+                ranges.append(self.loader.scalar_range(self.result.source_file, candidate))
+            except (OSError, RuntimeError, TypeError, ValueError):
+                continue
+        if not ranges:
+            self._auto_contour_frame()
+            return
+        values = (
+            min(item[0] for item in ranges),
+            max(item[1] for item in ranges),
+        )
+        self.range.set_data_range(*values)
+        self.range.set_range(*values)
 
     def _query_toggled(self, current, other, checked):
         if checked:

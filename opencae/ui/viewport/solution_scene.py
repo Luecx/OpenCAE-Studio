@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from opencae.optimization import build_mesh_index
-from .result_visualization import add_result
+from .result_visualization import add_result, update_result
 from .scene_camera import camera_position, restore_camera
 
 
@@ -15,6 +15,36 @@ def show_result(scene, result, field=None, options=None):
     if metadata.get("result_kind") == "topology_density":
         _show_topology_result(scene, result, options or {})
         return
+
+    options = options or {}
+    animation = dict(options.get("_animation", {}) or {})
+    if animation and scene.result_actor is not None and scene.result_grid is not None:
+        try:
+            grid = update_result(
+                scene.result_actor,
+                scene.result_mesh_actor,
+                scene.result_boundary_actor,
+                scene.result_undeformed_actor,
+                result,
+                field,
+                options,
+            )
+        except Exception as exc:
+            scene.owner.message.emit(f"Could not update animation frame: {exc}")
+            grid = None
+        if grid is not None:
+            scene.result_grid = grid
+            scene.owner.section_view.update_grid(
+                grid,
+                (
+                    scene.result_actor,
+                    scene.result_mesh_actor,
+                    scene.result_boundary_actor,
+                    scene.result_undeformed_actor,
+                ),
+            )
+            scene.owner.plotter.render()
+            return
 
     camera = camera_position(scene.owner.plotter)
     scene.clear(render=False)
@@ -36,7 +66,7 @@ def show_result(scene, result, field=None, options=None):
     else:
         restore_camera(scene.owner.plotter, camera)
     scene.owner.section_view.apply(
-        (options or {}).get("section", {}),
+        options.get("section", {}),
         scene.result_grid,
         (
             scene.result_actor,
@@ -46,7 +76,7 @@ def show_result(scene, result, field=None, options=None):
         ),
     )
     scene.owner.plotter.add_axes(color="#dce3e8")
-    scene.owner.result_query.configure((options or {}).get("query", ""), field)
+    scene.owner.result_query.configure(options.get("query", ""), field)
     scene.owner.plotter.render()
 
 
@@ -91,7 +121,7 @@ def _show_topology_result(scene, result, options):
         ),
     )
     run = SimpleNamespace(name=getattr(result, "name", "Topology Result"))
-    scene.topology_overlay.show(
+    topology_actors = scene.topology_overlay.show(
         scene.owner,
         run,
         iteration,
@@ -100,6 +130,13 @@ def _show_topology_result(scene, result, options):
         threshold=0.0,
         options=options,
     )
+    if topology_actors is not None:
+        actor, grid, mesh_actor, boundary_actor = topology_actors
+        scene.owner.section_view.apply(
+            options.get("section", {}),
+            grid,
+            (actor, mesh_actor, boundary_actor),
+        )
     if camera is None:
         scene.owner.plotter.view_isometric()
         scene.owner.plotter.reset_camera()

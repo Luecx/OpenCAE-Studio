@@ -111,6 +111,10 @@ class AnalysisController:
         old_name = replacement.name
         replacement.name = values["name"]
         replacement.number_of_modes = values["number_of_modes"]
+        if "time_period" in values:
+            replacement.time_period = float(values["time_period"])
+        if "settings" in values:
+            replacement.settings = deepcopy(values["settings"])
         replacement.load_refs = [
             EntityRef(entity_id, "Load") for entity_id in values["load_ids"]
         ]

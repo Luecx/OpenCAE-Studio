@@ -94,12 +94,16 @@ class MaterialPropertyDialog(QDialog):
                 if self.units is not None and quantity
                 else ""
             )
+            # Density can legitimately be very small in consistent engineering
+            # unit systems (e.g. ~7.85e-9 tonne/mm^3).  Eight fixed decimals can
+            # quantize such values heavily or even round them to zero.
+            decimals = 15 if quantity == "density" else 8
             editor = NumericUnitInput(
                 default,
                 unit,
                 minimum=-1e30,
                 maximum=1e30,
-                decimals=8,
+                decimals=decimals,
             )
             editors.append(editor)
             blocks.append(field_block(text, editor))

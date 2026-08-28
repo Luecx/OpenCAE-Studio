@@ -1,4 +1,4 @@
-"""Owns the lightweight borderless startup window shown before heavy GUI imports."""
+"""Owns the lightweight startup surface shown before heavy GUI imports."""
 
 from __future__ import annotations
 
@@ -7,16 +7,22 @@ from PyQt6.QtWidgets import QLabel, QProgressBar, QVBoxLayout, QWidget
 
 
 class StartupWindow(QWidget):
-    """Small frameless startup surface that remains responsive during initialization."""
+    """Small non-activating splash surface that remains responsive during startup."""
 
     def __init__(self):
         """Create the startup title, status label, and progress bar."""
+        # A WindowStaysOnTop Tool window caused some X11/XWayland compositors to
+        # restack/repaint unrelated application windows during startup.  A real
+        # splash window is still visible early, but does not participate in the
+        # normal tool-window focus/stacking cycle.
         super().__init__(
             None,
-            Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.Tool,
+            Qt.WindowType.SplashScreen
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowDoesNotAcceptFocus,
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setObjectName("StartupWindow")
         self.setFixedSize(520, 210)
         self.setStyleSheet(

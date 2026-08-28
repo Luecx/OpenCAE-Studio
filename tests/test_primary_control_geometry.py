@@ -121,20 +121,22 @@ def test_file_path_editor_uses_primary_geometry_for_both_cells():
 
 
 def test_component_widget_uses_segmented_units_and_three_columns():
-    """Keep vector components interchangeable with other canonical dialog fields."""
+    """Keep vector components separated and labelled with their physical units."""
     app = QApplication.instance() or QApplication([])
     components = ComponentsWidget(
         ("Ux", "Uy", "Uz", "Rx", "Ry", "Rz"),
         (1.0, 2.0, 3.0, None, None, None),
         checkable=True,
-        suffixes=("mm", "mm", "mm", "", "", ""),
+        suffixes=("mm", "mm", "mm", "rad", "rad", "rad"),
     )
     components.show()
     app.processEvents()
     try:
         assert len(components._fields) == 6
+        assert components.layout().horizontalSpacing() == 3
         assert components._fields[0].editor.height() == PRIMARY_CONTROL_HEIGHT
         assert components._fields[0].editor.unit_label.text() == "mm"
+        assert components._fields[3].editor.unit_label.text() == "rad"
         assert components.values()[:3] == [1.0, 2.0, 3.0]
         assert components.values()[3:] == [None, None, None]
     finally:

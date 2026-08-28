@@ -7,6 +7,8 @@ import pyvista as pv
 
 from opencae.geometry.cache import CACHE
 from opencae.geometry.orphan_mesh import snapshot_from_part
+from opencae.ui.core.theme import PALETTE
+from .contour_mapping import contour_plot_kwargs
 from .pyvista_mesh import build_grid
 from .scalar_bar import scalar_bar_args
 from .vtk_cell_data import cell_array
@@ -121,6 +123,7 @@ def add_topology_presentation(
             minimum, maximum = maximum, minimum
         if minimum == maximum:
             maximum = minimum + max(abs(minimum), 1.0) * 1.0e-12
+        mapping = contour_plot_kwargs(scalar_range)
         actor_name = f"{name_prefix}-surface"
         actor = plotter.add_mesh(
             grid,
@@ -128,7 +131,9 @@ def add_topology_presentation(
             preference="cell",
             clim=(minimum, maximum),
             cmap="viridis",
-            n_colors=18,
+            n_colors=mapping["n_colors"],
+            below_color=mapping["below_color"],
+            above_color=mapping["above_color"],
             show_edges=False,
             lighting=True,
             ambient=0.72,
@@ -138,15 +143,19 @@ def add_topology_presentation(
             pickable=False,
             reset_camera=False,
             render=False,
-            scalar_bar_args=scalar_bar_args("Density", plotter),
+            scalar_bar_args=scalar_bar_args(
+                "Density",
+                plotter,
+                outside_colors=bool(mapping["below_color"] or mapping["above_color"]),
+            ),
         )
         names.append(actor_name)
         if options.get("mesh_lines", True):
             line_name = f"{name_prefix}-mesh-lines"
             mesh_actor = plotter.add_mesh(
                 grid.extract_all_edges(),
-                color="#27323b",
-                line_width=0.7,
+                color=PALETTE["mesh_lines"],
+                line_width=0.8,
                 lighting=False,
                 name=line_name,
                 pickable=False,

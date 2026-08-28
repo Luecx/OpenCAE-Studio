@@ -270,12 +270,13 @@ class MainWindow(QMainWindow):
             Qt.DockWidgetArea.LeftDockWidgetArea,
             self.project_dock,
         )
-        self.addDockWidget(
-            Qt.DockWidgetArea.BottomDockWidgetArea,
-            self.output_dock,
-        )
+        for dock in (self.jobs_dock, self.log_dock, self.time_manager_dock):
+            self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+            dock.show()
+        self.tabifyDockWidget(self.jobs_dock, self.log_dock)
+        self.tabifyDockWidget(self.jobs_dock, self.time_manager_dock)
         self.project_dock.show()
-        self.output_dock.show()
+        self.jobs_dock.raise_()
         self.ribbon_host.show()
 
     def show_about(self):

@@ -13,14 +13,17 @@ _DEFAULT_HEIGHT = 0.72
 _MINIMUM_HEIGHT = 0.18
 
 
-def scalar_bar_args(title, plotter=None):
+def scalar_bar_args(title, plotter=None, *, outside_colors=False):
     """Return a readable right-side scalar bar positioned below the ViewCube."""
-    return {
+    args = {
         "title": str(title).replace(":", " — "),
         "vertical": True,
-        "position_x": 0.89,
+        "position_x": 0.905,
         "position_y": _DEFAULT_BOTTOM,
-        "width": 0.065,
+        # PyVista/VTK sizes the above/below swatches from the scalar-bar
+        # thickness.  The previous 0.065 bar made those end caps visually huge;
+        # a slimmer bar keeps them as small colorbar terminations.
+        "width": 0.045,
         "height": _available_height(plotter),
         "color": "#f0f3f6",
         "title_font_size": 13,
@@ -29,6 +32,12 @@ def scalar_bar_args(title, plotter=None):
         "n_labels": 7,
         "fmt": "%.4g",
     }
+    if outside_colors:
+        # Passing an explicit empty annotation keeps the VTK range swatch but
+        # removes the redundant literal "above" / "below" text.
+        args["below_label"] = ""
+        args["above_label"] = ""
+    return args
 
 
 def _available_height(plotter) -> float:

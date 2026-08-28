@@ -11,7 +11,7 @@ dependencies = [
   "PyQt6",
   "numpy",
   "pyvista",
-  "pyvistaqt",
+  "pyvistaqt @ git+https://github.com/pyvista/pyvistaqt.git@98a9abbd465f0c9e92eeb4c69f4c6ada1d19b84f",
   "vtk",
   "gmsh",
 ]

@@ -28,11 +28,17 @@ class ResultRibbonGroup(QFrame):
         super().__init__(parent)
         self.title = title
         self.widgets = tuple(widgets)
+        for widget in self.widgets:
+            if isinstance(widget, QToolButton):
+                widget.setProperty("resultsRibbonButton", True)
         self._collapsed = False
         self.setObjectName("RibbonGroup")
         self.setFrameShape(QFrame.Shape.NoFrame)
+        # Results used to keep its own faint card background even after the
+        # regular ribbon groups were flattened.  Keep the semantic separator,
+        # but let the group and its buttons sit directly on the ribbon surface.
         self.setStyleSheet(
-            f"QFrame#RibbonGroup {{ background: rgba(255,255,255,0.012); "
+            "QFrame#RibbonGroup { background: transparent; "
             f"border-right: 1px solid {PALETTE['border_light']}; }}"
         )
         self._layout = QVBoxLayout(self)
@@ -112,6 +118,7 @@ class ResultRibbonGroup(QFrame):
         button.setFixedSize(RIBBON_BUTTON_WIDTH, RIBBON_BUTTON_HEIGHT)
         button.setText(self.title.title())
         button.setProperty("ribbonButton", True)
+        button.setProperty("resultsRibbonButton", True)
 
         menu = QMenu(button)
         panel = QWidget(menu)

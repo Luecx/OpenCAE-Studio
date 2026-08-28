@@ -116,12 +116,13 @@ def test_orientation_change_produces_a_different_projection() -> None:
     assert widget.view_matrix == matrix
 
 
-def test_view_cube_has_no_translucent_widget_surface() -> None:
-    """Protect the fast opaque composition policy above the viewport widget."""
+def test_view_cube_uses_stable_opaque_native_surface_composition() -> None:
+    """Protect visibility and mouse ownership above the native VTK widget."""
     _application()
     widget = ViewCube()
     assert widget.testAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
     assert not widget.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    assert widget.testAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
     assert widget.mask().isEmpty()
 
 
@@ -213,8 +214,8 @@ def test_camera_controller_tracks_and_applies_face_normals() -> None:
     assert plotter.camera.callback is None
 
 
-def test_canvas_reparents_opaque_cube_to_render_surface() -> None:
-    """Keep the opaque cube inside the VTK surface instead of beside it."""
+def test_canvas_places_opaque_cube_on_render_surface() -> None:
+    """Keep the cube inside the VTK surface with native-compatible composition."""
     application = _application()
     canvas = ViewportCanvas()
     render_surface = QWidget(canvas)

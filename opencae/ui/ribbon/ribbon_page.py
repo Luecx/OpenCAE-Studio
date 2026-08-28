@@ -4,6 +4,7 @@ from PyQt6.QtCore import QSize, QTimer
 from PyQt6.QtWidgets import QHBoxLayout, QLayout, QSizePolicy, QWidget
 
 from opencae.ui.core.metrics import RIBBON_BUTTON_WIDTH
+from opencae.ui.core.theme import PALETTE
 from .ribbon_group import RibbonGroup
 
 
@@ -11,6 +12,7 @@ _PAGE_LEFT_MARGIN = 5
 _GROUP_LEFT_MARGIN = 8
 _GROUP_RIGHT_MARGIN = 9
 _GROUP_SPACING = 2
+_LEADING_SEPARATOR_WIDTH = 9
 
 
 class ResponsiveRibbonPage(QWidget):
@@ -42,6 +44,20 @@ class ResponsiveRibbonPage(QWidget):
 
         for widget in self._leading_widgets:
             layout.addWidget(widget)
+
+        self._leading_separator = None
+        if self._leading_widgets and self._specs:
+            separator = QWidget(self)
+            separator.setObjectName("RibbonLeadingSeparator")
+            separator.setFixedWidth(_LEADING_SEPARATOR_WIDTH)
+            separator.setStyleSheet(
+                "QWidget#RibbonLeadingSeparator { "
+                "background: transparent; "
+                f"border-right: 1px solid {PALETTE['border_light']}; "
+                "}"
+            )
+            layout.addWidget(separator)
+            self._leading_separator = separator
 
         self._groups_host = QWidget(self)
         self._groups_host.setMinimumWidth(0)
@@ -89,6 +105,8 @@ class ResponsiveRibbonPage(QWidget):
     def _required_width(self, collapsed_titles):
         width = _PAGE_LEFT_MARGIN
         width += sum(self._widget_width(widget) for widget in self._leading_widgets)
+        if self._leading_widgets and self._specs:
+            width += _LEADING_SEPARATOR_WIDTH
         for spec in self._specs:
             width += self._group_width(
                 spec,

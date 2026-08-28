@@ -59,7 +59,15 @@ def apply_mesh_snapshot(candidate, snapshot) -> None:
 
 
 def _derive_entity_facets(part):
-    """Persist CAD-face to oriented element-side associations at mesh time."""
+    """Persist CAD-face to oriented element-side associations at mesh time.
+
+    Gmsh reports ``getElements(2, face_tag)`` using the ids of its generated
+    *surface* elements.  For a 3D mesh those ids are not the ids of the volume
+    elements stored by OpenCAE, so they must never be used to filter solid
+    elements.  Solid sides are instead identified from the persisted CAD-face
+    node membership.  For a native 2D/shell mesh the entity element ids are in
+    the same dimension and remain the most precise membership signal.
+    """
     result = {}
     for label, node_ids in part.mesh.entity_nodes.items():
         if not str(label).startswith("Face-"):
@@ -78,12 +86,19 @@ def _derive_entity_facets(part):
                 strict=True,
             ):
                 element_id = int(element_id)
-                if candidates and element_id not in candidates:
-                    continue
                 if category in {"Shell Elements", "2D Elements"}:
-                    if not candidates or element_id in candidates:
-                        facets.append((element_id, "SPOS"))
+                    if candidates:
+                        if element_id in candidates:
+                            facets.append((element_id, "SPOS"))
+                    else:
+                        element_nodes = {int(value) for value in connectivity}
+                        if element_nodes and element_nodes.issubset(nodes):
+                            facets.append((element_id, "SPOS"))
                     continue
+
+                # For solid meshes, Face-* entity_elements contains Gmsh's
+                # lower-dimensional surface-element ids, not our volume ids.
+                # Match each oriented solid side against the CAD face's nodes.
                 for side, indices in element_side_indices(
                     block.definition.topology
                 ):

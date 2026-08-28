@@ -12,6 +12,7 @@ QUANTITIES = (
     Quantity("length", "Length", (1, 0, 0, 0)),
     Quantity("area", "Area", (2, 0, 0, 0)),
     Quantity("volume", "Volume", (3, 0, 0, 0)),
+    Quantity("angle", "Angle", (0, 0, 0, 0)),
     Quantity("force", "Force", (0, 1, 0, 0)),
     Quantity("moment", "Moment / Energy", (1, 1, 0, 0)),
     Quantity("pressure", "Pressure / Stress", (-2, 1, 0, 0)),

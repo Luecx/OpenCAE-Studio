@@ -8,8 +8,9 @@ persistence, and Analysis/Study workflows live in focused companion modules.
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import fields
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QCoreApplication, QObject, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.entities.jobs import Job, JobSourceKind, JobStatus
@@ -21,6 +22,16 @@ from .job_manager_factory import utc_now
 from .job_manager_study import run_study as run_study_workflow
 from .job_manager_validation import analysis_errors, study_errors
 from .job_output_store import JobOutputStore
+
+
+_RUNTIME_JOB_FIELDS = frozenset({
+    "status",
+    "exit_code",
+    "started_at",
+    "finished_at",
+    "progress",
+    "progress_label",
+})
 
 
 class JobManager(QObject):
@@ -43,6 +54,15 @@ class JobManager(QObject):
         self._monitors: dict[str, object] = {}
         self._output_store = JobOutputStore(lambda: self.store.project)
         self._result_loader = FrdLoader()
+        self._pending_output: dict[str, list[str]] = {}
+        self._pending_output_chars: dict[str, int] = {}
+        self._output_flush_timer = QTimer(self)
+        self._output_flush_timer.setSingleShot(True)
+        self._output_flush_timer.setInterval(40)
+        self._output_flush_timer.timeout.connect(self._flush_pending_output)
+        app = QCoreApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._flush_pending_output)
         store.changed.connect(self._repair_selection)
         self._repair_selection()
 
@@ -77,7 +97,9 @@ class JobManager(QObject):
 
     def output_for(self, job_id) -> str:
         """Return the bounded persisted solver output for one Job."""
-        return self._output_store.read(str(job_id or ""))
+        key = str(job_id or "")
+        self._flush_pending_output(key)
+        return self._output_store.read(key)
 
     def can_stop_selected(self) -> bool:
         """Return whether the selected Job still has a live runner."""
@@ -219,20 +241,49 @@ class JobManager(QObject):
         self.progress_changed.emit(job.id, 0.0, str(label))
 
     def _append_output(self, job_id, text) -> None:
-        """Persist one solver-output chunk and stream only that chunk to monitors."""
+        """Buffer solver output so high-volume stdout cannot starve Qt's event loop."""
         job_key = str(job_id)
         addition = str(text)
-        self._output_store.append(job_key, addition)
-        # Monitors can remain open while another Job is selected, so each event
-        # carries its Job id and the monitor performs the final filtering.
-        self.output_appended.emit(job_key, addition)
+        if not addition:
+            return
+        self._pending_output.setdefault(job_key, []).append(addition)
+        size = self._pending_output_chars.get(job_key, 0) + len(addition)
+        self._pending_output_chars[job_key] = size
+
+        # Flush at most roughly 25 times/s during ordinary streaming. Very large
+        # chunks are committed immediately to keep transient memory bounded.
+        if size >= 64 * 1024:
+            self._flush_pending_output(job_key)
+        elif not self._output_flush_timer.isActive():
+            self._output_flush_timer.start()
+
+    def _flush_pending_output(self, job_id=None) -> None:
+        """Persist and publish buffered output in coarse GUI-friendly chunks."""
+        keys = (
+            (str(job_id),)
+            if job_id is not None
+            else tuple(self._pending_output)
+        )
+        for key in keys:
+            parts = self._pending_output.pop(key, None)
+            self._pending_output_chars.pop(key, None)
+            if not parts:
+                continue
+            addition = "".join(parts)
+            self._output_store.append(key, addition)
+            # Monitors can remain open while another Job is selected, so each
+            # event carries its Job id and the monitor performs final filtering.
+            self.output_appended.emit(key, addition)
+
+        if self._pending_output and not self._output_flush_timer.isActive():
+            self._output_flush_timer.start()
 
     def _study_output(self, job_id, text) -> None:
-        """Normalize line-oriented Study output before persistence."""
-        line = str(text)
+        """Normalize Study output chunks before buffered persistence."""
+        chunk = str(text)
         self._append_output(
             job_id,
-            line + ("" if line.endswith("\n") else "\n"),
+            chunk + ("" if chunk.endswith("\n") else "\n"),
         )
 
     def _update_progress(self, job_id, progress, label) -> None:
@@ -251,12 +302,26 @@ class JobManager(QObject):
         )
 
     def _replace_job(self, candidate: Job, description: str) -> None:
-        """Replace an existing Job through ProjectStore's undoable boundary."""
-        if self.store.project.try_resolve(candidate.id) is None:
+        """Apply only scalar Job runtime fields without a full Project transaction."""
+        current = self.store.project.try_resolve(candidate.id)
+        if not isinstance(current, Job):
             return
-        self.store.replace_entity(
-            description,
-            self.store.project.id,
-            "jobs",
-            candidate,
-        )
+
+        # This hot path is deliberately incapable of changing relationships,
+        # identity, paths or settings. Those remain ordinary document edits and
+        # must use ProjectStore.replace_entity()/execute().
+        for field_info in fields(current):
+            name = field_info.name
+            if name in _RUNTIME_JOB_FIELDS:
+                continue
+            if getattr(current, name) != getattr(candidate, name):
+                raise ValueError(
+                    f"Job runtime update attempted to change non-runtime field '{name}'"
+                )
+
+        changes = {
+            name: getattr(candidate, name)
+            for name in _RUNTIME_JOB_FIELDS
+            if getattr(current, name) != getattr(candidate, name)
+        }
+        self.store.update_runtime_fields(current.id, changes)

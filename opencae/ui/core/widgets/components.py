@@ -30,7 +30,11 @@ class ComponentsWidget(QWidget):
 
         layout = QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setHorizontalSpacing(16)
+        # Keep each segmented editor visually independent.  A small real
+        # layout gap is preferable to compensating with oversized margins:
+        # it prevents neighboring X/Y/Z borders from touching while retaining
+        # the compact three-column geometry used throughout the dialogs.
+        layout.setHorizontalSpacing(3)
         layout.setVerticalSpacing(12)
         columns = min(3, max(1, len(labels)))
         for index, label in enumerate(labels):

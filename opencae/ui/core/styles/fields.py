@@ -155,6 +155,7 @@ def css(p):
 
     QLabel#MatrixHeader {{ color: {p['muted']}; font-size: 8pt; min-width: 22px; }}
     QDoubleSpinBox#MatrixCell {{ min-width: 76px; max-width: 96px; padding: 4px 5px; }}
+
     QCheckBox {{ spacing: 7px; }}
     QCheckBox::indicator {{
         width: 15px;
@@ -166,5 +167,42 @@ def css(p):
     QCheckBox::indicator:checked {{
         background: {p['accent']};
         border-color: {p['accent']};
+    }}
+
+    /* Radios use a real circular ring and center dot instead of the platform
+       default indicator, which otherwise clashes with the flat dark theme. */
+    QRadioButton {{
+        spacing: 8px;
+        color: {p['text']};
+    }}
+    QRadioButton::indicator {{
+        width: 16px;
+        height: 16px;
+        border: 2px solid {p['border_light']};
+        border-radius: 9px;
+        background: {p['window']};
+    }}
+    QRadioButton::indicator:hover {{
+        border-color: {p['accent_hover']};
+        background: {p['panel_alt']};
+    }}
+    QRadioButton::indicator:checked {{
+        border-color: {p['accent']};
+        background: qradialgradient(
+            cx: 0.5, cy: 0.5, radius: 0.5,
+            fx: 0.5, fy: 0.5,
+            stop: 0 {p['accent']},
+            stop: 0.33 {p['accent']},
+            stop: 0.35 {p['window']},
+            stop: 1 {p['window']}
+        );
+    }}
+    QRadioButton::indicator:checked:hover {{
+        border-color: {p['accent_hover']};
+    }}
+    QRadioButton:disabled {{ color: {p['muted']}; }}
+    QRadioButton::indicator:disabled {{
+        border-color: {p['border']};
+        background: {p['panel']};
     }}
     """

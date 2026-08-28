@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, is_dataclass
 from typing import Any
 
 from opencae.core.ids import new_id
@@ -10,6 +10,9 @@ from opencae.core.ids import new_id
 from .model_codec import encode_model
 from .persistent_model_field import is_persistent_model_field
 from .solver_writable import SolverWritable
+
+
+_MISSING = object()
 
 
 @dataclass
@@ -34,10 +37,18 @@ class Entity(SolverWritable):
     )
 
     def __setattr__(self, name, value) -> None:
-        """Protect identity and invalidate graph indexes on persistent changes."""
+        """Protect identity and invalidate graph indexes only for structural changes.
+
+        ProjectIndex contains ownership paths, Entity identities and EntityRef
+        relationships. Scalar metadata such as names, lifecycle status, progress,
+        timestamps and numeric settings do not change any of those structures, so
+        invalidating the entire index for every such assignment is unnecessary and
+        particularly expensive for large FE models.
+        """
         if name == "id" and "id" in self.__dict__ and self.__dict__["id"] != value:
             raise AttributeError("Entity.id is immutable")
 
+        previous = self.__dict__.get(name, _MISSING)
         super().__setattr__(name, value)
 
         project = self.__dict__.get("_project")
@@ -45,6 +56,11 @@ class Entity(SolverWritable):
             return
         field_info = getattr(type(self), "__dataclass_fields__", {}).get(name)
         if field_info is None or not is_persistent_model_field(field_info):
+            return
+        if not (
+            _may_affect_project_index(previous)
+            or _may_affect_project_index(value)
+        ):
             return
         invalidate = getattr(project, "invalidate_index", None)
         if callable(invalidate):
@@ -74,3 +90,12 @@ class Entity(SolverWritable):
     def to_dict(self) -> dict[str, Any]:
         """Encode this entity graph using the registered model codec."""
         return encode_model(self)
+
+
+def _may_affect_project_index(value: Any) -> bool:
+    """Return whether assigning ``value`` can alter ownership/reference topology."""
+    if value is _MISSING or value is None:
+        return False
+    # Entity, EntityRef and nested model records are dataclasses. Collections can
+    # own or contain any of those. Scalars cannot affect ProjectIndex structure.
+    return is_dataclass(value) or isinstance(value, (list, tuple, dict))

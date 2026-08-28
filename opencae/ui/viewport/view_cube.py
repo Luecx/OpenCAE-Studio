@@ -1,4 +1,4 @@
-"""Render the camera-oriented beveled ViewCube as an opaque Qt overlay."""
+"""Render the camera-oriented beveled ViewCube as a stable Qt overlay."""
 
 from __future__ import annotations
 
@@ -25,6 +25,12 @@ class ViewCube(QWidget):
     never propagate to the underlying QVTK widget because a propagated press
     without the matching release leaves VTK in an active camera-interaction
     state.
+
+    QVTK is a native render surface. A translucent QWidget child is not
+    composited reliably on all X11/Wayland/VTK combinations and can disappear
+    completely even though ordinary offscreen QWidget tests still pass. Keep
+    this child opaque and paint the exact viewport color behind the cube so the
+    overlay remains visible without introducing a rectangular background patch.
     """
 
     view_requested = pyqtSignal(object)

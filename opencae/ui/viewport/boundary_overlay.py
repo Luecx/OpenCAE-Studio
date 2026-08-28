@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pyvista as pv
 
+from opencae.model.entities.loads import load_region_projection
 from .boundary_geometry import region_samples
 from .screen_scale import world_size_for_pixels
 from .safe_operations import add_interaction_observer, remove_actor
@@ -53,7 +54,14 @@ class BoundaryOverlay:
         for load in project.loads:
             if not _visible(scene, load):
                 continue
-            samples = tuple(region_samples(project, load.target, scene))
+            samples = tuple(
+                region_samples(
+                    project,
+                    load.target,
+                    scene,
+                    projection=load_region_projection(load),
+                )
+            )
             if samples:
                 self._load_samples.append((load, samples))
 

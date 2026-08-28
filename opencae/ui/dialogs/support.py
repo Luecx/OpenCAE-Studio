@@ -85,12 +85,20 @@ class SupportDialog(ApplyDialog):
             ([0.0] * 6 if support_type == "Fixed" else [None] * 6),
         )
         length_unit = units.symbol("length") if units is not None else ""
+        angle_unit = units.symbol("angle") if units is not None else "rad"
         self.components = ComponentsWidget(
             ("Ux", "Uy", "Uz", "Rx", "Ry", "Rz"),
             defaults,
             checkable=True,
             editable=support_type != "Fixed",
-            suffixes=(length_unit, length_unit, length_unit, "", "", ""),
+            suffixes=(
+                length_unit,
+                length_unit,
+                length_unit,
+                angle_unit,
+                angle_unit,
+                angle_unit,
+            ),
         )
         root.addWidget(self.components)
         root.addStretch(1)

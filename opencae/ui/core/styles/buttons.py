@@ -54,12 +54,61 @@ def css(p):
         background: {p['accent_dim']};
         border-color: {p['accent']};
     }}
+    QToolButton#TimeManagerControl {{
+        background: transparent;
+        border: none;
+        border-radius: 3px;
+        padding: 0px;
+    }}
+    QToolButton#TimeManagerControl:hover {{
+        background: {p['panel_hover']};
+        border: none;
+    }}
+    QToolButton#TimeManagerControl:pressed,
+    QToolButton#TimeManagerControl:checked {{
+        background: {p['accent_dim']};
+        border: none;
+    }}
+    QToolButton#TimeManagerControl:disabled {{
+        background: transparent;
+        border: none;
+    }}
     QToolButton[ribbonButton="true"] {{
+        background: transparent;
+        border: 1px solid transparent;
         padding: 2px 3px 1px 3px;
         color: {p['text']};
     }}
     QToolButton[ribbonButton="true"]:hover {{
         background: {p['panel_hover']};
         border: 1px solid {p['border_light']};
+    }}
+    /* Persistent display toggles on Results need a readable but still flat
+       active state.  A small lift from the ribbon surface is enough; keep the
+       accent outline so Mesh Lines / Boundary remain immediately legible. */
+    QToolButton[resultsRibbonButton="true"] {{
+        background: transparent;
+    }}
+    QToolButton[resultsRibbonButton="true"]:checked {{
+        background: {p['panel_active']};
+        border-color: {p['accent']};
+    }}
+    QToolButton[resultsRibbonButton="true"]:hover {{
+        background: {p['panel_hover']};
+    }}
+    QToolButton[resultsRibbonButton="true"]:checked:hover {{
+        background: {p['panel_hover']};
+        border-color: {p['accent_hover']};
+    }}
+    QToolButton[ribbonButton="true"]::menu-button {{
+        width: 16px;
+        background: transparent;
+        border: none;
+    }}
+    QToolButton[ribbonButton="true"]::menu-indicator {{
+        subcontrol-origin: padding;
+        subcontrol-position: bottom right;
+        right: 3px;
+        bottom: 3px;
     }}
     """

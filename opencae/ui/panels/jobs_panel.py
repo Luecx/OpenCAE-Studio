@@ -2,6 +2,8 @@
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
+    QFrame,
     QHeaderView,
     QMenu,
     QTableWidget,
@@ -30,23 +32,33 @@ class JobsPanel(QWidget):
         root.setSpacing(4)
 
         self.table = QTableWidget(0, 5)
+        self.table.setProperty("flatTable", True)
+        self.table.setShowGrid(False)
+        self.table.setAlternatingRowColors(False)
+        self.table.setFrameShape(QFrame.Shape.NoFrame)
+        self.table.setMouseTracking(True)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setHorizontalHeaderLabels(
             ["Job", "Source", "Kind", "Solver", "Status"]
         )
         header = self.table.horizontalHeader()
+        header.setProperty("flatTableHeader", True)
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         header.setMinimumSectionSize(60)
+        header.setMinimumHeight(30)
         header.setStretchLastSection(False)
+        header.setHighlightSections(False)
         for column in range(5):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
         self.table.verticalHeader().hide()
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.itemSelectionChanged.connect(self._selection_changed)
         self.table.customContextMenuRequested.connect(self._show_context_menu)
         root.addWidget(self.table, 1)
 
         store.changed.connect(self.refresh)
+        store.runtime_changed.connect(self._runtime_changed)
         jobs.selection_changed.connect(self._manager_selection_changed)
         self.refresh()
         self._resize_columns()
@@ -67,6 +79,11 @@ class JobsPanel(QWidget):
             self.table.setColumnWidth(column, width)
             used += width
         self.table.setColumnWidth(4, max(60, available - used))
+
+    def _runtime_changed(self, entity_id, _fields):
+        """Refresh only when the lightweight update belongs to a visible Job."""
+        if any(job.id == str(entity_id) for job in self.store.project.jobs):
+            self.refresh()
 
     def refresh(self, *_):
         """Rebuild Job rows while preserving the manager's selected Job."""

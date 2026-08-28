@@ -23,6 +23,7 @@ class ViewportCanvas(QWidget):
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
+        self._render_widget = None
         self.cube = None
         self.query = ResultQueryPanel(self)
         self.result_selection = ResultSelectionPanel(self)
@@ -34,10 +35,13 @@ class ViewportCanvas(QWidget):
         self.notice.hide()
 
     def set_render_widget(self, widget):
-        """Attach the VTK surface and construct the cube with its final parent."""
+        """Attach the VTK surface and construct overlays with their final parent."""
+        self._render_widget = widget
         self._layout.addWidget(widget)
+
         # Reparenting an existing QWidget onto QVTK's native child can produce
-        # BadWindow failures on X11/offscreen backends.
+        # BadWindow failures on X11/offscreen backends, so construct the cube
+        # directly on the final native render surface.
         self.cube = ViewCube(widget)
         self.cube.show()
         self._position_overlays()
@@ -48,7 +52,7 @@ class ViewportCanvas(QWidget):
         self._position_overlays()
 
     def _position_overlays(self):
-        """Position corner overlays and center the workflow guidance notice."""
+        """Position corner overlays and centered workflow guidance."""
         margin = VIEWPORT_OVERLAY_MARGIN
         gap = VIEWPORT_OVERLAY_GAP
         if self.cube is not None:
