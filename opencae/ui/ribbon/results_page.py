@@ -200,10 +200,10 @@ class ResultsPage(QWidget):
             button.toggled.connect(self._emit)
         self.section.settings_changed.connect(self._emit)
         self.deform.settings_changed.connect(self._emit)
-        self.deform.auto_requested.connect(self._auto_deformation_scale)
+        self.deform.auto_frame_requested.connect(self._auto_deformation_frame)
+        self.deform.auto_frames_requested.connect(self._auto_deformation_frames)
         self.range.range_changed.connect(self._emit)
-        self.range.auto_frame_requested.connect(self._auto_contour_frame)
-        self.range.auto_frames_requested.connect(self._auto_contour_frames)
+        self.range.auto_bound_requested.connect(self._auto_contour_bound)
         self.choose.selection_changed.connect(self._field_changed)
         self.choose.navigation_changed.connect(self._field_navigation)
         self.previous_frame.clicked.connect(lambda: self._move_frame(-1))
@@ -356,7 +356,7 @@ class ResultsPage(QWidget):
                 self._range_signature = signature
                 # Selecting another field/component/step starts from a sensible
                 # current-frame range. Moving only between frames leaves the
-                # concrete range untouched so Auto Frames/manual ranges remain
+                # concrete range untouched so all-frame/manual ranges remain
                 # useful for visual comparison.
                 self.range.set_range(*current_range)
                 return
@@ -372,28 +372,29 @@ class ResultsPage(QWidget):
             str(field.metadata.get("component", "Magnitude")),
         )
 
-    def _auto_contour_frame(self):
-        """Set concrete limits from only the currently displayed result frame."""
+    def _auto_contour_bound(self, bound, scope):
+        """Calculate only one requested contour boundary from frame or step data."""
+        if bound not in {"minimum", "maximum"}:
+            return
+        index = 0 if bound == "minimum" else 1
         if self._topology_frames:
-            self.range.set_data_range(0.0, 1.0)
-            self.range.set_range(0.0, 1.0)
+            self.range.set_bound(bound, (0.0, 1.0)[index])
             return
         field = self.choose.current_field()
         if self.result is None or field is None or not self.result.source_file:
             return
-        values = self.loader.scalar_range(self.result.source_file, field)
-        self.range.set_data_range(*values)
-        self.range.set_range(*values)
+        if scope == "frame":
+            values = self.loader.scalar_range(self.result.source_file, field)
+            self.range.set_data_range(*values)
+        elif scope == "frames":
+            values = self._contour_range_across_frames(field)
+        else:
+            return
+        if values is not None:
+            self.range.set_bound(bound, values[index])
 
-    def _auto_contour_frames(self):
-        """Set concrete limits from the same field/component across current-step frames."""
-        if self._topology_frames:
-            self.range.set_data_range(0.0, 1.0)
-            self.range.set_range(0.0, 1.0)
-            return
-        field = self.choose.current_field()
-        if self.result is None or field is None or not self.result.source_file:
-            return
+    def _contour_range_across_frames(self, field):
+        """Return this field/component range across all frames in the active step."""
         step_id = int(field.metadata.get("step_id", 1))
         component = str(field.metadata.get("component", "Magnitude"))
         ranges = []
@@ -413,14 +414,14 @@ class ResultsPage(QWidget):
             except (OSError, RuntimeError, TypeError, ValueError):
                 continue
         if not ranges:
-            self._auto_contour_frame()
-            return
-        values = (
+            try:
+                return self.loader.scalar_range(self.result.source_file, field)
+            except (OSError, RuntimeError, TypeError, ValueError):
+                return None
+        return (
             min(item[0] for item in ranges),
             max(item[1] for item in ranges),
         )
-        self.range.set_data_range(*values)
-        self.range.set_range(*values)
 
     def _query_toggled(self, current, other, checked):
         if checked:
@@ -453,13 +454,49 @@ class ResultsPage(QWidget):
         except Exception as exc:
             QMessageBox.warning(self, "Save Results", str(exc))
 
-    def _auto_deformation_scale(self):
+    def _auto_deformation_frame(self):
+        """Fit deformation to the displacement magnitude in the active frame."""
         if self._topology_frames:
             return
         value = auto_deformation_scale(
             self.result,
             self.choose.current_field(),
         )
+        self._apply_deformation_scale(value)
+
+    def _auto_deformation_frames(self):
+        """Fit one conservative deformation scale across all active-step frames."""
+        if self._topology_frames:
+            return
+        field = self.choose.current_field()
+        if self.result is None or field is None or not self.result.source_file:
+            self._apply_deformation_scale(None)
+            return
+        step_id = int(field.metadata.get("step_id", 1))
+        scales = []
+        seen_frames = set()
+        for source in tuple(getattr(self.choose, "fields", ()) or ()):
+            if int(source.metadata.get("step_id", 1)) != step_id:
+                continue
+            frame_id = int(source.metadata.get("frame_id", 1))
+            if frame_id in seen_frames:
+                continue
+            seen_frames.add(frame_id)
+            try:
+                value = auto_deformation_scale(self.result, source)
+            except (OSError, RuntimeError, TypeError, ValueError):
+                continue
+            if value is not None and value > 0.0:
+                scales.append(float(value))
+        if not scales:
+            value = auto_deformation_scale(self.result, field)
+        else:
+            # Smaller scale corresponds to the frame with the largest physical
+            # displacement, so it is the safe common scale for every frame.
+            value = min(scales)
+        self._apply_deformation_scale(value)
+
+    def _apply_deformation_scale(self, value):
         if value is None:
             QMessageBox.information(
                 self,
