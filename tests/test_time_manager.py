@@ -189,7 +189,7 @@ def test_animation_path_updates_existing_result_actor_without_scene_clear():
     assert "scene.clear(" not in animation_path
 
 
-def test_time_manager_centers_left_controls_and_uses_fast_cached_playback():
+def test_time_manager_uses_full_width_controls_and_compact_plot():
     app = QApplication.instance() or QApplication([])
     panel = TimeManagerPanel()
     try:
@@ -200,6 +200,7 @@ def test_time_manager_centers_left_controls_and_uses_fast_cached_playback():
         assert isinstance(panel.stop_button, QToolButton)
         assert panel.sidebar.width() == 290
         assert panel.step.parent() is panel.sidebar
+        assert panel.step.sizePolicy().horizontalPolicy().name == "Expanding"
         assert panel.layout().count() == 2
         assert isinstance(panel.controls_row.layout(), QHBoxLayout)
         assert panel.controls_row.layout().count() == 9  # two stretches + seven buttons
@@ -213,11 +214,13 @@ def test_time_manager_centers_left_controls_and_uses_fast_cached_playback():
             panel.loop_button,
         )
         assert all(button.parent() is panel.controls_row for button in buttons)
-        assert panel.plot.minimumHeight() >= 150
+        assert panel.plot.minimumHeight() >= 130
         assert panel.speed.minimum() == 0.25
         assert panel.speed.maximum() == 4.0
         assert panel.FRAME_INTERVAL_MS <= 16
         assert panel.ACROSS_BASE_FPS >= 4.0
+        assert panel.total_frames.isHidden()
+        assert panel.current_frame_label.isHidden()
         for kind in ("first", "previous", "play", "stop", "next", "last", "loop"):
             assert not _playback_icon(kind).isNull()
     finally:
@@ -225,14 +228,19 @@ def test_time_manager_centers_left_controls_and_uses_fast_cached_playback():
         app.processEvents()
 
     source = (ROOT / "opencae/ui/panels/time_manager.py").read_text(encoding="utf-8")
+    plot_source = (ROOT / "opencae/ui/panels/time_manager_plot.py").read_text(encoding="utf-8")
     assert "QStyle.StandardPixmap" not in source
     assert "_playback_icon" in source
+    assert "frame_summary_changed" in source
+    assert "AlignLeft" in source
+    assert "setFixedWidth(220)" not in source
     assert 'x_label="Frame"' in source
     assert 'y_label="Time (s)" if self._has_time_axis else "Solver frame value"' in source
     assert "show_markers=False" in source
     assert "self._playback_options = self._animation_options(fields)" in source
     assert '"source_grid": self._cached_grid(first)' in source
     assert '"next_grid": self._cached_grid(second)' in source
+    assert "adjusted(56.0, 8.0, -12.0, -28.0)" in plot_source
 
 
 def test_lower_workspaces_are_independent_top_tabbed_native_docks():
@@ -257,6 +265,9 @@ def test_lower_workspaces_are_independent_top_tabbed_native_docks():
     assert "window.time_manager_dock" in layout_source
     assert "tabifyDockWidget" in layout_source
     assert "QTabWidget.TabPosition.North" in layout_source
+    assert "_WorkspaceTabInfoController" in layout_source
+    assert "frame_summary_changed.connect" in layout_source
+    assert 'tabText(int(index)) == "Time Manager"' in layout_source
     assert "A.SHOW_JOBS" in menu_source
     assert "A.SHOW_LOG" in menu_source
     assert "A.SHOW_TIME_MANAGER" in menu_source
