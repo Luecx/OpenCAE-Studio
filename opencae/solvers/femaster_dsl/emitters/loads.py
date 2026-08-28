@@ -22,6 +22,11 @@ from .region_materialization import materialize_region
 
 def write_amplitude(amplitude, writer, context):
     """Write one reusable scalar amplitude before loads that may reference it."""
+    if getattr(amplitude, "time_basis", "Step time") != "Step time":
+        raise ValueError(
+            f"FEMaster cannot represent total-time amplitude '{amplitude.name}'; "
+            "use Step time for this solver"
+        )
     interpolation = str(amplitude.interpolation)
     if interpolation == "Smooth Step":
         rows = amplitude.linearized_points(samples_per_segment=24)
