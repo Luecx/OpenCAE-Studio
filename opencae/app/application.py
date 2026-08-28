@@ -6,8 +6,16 @@ import sys
 
 from .qt_platform import configure_qt_platform_environment
 
-# QPA selection must precede all Qt/VTK imports.
+# QPA selection must precede all Qt imports. Native selection is the default;
+# explicit xcb/wayland overrides remain available for troubleshooting.
 configure_qt_platform_environment()
+
+# PyVistaQt's QOpenGLWidget bridge requires one process-wide compatible desktop
+# OpenGL format before QApplication and, critically, before any top-level widget
+# such as the startup splash is created.
+from .qt_opengl import configure_qt_opengl
+
+configure_qt_opengl()
 
 from PyQt6.QtWidgets import QApplication
 
@@ -58,12 +66,9 @@ def run() -> int:
     window = MainWindow(context)
 
     # MainWindow queues its initial viewport refresh with a zero-delay timer.
-    # Do not process Qt events again while the QVTK hierarchy is still hidden:
-    # forcing that first VTK Render() before the parent window is mapped can
-    # create short-lived native X11/XWayland surfaces that look like flashing
-    # popups or cause unrelated windows to repaint.  Update the splash text
-    # synchronously, hide it, map the main window, and only then enter Qt's
-    # normal event loop where the queued viewport refresh can render safely.
+    # Do not process Qt events again while the QOpenGLWidget hierarchy is still
+    # hidden. Update the splash synchronously, hide it, map the main window, and
+    # only then let the normal event loop realize and paint the VTK GL widget.
     startup.set_progress(94, "Finalizing workspace…")
     startup.set_progress(100, "Ready")
     startup.hide()
