@@ -66,6 +66,11 @@ class TimeManagerDock(_WorkspaceDock):
 
     def __init__(self, parent=None, *, results_page=None, viewport=None):
         panel = TimeManagerPanel(results_page, viewport)
+        # TimeManagerPanel historically styled this as a card.  In the docked
+        # workspace it belongs directly to the same surface as the tab strip.
+        panel.sidebar.setStyleSheet(
+            "QFrame#TimeManagerSidebar { background: transparent; border: none; }"
+        )
         super().__init__("Time Manager", "TimeManagerDock", panel, parent)
         # Compatibility for callers/tests that historically addressed the
         # panel through ``output_dock.time_manager``.
