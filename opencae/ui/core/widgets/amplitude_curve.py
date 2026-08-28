@@ -107,7 +107,8 @@ class AmplitudeCurvePreview(QWidget):
             py = plot.bottom() - (y - y_min) / (y_max - y_min) * plot.height()
             return QPointF(px, py)
 
-        path = QPainterPath(mapped(self._points[0]))
+        path = QPainterPath()
+        path.moveTo(mapped(self._points[0]))
         for point in self._points[1:]:
             path.lineTo(mapped(point))
         painter.setPen(
