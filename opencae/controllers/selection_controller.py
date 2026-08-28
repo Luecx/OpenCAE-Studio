@@ -63,9 +63,10 @@ class SelectionController:
         if isinstance(entity, Constraint):
             return self.parent.controllers.assembly.edit_constraint(entity)
 
+        from opencae.model.entities.amplitudes import Amplitude
         from opencae.model.entities.loads import Load
         from opencae.model.entities.supports import Support
-        if isinstance(entity, (Load, Support)):
+        if isinstance(entity, (Amplitude, Load, Support)):
             return self.parent.controllers.loads.edit(entity)
 
         from opencae.model.entities.analysis.step import AnalysisStep
