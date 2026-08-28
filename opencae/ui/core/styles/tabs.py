@@ -25,6 +25,30 @@ def css(p):
         background: {p['panel_hover']};
     }}
 
+    /* Browser Project/Solution is a standalone tab bar. */
+    QTabBar#BrowserTabBar {{
+        background: {p['panel']};
+        border: none;
+        qproperty-drawBase: false;
+    }}
+    QTabBar#BrowserTabBar::tab {{
+        background: {p['panel']};
+        color: {p['muted']};
+        padding: 7px 12px;
+        margin: 0px;
+        border: none;
+        border-bottom: 2px solid transparent;
+    }}
+    QTabBar#BrowserTabBar::tab:selected {{
+        background: {p['panel']};
+        color: {p['text']};
+        border-bottom: 2px solid {p['accent']};
+    }}
+    QTabBar#BrowserTabBar::tab:hover:!selected {{
+        background: {p['panel_hover']};
+        color: {p['text']};
+    }}
+
     /* QMainWindow creates a standalone QTabBar for tabified docks.  Give the
        lower workspace the same flat navigation language as the ribbon: one
        continuous surface, no native base line, and only an accent underline. */
