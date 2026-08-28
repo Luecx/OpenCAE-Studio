@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..core import Entity, ProjectIndex, SolverName, register_model_type
+from .amplitudes import Amplitude
 from .analysis.analysis import Analysis
 from .analysis.step import AnalysisStep
 from .assembly.assembly import Assembly
@@ -41,6 +42,7 @@ class Project(Entity):
     )
     supports: list[Support] = field(default_factory=list)
     loads: list[Load] = field(default_factory=list)
+    amplitudes: list[Amplitude] = field(default_factory=list)
     materials: list[Material] = field(default_factory=list)
     sections: list[Section] = field(default_factory=list)
     profiles: list[Profile] = field(default_factory=list)
