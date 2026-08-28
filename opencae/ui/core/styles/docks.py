@@ -11,8 +11,17 @@ def css(p):
         border-bottom: 1px solid {p['border']};
         text-align: left;
     }}
-    QWidget[workspaceSurface="true"] {{
+    QWidget#WorkspaceSurface {{
         background: {p['panel']};
+        border: none;
+    }}
+    QWidget#WorkspaceSurface > QWidget,
+    QWidget#WorkspaceSurface > QFrame {{
+        background: transparent;
+    }}
+    QFrame#TimeManagerSidebar {{
+        background: transparent;
+        border: none;
     }}
     QLabel#PanelTitle {{
         font-size: 13pt;
