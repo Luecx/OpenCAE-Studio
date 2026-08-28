@@ -63,19 +63,25 @@ def test_contour_mapping_clamps_discrete_level_count_to_52():
     assert contour_plot_kwargs({"levels": 999})["n_colors"] == 52
 
 
-def test_result_range_button_uses_grouped_controls_and_wide_color_swatches():
+def test_result_range_button_uses_one_shot_auto_actions_and_separate_color_row():
     app = QApplication.instance() or QApplication([])
     button = ResultRangeButton()
     try:
         assert isinstance(button.continuous, QCheckBox)
         assert isinstance(button.outside_colors, QCheckBox)
         assert button.levels.maximum() == 52
+        assert not button.auto_frame.isCheckable()
+        assert not button.auto_frames.isCheckable()
+        assert button.auto_frame.text() == "Auto Frame"
+        assert button.auto_frames.text() == "Auto Frames"
         assert button.below_color.text() == ""
         assert button.above_color.text() == ""
         assert button.below_color.toolTip() == "Below-range color"
         assert button.above_color.toolTip() == "Above-range color"
         assert button.below_color.minimumWidth() >= 72
         assert button.above_color.minimumWidth() >= 72
+        assert button.below_color.parent() is button.above_color.parent()
+        assert button.below_color.parent() is not button.outside_colors.parent()
         assert (
             button.below_color.sizePolicy().horizontalPolicy()
             == QSizePolicy.Policy.Expanding
@@ -84,12 +90,21 @@ def test_result_range_button_uses_grouped_controls_and_wide_color_swatches():
             button.above_color.sizePolicy().horizontalPolicy()
             == QSizePolicy.Policy.Expanding
         )
+
         button.set_data_range(-3.0, 12.0)
-        assert button.values()["minimum"] == -3.0
-        assert button.values()["maximum"] == 12.0
-        assert button.values()["levels"] == DEFAULT_CONTOUR_LEVELS
-        assert button.values()["continuous"] is False
-        assert button.values()["outside_colors"] is True
+        # Remembering frame data must not silently overwrite a concrete/manual
+        # range. Auto Frame is an action that copies it when explicitly invoked.
+        assert button.values()["minimum"] == 0.0
+        assert button.values()["maximum"] == 0.0
+        button.apply_data_range()
+        values = button.values()
+        assert values["minimum"] == -3.0
+        assert values["maximum"] == 12.0
+        assert values["minimum_auto"] is False
+        assert values["maximum_auto"] is False
+        assert values["levels"] == DEFAULT_CONTOUR_LEVELS
+        assert values["continuous"] is False
+        assert values["outside_colors"] is True
 
         button.levels.setValue(52)
         button.continuous.setChecked(True)
@@ -109,6 +124,8 @@ def test_result_range_button_uses_grouped_controls_and_wide_color_swatches():
     assert 'SectionHeading("Range")' in source
     assert 'SectionHeading("Color Mapping")' in source
     assert 'SectionHeading("Outside Range")' in source
+    assert "minimum_auto.toggled" not in source
+    assert "maximum_auto.toggled" not in source
 
 
 def test_deformation_and_section_buttons_open_instant_popups_with_radio_state():
@@ -129,6 +146,13 @@ def test_deformation_and_section_buttons_open_instant_popups_with_radio_state():
         section.section_on.setChecked(True)
         assert deformation.values()[0] is True
         assert section.values()["enabled"] is True
+
+        # Very large physical displacements can produce tiny automatic display
+        # factors. They must survive the editor instead of rounding to zero.
+        assert deformation.scale.editor.decimals() >= 12
+        deformation.set_scale(1.23456789e-9)
+        assert deformation.values()[1] > 0.0
+        assert np.isclose(deformation.values()[1], 1.23456789e-9, rtol=0.0, atol=1e-15)
     finally:
         deformation.deleteLater()
         section.deleteLater()
