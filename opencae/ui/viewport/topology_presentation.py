@@ -10,7 +10,7 @@ from opencae.geometry.orphan_mesh import snapshot_from_part
 from opencae.ui.core.theme import PALETTE
 from .contour_mapping import contour_plot_kwargs
 from .pyvista_mesh import build_grid
-from .scalar_bar import scalar_bar_args
+from .scalar_bar import install_scalar_bar_end_caps, scalar_bar_args
 from .vtk_cell_data import cell_array
 from .viewport_text_box import apply_viewport_text_box
 
@@ -148,6 +148,12 @@ def add_topology_presentation(
                 plotter,
                 outside_colors=bool(mapping["below_color"] or mapping["above_color"]),
             ),
+        )
+        install_scalar_bar_end_caps(
+            plotter,
+            "Density",
+            below_color=mapping["below_color"],
+            above_color=mapping["above_color"],
         )
         names.append(actor_name)
         if options.get("mesh_lines", True):
