@@ -12,6 +12,7 @@ from typing import Iterable
 
 from opencae.model.core import Entity
 from opencae.model.entities import (
+    Amplitude,
     Assembly,
     ConcentratedLoad,
     CoordinateSystem,
@@ -29,7 +30,7 @@ from opencae.model.entities import (
 from opencae.model.selection import RegionDefinition
 
 from .model_assembly import create_coordinate_system, create_instance
-from .model_loads import create_concentrated_load, create_pressure_load
+from .model_loads import create_amplitude, create_concentrated_load, create_pressure_load
 from .model_mesh import create_element, create_node
 from .model_ownership import require_owned
 from .model_parts import create_part
@@ -217,6 +218,23 @@ class Model:
         """Project a named Region object into solver/selection target space."""
         return create_region_target(self, region, instance=instance)
 
+    def amplitude(
+        self,
+        name: str,
+        *,
+        points: Iterable[tuple[float, float]],
+        interpolation: str = "Linear",
+        time_basis: str = "Step time",
+    ) -> Amplitude:
+        """Create a reusable dimensionless amplitude from time/value points."""
+        return create_amplitude(
+            self,
+            name,
+            points=points,
+            interpolation=interpolation,
+            time_basis=time_basis,
+        )
+
     def concentrated_load(
         self,
         name: str,
@@ -224,6 +242,7 @@ class Model:
         target: Region,
         components: Iterable[float],
         coordinate_system: CoordinateSystem | None = None,
+        amplitude: Amplitude | None = None,
         instance: Instance | None = None,
     ) -> ConcentratedLoad:
         """Create a six-component concentrated load on a Region object."""
@@ -233,6 +252,7 @@ class Model:
             target=target,
             components=components,
             coordinate_system=coordinate_system,
+            amplitude=amplitude,
             instance=instance,
         )
 
@@ -242,6 +262,7 @@ class Model:
         *,
         target: Region,
         pressure: float,
+        amplitude: Amplitude | None = None,
         instance: Instance | None = None,
     ) -> PressureLoad:
         """Create a pressure load on a Region object."""
@@ -250,6 +271,7 @@ class Model:
             name,
             target=target,
             pressure=pressure,
+            amplitude=amplitude,
             instance=instance,
         )
 
