@@ -1,14 +1,105 @@
 """Builds the main window ribbon, viewport, docks and status widgets."""
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QTabBar, QSizePolicy, QTabWidget, QToolBar
+from PyQt6.QtCore import QEvent, QObject, Qt
+from PyQt6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QTabBar,
+    QSizePolicy,
+    QTabWidget,
+    QToolBar,
+    QWidget,
+)
 
+from opencae.ui.core.theme import PALETTE
 from opencae.ui.docks.output_dock import JobsDock, LogDock, TimeManagerDock
 from opencae.ui.docks.project_dock import ProjectDock
 from opencae.ui.ribbon.ribbon import Ribbon
 from opencae.ui.status_unit_system import UnitSystemStatus
 from opencae.ui.viewport.stage_guidance import assembly_guidance
 from opencae.ui.viewport.viewport_factory import create_viewport
+
+
+class _WorkspaceTabInfoController(QObject):
+    """Host Time Manager frame readouts in the unused right side of dock tabs."""
+
+    def __init__(self, tab_bar, panel, parent=None):
+        super().__init__(parent or tab_bar)
+        self.tab_bar = tab_bar
+        self.panel = panel
+        self.widget = QWidget(tab_bar)
+        self.widget.setObjectName("WorkspaceTabInfo")
+        self.widget.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents,
+            True,
+        )
+        self.widget.setStyleSheet("background: transparent; border: none;")
+        row = QHBoxLayout(self.widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+
+        row.addWidget(self._label("Total frames"))
+        self.total = QLabel(panel.total_frames.text())
+        row.addWidget(self.total)
+        row.addSpacing(8)
+        row.addWidget(self._label("Current frame"))
+        self.current = QLabel(panel.current_frame_label.text())
+        self.current.setStyleSheet(
+            f"color:{PALETTE['accent']};font-weight:600;background:transparent;border:none;"
+        )
+        row.addWidget(self.current)
+
+        panel.frame_summary_changed.connect(self.set_summary)
+        tab_bar.currentChanged.connect(self._sync_visibility)
+        tab_bar.installEventFilter(self)
+        self._sync_visibility(tab_bar.currentIndex())
+
+    @staticmethod
+    def _label(text):
+        label = QLabel(text)
+        label.setStyleSheet(
+            f"color:{PALETTE['muted']};background:transparent;border:none;"
+        )
+        return label
+
+    def set_summary(self, total, current):
+        self.total.setText(str(total))
+        self.current.setText(str(current))
+        self._place()
+
+    def eventFilter(self, watched, event):
+        if watched is self.tab_bar and event.type() in {
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+            QEvent.Type.LayoutRequest,
+        }:
+            self._place()
+        return super().eventFilter(watched, event)
+
+    def _sync_visibility(self, index):
+        active = (
+            0 <= int(index) < self.tab_bar.count()
+            and self.tab_bar.tabText(int(index)) == "Time Manager"
+        )
+        self.widget.setVisible(active)
+        if active:
+            self._place()
+
+    def _place(self):
+        if not self.widget.isVisible() or not self.tab_bar.isVisible():
+            return
+        self.widget.adjustSize()
+        width = self.widget.sizeHint().width()
+        height = min(self.tab_bar.height(), self.widget.sizeHint().height())
+        last_right = (
+            self.tab_bar.tabRect(self.tab_bar.count() - 1).right()
+            if self.tab_bar.count()
+            else 0
+        )
+        x = max(last_right + 14, self.tab_bar.width() - width - 10)
+        y = max(0, (self.tab_bar.height() - height) // 2)
+        self.widget.setGeometry(x, y, width, height)
+        self.widget.raise_()
 
 
 def build_ribbon(window):
@@ -155,6 +246,11 @@ def _configure_workspace_tab_bar(window):
         tab_bar.style().polish(tab_bar)
         tab_bar.update()
         window.workspace_tab_bar = tab_bar
+        window.workspace_tab_info = _WorkspaceTabInfoController(
+            tab_bar,
+            window.time_manager_dock.panel,
+            window,
+        )
         return
 
 
