@@ -29,8 +29,8 @@ class ViewCube(QWidget):
     QVTK is a native render surface. A translucent QWidget child is not
     composited reliably on all X11/Wayland/VTK combinations and can disappear
     completely even though ordinary offscreen QWidget tests still pass. Keep
-    this child opaque and paint the viewport background explicitly so the cube
-    remains visible on every supported platform.
+    this child opaque and paint the viewport's top-gradient color explicitly so
+    the cube remains visible without introducing a dark rectangular patch.
     """
 
     view_requested = pyqtSignal(object)
@@ -81,7 +81,7 @@ class ViewCube(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
-        painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
+        painter.fillRect(self.rect(), QColor(PALETTE["viewport_top"]))
         self._hit_regions = []
         for _depth, face, polygon, view_normal in visible_faces:
             self._draw_face(painter, face, polygon, view_normal)
