@@ -133,7 +133,7 @@ def test_component_widget_uses_segmented_units_and_three_columns():
     app.processEvents()
     try:
         assert len(components._fields) == 6
-        assert components.layout().horizontalSpacing() >= 19
+        assert components.layout().horizontalSpacing() == 3
         assert components._fields[0].editor.height() == PRIMARY_CONTROL_HEIGHT
         assert components._fields[0].editor.unit_label.text() == "mm"
         assert components._fields[3].editor.unit_label.text() == "rad"
