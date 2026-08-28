@@ -150,6 +150,36 @@ def test_current_frame_negative_factor_reverses_values_and_deformation():
     assert np.allclose(scaled.point_data["DISP:D2"], (0.0, -1.0))
 
 
+def test_animation_can_use_prebuilt_frame_grids_without_loader_work():
+    first = _grid((0.0, 10.0), ((0.0, 0.0, 0.0), (0.0, 2.0, 0.0)))
+    second = _grid((20.0, 30.0), ((2.0, 0.0, 0.0), (0.0, 4.0, 0.0)))
+    old_loader = result_visualization._LOADER
+
+    def fail_loader(*_args, **_kwargs):
+        raise AssertionError("animation should reuse cached frame grids")
+
+    result_visualization._LOADER = SimpleNamespace(pyvista_grid=fail_loader)
+    try:
+        original, displayed = result_visualization._result_grids(
+            SimpleNamespace(source_file="dummy.frd"),
+            _field(1),
+            {
+                "_animation": {
+                    "mode": "interpolate",
+                    "next_field": _field(2),
+                    "source_grid": first,
+                    "next_grid": second,
+                    "alpha": 0.5,
+                }
+            },
+        )
+    finally:
+        result_visualization._LOADER = old_loader
+
+    assert np.allclose(original.point_data["STRESS:SXX"], (10.0, 20.0))
+    assert displayed is original
+
+
 def test_animation_path_updates_existing_result_actor_without_scene_clear():
     source = (ROOT / "opencae/ui/viewport/solution_scene.py").read_text(encoding="utf-8")
     animation_path = source.split(
@@ -159,7 +189,7 @@ def test_animation_path_updates_existing_result_actor_without_scene_clear():
     assert "scene.clear(" not in animation_path
 
 
-def test_time_manager_keeps_left_controls_horizontal_with_custom_icons():
+def test_time_manager_centers_left_controls_and_uses_fast_cached_playback():
     app = QApplication.instance() or QApplication([])
     panel = TimeManagerPanel()
     try:
@@ -168,10 +198,11 @@ def test_time_manager_keeps_left_controls_horizontal_with_custom_icons():
         assert panel.across_frames.isChecked()
         assert isinstance(panel.play_button, QToolButton)
         assert isinstance(panel.stop_button, QToolButton)
-        assert panel.sidebar.width() == 250
+        assert panel.sidebar.width() == 290
+        assert panel.step.parent() is panel.sidebar
         assert panel.layout().count() == 2
         assert isinstance(panel.controls_row.layout(), QHBoxLayout)
-        assert panel.controls_row.layout().count() == 8  # seven buttons + stretch
+        assert panel.controls_row.layout().count() == 9  # two stretches + seven buttons
         buttons = (
             panel.first_button,
             panel.previous_button,
@@ -185,6 +216,8 @@ def test_time_manager_keeps_left_controls_horizontal_with_custom_icons():
         assert panel.plot.minimumHeight() >= 150
         assert panel.speed.minimum() == 0.25
         assert panel.speed.maximum() == 4.0
+        assert panel.FRAME_INTERVAL_MS <= 16
+        assert panel.ACROSS_BASE_FPS >= 4.0
         for kind in ("first", "previous", "play", "stop", "next", "last", "loop"):
             assert not _playback_icon(kind).isNull()
     finally:
@@ -197,6 +230,9 @@ def test_time_manager_keeps_left_controls_horizontal_with_custom_icons():
     assert 'x_label="Frame"' in source
     assert 'y_label="Time (s)" if self._has_time_axis else "Solver frame value"' in source
     assert "show_markers=False" in source
+    assert "self._playback_options = self._animation_options(fields)" in source
+    assert '"source_grid": self._cached_grid(first)' in source
+    assert '"next_grid": self._cached_grid(second)' in source
 
 
 def test_lower_workspaces_are_independent_top_tabbed_native_docks():
