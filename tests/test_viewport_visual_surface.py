@@ -1,4 +1,4 @@
-"""Regressions for viewport contrast and lightweight horizon styling."""
+"""Regressions for viewport contrast and flat render-surface styling."""
 
 from pathlib import Path
 
@@ -12,8 +12,8 @@ def test_viewport_palette_uses_lighter_solid_surface_and_visible_mesh_lines():
     assert PALETTE["viewport"] != "#101319"
     assert "viewport_top" not in PALETTE
     assert "viewport_bottom" not in PALETTE
+    assert "viewport_horizon" not in PALETTE
     assert PALETTE["mesh_lines"] not in {"#182129", PALETTE["viewport"]}
-    assert PALETTE["viewport_horizon"] != PALETTE["viewport"]
 
 
 def test_safe_interactor_no_longer_promotes_viewport_to_gradient():
@@ -21,18 +21,17 @@ def test_safe_interactor_no_longer_promotes_viewport_to_gradient():
         encoding="utf-8"
     )
     assert "def set_background" not in source
-    assert 'viewport_top' not in source
-    assert 'viewport_bottom' not in source
+    assert "viewport_top" not in source
+    assert "viewport_bottom" not in source
 
 
-def test_viewport_canvas_keeps_one_subtle_camera_independent_horizon():
+def test_viewport_canvas_has_no_artificial_horizon_overlay():
     source = (ROOT / "opencae/ui/viewport/viewport_canvas.py").read_text(
         encoding="utf-8"
     )
-    assert 'self.horizon.setFixedHeight(1)' in source
-    assert 'PALETTE[\'viewport_horizon\']' in source
-    assert 'round(render_height * 0.62)' in source
-    assert "WA_TransparentForMouseEvents" in source
+    assert "ViewportHorizon" not in source
+    assert "self.horizon" not in source
+    assert "viewport_horizon" not in source
 
 
 def test_result_mesh_lines_use_theme_contrast_color():
@@ -45,7 +44,7 @@ def test_result_mesh_lines_use_theme_contrast_color():
     assert 'color=PALETTE["mesh_lines"]' in source
     assert 'edge_color=PALETTE["mesh_lines"]' in source
     assert 'color=PALETTE["mesh_lines"]' in topology_source
-    assert '#182129' not in source
+    assert "#182129" not in source
 
 
 def test_view_cube_opaque_fill_matches_exact_viewport_surface():
@@ -53,4 +52,4 @@ def test_view_cube_opaque_fill_matches_exact_viewport_surface():
         encoding="utf-8"
     )
     assert 'QColor(PALETTE["viewport"])' in source
-    assert 'viewport_top' not in source
+    assert "viewport_top" not in source
