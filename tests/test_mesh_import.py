@@ -132,3 +132,30 @@ BODY, S1
     facet = by_name["FACE"].definition.items[0].operand
     assert (facet.element_id, facet.local_face) == (10, "S1")
     assert facet.owner_ref.entity_id == part.id
+
+
+def test_inp_import_accepts_native_element_codes_emitted_by_our_dialects():
+    cases = (
+        ("T3D2", 2, "T3"),
+        ("B31", 2, "B33"),
+        ("STRI65", 6, "S6"),
+        ("S8R", 8, "S8"),
+    )
+    for native_type, node_count, canonical in cases:
+        node_lines = "\n".join(
+            f"{index}, {float(index)}, 0, 0" for index in range(1, node_count + 1)
+        )
+        connectivity = ", ".join(str(index) for index in range(1, node_count + 1))
+        deck = (
+            f"*node\n{node_lines}\n"
+            f"* element , elset = E , type = {native_type.lower()}\n"
+            f"10, {connectivity}\n"
+        )
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / f"{native_type}.inp"
+            path.write_text(deck)
+            imported = read_mesh_with_report(path, "part-id")
+
+        assert imported.snapshot.element_count == 1
+        assert imported.snapshot.blocks[0].name == canonical
+        assert imported.report.not_imported == []
