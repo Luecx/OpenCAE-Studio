@@ -7,9 +7,6 @@ persistence, and Analysis/Study workflows live in focused companion modules.
 
 from __future__ import annotations
 
-from copy import deepcopy
-from dataclasses import fields
-
 from PyQt6.QtCore import QCoreApplication, QObject, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
@@ -171,14 +168,16 @@ class JobManager(QObject):
 
         # Persist STOPPING before terminating the process so every observer sees
         # a valid intermediate state rather than inferring it from a button click.
-        candidate = deepcopy(job)
-        candidate.status = JobStatus.STOPPING
-        candidate.progress_label = JobStatus.STOPPING.value
-        self._replace_job(candidate, f"Stopping {job.name}")
+        label = JobStatus.STOPPING.value
+        self._update_job_runtime(
+            job.id,
+            status=JobStatus.STOPPING,
+            progress_label=label,
+        )
         self.progress_changed.emit(
             job.id,
-            candidate.progress,
-            candidate.progress_label,
+            job.progress,
+            label,
         )
         runner.stop()
 
@@ -230,13 +229,14 @@ class JobManager(QObject):
     def _start_job(self, job_id, label: str) -> None:
         """Move a prepared Job into the canonical RUNNING state."""
         job = self.store.project.resolve(job_id)
-        candidate = deepcopy(job)
-        candidate.status = JobStatus.RUNNING
-        candidate.exit_code = None
-        candidate.started_at = utc_now()
-        candidate.progress = 0.0
-        candidate.progress_label = str(label)
-        self._replace_job(candidate, f"Started {job.name}")
+        self._update_job_runtime(
+            job.id,
+            status=JobStatus.RUNNING,
+            exit_code=None,
+            started_at=utc_now(),
+            progress=0.0,
+            progress_label=str(label),
+        )
         self._append_output(job.id, f"{label}\n")
         self.progress_changed.emit(job.id, 0.0, str(label))
 
@@ -291,37 +291,28 @@ class JobManager(QObject):
         job = self.store.project.try_resolve(job_id)
         if not isinstance(job, Job):
             return
-        candidate = deepcopy(job)
-        candidate.progress = min(max(float(progress), 0.0), 1.0)
-        candidate.progress_label = str(label)
-        self._replace_job(candidate, f"Updated {job.name} progress")
+        normalized_progress = min(max(float(progress), 0.0), 1.0)
+        normalized_label = str(label)
+        self._update_job_runtime(
+            job.id,
+            progress=normalized_progress,
+            progress_label=normalized_label,
+        )
         self.progress_changed.emit(
             job.id,
-            candidate.progress,
-            candidate.progress_label,
+            normalized_progress,
+            normalized_label,
         )
 
-    def _replace_job(self, candidate: Job, description: str) -> None:
-        """Apply only scalar Job runtime fields without a full Project transaction."""
-        current = self.store.project.try_resolve(candidate.id)
+    def _update_job_runtime(self, job_id: str, **changes) -> Job | None:
+        """Apply an explicit allowlisted set of scalar Job lifecycle changes."""
+        current = self.store.project.try_resolve(job_id)
         if not isinstance(current, Job):
-            return
+            return None
 
-        # This hot path is deliberately incapable of changing relationships,
-        # identity, paths or settings. Those remain ordinary document edits and
-        # must use ProjectStore.replace_entity()/execute().
-        for field_info in fields(current):
-            name = field_info.name
-            if name in _RUNTIME_JOB_FIELDS:
-                continue
-            if getattr(current, name) != getattr(candidate, name):
-                raise ValueError(
-                    f"Job runtime update attempted to change non-runtime field '{name}'"
-                )
-
-        changes = {
-            name: getattr(candidate, name)
-            for name in _RUNTIME_JOB_FIELDS
-            if getattr(current, name) != getattr(candidate, name)
-        }
+        invalid = set(changes) - _RUNTIME_JOB_FIELDS
+        if invalid:
+            names = ", ".join(sorted(invalid))
+            raise ValueError(f"Invalid Job runtime field(s): {names}")
         self.store.update_runtime_fields(current.id, changes)
+        return current
