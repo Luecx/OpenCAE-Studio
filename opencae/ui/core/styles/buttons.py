@@ -83,18 +83,22 @@ def css(p):
         background: {p['panel_hover']};
         border: 1px solid {p['border_light']};
     }}
-    /* Results has several persistent checkable display toggles.  Keep those
-       controls on the same flat ribbon surface too; checked state is carried
-       by the accent outline rather than a filled rectangle. */
-    QToolButton[resultsRibbonButton="true"],
-    QToolButton[resultsRibbonButton="true"]:checked {{
+    /* Persistent display toggles on Results need a readable but still flat
+       active state.  A small lift from the ribbon surface is enough; keep the
+       accent outline so Mesh Lines / Boundary remain immediately legible. */
+    QToolButton[resultsRibbonButton="true"] {{
         background: transparent;
     }}
     QToolButton[resultsRibbonButton="true"]:checked {{
+        background: {p['panel_active']};
         border-color: {p['accent']};
     }}
     QToolButton[resultsRibbonButton="true"]:hover {{
         background: {p['panel_hover']};
+    }}
+    QToolButton[resultsRibbonButton="true"]:checked:hover {{
+        background: {p['panel_hover']};
+        border-color: {p['accent_hover']};
     }}
     QToolButton[ribbonButton="true"]::menu-button {{
         width: 16px;
