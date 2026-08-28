@@ -28,6 +28,44 @@ def css(p):
     QTreeView::item:hover, QTreeWidget::item:hover {{ background: {p['panel_hover']}; }}
     QTreeView::item:selected, QTreeWidget::item:selected {{ background: {p['accent_dim']}; }}
 
+    /* Opt-in flat data table surface.  Header and body intentionally share the
+       same panel token; typography and one quiet baseline carry hierarchy. */
+    QTableView[flatTable="true"], QTableWidget[flatTable="true"] {{
+        background: {p['panel']};
+        alternate-background-color: {p['panel']};
+        gridline-color: transparent;
+        selection-background-color: {p['panel_active']};
+        selection-color: {p['text']};
+        border: none;
+    }}
+    QTableView[flatTable="true"]::item,
+    QTableWidget[flatTable="true"]::item {{
+        background: transparent;
+        border: none;
+        padding: 5px 8px;
+    }}
+    QTableView[flatTable="true"]::item:hover,
+    QTableWidget[flatTable="true"]::item:hover {{
+        background: {p['panel_hover']};
+    }}
+    QTableView[flatTable="true"]::item:selected,
+    QTableWidget[flatTable="true"]::item:selected {{
+        background: {p['panel_active']};
+        color: {p['text']};
+    }}
+    QHeaderView[flatTableHeader="true"] {{
+        background: {p['panel']};
+        border: none;
+    }}
+    QHeaderView[flatTableHeader="true"]::section {{
+        background: {p['panel']};
+        color: {p['text']};
+        font-weight: 600;
+        border: none;
+        border-bottom: 1px solid {p['border']};
+        padding: 5px 8px;
+    }}
+
     QListWidget#EditorCheckList {{
         background: {p['window']};
         border: 1px solid {p['border_light']};
