@@ -1,7 +1,7 @@
 """Builds the main window ribbon, viewport, docks and status widgets."""
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QSizePolicy, QTabWidget, QToolBar
+from PyQt6.QtWidgets import QTabBar, QSizePolicy, QTabWidget, QToolBar
 
 from opencae.ui.docks.output_dock import JobsDock, LogDock, TimeManagerDock
 from opencae.ui.docks.project_dock import ProjectDock
@@ -106,6 +106,7 @@ def build_docks(window):
     )
     window.tabifyDockWidget(window.jobs_dock, window.log_dock)
     window.tabifyDockWidget(window.jobs_dock, window.time_manager_dock)
+    _configure_workspace_tab_bar(window)
     window.jobs_dock.raise_()
 
     window.project_dock.tree.stage_requested.connect(window.ribbon.set_stage)
@@ -138,6 +139,23 @@ def build_docks(window):
         Qt.Orientation.Vertical,
     )
     _sync_viewport_guidance(window)
+
+
+def _configure_workspace_tab_bar(window):
+    """Flatten the native QMainWindow tab bar used by the lower workspaces."""
+    expected = {"Jobs", "Log", "Time Manager"}
+    for tab_bar in window.findChildren(QTabBar):
+        labels = {tab_bar.tabText(index) for index in range(tab_bar.count())}
+        if not expected.issubset(labels):
+            continue
+        tab_bar.setObjectName("WorkspaceTabBar")
+        tab_bar.setDrawBase(False)
+        tab_bar.setExpanding(False)
+        tab_bar.style().unpolish(tab_bar)
+        tab_bar.style().polish(tab_bar)
+        tab_bar.update()
+        window.workspace_tab_bar = tab_bar
+        return
 
 
 def _sync_viewport_guidance(window, stage=None):
