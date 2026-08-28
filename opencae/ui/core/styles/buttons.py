@@ -74,6 +74,8 @@ def css(p):
         border: none;
     }}
     QToolButton[ribbonButton="true"] {{
+        background: transparent;
+        border: 1px solid transparent;
         padding: 2px 3px 1px 3px;
         color: {p['text']};
     }}
