@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pyvista as pv
-from PyQt6.QtWidgets import QApplication, QRadioButton, QToolButton
+from PyQt6.QtWidgets import QApplication, QHBoxLayout, QRadioButton, QToolButton
 
 from opencae.ui.panels.time_manager import (
     TimeManagerPanel,
@@ -45,18 +45,18 @@ def _grid(scalar, displacement):
     return grid
 
 
-def test_frame_axis_uses_monotonic_solver_values_as_time():
+def test_frame_axis_is_always_one_based_and_unit_spaced():
     axis, has_time = frame_axis((0.0, 0.1, 0.5, 1.0))
     assert has_time is True
-    assert axis == [0.0, 0.1, 0.5, 1.0]
+    assert axis == [1.0, 2.0, 3.0, 4.0]
 
     axis, has_time = frame_axis((1.0, 1.0, 1.0))
     assert has_time is False
     assert axis == [1.0, 2.0, 3.0]
 
 
-def test_frame_bracket_interpolates_between_nonuniform_time_values():
-    left, right, alpha = frame_bracket((0.0, 0.1, 0.5, 1.0), 0.3)
+def test_frame_bracket_interpolates_between_adjacent_frame_ordinals():
+    left, right, alpha = frame_bracket((1.0, 2.0, 3.0, 4.0), 2.5)
     assert (left, right) == (1, 2)
     assert np.isclose(alpha, 0.5)
 
@@ -159,7 +159,7 @@ def test_animation_path_updates_existing_result_actor_without_scene_clear():
     assert "scene.clear(" not in animation_path
 
 
-def test_time_manager_uses_left_sidebar_custom_icons_and_full_plot():
+def test_time_manager_keeps_left_controls_horizontal_with_custom_icons():
     app = QApplication.instance() or QApplication([])
     panel = TimeManagerPanel()
     try:
@@ -168,8 +168,20 @@ def test_time_manager_uses_left_sidebar_custom_icons_and_full_plot():
         assert panel.across_frames.isChecked()
         assert isinstance(panel.play_button, QToolButton)
         assert isinstance(panel.stop_button, QToolButton)
-        assert panel.sidebar.width() == 178
+        assert panel.sidebar.width() == 250
         assert panel.layout().count() == 2
+        assert isinstance(panel.controls_row.layout(), QHBoxLayout)
+        assert panel.controls_row.layout().count() == 8  # seven buttons + stretch
+        buttons = (
+            panel.first_button,
+            panel.previous_button,
+            panel.play_button,
+            panel.stop_button,
+            panel.next_button,
+            panel.last_button,
+            panel.loop_button,
+        )
+        assert all(button.parent() is panel.controls_row for button in buttons)
         assert panel.plot.minimumHeight() >= 150
         assert panel.speed.minimum() == 0.25
         assert panel.speed.maximum() == 4.0
@@ -182,12 +194,12 @@ def test_time_manager_uses_left_sidebar_custom_icons_and_full_plot():
     source = (ROOT / "opencae/ui/panels/time_manager.py").read_text(encoding="utf-8")
     assert "QStyle.StandardPixmap" not in source
     assert "_playback_icon" in source
-    assert 'x_label="Time" if self._has_time_axis else "Frame"' in source
-    assert 'y_label="Value"' in source
+    assert 'x_label="Frame"' in source
+    assert 'y_label="Time (s)" if self._has_time_axis else "Solver frame value"' in source
     assert "show_markers=False" in source
 
 
-def test_lower_workspaces_are_independent_native_docks():
+def test_lower_workspaces_are_independent_top_tabbed_native_docks():
     dock_source = (ROOT / "opencae/ui/docks/output_dock.py").read_text(encoding="utf-8")
     layout_source = (ROOT / "opencae/app/window_layout.py").read_text(encoding="utf-8")
     menu_source = (ROOT / "opencae/ui/menus/window_menu.py").read_text(encoding="utf-8")
@@ -197,10 +209,13 @@ def test_lower_workspaces_are_independent_native_docks():
     assert "class TimeManagerDock" in dock_source
     assert "QTabWidget" not in dock_source
     assert "OutputDock" not in dock_source
+    assert "WorkspaceDockHiddenTitleBar" in dock_source
+    assert "setTitleBarWidget(None if floating else self._docked_title_bar)" in dock_source
     assert "window.jobs_dock" in layout_source
     assert "window.log_dock" in layout_source
     assert "window.time_manager_dock" in layout_source
     assert "tabifyDockWidget" in layout_source
+    assert "QTabWidget.TabPosition.North" in layout_source
     assert "A.SHOW_JOBS" in menu_source
     assert "A.SHOW_LOG" in menu_source
     assert "A.SHOW_TIME_MANAGER" in menu_source
