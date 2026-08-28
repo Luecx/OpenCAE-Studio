@@ -5,10 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from time import sleep
 
+import pytest
 from PyQt6.QtCore import QEventLoop, QThread, QTimer
 from PyQt6.QtWidgets import QApplication
 
 from opencae.controllers.background_task import BackgroundTask
+from opencae.model.core import EntityRef
+from opencae.model.entities.jobs import Job, JobStatus
+from opencae.model.project import Project
+from opencae.store.project_store import ProjectStore
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,6 +56,45 @@ def test_background_task_keeps_qt_event_loop_responsive_and_marshals_result():
     assert len(heartbeats) >= 3
 
 
+def test_runtime_job_progress_does_not_copy_document_or_enter_undo_history():
+    job = Job(name="Long Job")
+    store = ProjectStore(Project(name="P", jobs=[job]))
+    live = store.project.resolve(job.id)
+    index_before = store.project.index
+    undo_count = len(store._undo)
+    document_events = []
+    runtime_events = []
+    store.changed.connect(document_events.append)
+    store.runtime_changed.connect(
+        lambda entity_id, names: runtime_events.append((entity_id, tuple(names)))
+    )
+
+    store.update_runtime_fields(
+        live.id,
+        {
+            "status": JobStatus.RUNNING,
+            "progress": 0.625,
+            "progress_label": "Solving",
+        },
+    )
+
+    assert live.status is JobStatus.RUNNING
+    assert live.progress == pytest.approx(0.625)
+    assert live.progress_label == "Solving"
+    assert len(store._undo) == undo_count
+    assert store.project.index is index_before
+    assert document_events == []
+    assert runtime_events == [
+        (live.id, ("status", "progress", "progress_label"))
+    ]
+
+    with pytest.raises(TypeError):
+        store.update_runtime_fields(
+            live.id,
+            {"source_ref": EntityRef("analysis-id")},
+        )
+
+
 def test_analysis_runner_never_waits_synchronously_for_solver_process():
     source = (ROOT / "opencae/jobs/analysis_job_runner.py").read_text(
         encoding="utf-8"
@@ -90,3 +134,5 @@ def test_solver_output_is_coalesced_before_disk_and_monitor_updates():
     assert "setInterval(40)" in source
     assert "64 * 1024" in source
     assert "_flush_pending_output" in source
+    assert "update_runtime_fields" in source
+    assert "_RUNTIME_JOB_FIELDS" in source
