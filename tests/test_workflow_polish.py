@@ -49,10 +49,11 @@ def test_startup_surface_does_not_behave_like_focus_stealing_tool_window():
     startup = StartupWindow()
     try:
         flags = startup.windowFlags()
-        assert flags & Qt.WindowType.SplashScreen
+        assert (
+            flags & Qt.WindowType.WindowType_Mask
+        ) == Qt.WindowType.SplashScreen
         assert flags & Qt.WindowType.WindowDoesNotAcceptFocus
         assert not (flags & Qt.WindowType.WindowStaysOnTopHint)
-        assert not (flags & Qt.WindowType.Tool)
         assert startup.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         assert startup.focusPolicy() == Qt.FocusPolicy.NoFocus
     finally:
@@ -62,9 +63,14 @@ def test_startup_surface_does_not_behave_like_focus_stealing_tool_window():
     application_source = (ROOT / "opencae/app/application.py").read_text(
         encoding="utf-8"
     )
+    startup_source = (ROOT / "opencae/app/startup_window.py").read_text(
+        encoding="utf-8"
+    )
     assert application_source.index("startup.hide()") < application_source.index(
         "window.show()"
     )
+    assert "WindowStaysOnTopHint" not in startup_source
+    assert "Qt.WindowType.Tool," not in startup_source
 
 
 def test_structural_steel_preset_converts_to_active_units():
