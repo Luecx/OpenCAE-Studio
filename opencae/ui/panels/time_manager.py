@@ -42,8 +42,8 @@ def frame_axis(values):
         raw[index + 1] > raw[index] + 1.0e-14
         for index in range(len(raw) - 1)
     )
-    # Playback speed is expressed in frames/second.  Solver frame values stay
-    # available as the plotted y-series but never stretch/compress the x-axis.
+    # Playback speed is expressed against a stable frame ordinal. Solver frame
+    # values stay available as the plotted y-series but never stretch x-space.
     return [float(index + 1) for index in range(len(raw))], strictly_increasing
 
 
@@ -121,7 +121,8 @@ def _playback_icon(kind: str, size: int = 18) -> QIcon:
 class TimeManagerPanel(QWidget):
     """Synchronize result playback with the authoritative Results ribbon state."""
 
-    FRAME_INTERVAL_MS = 33
+    FRAME_INTERVAL_MS = 16
+    ACROSS_BASE_FPS = 4.0
 
     def __init__(self, results_page=None, viewport=None, parent=None):
         super().__init__(parent)
@@ -138,6 +139,9 @@ class TimeManagerPanel(QWidget):
         self._play_position = 0.0
         self._phase = 0.0
         self._playing = False
+        self._playback_visible_index = -1
+        self._playback_options = None
+        self._frame_grid_cache = {}
         self._clock = QElapsedTimer()
         self._timer = QTimer(self)
         self._timer.setInterval(self.FRAME_INTERVAL_MS)
@@ -155,23 +159,20 @@ class TimeManagerPanel(QWidget):
 
         self.sidebar = QFrame()
         self.sidebar.setObjectName("TimeManagerSidebar")
-        self.sidebar.setFixedWidth(250)
+        self.sidebar.setFixedWidth(290)
         self.sidebar.setStyleSheet(
-            "QFrame#TimeManagerSidebar {"
-            f"background: {PALETTE['panel_alt']};"
-            f"border: 1px solid {PALETTE['border']};"
-            "border-radius: 4px;"
-            "}"
+            "QFrame#TimeManagerSidebar { background: transparent; border: none; }"
         )
         side = QVBoxLayout(self.sidebar)
-        side.setContentsMargins(10, 10, 10, 10)
-        side.setSpacing(7)
+        side.setContentsMargins(10, 8, 10, 8)
+        side.setSpacing(6)
 
         side.addWidget(self._heading("Playback Mode"))
         mode_row = QWidget()
         mode_layout = QHBoxLayout(mode_row)
         mode_layout.setContentsMargins(0, 0, 0, 0)
-        mode_layout.setSpacing(12)
+        mode_layout.setSpacing(14)
+        mode_layout.addStretch(1)
         self.current_frame = QRadioButton("Current frame")
         self.across_frames = QRadioButton("Across frames")
         self.across_frames.setChecked(True)
@@ -185,7 +186,14 @@ class TimeManagerPanel(QWidget):
         self.current_frame.toggled.connect(self._mode_changed)
         self.across_frames.toggled.connect(self._mode_changed)
 
-        side.addSpacing(3)
+        side.addSpacing(2)
+        side.addWidget(self._heading("Current step"))
+        self.step = ChevronComboBox()
+        self.step.setFixedWidth(220)
+        self.step.currentIndexChanged.connect(self._step_selected)
+        side.addWidget(self.step, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        side.addSpacing(2)
         side.addWidget(self._heading("Controls"))
         self.first_button = self._media_button("first", "First frame")
         self.previous_button = self._media_button("previous", "Previous frame")
@@ -200,6 +208,7 @@ class TimeManagerPanel(QWidget):
         controls_layout = QHBoxLayout(self.controls_row)
         controls_layout.setContentsMargins(0, 0, 0, 0)
         controls_layout.setSpacing(3)
+        controls_layout.addStretch(1)
         for button in (
             self.first_button,
             self.previous_button,
@@ -228,13 +237,15 @@ class TimeManagerPanel(QWidget):
             lambda: self._select_frame(len(self._frames) - 1)
         )
 
-        side.addSpacing(3)
+        side.addSpacing(2)
         side.addWidget(self._heading("Speed"))
         speed_row = QWidget()
         speed_layout = QHBoxLayout(speed_row)
         speed_layout.setContentsMargins(0, 0, 0, 0)
-        speed_layout.setSpacing(6)
+        speed_layout.setSpacing(8)
+        speed_layout.addStretch(1)
         self.speed_slider = QSlider(Qt.Orientation.Horizontal)
+        self.speed_slider.setFixedWidth(125)
         self.speed_slider.setRange(25, 400)
         self.speed_slider.setValue(100)
         self.speed = QDoubleSpinBox()
@@ -246,8 +257,9 @@ class TimeManagerPanel(QWidget):
         self.speed.setFixedWidth(76)
         self.speed_slider.valueChanged.connect(self._speed_slider_changed)
         self.speed.valueChanged.connect(self._speed_spin_changed)
-        speed_layout.addWidget(self.speed_slider, 1)
+        speed_layout.addWidget(self.speed_slider)
         speed_layout.addWidget(self.speed)
+        speed_layout.addStretch(1)
         side.addWidget(speed_row)
         side.addStretch(1)
         root.addWidget(self.sidebar, 0)
@@ -260,11 +272,6 @@ class TimeManagerPanel(QWidget):
         info = QHBoxLayout()
         info.setContentsMargins(0, 0, 0, 0)
         info.setSpacing(8)
-        info.addWidget(self._muted_label("Current step"))
-        self.step = ChevronComboBox()
-        self.step.setMinimumWidth(180)
-        self.step.currentIndexChanged.connect(self._step_selected)
-        info.addWidget(self.step)
         info.addStretch(1)
         info.addWidget(self._muted_label("Total frames"))
         self.total_frames = QLabel("0")
@@ -286,6 +293,7 @@ class TimeManagerPanel(QWidget):
     @staticmethod
     def _heading(text):
         label = QLabel(text)
+        label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
         label.setStyleSheet(
             f"color:{PALETTE['muted']};font-weight:600;font-size:9pt;"
         )
@@ -313,6 +321,8 @@ class TimeManagerPanel(QWidget):
         self._result = result
         self._field = field
         self._options = dict(options or {})
+        self._playback_options = None
+        self._frame_grid_cache.clear()
         self._sync_step_selector()
         self._sync_frames()
 
@@ -476,6 +486,7 @@ class TimeManagerPanel(QWidget):
         if self._playing:
             self._stop_playback(restore=True)
         self._phase = 0.0
+        self._playback_options = None
         self._refresh_plot()
         self._update_navigation()
 
@@ -494,9 +505,17 @@ class TimeManagerPanel(QWidget):
             return
         if self.across_frames.isChecked() and len(self._frames) < 2:
             return
+        fields = (
+            [item[2] for item in self._frames]
+            if self.across_frames.isChecked()
+            else [self._frames[self._current_index][2]]
+        )
+        # Range calculation is intentionally outside the 60 Hz tick loop.
+        self._playback_options = self._animation_options(fields)
         self._playing = True
         self._phase = 0.0
         self._play_position = self._axis[self._current_index]
+        self._playback_visible_index = self._current_index
         self._clock.start()
         self._timer.start()
         self._refresh_plot()
@@ -508,17 +527,22 @@ class TimeManagerPanel(QWidget):
         elapsed = (
             0.0
             if initial
-            else min(max(self._clock.restart() / 1000.0, 0.0), 0.25)
+            else min(max(self._clock.restart() / 1000.0, 0.0), 0.10)
         )
-        rate = float(self.speed.value())
+        multiplier = float(self.speed.value())
         if self.across_frames.isChecked():
-            # The playback coordinate is always a one-based frame ordinal, so
-            # one speed unit consistently means one frame per second.
-            self._play_position += elapsed * rate
+            # 1x is a practical four keyframes/second baseline. Interpolation is
+            # still rendered at ~60 Hz, so the response is fast without becoming
+            # a discrete frame slideshow.
+            self._play_position += elapsed * multiplier * self.ACROSS_BASE_FPS
+            start = self._axis[0]
             end = self._axis[-1]
             if self._play_position > end + 1.0e-12:
                 if self.loop_button.isChecked():
-                    self._play_position = self._axis[0]
+                    span = max(end - start, 1.0)
+                    self._play_position = start + (
+                        (self._play_position - start) % span
+                    )
                 else:
                     self._stop_playback(restore=False)
                     self._select_frame(len(self._frames) - 1)
@@ -528,15 +552,17 @@ class TimeManagerPanel(QWidget):
                 self._play_position,
             )
             visible = right if alpha >= 0.5 else left
-            self._update_current_label(visible)
+            if visible != self._playback_visible_index:
+                self._playback_visible_index = visible
+                self._update_current_label(visible)
             self.plot.set_cursor_x(self._play_position)
             self._render_interpolated(left, right, alpha)
             return
 
-        self._phase += elapsed * rate
+        self._phase += elapsed * multiplier
         if self._phase > 1.0 + 1.0e-12:
             if self.loop_button.isChecked():
-                self._phase = 0.0
+                self._phase %= 1.0
             else:
                 self._stop_playback(restore=True)
                 return
@@ -548,10 +574,15 @@ class TimeManagerPanel(QWidget):
             return
         first = self._frames[left][2]
         second = self._frames[right][2]
-        options = self._animation_options([item[2] for item in self._frames])
+        options = dict(
+            self._playback_options
+            or self._animation_options([item[2] for item in self._frames])
+        )
         options["_animation"] = {
             "mode": "interpolate",
             "next_field": second,
+            "source_grid": self._cached_grid(first),
+            "next_grid": self._cached_grid(second),
             "alpha": float(alpha),
         }
         self.viewport.scene.show_result(self._result, first, options)
@@ -560,12 +591,37 @@ class TimeManagerPanel(QWidget):
         if self.viewport is None or self._result is None or self._current_index < 0:
             return
         field = self._frames[self._current_index][2]
-        options = self._animation_options([field])
+        options = dict(
+            self._playback_options or self._animation_options([field])
+        )
         options["_animation"] = {
             "mode": "factor",
+            "source_grid": self._cached_grid(field),
             "factor": float(factor),
         }
         self.viewport.scene.show_result(self._result, field, options)
+
+    def _cached_grid(self, field):
+        """Materialize each solver frame at most once during one display state."""
+        if self._result is None or field is None:
+            return None
+        source = str(getattr(self._result, "source_file", "") or "")
+        if not source:
+            return None
+        step_id = field.metadata.get("step_id")
+        frame_id = field.metadata.get("frame_id")
+        key = (source, step_id, frame_id)
+        if key in self._frame_grid_cache:
+            return self._frame_grid_cache[key]
+        loader = getattr(self.results_page, "loader", None)
+        if loader is None:
+            return None
+        try:
+            grid = loader.pyvista_grid(source, step_id, frame_id)
+        except (OSError, RuntimeError, TypeError, ValueError):
+            return None
+        self._frame_grid_cache[key] = grid
+        return grid
 
     def _animation_options(self, fields):
         """Freeze automatic contour limits so changing values remain visually comparable."""
@@ -607,6 +663,8 @@ class TimeManagerPanel(QWidget):
         self._playing = False
         self._timer.stop()
         self.plot.set_cursor_x(None)
+        self._playback_visible_index = -1
+        self._playback_options = None
         if restore and was_playing:
             self._restore_exact()
             self._update_current_label(self._current_index)
