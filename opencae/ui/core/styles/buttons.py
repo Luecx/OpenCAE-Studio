@@ -54,6 +54,25 @@ def css(p):
         background: {p['accent_dim']};
         border-color: {p['accent']};
     }}
+    QToolButton#TimeManagerControl {{
+        background: {p['panel_alt']};
+        border: 1px solid {p['border_light']};
+        border-radius: 4px;
+        padding: 0px;
+    }}
+    QToolButton#TimeManagerControl:hover {{
+        background: {p['panel_hover']};
+        border-color: {p['accent_hover']};
+    }}
+    QToolButton#TimeManagerControl:pressed,
+    QToolButton#TimeManagerControl:checked {{
+        background: {p['accent_dim']};
+        border-color: {p['accent']};
+    }}
+    QToolButton#TimeManagerControl:disabled {{
+        background: {p['panel']};
+        border-color: {p['border']};
+    }}
     QToolButton[ribbonButton="true"] {{
         padding: 2px 3px 1px 3px;
         color: {p['text']};
