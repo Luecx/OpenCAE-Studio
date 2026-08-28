@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import subprocess
 import sys
 
 import pytest
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QDialogButtonBox
 
+from opencae.app.startup_window import StartupWindow
 from opencae.model.entities.resources.material_library import material_from_preset
 from opencae.ui.dialogs.default_seed import DefaultSeedDialog
 from opencae.ui.viewport.stage_guidance import assembly_guidance
 from opencae.units.system import UnitSystem
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_application_module_defers_main_window_import():
@@ -35,6 +41,30 @@ def test_application_module_defers_main_window_import():
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_startup_surface_does_not_behave_like_focus_stealing_tool_window():
+    """Startup feedback must not restack the desktop like an always-on-top tool."""
+    app = QApplication.instance() or QApplication([])
+    startup = StartupWindow()
+    try:
+        flags = startup.windowFlags()
+        assert flags & Qt.WindowType.SplashScreen
+        assert flags & Qt.WindowType.WindowDoesNotAcceptFocus
+        assert not (flags & Qt.WindowType.WindowStaysOnTopHint)
+        assert not (flags & Qt.WindowType.Tool)
+        assert startup.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        assert startup.focusPolicy() == Qt.FocusPolicy.NoFocus
+    finally:
+        startup.deleteLater()
+        app.processEvents()
+
+    application_source = (ROOT / "opencae/app/application.py").read_text(
+        encoding="utf-8"
+    )
+    assert application_source.index("startup.hide()") < application_source.index(
+        "window.show()"
+    )
 
 
 def test_structural_steel_preset_converts_to_active_units():
