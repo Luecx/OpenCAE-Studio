@@ -7,6 +7,7 @@ from .contour_mapping import contour_plot_kwargs
 from .scalar_bar import scalar_bar_args
 
 _LOADER = FrdLoader()
+_SOURCE_POINT_INDEX = "_opencae_source_point_index"
 
 
 def add_result(plotter, result, field=None, options=None):
@@ -74,9 +75,8 @@ def update_result(
 ):
     """Update persistent result actors in-place for one animation frame.
 
-    Animation previously cleared the complete plotter for every timer tick.  Keeping
-    the actors and lookup table alive avoids the blank intermediate frame that made
-    playback visibly flicker, while still replacing deformed geometry and scalars.
+    Animation keeps actors, lookup tables, scalar bars and line topology alive.
+    Only the primary dataset and the points of line overlays change per tick.
     """
     if result_actor is None:
         return None
@@ -111,20 +111,32 @@ def update_result(
             pass
 
     if mesh_actor is not None:
-        _replace_actor_input(mesh_actor, _mesh_edge_grid(grid))
+        _update_line_actor(mesh_actor, grid, _mesh_edge_grid)
     if boundary_actor is not None:
-        _replace_actor_input(boundary_actor, _boundary_grid(grid))
-    if undeformed_actor is not None:
-        _replace_actor_input(undeformed_actor, _boundary_grid(original))
+        _update_line_actor(boundary_actor, grid, _boundary_grid)
+    # The undeformed reference geometry is invariant across compatible result
+    # frames.  Re-extracting its boundary every 16 ms was pure animation cost.
+    del undeformed_actor, original
     return grid
 
 
 def _result_grids(result, field, options):
+    animation = dict(options.get("_animation", {}) or {})
     step_id = field.metadata.get("step_id") if field else None
     frame_id = field.metadata.get("frame_id") if field else None
-    original = _LOADER.pyvista_grid(result.source_file, step_id, frame_id)
+    original = animation.get("source_grid")
+    if original is None:
+        original = _LOADER.pyvista_grid(result.source_file, step_id, frame_id)
     original = _animated_grid(original, result, field, options)
-    return original, _deformed(original, options)
+    owns_transient_copy = str(animation.get("mode", "")) in {
+        "factor",
+        "interpolate",
+    }
+    return original, _deformed(
+        original,
+        options,
+        copy_grid=not owns_transient_copy,
+    )
 
 
 def _replace_actor_input(actor, dataset):
@@ -141,6 +153,37 @@ def _replace_actor_input(actor, dataset):
     except (AttributeError, RuntimeError, TypeError):
         return None
     return mapper
+
+
+def _update_line_actor(actor, grid, builder):
+    """Move an existing line overlay without re-running VTK extraction filters."""
+    try:
+        mapper = actor.GetMapper()
+    except (AttributeError, RuntimeError):
+        mapper = getattr(actor, "mapper", None)
+    if mapper is None:
+        return None
+    try:
+        import pyvista as pv
+
+        current = pv.wrap(mapper.GetInput())
+        source_ids = np.asarray(
+            current.point_data[_SOURCE_POINT_INDEX],
+            dtype=np.int64,
+        )
+        if (
+            len(source_ids) == current.n_points
+            and len(source_ids)
+            and int(source_ids.min()) >= 0
+            and int(source_ids.max()) < grid.n_points
+        ):
+            current.points = np.asarray(grid.points)[source_ids]
+            current.Modified()
+            mapper.Modified()
+            return mapper
+    except (AttributeError, KeyError, RuntimeError, TypeError, ValueError):
+        pass
+    return _replace_actor_input(actor, builder(grid))
 
 
 def interpolate_values(first, second, alpha):
@@ -193,13 +236,17 @@ def _animated_grid(grid, result, field, options):
         animated = grid.copy(deep=True)
         scaled = set()
         if scalar and scalar in animated.point_data:
-            animated.point_data[scalar] = np.asarray(animated.point_data[scalar], dtype=float) * factor
+            animated.point_data[scalar] = np.asarray(
+                animated.point_data[scalar], dtype=float
+            ) * factor
             scaled.add(scalar)
         keys = _displacement_keys(animated)
         if keys is not None:
             for key in keys:
                 if key not in scaled:
-                    animated.point_data[key] = np.asarray(animated.point_data[key], dtype=float) * factor
+                    animated.point_data[key] = np.asarray(
+                        animated.point_data[key], dtype=float
+                    ) * factor
         return animated
     if mode != "interpolate":
         return grid
@@ -207,11 +254,13 @@ def _animated_grid(grid, result, field, options):
     next_field = animation.get("next_field")
     if next_field is None:
         return grid
-    next_grid = _LOADER.pyvista_grid(
-        result.source_file,
-        next_field.metadata.get("step_id"),
-        next_field.metadata.get("frame_id"),
-    )
+    next_grid = animation.get("next_grid")
+    if next_grid is None:
+        next_grid = _LOADER.pyvista_grid(
+            result.source_file,
+            next_field.metadata.get("step_id"),
+            next_field.metadata.get("frame_id"),
+        )
     if not _compatible_frames(grid, next_grid):
         return grid
     alpha = min(max(float(animation.get("alpha", 0.0)), 0.0), 1.0)
@@ -254,11 +303,22 @@ def _compatible_frames(first, second):
     return bool(np.allclose(first.points, second.points, equal_nan=True))
 
 
+def _indexed_grid(grid):
+    """Attach a source-point map that survives surface/edge extraction."""
+    indexed = grid.copy(deep=False)
+    indexed.point_data[_SOURCE_POINT_INDEX] = np.arange(
+        indexed.n_points,
+        dtype=np.int64,
+    )
+    return indexed
+
+
 def _mesh_edge_grid(grid):
+    indexed = _indexed_grid(grid)
     try:
-        return grid.extract_all_edges()
+        return indexed.extract_all_edges()
     except (AttributeError, RuntimeError, TypeError, ValueError):
-        return grid.extract_surface(algorithm="dataset_surface").extract_feature_edges(
+        return indexed.extract_surface(algorithm="dataset_surface").extract_feature_edges(
             boundary_edges=True,
             feature_edges=True,
             manifold_edges=True,
@@ -280,7 +340,7 @@ def _mesh_edges(plotter, grid, name):
 
 
 def _boundary_grid(grid):
-    return grid.extract_surface(
+    return _indexed_grid(grid).extract_surface(
         algorithm="dataset_surface"
     ).extract_feature_edges(
         boundary_edges=True,
@@ -323,21 +383,34 @@ def _scalar_name(field):
 def _clim(grid, scalar, settings):
     if not scalar or scalar not in grid.point_data:
         return None
-    values = np.asarray(grid.point_data[scalar])
-    finite = values[np.isfinite(values)]
-    if not len(finite):
-        return None
-    data_minimum, data_maximum = float(finite.min()), float(finite.max())
-    minimum = (
-        data_minimum
-        if settings.get("minimum_auto", settings.get("auto", True))
-        else float(settings.get("minimum", data_minimum))
-    )
-    maximum = (
-        data_maximum
-        if settings.get("maximum_auto", settings.get("auto", True))
-        else float(settings.get("maximum", data_maximum))
-    )
+    minimum_auto = settings.get("minimum_auto", settings.get("auto", True))
+    maximum_auto = settings.get("maximum_auto", settings.get("auto", True))
+    # Time Manager freezes automatic limits before playback.  In that common
+    # path there is no reason to scan every scalar array on every render tick.
+    if (
+        not minimum_auto
+        and not maximum_auto
+        and "minimum" in settings
+        and "maximum" in settings
+    ):
+        minimum = float(settings["minimum"])
+        maximum = float(settings["maximum"])
+    else:
+        values = np.asarray(grid.point_data[scalar])
+        finite = values[np.isfinite(values)]
+        if not len(finite):
+            return None
+        data_minimum, data_maximum = float(finite.min()), float(finite.max())
+        minimum = (
+            data_minimum
+            if minimum_auto
+            else float(settings.get("minimum", data_minimum))
+        )
+        maximum = (
+            data_maximum
+            if maximum_auto
+            else float(settings.get("maximum", data_maximum))
+        )
     if minimum > maximum:
         minimum, maximum = maximum, minimum
     if minimum == maximum:
@@ -345,14 +418,14 @@ def _clim(grid, scalar, settings):
     return minimum, maximum
 
 
-def _deformed(grid, options):
+def _deformed(grid, options, *, copy_grid=True):
     if not options.get("deform"):
         return grid
     keys = _displacement_keys(grid)
     if keys is None:
         return grid
     vectors = np.column_stack([grid.point_data[key] for key in keys])
-    result = grid.copy(deep=True)
+    result = grid.copy(deep=True) if copy_grid else grid
     result.points = result.points + float(options.get("scale", 1.0)) * vectors
     return result
 
