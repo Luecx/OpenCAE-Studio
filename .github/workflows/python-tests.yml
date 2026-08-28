@@ -42,3 +42,31 @@ jobs:
           tests/test_static_architecture.py
       - name: Diagnose remaining full-suite regressions
         run: python -m pytest -vv --maxfail=20 tests
+
+  wayland:
+    name: Native Wayland viewport
+    runs-on: ubuntu-latest
+    env:
+      OPENCAE_WAYLAND_SMOKE: "1"
+      PYVISTA_OFF_SCREEN: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pyvista/setup-headless-display-action@v5
+        with:
+          qt: true
+          pyvista: false
+          wm: weston
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install OpenGL libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libglu1-mesa
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest
+      - name: Confirm native Wayland viewport
+        run: python -m pytest -vv tests/test_wayland_smoke.py
