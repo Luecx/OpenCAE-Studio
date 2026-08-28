@@ -28,7 +28,7 @@ class TimeManagerPlot(QWidget):
         self._interactive = True
         self._screen_points = []
         self.setMouseTracking(True)
-        self.setMinimumHeight(150)
+        self.setMinimumHeight(130)
         self.setObjectName("TimeManagerPlot")
 
     def set_series(
@@ -73,7 +73,9 @@ class TimeManagerPlot(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.fillRect(self.rect(), QColor(PALETTE["panel"]))
 
-        plot = QRectF(self.rect()).adjusted(64.0, 20.0, -22.0, -42.0)
+        # Use almost the complete vertical workspace. Only reserve the compact
+        # tick/axis text strips that are actually needed.
+        plot = QRectF(self.rect()).adjusted(56.0, 8.0, -12.0, -28.0)
         if plot.width() <= 10 or plot.height() <= 10:
             return
         painter.setPen(QPen(QColor(PALETTE["border_light"]), 1.0))
@@ -111,7 +113,7 @@ class TimeManagerPlot(QWidget):
             value = y_min + fraction * (y_max - y_min)
             painter.setPen(text_color)
             painter.drawText(
-                QRectF(4.0, y - 9.0, 54.0, 18.0),
+                QRectF(2.0, y - 8.0, 48.0, 16.0),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
                 f"{value:.3g}",
             )
@@ -134,19 +136,19 @@ class TimeManagerPlot(QWidget):
                 else f"{value:.4g}"
             )
             painter.drawText(
-                QRectF(px - 34.0, plot.bottom() + 5.0, 68.0, 18.0),
+                QRectF(px - 32.0, plot.bottom() + 2.0, 64.0, 15.0),
                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
                 label,
             )
 
         painter.setPen(QColor(PALETTE["muted"]))
         painter.drawText(
-            QRectF(plot.left(), plot.bottom() + 23.0, plot.width(), 18.0),
+            QRectF(plot.left(), plot.bottom() + 14.0, plot.width(), 13.0),
             Qt.AlignmentFlag.AlignCenter,
             self._x_label,
         )
         painter.drawText(
-            QRectF(plot.left() + 8.0, plot.top() + 4.0, 140.0, 18.0),
+            QRectF(plot.left() + 7.0, plot.top() + 3.0, 150.0, 15.0),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
             self._y_label,
         )
