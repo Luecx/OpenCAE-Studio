@@ -11,6 +11,9 @@ def css(p):
         border-bottom: 1px solid {p['border']};
         text-align: left;
     }}
+    QWidget[workspaceSurface="true"] {{
+        background: {p['panel']};
+    }}
     QLabel#PanelTitle {{
         font-size: 13pt;
         font-weight: 600;
