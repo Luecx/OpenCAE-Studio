@@ -3,7 +3,13 @@
 from pathlib import Path
 
 import numpy as np
-from PyQt6.QtWidgets import QApplication, QCheckBox, QRadioButton, QToolButton
+from PyQt6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QRadioButton,
+    QSizePolicy,
+    QToolButton,
+)
 
 from opencae.ui.ribbon.result_deformation import ResultDeformationButton
 from opencae.ui.ribbon.result_range import ResultRangeButton
@@ -57,7 +63,7 @@ def test_contour_mapping_clamps_discrete_level_count_to_52():
     assert contour_plot_kwargs({"levels": 999})["n_colors"] == 52
 
 
-def test_result_range_button_uses_checkboxes_and_full_contour_configuration():
+def test_result_range_button_uses_grouped_controls_and_wide_color_swatches():
     app = QApplication.instance() or QApplication([])
     button = ResultRangeButton()
     try:
@@ -68,8 +74,16 @@ def test_result_range_button_uses_checkboxes_and_full_contour_configuration():
         assert button.above_color.text() == ""
         assert button.below_color.toolTip() == "Below-range color"
         assert button.above_color.toolTip() == "Above-range color"
-        assert button.below_color.width() <= 40
-        assert button.above_color.width() <= 40
+        assert button.below_color.minimumWidth() >= 72
+        assert button.above_color.minimumWidth() >= 72
+        assert (
+            button.below_color.sizePolicy().horizontalPolicy()
+            == QSizePolicy.Policy.Expanding
+        )
+        assert (
+            button.above_color.sizePolicy().horizontalPolicy()
+            == QSizePolicy.Policy.Expanding
+        )
         button.set_data_range(-3.0, 12.0)
         assert button.values()["minimum"] == -3.0
         assert button.values()["maximum"] == 12.0
@@ -90,6 +104,11 @@ def test_result_range_button_uses_checkboxes_and_full_contour_configuration():
     finally:
         button.deleteLater()
         app.processEvents()
+
+    source = (ROOT / "opencae/ui/ribbon/result_range.py").read_text(encoding="utf-8")
+    assert 'SectionHeading("Range")' in source
+    assert 'SectionHeading("Color Mapping")' in source
+    assert 'SectionHeading("Outside Range")' in source
 
 
 def test_deformation_and_section_buttons_open_instant_popups_with_radio_state():
@@ -114,6 +133,19 @@ def test_deformation_and_section_buttons_open_instant_popups_with_radio_state():
         deformation.deleteLater()
         section.deleteLater()
         app.processEvents()
+
+    section_source = (ROOT / "opencae/ui/ribbon/result_section.py").read_text(encoding="utf-8")
+    assert "Align normal" not in section_source
+    assert "_set_axis" not in section_source
+    assert 'SectionHeading("Plane")' in section_source
+
+
+def test_radio_buttons_use_application_theme_indicator():
+    source = (ROOT / "opencae/ui/core/styles/fields.py").read_text(encoding="utf-8")
+    assert "QRadioButton::indicator" in source
+    assert "border-radius: 9px" in source
+    assert "qradialgradient" in source
+    assert "QRadioButton::indicator:checked:hover" in source
 
 
 def test_cylindrical_ring_geometry_respects_origin_normal_and_radius():
