@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import fields, is_dataclass
+from enum import Enum
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from opencae.model.core import Entity, EntityRef
+from opencae.model.core.persistent_model_field import is_persistent_model_field
 from opencae.model.project import Project
 
 from .commands import (
@@ -22,6 +25,7 @@ class ProjectStore(QObject):
     """Transactional document store for user-authored Project mutations."""
 
     changed = pyqtSignal(str)
+    runtime_changed = pyqtSignal(str, object)
     scene_changed = pyqtSignal(str)
     selection_changed = pyqtSignal(object)
     active_part_changed = pyqtSignal(object)
@@ -139,6 +143,62 @@ class ProjectStore(QObject):
             description,
             make_replace_command(self.project, parent_id, attribute, entity),
         )
+
+    def update_runtime_fields(self, entity_id: str, changes: dict[str, object]) -> None:
+        """Update scalar runtime metadata without document snapshots or undo history.
+
+        Runtime state such as Job progress changes frequently while external work
+        is running. Sending those values through :meth:`execute` would deepcopy
+        the entire Project (including large FE meshes), rebuild references and
+        create undo entries for every progress tick. This focused path is limited
+        to top-level persistent scalar/enum fields, so it cannot alter identity,
+        ownership, EntityRef relationships, collections, or the Project index.
+        """
+        entity = self.project.try_resolve(str(entity_id))
+        if not isinstance(entity, Entity):
+            raise ValueError(f"Runtime entity '{entity_id}' does not exist")
+        if not changes:
+            return
+        if not is_dataclass(entity):
+            raise TypeError("Runtime field updates require a dataclass Entity")
+
+        declared = {item.name: item for item in fields(entity)}
+        before: dict[str, object] = {}
+        normalized: dict[str, object] = {}
+        for name, value in changes.items():
+            field_info = declared.get(str(name))
+            if field_info is None or not is_persistent_model_field(field_info):
+                raise AttributeError(
+                    f"{type(entity).__name__} has no persistent field '{name}'"
+                )
+            if not _is_runtime_scalar(value):
+                raise TypeError(
+                    f"Runtime field '{name}' must be scalar and reference-free"
+                )
+            current = getattr(entity, name)
+            if not _is_runtime_scalar(current):
+                raise TypeError(
+                    f"Runtime field '{name}' is not a scalar runtime field"
+                )
+            if current == value:
+                continue
+            before[name] = current
+            normalized[name] = value
+
+        if not normalized:
+            return
+        try:
+            for name, value in normalized.items():
+                setattr(entity, name, value)
+        except Exception:
+            for name, value in before.items():
+                setattr(entity, name, value)
+            raise
+
+        # No reference/index-affecting field can enter this path, so the existing
+        # Project index remains valid and project-wide reference validation is
+        # intentionally not repeated here.
+        self.runtime_changed.emit(entity.id, tuple(normalized))
 
     def delete_entity(
         self,
@@ -268,3 +328,8 @@ class ProjectStore(QObject):
         if changed:
             self.active_part_changed.emit(self.active_part())
         return changed
+
+
+def _is_runtime_scalar(value) -> bool:
+    """Return whether a value cannot encode model identity or ownership."""
+    return value is None or isinstance(value, (str, int, float, bool, Enum))
