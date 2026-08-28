@@ -1,7 +1,7 @@
 """Builds the main window ribbon, viewport, docks and status widgets."""
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QSizePolicy, QToolBar
+from PyQt6.QtWidgets import QSizePolicy, QTabWidget, QToolBar
 
 from opencae.ui.docks.output_dock import JobsDock, LogDock, TimeManagerDock
 from opencae.ui.docks.project_dock import ProjectDock
@@ -96,9 +96,14 @@ def build_docks(window):
     window.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, window.project_dock)
     for dock in (window.jobs_dock, window.log_dock, window.time_manager_dock):
         window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
-    # QMainWindow owns the tab strip.  There is deliberately no nested Output
-    # QTabWidget anymore: each workspace is a real dock with its own Window-menu
-    # visibility state and can be detached/rearranged independently.
+
+    # Keep the lower workspace navigation above its content.  The tabs are the
+    # only docked header; the individual dock captions are suppressed while
+    # docked by _WorkspaceDock.
+    window.setTabPosition(
+        Qt.DockWidgetArea.BottomDockWidgetArea,
+        QTabWidget.TabPosition.North,
+    )
     window.tabifyDockWidget(window.jobs_dock, window.log_dock)
     window.tabifyDockWidget(window.jobs_dock, window.time_manager_dock)
     window.jobs_dock.raise_()
