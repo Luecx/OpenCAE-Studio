@@ -1,4 +1,4 @@
-"""Render the camera-oriented beveled ViewCube as a transparent Qt overlay."""
+"""Render the camera-oriented beveled ViewCube as a stable Qt overlay."""
 
 from __future__ import annotations
 
@@ -25,6 +25,12 @@ class ViewCube(QWidget):
     never propagate to the underlying QVTK widget because a propagated press
     without the matching release leaves VTK in an active camera-interaction
     state.
+
+    QVTK is a native render surface. A translucent QWidget child is not
+    composited reliably on all X11/Wayland/VTK combinations and can disappear
+    completely even though ordinary offscreen QWidget tests still pass. Keep
+    this child opaque and paint the viewport background explicitly so the cube
+    remains visible on every supported platform.
     """
 
     view_requested = pyqtSignal(object)
@@ -46,8 +52,8 @@ class ViewCube(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName("View orientation cube")
-        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation, True)
 
     @property
@@ -69,12 +75,13 @@ class ViewCube(QWidget):
         self.update()
 
     def paintEvent(self, event) -> None:
-        """Project, depth-sort, and paint faces over the live viewport."""
+        """Project, depth-sort, and paint all currently visible faces."""
         del event
         visible_faces = self._visible_faces()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
         self._hit_regions = []
         for _depth, face, polygon, view_normal in visible_faces:
             self._draw_face(painter, face, polygon, view_normal)
