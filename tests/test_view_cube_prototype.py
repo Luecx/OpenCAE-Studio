@@ -8,7 +8,7 @@ from collections import Counter
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QImage
+from PyQt6.QtGui import QColor, QImage
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QWidget
 
@@ -87,19 +87,21 @@ def test_generic_orientation_keeps_all_visible_connector_faces() -> None:
     assert sum(face[1][0] == "corner" for face in visible) == 4
 
 
-def test_view_cube_paints_faces_over_a_transparent_background() -> None:
-    """Keep only the cube opaque while the surrounding overlay pixels stay clear."""
+def test_view_cube_paints_opaque_non_uniform_pixels() -> None:
+    """Ensure a complete raster is produced instead of a transparent black box."""
     _application()
     widget = ViewCube()
     image = _render(widget)
-    alphas = {
-        image.pixelColor(x, y).alpha()
+    colors = {
+        image.pixelColor(x, y).name(QColor.NameFormat.HexArgb)
+        for x, y in ((0, 0), (87, 42), (57, 87), (116, 87), (87, 116))
+    }
+    assert len(colors) >= 4
+    assert all(
+        image.pixelColor(x, y).alpha() == 255
         for x in range(image.width())
         for y in range(image.height())
-    }
-    assert 0 in alphas
-    assert 255 in alphas
-    assert image.pixelColor(0, 0).alpha() == 0
+    )
 
 
 def test_orientation_change_produces_a_different_projection() -> None:
@@ -114,12 +116,12 @@ def test_orientation_change_produces_a_different_projection() -> None:
     assert widget.view_matrix == matrix
 
 
-def test_view_cube_uses_translucent_widget_surface() -> None:
-    """Keep the Qt overlay transparent without relinquishing mouse ownership."""
+def test_view_cube_uses_stable_opaque_native_surface_composition() -> None:
+    """Protect visibility and mouse ownership above the native VTK widget."""
     _application()
     widget = ViewCube()
-    assert not widget.testAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
-    assert widget.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    assert widget.testAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+    assert not widget.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
     assert widget.testAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
     assert widget.mask().isEmpty()
 
@@ -212,8 +214,8 @@ def test_camera_controller_tracks_and_applies_face_normals() -> None:
     assert plotter.camera.callback is None
 
 
-def test_canvas_reparents_translucent_cube_to_render_surface() -> None:
-    """Keep the transparent cube inside the VTK surface instead of beside it."""
+def test_canvas_places_opaque_cube_on_render_surface() -> None:
+    """Keep the cube inside the VTK surface with native-compatible composition."""
     application = _application()
     canvas = ViewportCanvas()
     render_surface = QWidget(canvas)
@@ -223,5 +225,5 @@ def test_canvas_reparents_translucent_cube_to_render_surface() -> None:
     application.processEvents()
 
     assert canvas.cube.parentWidget() is render_surface
-    assert not canvas.cube.testAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
-    assert canvas.cube.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    assert canvas.cube.testAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+    assert not canvas.cube.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
