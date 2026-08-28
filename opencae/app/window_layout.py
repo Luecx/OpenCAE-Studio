@@ -3,7 +3,7 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QSizePolicy, QToolBar
 
-from opencae.ui.docks.output_dock import OutputDock
+from opencae.ui.docks.output_dock import JobsDock, LogDock, TimeManagerDock
 from opencae.ui.docks.project_dock import ProjectDock
 from opencae.ui.ribbon.ribbon import Ribbon
 from opencae.ui.status_unit_system import UnitSystemStatus
@@ -72,7 +72,7 @@ def build_viewport(window):
 
 
 def build_docks(window):
-    """Create the project and lower workspace docks and connect result navigation."""
+    """Create independent project/jobs/log/time docks and connect result navigation."""
     store = window.context.store
     window.project_dock = ProjectDock(
         store,
@@ -80,16 +80,29 @@ def build_docks(window):
         visibility=window.visibility,
         parent=window,
     )
-    window.output_dock = OutputDock(
+    window.jobs_dock = JobsDock(
         store,
         window.controllers.jobs,
         window.actions,
         window,
+    )
+    window.log_dock = LogDock(store, window)
+    window.time_manager_dock = TimeManagerDock(
+        window,
         results_page=window.ribbon.results_page,
         viewport=window.viewport,
     )
+
     window.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, window.project_dock)
-    window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, window.output_dock)
+    for dock in (window.jobs_dock, window.log_dock, window.time_manager_dock):
+        window.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+    # QMainWindow owns the tab strip.  There is deliberately no nested Output
+    # QTabWidget anymore: each workspace is a real dock with its own Window-menu
+    # visibility state and can be detached/rearranged independently.
+    window.tabifyDockWidget(window.jobs_dock, window.log_dock)
+    window.tabifyDockWidget(window.jobs_dock, window.time_manager_dock)
+    window.jobs_dock.raise_()
+
     window.project_dock.tree.stage_requested.connect(window.ribbon.set_stage)
     window.project_dock.solution_tree.solution_requested.connect(window.show_solution)
     window.project_dock.solution_tree.delete_requested.connect(window.delete_result)
@@ -115,7 +128,7 @@ def build_docks(window):
         Qt.Orientation.Horizontal,
     )
     window.resizeDocks(
-        [window.output_dock],
+        [window.jobs_dock],
         [300],
         Qt.Orientation.Vertical,
     )
