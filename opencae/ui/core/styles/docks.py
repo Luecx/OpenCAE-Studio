@@ -11,7 +11,8 @@ def css(p):
         border-bottom: 1px solid {p['border']};
         text-align: left;
     }}
-    QWidget#WorkspaceSurface {{
+    QWidget#WorkspaceSurface,
+    QWidget[workspaceSurface="true"] {{
         background: {p['panel']};
         border: none;
     }}
