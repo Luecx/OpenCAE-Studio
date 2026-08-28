@@ -1,6 +1,6 @@
 """Provides the result contour-range ribbon control and its compact editor flyout."""
 
-from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QRectF, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -378,7 +378,7 @@ def _chain_icon(size):
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(
         QPen(
-            QColor(PALETTE["text_muted"]),
+            QColor(PALETTE["muted"]),
             max(1.4, size / 11.0),
             Qt.PenStyle.SolidLine,
             Qt.PenCapStyle.RoundCap,
