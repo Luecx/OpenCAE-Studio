@@ -10,12 +10,17 @@ from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtGui import QAction, QIcon, QPixmap
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QWidget
+from vtkmodules.vtkRenderingAnnotation import vtkScalarBarActor
 
 from opencae.ui.core.metrics import RIBBON_BUTTON_HEIGHT
 from opencae.ui.templates import action_button
 from opencae.ui.viewport.result_query_model import QueryResult
 from opencae.ui.viewport.result_query_panel import ResultQueryPanel
-from opencae.ui.viewport.scalar_bar import _cap_rectangles, scalar_bar_args
+from opencae.ui.viewport.scalar_bar import (
+    _cap_rectangles,
+    _disable_native_range_swatches,
+    scalar_bar_args,
+)
 from opencae.ui.viewport.view_cube import ViewCube
 from opencae.ui.viewport.viewport_overlay_metrics import (
     VIEW_CUBE_SIZE,
@@ -83,8 +88,8 @@ class _Plotter:
         return self._height
 
 
-def test_scalar_bar_reserves_cube_space_and_disables_native_range_swatches():
-    """The main bar stays below the cube while OpenCAE owns outside end caps."""
+def test_scalar_bar_reserves_cube_space_without_native_range_labels():
+    """The main bar stays below the cube and does not request swatch labels."""
     viewport_height = 600
     args = scalar_bar_args(
         "STRESS:SXX",
@@ -99,14 +104,22 @@ def test_scalar_bar_reserves_cube_space_and_disables_native_range_swatches():
     assert args["title_font_size"] >= 13
     assert args["label_font_size"] >= 11
     assert args["width"] <= 0.05
-    # Explicit None prevents PyVista from enabling VTK's thick, padded built-in
-    # above/below swatches. OpenCAE supplies its own compact colored caps.
-    assert args["below_label"] is None
-    assert args["above_label"] is None
+    assert "below_label" not in args
+    assert "above_label" not in args
 
-    no_caps = scalar_bar_args("STRESS:SXX", _Plotter(viewport_height))
-    assert "below_label" not in no_caps
-    assert "above_label" not in no_caps
+
+def test_scalar_bar_native_range_swatches_are_explicitly_disabled():
+    """PyVista's LUT colors must not resurrect VTK's thick padded swatches."""
+    actor = vtkScalarBarActor()
+    actor.DrawBelowRangeSwatchOn()
+    actor.DrawAboveRangeSwatchOn()
+    assert actor.GetDrawBelowRangeSwatch()
+    assert actor.GetDrawAboveRangeSwatch()
+
+    _disable_native_range_swatches(actor)
+
+    assert not actor.GetDrawBelowRangeSwatch()
+    assert not actor.GetDrawAboveRangeSwatch()
 
 
 def test_scalar_bar_custom_caps_are_thin_and_exactly_touch_main_bar():
