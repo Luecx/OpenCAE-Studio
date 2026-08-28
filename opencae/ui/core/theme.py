@@ -20,10 +20,9 @@ PALETTE = {
     "warning": "#d5a442",
     "danger": "#df6262",
     # Keep the 3D view calm and neutral, but lighter than the original nearly
-    # black surface.  Opaque Qt overlays (notably the ViewCube) use this exact
+    # black surface. Opaque Qt overlays (notably the ViewCube) use this exact
     # same token so no rectangular background patch is visible.
     "viewport": "#232a32",
-    "viewport_horizon": "#303942",
     "mesh_lines": "#6d7884",
 }
 
