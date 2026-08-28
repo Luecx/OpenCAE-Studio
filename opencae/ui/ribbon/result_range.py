@@ -1,7 +1,7 @@
 """Provides the result contour-range ribbon control and its compact editor flyout."""
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtCore import QPointF, QRectF, QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.core.theme import PALETTE
 from opencae.ui.templates import (
     PRIMARY_CONTROL_HEIGHT,
     SectionHeading,
@@ -36,8 +37,7 @@ class ResultRangeButton(QToolButton):
     """Open a compact editor for result range and contour color mapping."""
 
     range_changed = pyqtSignal(object)
-    auto_frame_requested = pyqtSignal()
-    auto_frames_requested = pyqtSignal()
+    auto_bound_requested = pyqtSignal(str, str)
 
     def __init__(self, parent=None):
         """Build the ribbon button and its contour presentation controls."""
@@ -50,37 +50,65 @@ class ResultRangeButton(QToolButton):
         self.setProperty("ribbonButton", True)
         self.setFixedSize(82, 70)
         self._data_range = (0.0, 1.0)
+        self._syncing_bounds = False
         self._colors = {
             "below": DEFAULT_OUTSIDE_COLOR,
             "above": DEFAULT_OUTSIDE_COLOR,
         }
 
         panel = QWidget()
-        panel.setMinimumWidth(380)
+        panel.setMinimumWidth(410)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(10)
+        layout.setSpacing(9)
 
         layout.addWidget(SectionHeading("Range"))
         self.minimum = self._field()
         self.maximum = self._field()
-        layout.addWidget(field_block("Minimum", self.minimum))
-        layout.addWidget(field_block("Maximum", self.maximum))
-
-        auto_row = QWidget()
-        auto_layout = QHBoxLayout(auto_row)
-        auto_layout.setContentsMargins(0, 0, 0, 0)
-        auto_layout.setSpacing(8)
-        self.auto_frame = self._auto_button("Auto Frame")
-        self.auto_frames = self._auto_button("Auto Frames")
-        self.auto_frame.setToolTip("Set the contour range from the current frame")
-        self.auto_frames.setToolTip(
-            "Set the contour range from this field/component across all frames in the current step"
+        self.minimum_frame = self._auto_button("frame")
+        self.minimum_frames = self._auto_button("frames")
+        self.maximum_frame = self._auto_button("frame")
+        self.maximum_frames = self._auto_button("frames")
+        layout.addWidget(
+            field_block(
+                "Minimum",
+                self._bound_row(
+                    self.minimum,
+                    self.minimum_frame,
+                    self.minimum_frames,
+                ),
+            )
         )
-        auto_layout.addWidget(self.auto_frame, 1)
-        auto_layout.addWidget(self.auto_frames, 1)
-        layout.addWidget(auto_row)
 
+        self.symmetric = QToolButton()
+        self.symmetric.setObjectName("ResultRangeSymmetryButton")
+        self.symmetric.setCheckable(True)
+        self.symmetric.setAutoRaise(False)
+        self.symmetric.setIcon(_chain_icon(18))
+        self.symmetric.setIconSize(QSize(18, 18))
+        self.symmetric.setFixedSize(30, 26)
+        self.symmetric.setToolTip(
+            "Couple minimum and maximum symmetrically around zero"
+        )
+        link_row = QHBoxLayout()
+        link_row.setContentsMargins(0, 0, 0, 0)
+        link_row.addStretch(1)
+        link_row.addWidget(self.symmetric)
+        link_row.addStretch(1)
+        layout.addLayout(link_row)
+
+        layout.addWidget(
+            field_block(
+                "Maximum",
+                self._bound_row(
+                    self.maximum,
+                    self.maximum_frame,
+                    self.maximum_frames,
+                ),
+            )
+        )
+
+        layout.addWidget(self._separator())
         layout.addWidget(SectionHeading("Color Mapping"))
         self.continuous = QCheckBox("Continuous color mapping")
         self.continuous.setObjectName("ResultContinuousCheckBox")
@@ -105,23 +133,21 @@ class ResultRangeButton(QToolButton):
         levels_layout.addWidget(self.level_value)
         layout.addWidget(field_block("Number of levels", levels_row))
 
+        layout.addWidget(self._separator())
         layout.addWidget(SectionHeading("Outside Range"))
         self.outside_colors = QCheckBox("Color values outside range")
         self.outside_colors.setChecked(True)
         self.outside_colors.setObjectName("ResultOutsideColorsCheckBox")
         layout.addWidget(self.outside_colors)
 
-        # The swatches are deliberately one full-width row below the checkbox.
-        # They visually read as the two colorbar end colors rather than as tiny
-        # form actions attached to the checkbox label.
         color_row = QWidget()
         color_layout = QHBoxLayout(color_row)
         color_layout.setContentsMargins(0, 0, 0, 0)
         color_layout.setSpacing(8)
         self.below_color = self._color_button("below")
         self.above_color = self._color_button("above")
-        color_layout.addWidget(self.below_color, 1)
-        color_layout.addWidget(self.above_color, 1)
+        color_layout.addWidget(field_block("Below range", self.below_color), 1)
+        color_layout.addWidget(field_block("Above range", self.above_color), 1)
         layout.addWidget(color_row)
 
         menu = QMenu(self)
@@ -130,10 +156,24 @@ class ResultRangeButton(QToolButton):
         menu.addAction(action)
         self.setMenu(menu)
 
-        for spin in (self.minimum, self.maximum):
-            spin.valueChanged.connect(self._emit)
-        self.auto_frame.clicked.connect(self.auto_frame_requested.emit)
-        self.auto_frames.clicked.connect(self.auto_frames_requested.emit)
+        self.minimum.valueChanged.connect(
+            lambda value: self._bound_changed("minimum", value)
+        )
+        self.maximum.valueChanged.connect(
+            lambda value: self._bound_changed("maximum", value)
+        )
+        for bound, scope, button in (
+            ("minimum", "frame", self.minimum_frame),
+            ("minimum", "frames", self.minimum_frames),
+            ("maximum", "frame", self.maximum_frame),
+            ("maximum", "frames", self.maximum_frames),
+        ):
+            button.clicked.connect(
+                lambda _checked=False, bound=bound, scope=scope: self.auto_bound_requested.emit(
+                    bound, scope
+                )
+            )
+        self.symmetric.toggled.connect(self._symmetric_toggled)
         self.levels.valueChanged.connect(self._levels_changed)
         self.continuous.toggled.connect(self._continuous_changed)
         self.outside_colors.toggled.connect(self._outside_colors_changed)
@@ -151,15 +191,47 @@ class ResultRangeButton(QToolButton):
         return spin
 
     @staticmethod
-    def _auto_button(text):
-        """Return a one-shot range calculation button, never a toggle state."""
+    def _auto_button(scope):
+        """Return a compact one-shot range calculation icon."""
         button = QToolButton()
-        button.setText(text)
         button.setCheckable(False)
-        button.setMinimumHeight(PRIMARY_CONTROL_HEIGHT)
-        button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        button.setObjectName("ResultAutoButton")
+        button.setObjectName("ResultRangeAutoIcon")
+        button.setIcon(
+            make_icon(
+                IconKind.RESULT_FRAME if scope == "frame" else IconKind.RANGE,
+                16,
+            )
+        )
+        button.setIconSize(QSize(16, 16))
+        button.setFixedSize(30, PRIMARY_CONTROL_HEIGHT)
+        button.setToolTip(
+            "Use value from current frame"
+            if scope == "frame"
+            else "Use value across all frames in the current step"
+        )
         return button
+
+    @staticmethod
+    def _bound_row(field, frame_button, frames_button):
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(5)
+        row_layout.addWidget(field, 1)
+        row_layout.addWidget(frame_button)
+        row_layout.addWidget(frames_button)
+        return row
+
+    @staticmethod
+    def _separator():
+        line = QWidget()
+        line.setObjectName("ResultRangeSeparator")
+        line.setFixedHeight(1)
+        line.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        line.setStyleSheet(
+            f"QWidget#ResultRangeSeparator {{ background: {PALETTE['border_light']}; }}"
+        )
+        return line
 
     def _color_button(self, name):
         """Return an expanding colorbar end swatch for outside-range values."""
@@ -188,19 +260,33 @@ class ResultRangeButton(QToolButton):
         )
 
     def set_data_range(self, minimum, maximum):
-        """Remember the active-frame data range without creating an auto state."""
+        """Remember the active-frame data range without changing fixed limits."""
         self._data_range = (float(minimum), float(maximum))
 
     def set_range(self, minimum, maximum):
-        """Set concrete contour limits and publish them as ordinary fixed values."""
+        """Set both concrete contour limits while respecting symmetry coupling."""
         lower, upper = float(minimum), float(maximum)
         if lower > upper:
             lower, upper = upper, lower
-        for spin, value in ((self.minimum, lower), (self.maximum, upper)):
-            spin.blockSignals(True)
-            spin.setValue(value)
-            spin.blockSignals(False)
-        self._data_range = (lower, upper)
+        if self.symmetric.isChecked():
+            extent = max(abs(lower), abs(upper))
+            lower, upper = -extent, extent
+        self._set_bounds(lower, upper)
+        self._data_range = (float(minimum), float(maximum))
+        self._emit()
+
+    def set_bound(self, bound, value):
+        """Set one calculated bound, mirroring it when symmetry is enabled."""
+        numeric = float(value)
+        if self.symmetric.isChecked():
+            extent = abs(numeric)
+            self._set_bounds(-extent, extent)
+        elif bound == "minimum":
+            self._set_bounds(numeric, self.maximum.value())
+        elif bound == "maximum":
+            self._set_bounds(self.minimum.value(), numeric)
+        else:
+            raise ValueError(f"Unknown contour bound: {bound}")
         self._emit()
 
     def apply_data_range(self):
@@ -212,16 +298,42 @@ class ResultRangeButton(QToolButton):
         return {
             "minimum": self.minimum.value(),
             "maximum": self.maximum.value(),
-            # Retain these compatibility keys for renderers/persisted options,
-            # but Auto is now an action rather than a persistent toggle mode.
             "minimum_auto": False,
             "maximum_auto": False,
+            "symmetric": self.symmetric.isChecked(),
             "levels": self.levels.value(),
             "continuous": self.continuous.isChecked(),
             "outside_colors": self.outside_colors.isChecked(),
             "below_color": self._colors["below"],
             "above_color": self._colors["above"],
         }
+
+    def _set_bounds(self, minimum, maximum):
+        self._syncing_bounds = True
+        try:
+            for spin, value in (
+                (self.minimum, minimum),
+                (self.maximum, maximum),
+            ):
+                spin.blockSignals(True)
+                spin.setValue(float(value))
+                spin.blockSignals(False)
+        finally:
+            self._syncing_bounds = False
+
+    def _bound_changed(self, bound, value):
+        if self._syncing_bounds:
+            return
+        if self.symmetric.isChecked():
+            extent = abs(float(value))
+            self._set_bounds(-extent, extent)
+        self._emit()
+
+    def _symmetric_toggled(self, checked):
+        if checked:
+            extent = max(abs(self.minimum.value()), abs(self.maximum.value()))
+            self._set_bounds(-extent, extent)
+        self._emit()
 
     def _levels_changed(self, value):
         self.level_value.setText(str(int(value)))
@@ -256,3 +368,38 @@ class ResultRangeButton(QToolButton):
     def _emit(self, *_):
         """Publish the complete contour-range configuration."""
         self.range_changed.emit(self.values())
+
+
+def _chain_icon(size):
+    """Draw a small neutral chain glyph without relying on platform emoji fonts."""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(
+        QPen(
+            QColor(PALETTE["text_muted"]),
+            max(1.4, size / 11.0),
+            Qt.PenStyle.SolidLine,
+            Qt.PenCapStyle.RoundCap,
+            Qt.PenJoinStyle.RoundJoin,
+        )
+    )
+    painter.save()
+    painter.translate(size / 2.0, size / 2.0)
+    painter.rotate(-35.0)
+    link_width = size * 0.58
+    link_height = size * 0.30
+    painter.drawRoundedRect(
+        QRectF(-link_width * 0.72, -link_height / 2.0, link_width, link_height),
+        link_height / 2.0,
+        link_height / 2.0,
+    )
+    painter.drawRoundedRect(
+        QRectF(-link_width * 0.28, -link_height / 2.0, link_width, link_height),
+        link_height / 2.0,
+        link_height / 2.0,
+    )
+    painter.restore()
+    painter.end()
+    return QIcon(pixmap)
