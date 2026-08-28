@@ -3,6 +3,7 @@
 import numpy as np
 
 from opencae.results import FrdLoader
+from opencae.ui.core.theme import PALETTE
 from .contour_mapping import contour_plot_kwargs
 from .scalar_bar import scalar_bar_args
 
@@ -28,7 +29,7 @@ def add_result(plotter, result, field=None, options=None):
         below_color=mapping["below_color"],
         above_color=mapping["above_color"],
         show_edges=False,
-        edge_color="#182129",
+        edge_color=PALETTE["mesh_lines"],
         line_width=1.0,
         lighting=True,
         ambient=.22,
@@ -330,7 +331,7 @@ def _mesh_edge_grid(grid):
 def _mesh_edges(plotter, grid, name):
     return plotter.add_mesh(
         _mesh_edge_grid(grid),
-        color="#182129",
+        color=PALETTE["mesh_lines"],
         line_width=1.0,
         lighting=False,
         name=name,
