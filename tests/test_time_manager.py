@@ -203,6 +203,9 @@ def test_lower_workspaces_are_independent_top_tabbed_native_docks():
     dock_source = (ROOT / "opencae/ui/docks/output_dock.py").read_text(encoding="utf-8")
     layout_source = (ROOT / "opencae/app/window_layout.py").read_text(encoding="utf-8")
     menu_source = (ROOT / "opencae/ui/menus/window_menu.py").read_text(encoding="utf-8")
+    tab_style = (ROOT / "opencae/ui/core/styles/tabs.py").read_text(encoding="utf-8")
+    dock_style = (ROOT / "opencae/ui/core/styles/docks.py").read_text(encoding="utf-8")
+    button_style = (ROOT / "opencae/ui/core/styles/buttons.py").read_text(encoding="utf-8")
 
     assert "class JobsDock" in dock_source
     assert "class LogDock" in dock_source
@@ -211,6 +214,8 @@ def test_lower_workspaces_are_independent_top_tabbed_native_docks():
     assert "OutputDock" not in dock_source
     assert "WorkspaceDockHiddenTitleBar" in dock_source
     assert "setTitleBarWidget(None if floating else self._docked_title_bar)" in dock_source
+    assert 'widget.setProperty("workspaceSurface", True)' in dock_source
+    assert "background: transparent; border: none;" in dock_source
     assert "window.jobs_dock" in layout_source
     assert "window.log_dock" in layout_source
     assert "window.time_manager_dock" in layout_source
@@ -219,3 +224,11 @@ def test_lower_workspaces_are_independent_top_tabbed_native_docks():
     assert "A.SHOW_JOBS" in menu_source
     assert "A.SHOW_LOG" in menu_source
     assert "A.SHOW_TIME_MANAGER" in menu_source
+    assert "border-bottom: 2px solid {p['accent']}" in tab_style
+    assert "border-top: 2px solid" not in tab_style
+    assert "background: {p['panel']};" in tab_style
+    assert 'QWidget[workspaceSurface="true"]' in dock_style
+    assert "QToolButton#TimeManagerControl" in button_style
+    control_style = button_style.split("QToolButton#TimeManagerControl", 1)[1]
+    assert "background: transparent;" in control_style
+    assert "border: none;" in control_style
