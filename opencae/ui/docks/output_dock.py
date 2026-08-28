@@ -14,6 +14,7 @@ class _WorkspaceDock(QDockWidget):
     def __init__(self, title, object_name, widget, parent=None):
         super().__init__(title, parent)
         self.setObjectName(object_name)
+        widget.setProperty("workspaceSurface", True)
         self.setWidget(widget)
         self.setMinimumHeight(OUTPUT_MIN_HEIGHT)
 
@@ -54,6 +55,11 @@ class TimeManagerDock(_WorkspaceDock):
 
     def __init__(self, parent=None, *, results_page=None, viewport=None):
         self.panel = TimeManagerPanel(results_page, viewport)
+        # The playback controls belong to the workspace surface rather than a
+        # nested card.  Keep grouping through spacing and headings only.
+        self.panel.sidebar.setStyleSheet(
+            "QFrame#TimeManagerSidebar { background: transparent; border: none; }"
+        )
         super().__init__("Time Manager", "TimeManagerDock", self.panel, parent)
         # Compatibility for callers/tests that historically addressed the
         # panel through ``output_dock.time_manager``.
