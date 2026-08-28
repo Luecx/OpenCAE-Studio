@@ -21,7 +21,10 @@ ASSEMBLY_KINDS = {
     "asm_coordinate_system", "asm_reference_points", "asm_reference_point",
 }
 CONSTRAINT_KINDS = {"constraints", "constraint"}
-BC_KINDS = {"boundary_conditions", "supports", "support", "loads", "load"}
+BC_KINDS = {
+    "boundary_conditions", "supports", "support", "loads", "load",
+    "amplitudes", "amplitude",
+}
 STEP_KINDS = {"steps", "analysis_step", "analysis_step_reference"}
 ANALYSIS_KINDS = {"analyses", "analysis"}
 STUDY_KINDS = {
