@@ -83,10 +83,14 @@ class _Plotter:
         return self._height
 
 
-def test_scalar_bar_reserves_view_cube_vertical_space_and_uses_readable_text():
-    """The right-side colorbar must end below the fixed ViewCube footprint."""
+def test_scalar_bar_reserves_cube_space_and_uses_compact_unlabeled_range_caps():
+    """The right-side colorbar stays below the cube and keeps range caps subtle."""
     viewport_height = 600
-    args = scalar_bar_args("STRESS:SXX", _Plotter(viewport_height))
+    args = scalar_bar_args(
+        "STRESS:SXX",
+        _Plotter(viewport_height),
+        outside_colors=True,
+    )
     cube_bottom = 1.0 - (
         VIEWPORT_OVERLAY_MARGIN + VIEW_CUBE_SIZE + VIEWPORT_OVERLAY_GAP
     ) / viewport_height
@@ -94,6 +98,13 @@ def test_scalar_bar_reserves_view_cube_vertical_space_and_uses_readable_text():
     assert args["position_y"] + args["height"] <= cube_bottom + 1.0e-9
     assert args["title_font_size"] >= 13
     assert args["label_font_size"] >= 11
+    assert args["width"] <= 0.05
+    assert args["below_label"] == ""
+    assert args["above_label"] == ""
+
+    no_caps = scalar_bar_args("STRESS:SXX", _Plotter(viewport_height))
+    assert "below_label" not in no_caps
+    assert "above_label" not in no_caps
 
 
 def test_result_query_panel_caps_matrix_to_available_viewport_height():
