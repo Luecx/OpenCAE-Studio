@@ -56,13 +56,16 @@ def run() -> int:
 
     _progress(app, startup, 66, "Preparing 3D viewport…")
     window = MainWindow(context)
-    _progress(app, startup, 94, "Finalizing workspace…")
 
-    # Do not expose two top-level OpenCAE windows in the same compositor frame.
-    # In particular, an always-on-top/tool splash overlapping the native QVTK
-    # child caused desktop-wide flashing on some X11/XWayland setups.
+    # MainWindow queues its initial viewport refresh with a zero-delay timer.
+    # Do not process Qt events again while the QVTK hierarchy is still hidden:
+    # forcing that first VTK Render() before the parent window is mapped can
+    # create short-lived native X11/XWayland surfaces that look like flashing
+    # popups or cause unrelated windows to repaint.  Update the splash text
+    # synchronously, hide it, map the main window, and only then enter Qt's
+    # normal event loop where the queued viewport refresh can render safely.
+    startup.set_progress(94, "Finalizing workspace…")
     startup.set_progress(100, "Ready")
-    app.processEvents()
     startup.hide()
     window.show()
     startup.deleteLater()
