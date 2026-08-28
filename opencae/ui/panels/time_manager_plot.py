@@ -12,7 +12,7 @@ from opencae.ui.core.theme import PALETTE
 
 
 class TimeManagerPlot(QWidget):
-    """Render a compact clickable frame curve without an external chart dependency."""
+    """Render a compact frame/value curve without an external chart dependency."""
 
     frame_selected = pyqtSignal(int)
 
@@ -22,8 +22,10 @@ class TimeManagerPlot(QWidget):
         self._y = []
         self._current_index = -1
         self._cursor_x = None
-        self._x_label = "Frame"
+        self._x_label = "Time"
         self._y_label = "Value"
+        self._show_markers = True
+        self._interactive = True
         self._screen_points = []
         self.setMouseTracking(True)
         self.setMinimumHeight(150)
@@ -36,10 +38,12 @@ class TimeManagerPlot(QWidget):
         *,
         current_index=-1,
         cursor_x=None,
-        x_label="Frame",
+        x_label="Time",
         y_label="Value",
+        show_markers=True,
+        interactive=True,
     ) -> None:
-        """Replace the plotted frame series and current-playhead state."""
+        """Replace the plotted series and current-playhead state."""
         pairs = [
             (float(x), float(y))
             for x, y in zip(tuple(x_values), tuple(y_values))
@@ -51,6 +55,9 @@ class TimeManagerPlot(QWidget):
         self._cursor_x = None if cursor_x is None else float(cursor_x)
         self._x_label = str(x_label)
         self._y_label = str(y_label)
+        self._show_markers = bool(show_markers)
+        self._interactive = bool(interactive)
+        self._screen_points = []
         self.update()
 
     def set_current_index(self, index: int) -> None:
@@ -139,17 +146,18 @@ class TimeManagerPlot(QWidget):
             self._x_label,
         )
         painter.drawText(
-            QRectF(plot.left() + 8.0, plot.top() + 4.0, 120.0, 18.0),
+            QRectF(plot.left() + 8.0, plot.top() + 4.0, 140.0, 18.0),
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
             self._y_label,
         )
 
         screen_points = [point(x, y) for x, y in zip(self._x, self._y)]
-        self._screen_points = screen_points
+        self._screen_points = screen_points if self._interactive else []
         path = QPainterPath(screen_points[0])
         for value in screen_points[1:]:
             path.lineTo(value)
         painter.setPen(QPen(QColor(PALETTE["accent"]), 2.0))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)
 
         if self._cursor_x is not None and x_min <= self._cursor_x <= x_max:
@@ -157,19 +165,20 @@ class TimeManagerPlot(QWidget):
             painter.setPen(QPen(QColor(PALETTE["accent_hover"]), 1.0, Qt.PenStyle.DashLine))
             painter.drawLine(QPointF(px, plot.top()), QPointF(px, plot.bottom()))
 
-        for index, screen in enumerate(screen_points):
-            selected = index == self._current_index
-            radius = 6.0 if selected else 4.0
-            painter.setPen(QPen(QColor(PALETTE["text"]), 1.0))
-            painter.setBrush(QColor(PALETTE["accent"] if selected else PALETTE["panel_alt"]))
-            painter.drawEllipse(screen, radius, radius)
-            if selected:
-                painter.setPen(QPen(QColor(PALETTE["accent_hover"]), 2.0))
-                painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.drawEllipse(screen, radius + 3.0, radius + 3.0)
+        if self._show_markers:
+            for index, screen in enumerate(screen_points):
+                selected = index == self._current_index
+                radius = 6.0 if selected else 4.0
+                painter.setPen(QPen(QColor(PALETTE["text"]), 1.0))
+                painter.setBrush(QColor(PALETTE["accent"] if selected else PALETTE["panel_alt"]))
+                painter.drawEllipse(screen, radius, radius)
+                if selected:
+                    painter.setPen(QPen(QColor(PALETTE["accent_hover"]), 2.0))
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawEllipse(screen, radius + 3.0, radius + 3.0)
 
     def _nearest_marker(self, position, tolerance=10.0):
-        if not self._screen_points:
+        if not self._interactive or not self._screen_points:
             return None
         px, py = float(position.x()), float(position.y())
         distances = [
@@ -195,7 +204,9 @@ class TimeManagerPlot(QWidget):
         else:
             QToolTip.showText(
                 event.globalPosition().toPoint(),
-                f"Frame: {index + 1}\n{self._y_label}: {self._y[index]:.6g}",
+                f"Frame: {index + 1}\n"
+                f"{self._x_label}: {self._x[index]:.6g}\n"
+                f"{self._y_label}: {self._y[index]:.6g}",
                 self,
             )
         super().mouseMoveEvent(event)
