@@ -34,6 +34,15 @@ def show_result(scene, result, field=None, options=None):
             grid = None
         if grid is not None:
             scene.result_grid = grid
+            scene.owner.section_view.update_grid(
+                grid,
+                (
+                    scene.result_actor,
+                    scene.result_mesh_actor,
+                    scene.result_boundary_actor,
+                    scene.result_undeformed_actor,
+                ),
+            )
             scene.owner.plotter.render()
             return
 
@@ -112,7 +121,7 @@ def _show_topology_result(scene, result, options):
         ),
     )
     run = SimpleNamespace(name=getattr(result, "name", "Topology Result"))
-    scene.topology_overlay.show(
+    topology_actors = scene.topology_overlay.show(
         scene.owner,
         run,
         iteration,
@@ -121,6 +130,13 @@ def _show_topology_result(scene, result, options):
         threshold=0.0,
         options=options,
     )
+    if topology_actors is not None:
+        actor, grid, mesh_actor, boundary_actor = topology_actors
+        scene.owner.section_view.apply(
+            options.get("section", {}),
+            grid,
+            (actor, mesh_actor, boundary_actor),
+        )
     if camera is None:
         scene.owner.plotter.view_isometric()
         scene.owner.plotter.reset_camera()
