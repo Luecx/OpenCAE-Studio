@@ -60,12 +60,15 @@ class ResultDeformationButton(QToolButton):
         state_layout.addStretch(1)
         layout.addWidget(field_block("Deformation", state_row))
 
+        # Automatic scaling can legitimately be far below 1e-6 when a result
+        # contains very large physical displacements.  Six decimals silently
+        # rounded those valid factors to zero, effectively hiding deformation.
         self.scale = NumericUnitInput(
             1.0,
             "",
             minimum=0.0,
             maximum=1e12,
-            decimals=6,
+            decimals=15,
         )
         layout.addWidget(field_block("Deformation scaling factor", self.scale))
 
