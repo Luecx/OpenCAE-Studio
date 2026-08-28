@@ -58,7 +58,7 @@ class TopologyDensityOverlay:
             "boundary_lines": True,
             **dict(options or {}),
         }
-        _actor, _grid, _mesh, _boundary, names = add_topology_presentation(
+        actor, grid, mesh_actor, boundary_actor, names = add_topology_presentation(
             viewport.plotter,
             viewport.store.project,
             mesh_index,
@@ -71,6 +71,7 @@ class TopologyDensityOverlay:
         )
         self._names.extend(names)
         viewport.plotter.render()
+        return actor, grid, mesh_actor, boundary_actor
 
 
 __all__ = ["TopologyDensityOverlay", "visible_density_indices"]
