@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_results_ribbon_uses_same_flat_surface_as_other_pages():
+def test_results_ribbon_uses_flat_surface_with_subtle_active_toggle_lift():
     group_source = (ROOT / "opencae/ui/ribbon/result_group.py").read_text(
         encoding="utf-8"
     )
@@ -19,9 +19,10 @@ def test_results_ribbon_uses_same_flat_surface_as_other_pages():
     assert 'widget.setProperty("resultsRibbonButton", True)' in group_source
     assert 'QToolButton[resultsRibbonButton="true"]' in button_style
     checked = button_style.split(
-        'QToolButton[resultsRibbonButton="true"],', 1
+        'QToolButton[resultsRibbonButton="true"]:checked', 1
     )[1]
-    assert "background: transparent;" in checked
+    assert "background: {p['panel_active']};" in checked
+    assert "border-color: {p['accent']};" in checked
 
 
 def test_browser_project_solution_tabs_have_dedicated_flat_style():
