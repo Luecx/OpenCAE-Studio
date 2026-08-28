@@ -34,7 +34,7 @@ class TopologyThresholdControl(QWidget):
         self.automatic_input.setChecked(True)
         self.value_input = QDoubleSpinBox()
         self.value_input.setRange(0.0, 1.000001)
-        self.value_input.setDecimals(4)
+        self.value_input.setDecimals(10)
         self.value_input.setSingleStep(0.01)
         self.value_input.setValue(0.3)
         self.value_input.setEnabled(False)
@@ -75,8 +75,8 @@ class TopologyThresholdControl(QWidget):
         del blocker
         fallback = " · equal-element fallback" if approximate else ""
         self.summary.setText(
-            f"Automatic ρ ≥ {threshold:.4f} · binary constraint "
-            f"{achieved:.6g} / {limit:.6g}{fallback}"
+            f"Automatic ρ ≥ {threshold:.10g} · binary constraint "
+            f"{achieved:.10g} / {limit:.10g}{fallback}"
         )
 
     def show_automatic_unavailable(self) -> None:
@@ -87,7 +87,9 @@ class TopologyThresholdControl(QWidget):
 
     def show_manual_result(self) -> None:
         """Describe the active manual density cutoff."""
-        self.summary.setText(f"Manual density threshold ρ ≥ {self.value:.4f}")
+        self.summary.setText(
+            f"Manual density threshold ρ ≥ {self.value:.10g}"
+        )
 
     def _mode_changed(self, automatic: bool) -> None:
         """Enable manual entry only in manual mode and request a redraw."""
