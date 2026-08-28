@@ -6,9 +6,11 @@ import numpy as np
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QLabel,
     QRadioButton,
     QSizePolicy,
     QToolButton,
+    QWidget,
 )
 
 from opencae.ui.ribbon.result_deformation import ResultDeformationButton
@@ -63,25 +65,54 @@ def test_contour_mapping_clamps_discrete_level_count_to_52():
     assert contour_plot_kwargs({"levels": 999})["n_colors"] == 52
 
 
-def test_result_range_button_uses_one_shot_auto_actions_and_separate_color_row():
+def test_result_range_button_uses_bound_auto_icons_labels_and_symmetry_link():
     app = QApplication.instance() or QApplication([])
     button = ResultRangeButton()
     try:
         assert isinstance(button.continuous, QCheckBox)
         assert isinstance(button.outside_colors, QCheckBox)
         assert button.levels.maximum() == 52
-        assert not button.auto_frame.isCheckable()
-        assert not button.auto_frames.isCheckable()
-        assert button.auto_frame.text() == "Auto Frame"
-        assert button.auto_frames.text() == "Auto Frames"
+
+        auto_buttons = (
+            button.minimum_frame,
+            button.minimum_frames,
+            button.maximum_frame,
+            button.maximum_frames,
+        )
+        for auto in auto_buttons:
+            assert isinstance(auto, QToolButton)
+            assert not auto.isCheckable()
+            assert auto.text() == ""
+            assert not auto.icon().isNull()
+        assert "current frame" in button.minimum_frame.toolTip().lower()
+        assert "all frames" in button.minimum_frames.toolTip().lower()
+        assert "current frame" in button.maximum_frame.toolTip().lower()
+        assert "all frames" in button.maximum_frames.toolTip().lower()
+        assert button.minimum_frame.parent() is button.minimum.parent()
+        assert button.minimum_frames.parent() is button.minimum.parent()
+        assert button.maximum_frame.parent() is button.maximum.parent()
+        assert button.maximum_frames.parent() is button.maximum.parent()
+
+        assert button.symmetric.isCheckable()
+        assert not button.symmetric.icon().isNull()
+        assert "symmetrically" in button.symmetric.toolTip().lower()
+
+        labels = {
+            label.text()
+            for label in button.findChildren(QLabel)
+            if label.text()
+        }
+        assert "Below range" in labels
+        assert "Above range" in labels
+        separators = button.findChildren(QWidget, "ResultRangeSeparator")
+        assert len(separators) == 2
+
         assert button.below_color.text() == ""
         assert button.above_color.text() == ""
         assert button.below_color.toolTip() == "Below-range color"
         assert button.above_color.toolTip() == "Above-range color"
         assert button.below_color.minimumWidth() >= 72
         assert button.above_color.minimumWidth() >= 72
-        assert button.below_color.parent() is button.above_color.parent()
-        assert button.below_color.parent() is not button.outside_colors.parent()
         assert (
             button.below_color.sizePolicy().horizontalPolicy()
             == QSizePolicy.Policy.Expanding
@@ -93,7 +124,7 @@ def test_result_range_button_uses_one_shot_auto_actions_and_separate_color_row()
 
         button.set_data_range(-3.0, 12.0)
         # Remembering frame data must not silently overwrite a concrete/manual
-        # range. Auto Frame is an action that copies it when explicitly invoked.
+        # range. A bound icon is a one-shot calculation action.
         assert button.values()["minimum"] == 0.0
         assert button.values()["maximum"] == 0.0
         button.apply_data_range()
@@ -102,9 +133,32 @@ def test_result_range_button_uses_one_shot_auto_actions_and_separate_color_row()
         assert values["maximum"] == 12.0
         assert values["minimum_auto"] is False
         assert values["maximum_auto"] is False
-        assert values["levels"] == DEFAULT_CONTOUR_LEVELS
-        assert values["continuous"] is False
-        assert values["outside_colors"] is True
+        assert values["symmetric"] is False
+
+        # Bound-specific calculations leave the opposite side untouched while
+        # uncoupled.
+        button.set_bound("minimum", -4.0)
+        assert button.minimum.value() == -4.0
+        assert button.maximum.value() == 12.0
+        button.set_bound("maximum", 9.0)
+        assert button.minimum.value() == -4.0
+        assert button.maximum.value() == 9.0
+
+        # Linking first normalizes the envelope, then either editor mirrors the
+        # opposite bound with the same magnitude and inverse sign.
+        button.symmetric.setChecked(True)
+        assert button.minimum.value() == -9.0
+        assert button.maximum.value() == 9.0
+        button.minimum.setValue(-5.0)
+        assert button.minimum.value() == -5.0
+        assert button.maximum.value() == 5.0
+        button.maximum.setValue(8.0)
+        assert button.minimum.value() == -8.0
+        assert button.maximum.value() == 8.0
+        button.set_bound("minimum", -2.5)
+        assert button.minimum.value() == -2.5
+        assert button.maximum.value() == 2.5
+        assert button.values()["symmetric"] is True
 
         button.levels.setValue(52)
         button.continuous.setChecked(True)
@@ -124,6 +178,9 @@ def test_result_range_button_uses_one_shot_auto_actions_and_separate_color_row()
     assert 'SectionHeading("Range")' in source
     assert 'SectionHeading("Color Mapping")' in source
     assert 'SectionHeading("Outside Range")' in source
+    assert source.count("ResultRangeSeparator") >= 2
+    assert '"Auto Frame"' not in source
+    assert '"Auto Frames"' not in source
     assert "minimum_auto.toggled" not in source
     assert "maximum_auto.toggled" not in source
 
@@ -146,6 +203,11 @@ def test_deformation_and_section_buttons_open_instant_popups_with_radio_state():
         section.section_on.setChecked(True)
         assert deformation.values()[0] is True
         assert section.values()["enabled"] is True
+
+        assert deformation.auto_frame.text() == "Current Frame"
+        assert deformation.auto_frames.text() == "All Frames"
+        assert "current frame" in deformation.auto_frame.toolTip().lower()
+        assert "all frames" in deformation.auto_frames.toolTip().lower()
 
         # Very large physical displacements can produce tiny automatic display
         # factors. They must survive the editor instead of rounding to zero.

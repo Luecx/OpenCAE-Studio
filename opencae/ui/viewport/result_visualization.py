@@ -5,7 +5,7 @@ import numpy as np
 from opencae.results import FrdLoader
 from opencae.ui.core.theme import PALETTE
 from .contour_mapping import contour_plot_kwargs
-from .scalar_bar import scalar_bar_args
+from .scalar_bar import install_scalar_bar_end_caps, scalar_bar_args
 
 _LOADER = FrdLoader()
 _SOURCE_POINT_INDEX = "_opencae_source_point_index"
@@ -48,6 +48,13 @@ def add_result(plotter, result, field=None, options=None):
         pickable=True,
         render=False,
     )
+    if scalar:
+        install_scalar_bar_end_caps(
+            plotter,
+            scalar,
+            below_color=mapping["below_color"],
+            above_color=mapping["above_color"],
+        )
     mesh_edges = (
         _mesh_edges(plotter, grid, "solution-mesh-lines")
         if show_edges
@@ -124,7 +131,7 @@ def update_result(
     if boundary_actor is not None:
         _update_line_actor(boundary_actor, grid, _boundary_grid)
     # The undeformed reference geometry is invariant across compatible result
-    # frames.  Re-extracting its boundary every 16 ms was pure animation cost.
+    # frames. Re-extracting its boundary every 16 ms was pure animation cost.
     del undeformed_actor, original
     return grid
 
@@ -238,7 +245,7 @@ def _animated_grid(grid, result, field, options):
         return grid
     scalar = _scalar_name(field)
     if mode == "factor":
-        # Current-frame playback uses a full sine cycle.  Negative amplitudes
+        # Current-frame playback uses a full sine cycle. Negative amplitudes
         # therefore represent the reversed response and must reach both the
         # displayed scalar and displacement field unchanged in sign.
         factor = min(max(float(animation.get("factor", 1.0)), -1.0), 1.0)
@@ -394,7 +401,7 @@ def _clim(grid, scalar, settings):
         return None
     minimum_auto = settings.get("minimum_auto", settings.get("auto", True))
     maximum_auto = settings.get("maximum_auto", settings.get("auto", True))
-    # Time Manager freezes automatic limits before playback.  In that common
+    # Time Manager freezes automatic limits before playback. In that common
     # path there is no reason to scan every scalar array on every render tick.
     if (
         not minimum_auto

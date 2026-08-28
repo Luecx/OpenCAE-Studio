@@ -6,16 +6,24 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import numpy as np
+import pyvista as pv
 from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtGui import QAction, QIcon, QPixmap
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QWidget
+from vtkmodules.vtkRenderingAnnotation import vtkScalarBarActor
 
 from opencae.ui.core.metrics import RIBBON_BUTTON_HEIGHT
 from opencae.ui.templates import action_button
 from opencae.ui.viewport.result_query_model import QueryResult
 from opencae.ui.viewport.result_query_panel import ResultQueryPanel
-from opencae.ui.viewport.scalar_bar import scalar_bar_args
+from opencae.ui.viewport.scalar_bar import (
+    _cap_rectangles,
+    _disable_native_range_swatches,
+    install_scalar_bar_end_caps,
+    scalar_bar_args,
+)
 from opencae.ui.viewport.view_cube import ViewCube
 from opencae.ui.viewport.viewport_overlay_metrics import (
     VIEW_CUBE_SIZE,
@@ -83,8 +91,8 @@ class _Plotter:
         return self._height
 
 
-def test_scalar_bar_reserves_cube_space_and_uses_compact_unlabeled_range_caps():
-    """The right-side colorbar stays below the cube and keeps range caps subtle."""
+def test_scalar_bar_reserves_cube_space_without_native_range_labels():
+    """The main bar stays below the cube and does not request swatch labels."""
     viewport_height = 600
     args = scalar_bar_args(
         "STRESS:SXX",
@@ -99,12 +107,76 @@ def test_scalar_bar_reserves_cube_space_and_uses_compact_unlabeled_range_caps():
     assert args["title_font_size"] >= 13
     assert args["label_font_size"] >= 11
     assert args["width"] <= 0.05
-    assert args["below_label"] == ""
-    assert args["above_label"] == ""
+    assert "below_label" not in args
+    assert "above_label" not in args
 
-    no_caps = scalar_bar_args("STRESS:SXX", _Plotter(viewport_height))
-    assert "below_label" not in no_caps
-    assert "above_label" not in no_caps
+
+def test_scalar_bar_native_range_swatches_are_explicitly_disabled():
+    """PyVista's LUT colors must not resurrect VTK's thick padded swatches."""
+    actor = vtkScalarBarActor()
+    actor.DrawBelowRangeSwatchOn()
+    actor.DrawAboveRangeSwatchOn()
+    assert actor.GetDrawBelowRangeSwatch()
+    assert actor.GetDrawAboveRangeSwatch()
+
+    _disable_native_range_swatches(actor)
+
+    assert not actor.GetDrawBelowRangeSwatch()
+    assert not actor.GetDrawAboveRangeSwatch()
+
+
+def test_scalar_bar_custom_caps_use_configured_outside_colors():
+    """The cap actors must use exactly the colors selected in the contour menu."""
+    plotter = pv.Plotter(off_screen=True, window_size=(360, 360))
+    mesh = pv.Sphere(theta_resolution=8, phi_resolution=8)
+    mesh["value"] = np.asarray(mesh.points)[:, 2]
+    try:
+        plotter.add_mesh(
+            mesh,
+            scalars="value",
+            clim=(-0.5, 0.5),
+            below_color="#345678",
+            above_color="#c08040",
+            scalar_bar_args=scalar_bar_args(
+                "value",
+                plotter,
+                outside_colors=True,
+            ),
+            render=False,
+        )
+        state = install_scalar_bar_end_caps(
+            plotter,
+            "value",
+            below_color="#345678",
+            above_color="#c08040",
+        )
+        assert state is not None
+        scalar_actor = plotter.scalar_bars["value"]
+        assert not scalar_actor.GetDrawBelowRangeSwatch()
+        assert not scalar_actor.GetDrawAboveRangeSwatch()
+        assert np.allclose(
+            state["below_actor"].GetProperty().GetColor(),
+            (0x34 / 255.0, 0x56 / 255.0, 0x78 / 255.0),
+        )
+        assert np.allclose(
+            state["above_actor"].GetProperty().GetColor(),
+            (0xC0 / 255.0, 0x80 / 255.0, 0x40 / 255.0),
+        )
+    finally:
+        plotter.close()
+
+
+def test_scalar_bar_custom_caps_are_thin_and_exactly_touch_main_bar():
+    """Outside-range caps have independent thickness and zero pixel gap."""
+    bar = (50, 100, 18, 320)
+    below, above = _cap_rectangles(bar, cap_pixels=6)
+
+    assert below == (50, 94, 18, 6)
+    assert above == (50, 420, 18, 6)
+    assert below[1] + below[3] == bar[1]
+    assert above[1] == bar[1] + bar[3]
+    assert below[3] == above[3] == 6
+    assert below[3] < bar[2]
 
 
 def test_result_query_panel_caps_matrix_to_available_viewport_height():
