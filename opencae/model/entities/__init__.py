@@ -1,3 +1,4 @@
+from .amplitudes import *
 from .analysis import *
 from .assembly import *
 from .constraints import *
