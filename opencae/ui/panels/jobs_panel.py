@@ -2,6 +2,7 @@
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QHeaderView,
     QMenu,
     QTableWidget,
@@ -30,17 +31,26 @@ class JobsPanel(QWidget):
         root.setSpacing(4)
 
         self.table = QTableWidget(0, 5)
+        self.table.setProperty("flatTable", True)
+        self.table.setShowGrid(False)
+        self.table.setAlternatingRowColors(False)
+        self.table.setFrameShape(QTableWidget.Shape.NoFrame)
+        self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setHorizontalHeaderLabels(
             ["Job", "Source", "Kind", "Solver", "Status"]
         )
         header = self.table.horizontalHeader()
+        header.setProperty("flatTableHeader", True)
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         header.setMinimumSectionSize(60)
+        header.setMinimumHeight(30)
         header.setStretchLastSection(False)
+        header.setHighlightSections(False)
         for column in range(5):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
         self.table.verticalHeader().hide()
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.itemSelectionChanged.connect(self._selection_changed)
         self.table.customContextMenuRequested.connect(self._show_context_menu)
