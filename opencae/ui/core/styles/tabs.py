@@ -2,8 +2,11 @@ def css(p):
     return f"""
     QTabWidget::pane {{
         border: none;
-        border-top: 1px solid {p['border']};
         background: {p['panel']};
+    }}
+    QTabBar {{
+        background: {p['panel']};
+        border: none;
     }}
     QTabBar::tab {{
         background: {p['panel']};
