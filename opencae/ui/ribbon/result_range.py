@@ -36,6 +36,8 @@ class ResultRangeButton(QToolButton):
     """Open a compact editor for result range and contour color mapping."""
 
     range_changed = pyqtSignal(object)
+    auto_frame_requested = pyqtSignal()
+    auto_frames_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         """Build the ribbon button and its contour presentation controls."""
@@ -60,10 +62,24 @@ class ResultRangeButton(QToolButton):
         layout.setSpacing(10)
 
         layout.addWidget(SectionHeading("Range"))
-        minimum_row, self.minimum, self.minimum_auto = self._field()
-        maximum_row, self.maximum, self.maximum_auto = self._field()
-        layout.addWidget(field_block("Minimum", minimum_row))
-        layout.addWidget(field_block("Maximum", maximum_row))
+        self.minimum = self._field()
+        self.maximum = self._field()
+        layout.addWidget(field_block("Minimum", self.minimum))
+        layout.addWidget(field_block("Maximum", self.maximum))
+
+        auto_row = QWidget()
+        auto_layout = QHBoxLayout(auto_row)
+        auto_layout.setContentsMargins(0, 0, 0, 0)
+        auto_layout.setSpacing(8)
+        self.auto_frame = self._auto_button("Auto Frame")
+        self.auto_frames = self._auto_button("Auto Frames")
+        self.auto_frame.setToolTip("Set the contour range from the current frame")
+        self.auto_frames.setToolTip(
+            "Set the contour range from this field/component across all frames in the current step"
+        )
+        auto_layout.addWidget(self.auto_frame, 1)
+        auto_layout.addWidget(self.auto_frames, 1)
+        layout.addWidget(auto_row)
 
         layout.addWidget(SectionHeading("Color Mapping"))
         self.continuous = QCheckBox("Continuous color mapping")
@@ -90,19 +106,23 @@ class ResultRangeButton(QToolButton):
         layout.addWidget(field_block("Number of levels", levels_row))
 
         layout.addWidget(SectionHeading("Outside Range"))
-        outside_row = QWidget()
-        outside_layout = QHBoxLayout(outside_row)
-        outside_layout.setContentsMargins(0, 0, 0, 0)
-        outside_layout.setSpacing(8)
         self.outside_colors = QCheckBox("Color values outside range")
         self.outside_colors.setChecked(True)
         self.outside_colors.setObjectName("ResultOutsideColorsCheckBox")
-        outside_layout.addWidget(self.outside_colors, 0)
+        layout.addWidget(self.outside_colors)
+
+        # The swatches are deliberately one full-width row below the checkbox.
+        # They visually read as the two colorbar end colors rather than as tiny
+        # form actions attached to the checkbox label.
+        color_row = QWidget()
+        color_layout = QHBoxLayout(color_row)
+        color_layout.setContentsMargins(0, 0, 0, 0)
+        color_layout.setSpacing(8)
         self.below_color = self._color_button("below")
         self.above_color = self._color_button("above")
-        outside_layout.addWidget(self.below_color, 1)
-        outside_layout.addWidget(self.above_color, 1)
-        layout.addWidget(outside_row)
+        color_layout.addWidget(self.below_color, 1)
+        color_layout.addWidget(self.above_color, 1)
+        layout.addWidget(color_row)
 
         menu = QMenu(self)
         action = QWidgetAction(menu)
@@ -112,50 +132,40 @@ class ResultRangeButton(QToolButton):
 
         for spin in (self.minimum, self.maximum):
             spin.valueChanged.connect(self._emit)
-        self.minimum_auto.toggled.connect(
-            lambda checked: self._auto_changed("minimum", checked)
-        )
-        self.maximum_auto.toggled.connect(
-            lambda checked: self._auto_changed("maximum", checked)
-        )
+        self.auto_frame.clicked.connect(self.auto_frame_requested.emit)
+        self.auto_frames.clicked.connect(self.auto_frames_requested.emit)
         self.levels.valueChanged.connect(self._levels_changed)
         self.continuous.toggled.connect(self._continuous_changed)
         self.outside_colors.toggled.connect(self._outside_colors_changed)
         self.below_color.clicked.connect(lambda: self._choose_color("below"))
         self.above_color.clicked.connect(lambda: self._choose_color("above"))
-        self.minimum_auto.setChecked(True)
-        self.maximum_auto.setChecked(True)
 
     @staticmethod
     def _field():
-        """Return one composite numeric limit row and its child controls."""
-        host = QWidget()
-        row = QHBoxLayout(host)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(6)
-
+        """Return one full-width numeric contour limit editor."""
         spin = QDoubleSpinBox()
         spin.setRange(-1e300, 1e300)
-        spin.setDecimals(8)
+        spin.setDecimals(12)
         spin.setMinimumWidth(0)
         apply_primary_control_height(spin)
+        return spin
 
-        auto = QToolButton()
-        auto.setText("Auto")
-        auto.setCheckable(True)
-        auto.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
-        auto.setMinimumWidth(58)
-        auto.setObjectName("ResultAutoButton")
-
-        row.addWidget(spin, 1)
-        row.addWidget(auto)
-        return host, spin, auto
+    @staticmethod
+    def _auto_button(text):
+        """Return a one-shot range calculation button, never a toggle state."""
+        button = QToolButton()
+        button.setText(text)
+        button.setCheckable(False)
+        button.setMinimumHeight(PRIMARY_CONTROL_HEIGHT)
+        button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        button.setObjectName("ResultAutoButton")
+        return button
 
     def _color_button(self, name):
         """Return an expanding colorbar end swatch for outside-range values."""
         button = QToolButton()
         button.setMinimumWidth(72)
-        button.setFixedHeight(24)
+        button.setFixedHeight(22)
         button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         button.setObjectName("ResultContourColorButton")
         button.setToolTip(
@@ -178,41 +188,40 @@ class ResultRangeButton(QToolButton):
         )
 
     def set_data_range(self, minimum, maximum):
-        """Replace the automatic limits with the range of the active result field."""
+        """Remember the active-frame data range without creating an auto state."""
         self._data_range = (float(minimum), float(maximum))
-        self._apply_auto("minimum")
-        self._apply_auto("maximum")
+
+    def set_range(self, minimum, maximum):
+        """Set concrete contour limits and publish them as ordinary fixed values."""
+        lower, upper = float(minimum), float(maximum)
+        if lower > upper:
+            lower, upper = upper, lower
+        for spin, value in ((self.minimum, lower), (self.maximum, upper)):
+            spin.blockSignals(True)
+            spin.setValue(value)
+            spin.blockSignals(False)
+        self._data_range = (lower, upper)
+        self._emit()
+
+    def apply_data_range(self):
+        """Copy the remembered current-frame range into the editable fields."""
+        self.set_range(*self._data_range)
 
     def values(self):
         """Return the complete range and contour-mapping configuration."""
         return {
             "minimum": self.minimum.value(),
             "maximum": self.maximum.value(),
-            "minimum_auto": self.minimum_auto.isChecked(),
-            "maximum_auto": self.maximum_auto.isChecked(),
+            # Retain these compatibility keys for renderers/persisted options,
+            # but Auto is now an action rather than a persistent toggle mode.
+            "minimum_auto": False,
+            "maximum_auto": False,
             "levels": self.levels.value(),
             "continuous": self.continuous.isChecked(),
             "outside_colors": self.outside_colors.isChecked(),
             "below_color": self._colors["below"],
             "above_color": self._colors["above"],
         }
-
-    def _auto_changed(self, name, checked):
-        """Enable manual editing only when automatic range selection is disabled."""
-        getattr(self, name).setEnabled(not checked)
-        if checked:
-            self._apply_auto(name)
-        self._emit()
-
-    def _apply_auto(self, name):
-        """Copy the current data-range endpoint into an automatic limit editor."""
-        button = getattr(self, name + "_auto")
-        if not button.isChecked():
-            return
-        spin = getattr(self, name)
-        spin.blockSignals(True)
-        spin.setValue(self._data_range[0 if name == "minimum" else 1])
-        spin.blockSignals(False)
 
     def _levels_changed(self, value):
         self.level_value.setText(str(int(value)))
