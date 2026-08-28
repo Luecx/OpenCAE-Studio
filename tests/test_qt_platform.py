@@ -1,6 +1,15 @@
-"""Tests OpenCAE's pre-QApplication Qt platform selection policy."""
+"""Tests OpenCAE's pre-QApplication Qt platform and OpenGL policy."""
 
+from pathlib import Path
+
+from PyQt6.QtGui import QSurfaceFormat
+
+from opencae.app.qt_opengl import opencae_surface_format
 from opencae.app.qt_platform import is_wayland_session, recommended_qt_platform
+
+
+ROOT = Path(__file__).resolve().parents[1]
+_PYVISTAQT_WAYLAND_COMMIT = "98a9abbd465f0c9e92eeb4c69f4c6ada1d19b84f"
 
 
 def test_wayland_session_is_detected_from_session_type():
@@ -13,14 +22,14 @@ def test_wayland_session_is_detected_from_display_socket():
     assert is_wayland_session({"WAYLAND_DISPLAY": "wayland-0"})
 
 
-def test_linux_wayland_defaults_to_xcb_for_current_vtk_bridge():
-    """Auto mode must keep Qt and the current X11 VTK bridge on one backend."""
+def test_linux_wayland_auto_mode_keeps_native_qt_selection():
+    """Auto mode must no longer force a Wayland session through XWayland/xcb."""
     assert (
         recommended_qt_platform(
             system="Linux",
             environment={"XDG_SESSION_TYPE": "wayland"},
         )
-        == "xcb"
+        is None
     )
 
 
@@ -38,22 +47,32 @@ def test_explicit_qt_platform_is_never_overridden():
     )
 
 
-def test_native_override_allows_wayland_development():
-    """Developers must be able to opt into the future native Wayland path."""
+def test_explicit_opencae_xcb_fallback_remains_available():
+    """Users with problematic drivers can still deliberately request XWayland."""
     assert (
         recommended_qt_platform(
             system="Linux",
             environment={
                 "XDG_SESSION_TYPE": "wayland",
-                "OPENCAE_QT_PLATFORM": "native",
+                "OPENCAE_QT_PLATFORM": "xcb",
             },
         )
-        is None
+        == "xcb"
+    )
+
+
+def test_explicit_wayland_override_remains_available():
+    assert (
+        recommended_qt_platform(
+            system="Linux",
+            environment={"OPENCAE_QT_PLATFORM": "wayland"},
+        )
+        == "wayland"
     )
 
 
 def test_non_wayland_linux_keeps_qt_default():
-    """X11 sessions do not need an OpenCAE-specific QPA override."""
+    """X11 sessions also remain under Qt's native auto-selection."""
     assert (
         recommended_qt_platform(
             system="Linux",
@@ -61,3 +80,37 @@ def test_non_wayland_linux_keeps_qt_default():
         )
         is None
     )
+
+
+def test_qt_opengl_format_matches_qopenglwidget_vtk_bridge_requirements():
+    fmt = opencae_surface_format()
+    assert fmt.renderableType() == QSurfaceFormat.RenderableType.OpenGL
+    assert fmt.profile() == QSurfaceFormat.OpenGLContextProfile.CoreProfile
+    assert (fmt.majorVersion(), fmt.minorVersion()) == (3, 2)
+    assert fmt.swapBehavior() == QSurfaceFormat.SwapBehavior.DoubleBuffer
+    assert fmt.redBufferSize() == 8
+    assert fmt.greenBufferSize() == 8
+    assert fmt.blueBufferSize() == 8
+    assert fmt.depthBufferSize() == 8
+    assert fmt.alphaBufferSize() == 8
+    assert fmt.stencilBufferSize() == 0
+    assert fmt.samples() == 0
+
+
+def test_qt_opengl_is_configured_before_qapplication_and_top_level_widgets():
+    source = (ROOT / "opencae/app/application.py").read_text(encoding="utf-8")
+    assert source.index("configure_qt_platform_environment()") < source.index(
+        "from .qt_opengl import configure_qt_opengl"
+    )
+    assert source.index("configure_qt_opengl()") < source.index(
+        "from PyQt6.QtWidgets import QApplication"
+    )
+    assert source.index("configure_qt_opengl()") < source.index("StartupWindow")
+
+
+def test_pyvistaqt_is_pinned_to_merged_wayland_qopenglwidget_bridge():
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert _PYVISTAQT_WAYLAND_COMMIT in requirements
+    assert _PYVISTAQT_WAYLAND_COMMIT in pyproject
+    assert "git+https://github.com/pyvista/pyvistaqt.git" in requirements
