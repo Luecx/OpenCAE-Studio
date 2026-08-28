@@ -58,6 +58,7 @@ class JobsPanel(QWidget):
         root.addWidget(self.table, 1)
 
         store.changed.connect(self.refresh)
+        store.runtime_changed.connect(self._runtime_changed)
         jobs.selection_changed.connect(self._manager_selection_changed)
         self.refresh()
         self._resize_columns()
@@ -78,6 +79,11 @@ class JobsPanel(QWidget):
             self.table.setColumnWidth(column, width)
             used += width
         self.table.setColumnWidth(4, max(60, available - used))
+
+    def _runtime_changed(self, entity_id, _fields):
+        """Refresh only when the lightweight update belongs to a visible Job."""
+        if any(job.id == str(entity_id) for job in self.store.project.jobs):
+            self.refresh()
 
     def refresh(self, *_):
         """Rebuild Job rows while preserving the manager's selected Job."""
