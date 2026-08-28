@@ -82,6 +82,8 @@ def test_runtime_job_progress_does_not_copy_document_or_enter_undo_history():
     assert live.progress == pytest.approx(0.625)
     assert live.progress_label == "Solving"
     assert len(store._undo) == undo_count
+    # Scalar lifecycle metadata changes neither ownership nor EntityRefs. Keeping
+    # the exact same ProjectIndex object is the performance contract here.
     assert store.project.index is index_before
     assert document_events == []
     assert runtime_events == [
@@ -114,6 +116,19 @@ def test_topology_runner_prepares_and_consumes_iterations_off_thread():
     assert "processing results" in source
     assert "_compute_iteration_payload" in source
     assert "waitForFinished" not in source
+
+
+def test_topology_job_adapter_uses_chunked_output_and_lightweight_runtime_commits():
+    source = (ROOT / "opencae/optimization/job_runner.py").read_text(
+        encoding="utf-8"
+    )
+    assert "self.progress.emit(text)" in source
+    assert "text.splitlines()" not in source
+    assert "update_runtime_fields" in source
+    assert "_append_iteration_runtime" in source
+    assert "index.by_id[stored.id] = stored" in source
+    assert "self.store.add_entity(" not in source
+    assert "self.store.replace_entity(" not in source
 
 
 def test_mesh_generation_runs_gmsh_on_background_task_with_stale_guard():
