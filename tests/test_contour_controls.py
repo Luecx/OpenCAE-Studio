@@ -1,6 +1,7 @@
 """Regressions for result contour controls and coordinate-system overlays."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from PyQt6.QtWidgets import (
@@ -261,6 +262,76 @@ def test_coordinate_overlay_observes_camera_for_screen_space_rescaling():
     overlay._observe_camera(plotter)
     assert plotter.camera.callback is not None
     assert overlay._observer_id == 9
+
+
+def test_coordinate_overlay_rescales_existing_actors_without_rebuilding():
+    """Camera updates preserve every expensive mesh and label pipeline."""
+    class Actor:
+        def __init__(self):
+            self.position = None
+            self.scale = None
+
+        def SetPosition(self, *position):
+            self.position = position
+
+        def SetScale(self, *scale):
+            self.scale = scale
+
+    class Camera:
+        position = (0.0, 0.0, 10.0)
+        parallel_scale = 2.0
+
+        def AddObserver(self, _event, _callback):
+            return 3
+
+        def GetParallelProjection(self):
+            return True
+
+        def GetParallelScale(self):
+            return self.parallel_scale
+
+    class Plotter:
+        def __init__(self):
+            self.camera = Camera()
+            self.window_size = (800, 600)
+            self.added = []
+            self.removed = []
+
+        def add_mesh(self, _mesh, **kwargs):
+            actor = Actor()
+            self.added.append((kwargs["name"], actor))
+            return actor
+
+        def add_point_labels(self, _points, _labels, **kwargs):
+            actor = Actor()
+            self.added.append((kwargs["name"], actor))
+            return actor
+
+        def remove_actor(self, name, **_kwargs):
+            self.removed.append(name)
+
+    system = SimpleNamespace(
+        name="CSYS-1",
+        origin=(1.0, 2.0, 3.0),
+        axis_1=(1.0, 0.0, 0.0),
+        axis_2=(0.0, 1.0, 0.0),
+        system_type="Rectangular",
+    )
+    plotter = Plotter()
+    overlay = CoordinateSystemOverlay()
+    overlay.show_part(
+        plotter,
+        SimpleNamespace(coordinate_systems=[system]),
+    )
+    actors = tuple(actor for _name, actor in plotter.added)
+    initial_scales = tuple(actor.scale for actor in actors if actor.scale)
+
+    plotter.camera.parallel_scale = 4.0
+    assert overlay.refresh_scale(plotter)
+
+    assert tuple(actor for _name, actor in plotter.added) == actors
+    assert plotter.removed == []
+    assert tuple(actor.scale for actor in actors if actor.scale) != initial_scales
 
 
 def test_ribbon_dropdown_style_has_arrow_without_split_button_border():

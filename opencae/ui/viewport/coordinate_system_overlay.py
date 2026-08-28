@@ -1,33 +1,33 @@
-"""Render model coordinate systems at a fixed screen-space size."""
+"""Coordinate persistent coordinate-system visuals with the active camera."""
+
+from __future__ import annotations
 
 import numpy as np
-import pyvista as pv
 
+from .coordinate_system_visual import (
+    CoordinateSystemVisual,
+    ring_geometry as _ring_geometry,
+)
 from .instance_transform import transform_points, transform_vector
-from .safe_operations import remove_actor
 from .screen_scale import world_size_for_pixels
 
 
 class CoordinateSystemOverlay:
-    """Draw visible coordinate systems and keep them constant in screen space."""
+    """Own visible coordinate systems and update their existing actor transforms."""
 
     def __init__(self):
-        self._names = []
-        self._records = []
+        self._visuals: list[CoordinateSystemVisual] = []
         self._camera = None
         self._observer_id = None
-        self._rescaling = False
-
-    def _clear_actors(self, plotter):
-        for name in self._names:
-            remove_actor(plotter, name)
-        self._names.clear()
 
     def clear(self, plotter):
-        self._clear_actors(plotter)
-        self._records.clear()
+        """Remove all persistent visuals while retaining the camera observer."""
+        for visual in self._visuals:
+            visual.clear(plotter)
+        self._visuals.clear()
 
     def show_part(self, plotter, part, scene=None):
+        """Replace the overlay with visible systems owned by one Part."""
         self._observe_camera(plotter)
         records = [
             (system, f"part-{index}", None)
@@ -37,6 +37,7 @@ class CoordinateSystemOverlay:
         self._replace_records(plotter, records)
 
     def show_assembly(self, plotter, project, scene):
+        """Replace the overlay with Assembly and transformed Part systems."""
         self._observe_camera(plotter)
         records = [
             (system, f"assembly-{index}", None)
@@ -55,16 +56,27 @@ class CoordinateSystemOverlay:
         self._replace_records(plotter, records)
 
     def _replace_records(self, plotter, records):
-        """Replace visible systems without reacting to camera events caused by actors."""
-        if self._rescaling:
-            return
-        self._rescaling = True
-        try:
-            self._clear_actors(plotter)
-            self._records = list(records)
-            self._redraw(plotter)
-        finally:
-            self._rescaling = False
+        """Recreate visuals only when the displayed model context changes."""
+        self.clear(plotter)
+        for system, key, instance in records:
+            origin = np.asarray(system.origin, dtype=float)
+            axes = self._axes(system)
+            if instance is not None:
+                origin = transform_points([origin], instance)[0]
+                axes = tuple(transform_vector(axis, instance) for axis in axes)
+            cylindrical = str(system.system_type).lower().startswith("cyl")
+            labels = ("r", "θ", "z") if cylindrical else ("x", "y", "z")
+            visual = CoordinateSystemVisual(
+                plotter,
+                key=key,
+                name=system.name,
+                origin=origin,
+                axes=axes,
+                labels=labels,
+                cylindrical=cylindrical,
+            )
+            visual.set_scale(world_size_for_pixels(plotter, origin, 44))
+            self._visuals.append(visual)
 
     def _observe_camera(self, plotter):
         camera = getattr(plotter, "camera", None)
@@ -86,91 +98,14 @@ class CoordinateSystemOverlay:
             self._observer_id = None
 
     def refresh_scale(self, plotter):
-        """Rebuild only coordinate-system actors using the current camera zoom."""
-        if not self._records or self._rescaling:
+        """Update actor transforms and label points without rebuilding pipelines."""
+        if not self._visuals:
             return False
-        self._rescaling = True
-        try:
-            self._clear_actors(plotter)
-            self._redraw(plotter)
-        finally:
-            self._rescaling = False
+        for visual in self._visuals:
+            visual.set_scale(
+                world_size_for_pixels(plotter, visual.origin, 44)
+            )
         return True
-
-    def _redraw(self, plotter):
-        for system, key, instance in self._records:
-            self._draw(plotter, system, key, instance)
-
-    def _draw(self, plotter, system, key, instance=None):
-        origin = np.asarray(system.origin, dtype=float)
-        x, y, z = self._axes(system)
-        if instance:
-            origin = transform_points([origin], instance)[0]
-            x, y, z = (transform_vector(vector, instance) for vector in (x, y, z))
-        scale = world_size_for_pixels(plotter, origin, 44)
-        cylindrical = str(system.system_type).lower().startswith("cyl")
-        labels = ("r", "θ", "z") if cylindrical else ("x", "y", "z")
-        for suffix, vector, color, label in zip(
-            ("x", "y", "z"),
-            (x, y, z),
-            ("#ef6666", "#70d184", "#6ca6ff"),
-            labels,
-        ):
-            name = f"csys-{key}-{suffix}"
-            self._names.append(name)
-            arrow = pv.Arrow(start=origin, direction=vector, scale=scale)
-            plotter.add_mesh(
-                arrow,
-                color=color,
-                lighting=False,
-                pickable=False,
-                name=name,
-                render=False,
-            )
-            tip = origin + vector * scale
-            label_name = f"{name}-label"
-            self._names.append(label_name)
-            plotter.add_point_labels(
-                np.asarray([tip]),
-                [label],
-                name=label_name,
-                point_size=0,
-                font_size=9,
-                text_color=color,
-                shape_opacity=0,
-                always_visible=False,
-                render=False,
-            )
-        if cylindrical:
-            self._ring(plotter, origin, z, scale * 0.48, key)
-        label_name = f"csys-{key}-label"
-        self._names.append(label_name)
-        plotter.add_point_labels(
-            np.asarray([origin]),
-            [system.name],
-            name=label_name,
-            point_size=0,
-            font_size=10,
-            text_color="#f0f3f6",
-            shape_color="#20262d",
-            shape_opacity=0.82,
-            always_visible=False,
-            render=False,
-        )
-
-    def _ring(self, plotter, origin, normal, radius, key):
-        name = f"csys-{key}-ring"
-        self._names.append(name)
-        circle = _ring_geometry(origin, normal, radius)
-        plotter.add_mesh(
-            circle,
-            color="#8fd3ff",
-            line_width=2,
-            lighting=False,
-            pickable=False,
-            name=name,
-            render=False,
-        )
 
     @staticmethod
     def _axes(system):
@@ -188,25 +123,6 @@ class CoordinateSystemOverlay:
         vector = np.asarray(value, dtype=float)
         norm = np.linalg.norm(vector)
         return vector / norm if norm > 1e-14 else np.asarray((1.0, 0.0, 0.0))
-
-
-def _ring_geometry(origin, normal, radius):
-    """Build a circular polyline in the plane orthogonal to ``normal``."""
-    center = np.asarray(origin, dtype=float)
-    axis = CoordinateSystemOverlay._unit(normal)
-    reference = (
-        np.asarray((1.0, 0.0, 0.0))
-        if abs(float(axis[0])) < 0.9
-        else np.asarray((0.0, 1.0, 0.0))
-    )
-    polar = CoordinateSystemOverlay._unit(np.cross(axis, reference)) * float(radius)
-    return pv.CircularArcFromNormal(
-        center=center,
-        resolution=72,
-        normal=axis,
-        polar=polar,
-        angle=360.0,
-    )
 
 
 def _visible(scene, entity):

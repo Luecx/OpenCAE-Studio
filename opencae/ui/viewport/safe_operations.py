@@ -7,15 +7,18 @@ LOGGER = logging.getLogger(__name__)
 _EXPECTED_VTK_ERRORS = (AttributeError, KeyError, RuntimeError, TypeError, ValueError)
 
 
-def remove_actor(plotter, name: str, *, render: bool = False) -> bool:
-    """Remove a named actor without hiding unexpected renderer failures."""
+def remove_actor(plotter, actor_or_name, *, render: bool = False) -> bool:
+    """Remove an actor reference or name without hiding renderer failures."""
     try:
-        plotter.remove_actor(name, reset_camera=False, render=render)
+        plotter.remove_actor(actor_or_name, reset_camera=False, render=render)
         return True
     except _EXPECTED_VTK_ERRORS:
         return False
     except Exception:
-        LOGGER.exception("Unexpected failure while removing viewport actor %s", name)
+        LOGGER.exception(
+            "Unexpected failure while removing viewport actor %s",
+            actor_or_name,
+        )
         return False
 
 
