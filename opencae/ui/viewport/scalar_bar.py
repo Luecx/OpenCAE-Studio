@@ -27,7 +27,8 @@ def scalar_bar_title(title) -> str:
 
 def scalar_bar_args(title, plotter=None, *, outside_colors=False):
     """Return a readable right-side scalar bar positioned below the ViewCube."""
-    args = {
+    del outside_colors
+    return {
         "title": scalar_bar_title(title),
         "vertical": True,
         "position_x": 0.905,
@@ -41,15 +42,6 @@ def scalar_bar_args(title, plotter=None, *, outside_colors=False):
         "n_labels": 7,
         "fmt": "%.4g",
     }
-    if outside_colors:
-        # PyVista normally turns non-None labels into VTK's built-in range
-        # swatches. Those swatches are as tall as the scalar-bar thickness and
-        # include an internal fixed pad. Explicit None values prevent PyVista's
-        # automatic "below"/"above" labels while our compact caps are drawn by
-        # install_scalar_bar_end_caps().
-        args["below_label"] = None
-        args["above_label"] = None
-    return args
 
 
 def install_scalar_bar_end_caps(
@@ -63,16 +55,19 @@ def install_scalar_bar_end_caps(
     """Attach small, gap-free end caps using the configured outside colors.
 
     VTK's built-in above/below swatches cannot be sized independently from the
-    scalar-bar thickness and reserve a fixed pad. OpenCAE therefore draws two
-    lightweight 2D quads against vtkScalarBarActor.GetScalarBarRect(). The
-    geometry follows resize/layout changes and schedules one corrective render
-    only when the scalar-bar rectangle actually moves or changes size.
+    scalar-bar thickness and reserve a fixed pad. OpenCAE therefore switches
+    those native swatches off and draws two lightweight 2D quads directly
+    against vtkScalarBarActor.GetScalarBarRect(). The geometry follows
+    resize/layout changes and schedules one corrective render only when the
+    scalar-bar rectangle actually moves or changes size.
     """
     scalar_actor = _scalar_actor(plotter, title)
     renderer = getattr(plotter, "renderer", None)
     render_window = _render_window(plotter)
     if scalar_actor is None or renderer is None or render_window is None:
         return None
+
+    _disable_native_range_swatches(scalar_actor)
 
     state = getattr(plotter, "_opencae_scalar_bar_caps", None)
     if state is None:
@@ -110,6 +105,15 @@ def install_scalar_bar_end_caps(
             lambda *_: _update_cap_geometry(state),
         )
     return state
+
+
+def _disable_native_range_swatches(scalar_actor):
+    """Suppress PyVista/VTK's thick padded above/below range blocks."""
+    try:
+        scalar_actor.DrawBelowRangeSwatchOff()
+        scalar_actor.DrawAboveRangeSwatchOff()
+    except (AttributeError, RuntimeError, TypeError):
+        pass
 
 
 def _new_cap_state(renderer):
@@ -157,9 +161,8 @@ def _scalar_actor(plotter, title):
     key = scalar_bar_title(title)
     try:
         bars = plotter.scalar_bars
-        actor = bars.get(key)
-        if actor is not None:
-            return actor
+        if key in bars:
+            return bars[key]
     except (AttributeError, KeyError, TypeError, RuntimeError):
         pass
     try:
