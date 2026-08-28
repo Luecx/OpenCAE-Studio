@@ -15,7 +15,7 @@ from opencae.ui.core.metrics import RIBBON_BUTTON_HEIGHT
 from opencae.ui.templates import action_button
 from opencae.ui.viewport.result_query_model import QueryResult
 from opencae.ui.viewport.result_query_panel import ResultQueryPanel
-from opencae.ui.viewport.scalar_bar import scalar_bar_args
+from opencae.ui.viewport.scalar_bar import _cap_rectangles, scalar_bar_args
 from opencae.ui.viewport.view_cube import ViewCube
 from opencae.ui.viewport.viewport_overlay_metrics import (
     VIEW_CUBE_SIZE,
@@ -83,8 +83,8 @@ class _Plotter:
         return self._height
 
 
-def test_scalar_bar_reserves_cube_space_and_uses_compact_unlabeled_range_caps():
-    """The right-side colorbar stays below the cube and keeps range caps subtle."""
+def test_scalar_bar_reserves_cube_space_and_disables_native_range_swatches():
+    """The main bar stays below the cube while OpenCAE owns outside end caps."""
     viewport_height = 600
     args = scalar_bar_args(
         "STRESS:SXX",
@@ -99,12 +99,27 @@ def test_scalar_bar_reserves_cube_space_and_uses_compact_unlabeled_range_caps():
     assert args["title_font_size"] >= 13
     assert args["label_font_size"] >= 11
     assert args["width"] <= 0.05
-    assert args["below_label"] == ""
-    assert args["above_label"] == ""
+    # Explicit None prevents PyVista from enabling VTK's thick, padded built-in
+    # above/below swatches. OpenCAE supplies its own compact colored caps.
+    assert args["below_label"] is None
+    assert args["above_label"] is None
 
     no_caps = scalar_bar_args("STRESS:SXX", _Plotter(viewport_height))
     assert "below_label" not in no_caps
     assert "above_label" not in no_caps
+
+
+def test_scalar_bar_custom_caps_are_thin_and_exactly_touch_main_bar():
+    """Outside-range caps have independent thickness and zero pixel gap."""
+    bar = (50, 100, 18, 320)
+    below, above = _cap_rectangles(bar, cap_pixels=6)
+
+    assert below == (50, 94, 18, 6)
+    assert above == (50, 420, 18, 6)
+    assert below[1] + below[3] == bar[1]
+    assert above[1] == bar[1] + bar[3]
+    assert below[3] == above[3] == 6
+    assert below[3] < bar[2]
 
 
 def test_result_query_panel_caps_matrix_to_available_viewport_height():
