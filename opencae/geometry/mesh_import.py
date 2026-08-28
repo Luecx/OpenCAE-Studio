@@ -23,6 +23,16 @@ _TYPE = {
     "C3D15": (18, "Pentahedra", 2, 6, 3), "C3D20": (17, "Hexahedra", 2, 8, 3), "C3D20R": (17, "Hexahedra", 2, 8, 3),
 }
 
+# Native deck codes emitted by OpenCAE that map back to one canonical internal
+# element definition.  This makes import an actual inverse of our Abaqus /
+# CalculiX element lowering rather than only accepting FEMaster spellings.
+_ELEMENT_TYPE_ALIASES = {
+    "T3D2": "T3",
+    "B31": "B33",
+    "STRI65": "S6",
+    "S8R": "S8",
+}
+
 _NODES_PER_ELEMENT = {
     "T3": 2, "B33": 2,
     "S3": 3, "MITC3FRT": 3,
@@ -120,7 +130,6 @@ def _read_keyword_deck(path, part_id) -> MeshImportResult:
         if not line or line.startswith("**"):
             continue
         if line.startswith("*"):
-            # A new keyword always terminates an incomplete previous element row.
             if pending_element:
                 report.warnings.append(
                     f"Incomplete element connectivity before line {line_number} was ignored"
@@ -281,16 +290,17 @@ def _keyword_context(
         if "INPUT" in params:
             report.reject(keyword, line_number, header, "external INPUT files are not followed")
             return None, {}
-        element_type = params.get("TYPE", "").upper()
-        if not element_type:
+        native_element_type = params.get("TYPE", "").upper()
+        if not native_element_type:
             report.reject(keyword, line_number, header, "TYPE is required")
             return None, {}
+        element_type = _ELEMENT_TYPE_ALIASES.get(native_element_type, native_element_type)
         if element_type not in _TYPE:
             report.reject(
                 keyword,
                 line_number,
                 header,
-                f"element TYPE={element_type} is not supported",
+                f"element TYPE={native_element_type} is not supported",
             )
             return None, {}
         _report_partial_parameters(
