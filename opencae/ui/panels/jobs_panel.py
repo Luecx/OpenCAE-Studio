@@ -3,6 +3,7 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QFrame,
     QHeaderView,
     QMenu,
     QTableWidget,
@@ -34,8 +35,8 @@ class JobsPanel(QWidget):
         self.table.setProperty("flatTable", True)
         self.table.setShowGrid(False)
         self.table.setAlternatingRowColors(False)
-        self.table.setFrameShape(QTableWidget.Shape.NoFrame)
-        self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.table.setFrameShape(QFrame.Shape.NoFrame)
+        self.table.setMouseTracking(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setHorizontalHeaderLabels(
