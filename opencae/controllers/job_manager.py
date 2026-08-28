@@ -8,6 +8,7 @@ persistence, and Analysis/Study workflows live in focused companion modules.
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import fields
 
 from PyQt6.QtCore import QCoreApplication, QObject, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
@@ -21,6 +22,16 @@ from .job_manager_factory import utc_now
 from .job_manager_study import run_study as run_study_workflow
 from .job_manager_validation import analysis_errors, study_errors
 from .job_output_store import JobOutputStore
+
+
+_RUNTIME_JOB_FIELDS = frozenset({
+    "status",
+    "exit_code",
+    "started_at",
+    "finished_at",
+    "progress",
+    "progress_label",
+})
 
 
 class JobManager(QObject):
@@ -291,12 +302,26 @@ class JobManager(QObject):
         )
 
     def _replace_job(self, candidate: Job, description: str) -> None:
-        """Replace an existing Job through ProjectStore's undoable boundary."""
-        if self.store.project.try_resolve(candidate.id) is None:
+        """Apply only scalar Job runtime fields without a full Project transaction."""
+        current = self.store.project.try_resolve(candidate.id)
+        if not isinstance(current, Job):
             return
-        self.store.replace_entity(
-            description,
-            self.store.project.id,
-            "jobs",
-            candidate,
-        )
+
+        # This hot path is deliberately incapable of changing relationships,
+        # identity, paths or settings. Those remain ordinary document edits and
+        # must use ProjectStore.replace_entity()/execute().
+        for field_info in fields(current):
+            name = field_info.name
+            if name in _RUNTIME_JOB_FIELDS:
+                continue
+            if getattr(current, name) != getattr(candidate, name):
+                raise ValueError(
+                    f"Job runtime update attempted to change non-runtime field '{name}'"
+                )
+
+        changes = {
+            name: getattr(candidate, name)
+            for name in _RUNTIME_JOB_FIELDS
+            if getattr(current, name) != getattr(candidate, name)
+        }
+        self.store.update_runtime_fields(current.id, changes)
