@@ -1,6 +1,6 @@
 """Provide independent lower docks for jobs, log output, and result time control."""
 
-from PyQt6.QtWidgets import QDockWidget
+from PyQt6.QtWidgets import QDockWidget, QWidget
 
 from opencae.ui.core.metrics import OUTPUT_MIN_HEIGHT
 from opencae.ui.panels.jobs_panel import JobsPanel
@@ -9,13 +9,27 @@ from opencae.ui.panels.time_manager import TimeManagerPanel
 
 
 class _WorkspaceDock(QDockWidget):
-    """Common geometry for lower workspace docks."""
+    """Common geometry and header behavior for lower workspace docks."""
 
     def __init__(self, title, object_name, widget, parent=None):
         super().__init__(title, parent)
         self.setObjectName(object_name)
         self.setWidget(widget)
         self.setMinimumHeight(OUTPUT_MIN_HEIGHT)
+
+        # When docked, QMainWindow's tab already carries the workspace name.
+        # Suppress the second QDockWidget caption so there is only one header.
+        # Restore the native caption while floating so the detached window
+        # keeps normal drag/close behavior.
+        self._docked_title_bar = QWidget(self)
+        self._docked_title_bar.setObjectName("WorkspaceDockHiddenTitleBar")
+        self._docked_title_bar.setFixedHeight(0)
+        self.topLevelChanged.connect(self._sync_title_bar)
+        self._sync_title_bar(False)
+
+    def _sync_title_bar(self, floating):
+        """Use only the QMainWindow tab while docked and a native title when floating."""
+        self.setTitleBarWidget(None if floating else self._docked_title_bar)
 
 
 class JobsDock(_WorkspaceDock):
