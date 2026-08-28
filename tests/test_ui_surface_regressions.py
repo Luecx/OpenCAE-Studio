@@ -1,4 +1,4 @@
-"""Source-level regressions for flat ribbon and Browser tab surfaces."""
+"""Source-level regressions for flat ribbon, Browser, and table surfaces."""
 
 from pathlib import Path
 
@@ -42,3 +42,25 @@ def test_browser_project_solution_tabs_have_dedicated_flat_style():
     assert "background: {p['panel']};" in browser_style
     assert "border-bottom: 2px solid {p['accent']};" in browser_style
     assert "qproperty-drawBase: false;" in browser_style
+
+
+def test_jobs_table_opts_into_shared_flat_table_surface():
+    panel_source = (ROOT / "opencae/ui/panels/jobs_panel.py").read_text(
+        encoding="utf-8"
+    )
+    view_style = (ROOT / "opencae/ui/core/styles/views.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'self.table.setProperty("flatTable", True)' in panel_source
+    assert 'header.setProperty("flatTableHeader", True)' in panel_source
+    assert "self.table.setShowGrid(False)" in panel_source
+    assert "self.table.setAlternatingRowColors(False)" in panel_source
+    assert "header.setHighlightSections(False)" in panel_source
+
+    assert 'QTableWidget[flatTable="true"]' in view_style
+    flat_header = view_style.split('QHeaderView[flatTableHeader="true"]', 1)[1]
+    assert "background: {p['panel']};" in flat_header
+    assert "border-right" not in flat_header.split("QListWidget#EditorCheckList", 1)[0]
+    assert "border-bottom: 1px solid {p['border']};" in flat_header
+    assert "selection-background-color: {p['panel_active']};" in view_style
