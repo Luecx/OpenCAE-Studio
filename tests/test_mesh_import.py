@@ -71,10 +71,10 @@ FIXED, 1, 3
         "BOUNDARY",
         "END STEP",
     ]
-    assert [issue.line_number for issue in issues] == [1, 17, 18, 20, 21, 23]
+    assert [issue.line_number for issue in issues] == [1, 16, 17, 19, 20, 22]
     formatted = imported.report.format_unimported()
-    assert "*MATERIAL, NAME=Steel — line 17" in formatted
-    assert "*BOUNDARY — line 21" in formatted
+    assert "*MATERIAL, NAME=Steel — line 16" in formatted
+    assert "*BOUNDARY — line 20" in formatted
     assert "keyword is not supported by the orphan-mesh importer" in formatted
 
 
