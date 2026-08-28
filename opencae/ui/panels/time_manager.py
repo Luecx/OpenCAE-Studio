@@ -34,7 +34,7 @@ from .time_manager_plot import TimeManagerPlot
 
 
 def frame_axis(values):
-    """Use physical frame values as time when monotonic, otherwise 1..N ordinals."""
+    """Return the stable one-based frame axis and whether solver values are time-like."""
     raw = [float(value) for value in values]
     if not raw:
         return [], False
@@ -42,9 +42,9 @@ def frame_axis(values):
         raw[index + 1] > raw[index] + 1.0e-14
         for index in range(len(raw) - 1)
     )
-    if strictly_increasing:
-        return raw, True
-    return [float(index + 1) for index in range(len(raw))], False
+    # Playback speed is expressed in frames/second.  Solver frame values stay
+    # available as the plotted y-series but never stretch/compress the x-axis.
+    return [float(index + 1) for index in range(len(raw))], strictly_increasing
 
 
 def frame_bracket(axis, value):
@@ -119,7 +119,7 @@ def _playback_icon(kind: str, size: int = 18) -> QIcon:
 
 
 class TimeManagerPanel(QWidget):
-    """Synchronize a full-width result timeline with the Results ribbon state."""
+    """Synchronize result playback with the authoritative Results ribbon state."""
 
     FRAME_INTERVAL_MS = 33
 
@@ -155,7 +155,7 @@ class TimeManagerPanel(QWidget):
 
         self.sidebar = QFrame()
         self.sidebar.setObjectName("TimeManagerSidebar")
-        self.sidebar.setFixedWidth(178)
+        self.sidebar.setFixedWidth(250)
         self.sidebar.setStyleSheet(
             "QFrame#TimeManagerSidebar {"
             f"background: {PALETTE['panel_alt']};"
@@ -164,22 +164,28 @@ class TimeManagerPanel(QWidget):
             "}"
         )
         side = QVBoxLayout(self.sidebar)
-        side.setContentsMargins(12, 10, 12, 10)
-        side.setSpacing(6)
+        side.setContentsMargins(10, 10, 10, 10)
+        side.setSpacing(7)
 
         side.addWidget(self._heading("Playback Mode"))
+        mode_row = QWidget()
+        mode_layout = QHBoxLayout(mode_row)
+        mode_layout.setContentsMargins(0, 0, 0, 0)
+        mode_layout.setSpacing(12)
         self.current_frame = QRadioButton("Current frame")
         self.across_frames = QRadioButton("Across frames")
         self.across_frames.setChecked(True)
         self.mode_group = QButtonGroup(self)
         self.mode_group.addButton(self.current_frame)
         self.mode_group.addButton(self.across_frames)
-        side.addWidget(self.current_frame)
-        side.addWidget(self.across_frames)
+        mode_layout.addWidget(self.current_frame)
+        mode_layout.addWidget(self.across_frames)
+        mode_layout.addStretch(1)
+        side.addWidget(mode_row)
         self.current_frame.toggled.connect(self._mode_changed)
         self.across_frames.toggled.connect(self._mode_changed)
 
-        side.addSpacing(6)
+        side.addSpacing(3)
         side.addWidget(self._heading("Controls"))
         self.first_button = self._media_button("first", "First frame")
         self.previous_button = self._media_button("previous", "Previous frame")
@@ -189,6 +195,11 @@ class TimeManagerPanel(QWidget):
         self.last_button = self._media_button("last", "Last frame")
         self.loop_button = self._media_button("loop", "Loop playback")
         self.loop_button.setCheckable(True)
+
+        self.controls_row = QWidget()
+        controls_layout = QHBoxLayout(self.controls_row)
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(3)
         for button in (
             self.first_button,
             self.previous_button,
@@ -198,7 +209,9 @@ class TimeManagerPanel(QWidget):
             self.last_button,
             self.loop_button,
         ):
-            side.addWidget(button, 0, Qt.AlignmentFlag.AlignLeft)
+            controls_layout.addWidget(button)
+        controls_layout.addStretch(1)
+        side.addWidget(self.controls_row)
 
         self.first_button.clicked.connect(lambda: self._select_frame(0))
         self.previous_button.clicked.connect(
@@ -215,8 +228,12 @@ class TimeManagerPanel(QWidget):
             lambda: self._select_frame(len(self._frames) - 1)
         )
 
-        side.addSpacing(6)
+        side.addSpacing(3)
         side.addWidget(self._heading("Speed"))
+        speed_row = QWidget()
+        speed_layout = QHBoxLayout(speed_row)
+        speed_layout.setContentsMargins(0, 0, 0, 0)
+        speed_layout.setSpacing(6)
         self.speed_slider = QSlider(Qt.Orientation.Horizontal)
         self.speed_slider.setRange(25, 400)
         self.speed_slider.setValue(100)
@@ -226,10 +243,12 @@ class TimeManagerPanel(QWidget):
         self.speed.setDecimals(2)
         self.speed.setValue(1.0)
         self.speed.setSuffix(" x")
+        self.speed.setFixedWidth(76)
         self.speed_slider.valueChanged.connect(self._speed_slider_changed)
         self.speed.valueChanged.connect(self._speed_spin_changed)
-        side.addWidget(self.speed_slider)
-        side.addWidget(self.speed)
+        speed_layout.addWidget(self.speed_slider, 1)
+        speed_layout.addWidget(self.speed)
+        side.addWidget(speed_row)
         side.addStretch(1)
         root.addWidget(self.sidebar, 0)
 
@@ -285,7 +304,7 @@ class TimeManagerPanel(QWidget):
         button.setIcon(_playback_icon(kind))
         button.setIconSize(QSize(18, 18))
         button.setToolTip(tooltip)
-        button.setFixedSize(30, 28)
+        button.setFixedSize(28, 28)
         return button
 
     def set_display_state(self, result, field, options):
@@ -367,7 +386,7 @@ class TimeManagerPanel(QWidget):
 
     def _refresh_plot(self):
         if not self._frames:
-            self.plot.set_series([], [], x_label="Time", y_label="Value")
+            self.plot.set_series([], [], x_label="Frame", y_label="Value")
             return
         if self.current_frame.isChecked():
             phases = [index / 64.0 for index in range(65)]
@@ -387,8 +406,8 @@ class TimeManagerPanel(QWidget):
             self._frame_values,
             current_index=self._current_index,
             cursor_x=self._play_position if self._playing else None,
-            x_label="Time" if self._has_time_axis else "Frame",
-            y_label="Value",
+            x_label="Frame",
+            y_label="Time (s)" if self._has_time_axis else "Solver frame value",
             show_markers=True,
             interactive=True,
         )
@@ -493,8 +512,8 @@ class TimeManagerPanel(QWidget):
         )
         rate = float(self.speed.value())
         if self.across_frames.isChecked():
-            # With physical frame values, the playback coordinate is the actual
-            # time value.  Otherwise it advances one ordinal frame per second.
+            # The playback coordinate is always a one-based frame ordinal, so
+            # one speed unit consistently means one frame per second.
             self._play_position += elapsed * rate
             end = self._axis[-1]
             if self._play_position > end + 1.0e-12:
