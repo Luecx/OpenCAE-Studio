@@ -10,6 +10,7 @@ class Load(Entity):
     load_type: str = "Load"
     target: RegionDefinition = field(default_factory=RegionDefinition)
     coordinate_system_ref: EntityRef | None = None
+    amplitude_ref: EntityRef | None = None
 
     def __post_init__(self):
         from opencae.model.selection import as_region_definition
