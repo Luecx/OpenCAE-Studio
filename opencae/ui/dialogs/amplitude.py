@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
@@ -83,13 +83,14 @@ class AmplitudeDialog(ApplyDialog):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(18)
 
+        # Function-page construction immediately creates its first live preview,
+        # so the preview must exist before either editor page is initialized.
+        self.preview = AmplitudeCurvePreview()
         self.stack = QStackedWidget()
         self.stack.setMinimumWidth(430)
         self.stack.addWidget(self._tabular_page(amplitude))
         self.stack.addWidget(self._function_page(amplitude))
         content_layout.addWidget(self.stack, 5)
-
-        self.preview = AmplitudeCurvePreview()
         content_layout.addWidget(self.preview, 6)
         root.addWidget(content, 1)
 
@@ -314,7 +315,8 @@ class AmplitudeDialog(ApplyDialog):
         try:
             if self.mode.currentText() == "Function":
                 points = self._function_points()
-                knots = points if len(points) <= 32 else points[::max(1, len(points) // 20)] + [points[-1]]
+                stride = max(1, len(points) // 20)
+                knots = points if len(points) <= 32 else [*points[::stride], points[-1]]
                 self.preview.set_data(points, knots)
             else:
                 knots = self._table_points()
@@ -327,16 +329,16 @@ class AmplitudeDialog(ApplyDialog):
 
     def validate(self) -> bool:
         name = self.name.text().strip()
-        current = self.amplitude.name if self.amplitude else None
+        if not name:
+            QMessageBox.warning(self, "Missing name", "Enter an amplitude name.")
+            return False
+        current = self.amplitude.name if self.amplitude else ""
         if not is_unique(name, self.existing_names, current):
             QMessageBox.warning(
                 self,
                 "Duplicate name",
                 f"An amplitude named '{name}' already exists.",
             )
-            return False
-        if not name:
-            QMessageBox.warning(self, "Missing name", "Enter an amplitude name.")
             return False
         try:
             if self.mode.currentText() == "Function":
@@ -389,7 +391,6 @@ class AmplitudeDialog(ApplyDialog):
 class _AmplitudePointTable(QTableWidget):
     """Editable numeric table with spreadsheet-friendly multi-row paste."""
 
-    from PyQt6.QtCore import pyqtSignal
     pasted = pyqtSignal()
 
     def keyPressEvent(self, event):
@@ -398,7 +399,11 @@ class _AmplitudePointTable(QTableWidget):
             rows = [line for line in text.splitlines() if line.strip()]
             parsed = []
             for line in rows:
-                columns = [value.strip() for value in line.replace(",", "\t").split("\t") if value.strip()]
+                columns = [
+                    value.strip()
+                    for value in line.replace(",", "\t").split("\t")
+                    if value.strip()
+                ]
                 if len(columns) < 2:
                     continue
                 try:
