@@ -1,27 +1,22 @@
-"""Selects a safe Qt platform backend before QApplication is constructed.
+"""Select optional Qt platform overrides before QApplication is constructed.
 
-OpenCAE currently embeds VTK through ``pyvistaqt.QtInteractor``. That widget is
-built on the Python ``QVTKRenderWindowInteractor`` path, which hands a native Qt
-window id to a platform-specific ``vtkRenderWindow``. On Linux, VTK normally
-tries the X11 OpenGL render window first. A native Wayland Qt window id is not an
-X11 window id, so mixing both backends can fail with ``BadWindow``.
-
-Until the viewport is migrated to a Qt-owned generic OpenGL integration, the
-safe production default for Wayland sessions is therefore Qt's ``xcb`` backend.
-Explicit user/developer platform choices are always respected.
+PyVistaQt's QOpenGLWidget/vtkGenericOpenGLRenderWindow integration owns the
+OpenGL surface through Qt and no longer passes a native window handle to VTK.
+OpenCAE therefore lets Qt choose its native QPA backend by default, including
+Wayland on Linux. Explicit ``QT_QPA_PLATFORM`` and ``OPENCAE_QT_PLATFORM``
+overrides remain available for driver/platform troubleshooting.
 """
 
 from __future__ import annotations
 
 import os
-import platform
 from collections.abc import MutableMapping
 
 
 _OPENCAE_PLATFORM_ENV = "OPENCAE_QT_PLATFORM"
 _QT_PLATFORM_ENV = "QT_QPA_PLATFORM"
-_NATIVE_VALUES = {"native", "system"}
-_SUPPORTED_OVERRIDES = {"auto", "native", "system", "xcb", "wayland"}
+_NATIVE_VALUES = {"auto", "native", "system"}
+_SUPPORTED_OVERRIDES = _NATIVE_VALUES | {"xcb", "wayland"}
 
 
 def is_wayland_session(environment: MutableMapping[str, str] | None = None) -> bool:
@@ -36,17 +31,17 @@ def recommended_qt_platform(
     system: str | None = None,
     environment: MutableMapping[str, str] | None = None,
 ) -> str | None:
-    """Return the Qt QPA backend OpenCAE should request, if any.
+    """Return an explicit Qt QPA backend only when the user requested one.
 
-    ``None`` means that Qt should choose its normal platform backend. An
-    explicitly supplied ``QT_QPA_PLATFORM`` always wins. ``OPENCAE_QT_PLATFORM``
-    is intended for OpenCAE-specific testing and may be ``auto``, ``native``,
-    ``system``, ``xcb`` or ``wayland``.
+    ``None`` means Qt chooses its normal native platform plugin. The ``system``
+    argument is retained for API/test compatibility but no longer affects auto
+    selection: Wayland sessions are intentionally not forced through XWayland.
     """
+    del system
     env = os.environ if environment is None else environment
 
-    # Respect the standard Qt override first. Users who deliberately launch with
-    # QT_QPA_PLATFORM=wayland must be able to test the native path unchanged.
+    # Respect the standard Qt override first. This also lets CI use ``offscreen``
+    # without OpenCAE replacing it with a desktop platform plugin.
     if str(env.get(_QT_PLATFORM_ENV, "")).strip():
         return None
 
@@ -58,20 +53,11 @@ def recommended_qt_platform(
         )
     if requested in _NATIVE_VALUES:
         return None
-    if requested in {"xcb", "wayland"}:
-        return requested
-
-    current_system = (system or platform.system()).casefold()
-    if current_system == "linux" and is_wayland_session(env):
-        # The current PyVistaQt bridge still creates a platform vtkRenderWindow
-        # and feeds it a Qt native window id. Keeping Qt on X11/XWayland avoids
-        # passing a Wayland handle into vtkXOpenGLRenderWindow.
-        return "xcb"
-    return None
+    return requested
 
 
 def configure_qt_platform_environment() -> str | None:
-    """Apply OpenCAE's Qt platform recommendation before QApplication exists."""
+    """Apply an explicit OpenCAE Qt platform override before Qt is imported."""
     backend = recommended_qt_platform()
     if backend is not None:
         os.environ[_QT_PLATFORM_ENV] = backend
