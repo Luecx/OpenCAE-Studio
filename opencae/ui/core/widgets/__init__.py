@@ -1,5 +1,6 @@
 """Public exports for reusable OpenCAE form, selector and output widgets."""
 
+from .amplitude_curve import AmplitudeCurvePreview
 from .automatic_manual_value_editor import AutomaticManualValueEditor
 from .chevron_combo import ChevronComboBox
 from .compact_region_selector import CompactRegionSelector
@@ -15,6 +16,7 @@ from .region_selection import RegionSelectionWidget
 from .xyz_picker import XYZPicker
 
 __all__ = [
+    "AmplitudeCurvePreview",
     "AutomaticManualValueEditor",
     "ChevronComboBox",
     "CompactRegionSelector",
