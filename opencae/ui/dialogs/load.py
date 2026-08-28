@@ -16,6 +16,14 @@ from opencae.ui.templates import (
 from .load_common import BaseLoadDialog
 
 
+_AMPLITUDE_LOAD_TYPES = {
+    "Concentrated Load",
+    "Surface Traction",
+    "Pressure",
+    "Volume Load",
+}
+
+
 class LoadDialog(BaseLoadDialog):
     """Create or edit one load type while sharing target and naming behavior."""
 
@@ -26,6 +34,7 @@ class LoadDialog(BaseLoadDialog):
         regions=(),
         coordinate_systems=(),
         fields=(),
+        amplitudes=(),
         create_region=None,
         pick_region=None,
         parent=None,
@@ -62,6 +71,7 @@ class LoadDialog(BaseLoadDialog):
         self.temperature_field = None
         self.inertia = None
         self.distribution = None
+        self.amplitude = None
 
         symbol = lambda quantity: units.symbol(quantity) if units is not None else ""
 
@@ -151,6 +161,19 @@ class LoadDialog(BaseLoadDialog):
             self.point_masses.setChecked(bool(getattr(load, "consider_point_masses", False)))
             self.root.addWidget(self.point_masses)
 
+        if load_type in _AMPLITUDE_LOAD_TYPES:
+            current_amplitude = (
+                load.amplitude_ref.entity_id
+                if load and getattr(load, "amplitude_ref", None)
+                else None
+            )
+            self.root.addWidget(SectionHeading("Amplitude"))
+            self.amplitude = ReferenceSelector(
+                (("None", None), *tuple(amplitudes)),
+                current_amplitude,
+            )
+            self.root.addWidget(field_block("Amplitude", self.amplitude))
+
         self.finish()
 
     @staticmethod
@@ -171,6 +194,8 @@ class LoadDialog(BaseLoadDialog):
             values["components"] = self.components.values()
         if self.distribution is not None:
             values["distribution"] = self.distribution.currentData()
+        if self.amplitude is not None:
+            values["amplitude_id"] = self.amplitude.currentValue()
         if self.load_type == "Pressure":
             values["pressure"] = self.scalar.value()
         if self.load_type == "Temperature":
