@@ -19,7 +19,12 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.ui.core.icon_factory import IconKind
-from opencae.ui.templates import PRIMARY_CONTROL_HEIGHT, Vector3Input, field_block
+from opencae.ui.templates import (
+    PRIMARY_CONTROL_HEIGHT,
+    SectionHeading,
+    Vector3Input,
+    field_block,
+)
 
 from .result_widgets import ribbon_button
 
@@ -47,8 +52,9 @@ class ResultSectionButton(QToolButton):
         panel.setMinimumWidth(360)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
 
+        layout.addWidget(SectionHeading("Display"))
         state_row = QWidget()
         state_layout = QHBoxLayout(state_row)
         state_layout.setContentsMargins(0, 0, 0, 0)
@@ -64,28 +70,13 @@ class ResultSectionButton(QToolButton):
         state_layout.addStretch(1)
         layout.addWidget(field_block("Section view", state_row))
 
+        layout.addWidget(SectionHeading("Plane"))
         self.origin = Vector3Input()
         self.normal = Vector3Input((1.0, 0.0, 0.0))
         layout.addWidget(field_block("Origin", self.origin))
         layout.addWidget(field_block("Normal", self.normal))
 
-        axes = QWidget()
-        axis_layout = QHBoxLayout(axes)
-        axis_layout.setContentsMargins(0, 0, 0, 0)
-        axis_layout.setSpacing(6)
-        for label, vector in (
-            ("X", (1.0, 0.0, 0.0)),
-            ("Y", (0.0, 1.0, 0.0)),
-            ("Z", (0.0, 0.0, 1.0)),
-        ):
-            button = QPushButton(label)
-            button.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
-            button.clicked.connect(
-                lambda _checked=False, value=vector: self._set_axis(value)
-            )
-            axis_layout.addWidget(button, 1)
-        layout.addWidget(field_block("Align normal", axes))
-
+        layout.addWidget(SectionHeading("Options"))
         self.invert = QCheckBox("Invert clipping direction")
         self.show_plane = QCheckBox("Show interactive plane")
         self.show_plane.setChecked(True)
@@ -155,11 +146,6 @@ class ResultSectionButton(QToolButton):
     def _request_center(self) -> None:
         """Ask the viewport to center the clipping plane on the active result."""
         self._origin_is_automatic = True
-        self.settings_changed.emit()
-
-    def _set_axis(self, value) -> None:
-        """Align the section normal with one global Cartesian axis."""
-        self.normal.set_value(value)
         self.settings_changed.emit()
 
     @staticmethod
