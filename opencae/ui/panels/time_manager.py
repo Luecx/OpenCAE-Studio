@@ -12,6 +12,7 @@ from PyQt6.QtCore import (
     QSignalBlocker,
     Qt,
     QTimer,
+    pyqtSignal,
 )
 from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QPolygonF
 from PyQt6.QtWidgets import (
@@ -21,6 +22,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QRadioButton,
+    QSizePolicy,
     QSlider,
     QToolButton,
     QVBoxLayout,
@@ -121,6 +123,8 @@ def _playback_icon(kind: str, size: int = 18) -> QIcon:
 class TimeManagerPanel(QWidget):
     """Synchronize result playback with the authoritative Results ribbon state."""
 
+    frame_summary_changed = pyqtSignal(str, str)
+
     FRAME_INTERVAL_MS = 16
     ACROSS_BASE_FPS = 4.0
 
@@ -154,8 +158,8 @@ class TimeManagerPanel(QWidget):
 
     def _build(self):
         root = QHBoxLayout(self)
-        root.setContentsMargins(10, 8, 10, 10)
-        root.setSpacing(12)
+        root.setContentsMargins(6, 3, 6, 4)
+        root.setSpacing(8)
 
         self.sidebar = QFrame()
         self.sidebar.setObjectName("TimeManagerSidebar")
@@ -164,36 +168,45 @@ class TimeManagerPanel(QWidget):
             "QFrame#TimeManagerSidebar { background: transparent; border: none; }"
         )
         side = QVBoxLayout(self.sidebar)
-        side.setContentsMargins(10, 8, 10, 8)
-        side.setSpacing(6)
+        side.setContentsMargins(8, 4, 8, 4)
+        side.setSpacing(5)
 
         side.addWidget(self._heading("Playback Mode"))
         mode_row = QWidget()
         mode_layout = QHBoxLayout(mode_row)
         mode_layout.setContentsMargins(0, 0, 0, 0)
-        mode_layout.setSpacing(14)
-        mode_layout.addStretch(1)
+        mode_layout.setSpacing(8)
         self.current_frame = QRadioButton("Current frame")
         self.across_frames = QRadioButton("Across frames")
         self.across_frames.setChecked(True)
         self.mode_group = QButtonGroup(self)
         self.mode_group.addButton(self.current_frame)
         self.mode_group.addButton(self.across_frames)
-        mode_layout.addWidget(self.current_frame)
-        mode_layout.addWidget(self.across_frames)
-        mode_layout.addStretch(1)
+        mode_layout.addWidget(
+            self.current_frame,
+            1,
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+        )
+        mode_layout.addWidget(
+            self.across_frames,
+            1,
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+        )
         side.addWidget(mode_row)
         self.current_frame.toggled.connect(self._mode_changed)
         self.across_frames.toggled.connect(self._mode_changed)
 
-        side.addSpacing(2)
+        side.addSpacing(1)
         side.addWidget(self._heading("Current step"))
         self.step = ChevronComboBox()
-        self.step.setFixedWidth(220)
+        self.step.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
         self.step.currentIndexChanged.connect(self._step_selected)
-        side.addWidget(self.step, 0, Qt.AlignmentFlag.AlignHCenter)
+        side.addWidget(self.step)
 
-        side.addSpacing(2)
+        side.addSpacing(1)
         side.addWidget(self._heading("Controls"))
         self.first_button = self._media_button("first", "First frame")
         self.previous_button = self._media_button("previous", "Previous frame")
@@ -237,15 +250,13 @@ class TimeManagerPanel(QWidget):
             lambda: self._select_frame(len(self._frames) - 1)
         )
 
-        side.addSpacing(2)
+        side.addSpacing(1)
         side.addWidget(self._heading("Speed"))
         speed_row = QWidget()
         speed_layout = QHBoxLayout(speed_row)
         speed_layout.setContentsMargins(0, 0, 0, 0)
         speed_layout.setSpacing(8)
-        speed_layout.addStretch(1)
         self.speed_slider = QSlider(Qt.Orientation.Horizontal)
-        self.speed_slider.setFixedWidth(125)
         self.speed_slider.setRange(25, 400)
         self.speed_slider.setValue(100)
         self.speed = QDoubleSpinBox()
@@ -257,34 +268,23 @@ class TimeManagerPanel(QWidget):
         self.speed.setFixedWidth(76)
         self.speed_slider.valueChanged.connect(self._speed_slider_changed)
         self.speed.valueChanged.connect(self._speed_spin_changed)
-        speed_layout.addWidget(self.speed_slider)
+        speed_layout.addWidget(self.speed_slider, 1)
         speed_layout.addWidget(self.speed)
-        speed_layout.addStretch(1)
         side.addWidget(speed_row)
         side.addStretch(1)
         root.addWidget(self.sidebar, 0)
 
+        # Keep compatibility labels as state holders for callers/tests, but the
+        # visible frame summary is hosted in the native lower dock tab strip.
+        self.total_frames = QLabel("0", self)
+        self.total_frames.hide()
+        self.current_frame_label = QLabel("—", self)
+        self.current_frame_label.hide()
+
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(8)
-
-        info = QHBoxLayout()
-        info.setContentsMargins(0, 0, 0, 0)
-        info.setSpacing(8)
-        info.addStretch(1)
-        info.addWidget(self._muted_label("Total frames"))
-        self.total_frames = QLabel("0")
-        info.addWidget(self.total_frames)
-        info.addSpacing(8)
-        info.addWidget(self._muted_label("Current frame"))
-        self.current_frame_label = QLabel("—")
-        self.current_frame_label.setStyleSheet(
-            f"color:{PALETTE['accent']};font-weight:600;"
-        )
-        info.addWidget(self.current_frame_label)
-        content_layout.addLayout(info)
-
+        content_layout.setSpacing(0)
         self.plot = TimeManagerPlot()
         self.plot.frame_selected.connect(self._select_frame)
         content_layout.addWidget(self.plot, 1)
@@ -293,16 +293,12 @@ class TimeManagerPanel(QWidget):
     @staticmethod
     def _heading(text):
         label = QLabel(text)
-        label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+        label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         label.setStyleSheet(
             f"color:{PALETTE['muted']};font-weight:600;font-size:9pt;"
         )
-        return label
-
-    @staticmethod
-    def _muted_label(text):
-        label = QLabel(text)
-        label.setStyleSheet(f"color:{PALETTE['muted']};")
         return label
 
     @staticmethod
@@ -347,6 +343,7 @@ class TimeManagerPanel(QWidget):
             self._current_index = -1
             self.total_frames.setText("0")
             self.current_frame_label.setText("—")
+            self._emit_frame_summary()
             self._refresh_plot()
             self._set_available(False)
             return
@@ -456,8 +453,15 @@ class TimeManagerPanel(QWidget):
         self.current_frame_label.setText(
             f"{index + 1} / {count}" if 0 <= index < count else "—"
         )
+        self._emit_frame_summary()
         if self.across_frames.isChecked():
             self.plot.set_current_index(index)
+
+    def _emit_frame_summary(self):
+        self.frame_summary_changed.emit(
+            self.total_frames.text(),
+            self.current_frame_label.text(),
+        )
 
     def _select_frame(self, index):
         if not self._frames:
