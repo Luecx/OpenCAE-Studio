@@ -24,7 +24,8 @@ class ResultDeformationButton(QToolButton):
     """Open deformation state and scale settings from one ribbon popup."""
 
     settings_changed = pyqtSignal()
-    auto_requested = pyqtSignal()
+    auto_frame_requested = pyqtSignal()
+    auto_frames_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         """Build an instant popup with explicit on/off radio buttons."""
@@ -40,7 +41,7 @@ class ResultDeformationButton(QToolButton):
         self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
 
         panel = QWidget()
-        panel.setMinimumWidth(300)
+        panel.setMinimumWidth(320)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(12)
@@ -61,8 +62,8 @@ class ResultDeformationButton(QToolButton):
         layout.addWidget(field_block("Deformation", state_row))
 
         # Automatic scaling can legitimately be far below 1e-6 when a result
-        # contains very large physical displacements.  Six decimals silently
-        # rounded those valid factors to zero, effectively hiding deformation.
+        # contains very large physical displacements. Fifteen decimals preserve
+        # those factors instead of silently rounding the display scale to zero.
         self.scale = NumericUnitInput(
             1.0,
             "",
@@ -72,16 +73,31 @@ class ResultDeformationButton(QToolButton):
         )
         layout.addWidget(field_block("Deformation scaling factor", self.scale))
 
-        actions = QHBoxLayout()
-        actions.setContentsMargins(0, 0, 0, 0)
-        actions.setSpacing(8)
-        auto = button("Auto")
+        auto_row = QWidget()
+        auto_layout = QHBoxLayout(auto_row)
+        auto_layout.setContentsMargins(0, 0, 0, 0)
+        auto_layout.setSpacing(8)
+        self.auto_frame = button("Current Frame")
+        self.auto_frames = button("All Frames")
+        self.auto_frame.setToolTip(
+            "Fit the deformation scale to displacement in the current frame"
+        )
+        self.auto_frames.setToolTip(
+            "Fit one deformation scale to displacement across all frames in the current step"
+        )
+        self.auto_frame.clicked.connect(self.auto_frame_requested.emit)
+        self.auto_frames.clicked.connect(self.auto_frames_requested.emit)
+        auto_layout.addWidget(self.auto_frame, 1)
+        auto_layout.addWidget(self.auto_frames, 1)
+        layout.addWidget(field_block("Automatic scaling", auto_row))
+
+        reset_row = QHBoxLayout()
+        reset_row.setContentsMargins(0, 0, 0, 0)
+        reset_row.addStretch(1)
         reset = button("Reset to 1")
-        auto.clicked.connect(self.auto_requested.emit)
         reset.clicked.connect(lambda: self.scale.setValue(1.0))
-        actions.addWidget(auto)
-        actions.addWidget(reset)
-        layout.addLayout(actions)
+        reset_row.addWidget(reset)
+        layout.addLayout(reset_row)
 
         menu = QMenu(self)
         action = QWidgetAction(menu)
