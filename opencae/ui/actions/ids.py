@@ -10,7 +10,11 @@ class A:
     EDIT_SELECTED = "edit.selected"; DELETE_SELECTED = "delete.selected"
     FIT_VIEW = "view.fit"; TOGGLE_MESH = "view.toggle_mesh"
     SHOW_PROJECT = "view.show_project"
-    SHOW_OUTPUT = "view.show_output"; RESET_LAYOUT = "window.reset_layout"
+    SHOW_JOBS = "view.show_jobs"; SHOW_LOG = "view.show_log"
+    SHOW_TIME_MANAGER = "view.show_time_manager"
+    # Compatibility alias for plugins/saved commands using the old Output action.
+    SHOW_OUTPUT = SHOW_JOBS
+    RESET_LAYOUT = "window.reset_layout"
     MATERIAL = "resource.material"; MATERIAL_BROWSER = "resource.material_browser"
     SET_ELASTICITY = "material.elasticity"
     SET_DENSITY = "material.density"; SET_PLASTICITY = "material.plasticity"
