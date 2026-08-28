@@ -28,6 +28,9 @@ class ResultRibbonGroup(QFrame):
         super().__init__(parent)
         self.title = title
         self.widgets = tuple(widgets)
+        for widget in self.widgets:
+            if isinstance(widget, QToolButton):
+                widget.setProperty("resultsRibbonButton", True)
         self._collapsed = False
         self.setObjectName("RibbonGroup")
         self.setFrameShape(QFrame.Shape.NoFrame)
