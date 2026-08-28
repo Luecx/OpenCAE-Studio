@@ -9,13 +9,16 @@ def css(p):
         background: {p['panel']};
         padding: 8px 14px;
         border: none;
-        border-right: 1px solid {p['border']};
+        border-bottom: 2px solid transparent;
         color: {p['muted']};
     }}
     QTabBar::tab:selected {{
         color: {p['text']};
-        background: {p['panel_alt']};
-        border-top: 2px solid {p['accent']};
+        background: {p['panel']};
+        border-bottom: 2px solid {p['accent']};
     }}
-    QTabBar::tab:hover {{ background: {p['panel_hover']}; }}
+    QTabBar::tab:hover:!selected {{
+        color: {p['text']};
+        background: {p['panel_hover']};
+    }}
     """
