@@ -6,6 +6,8 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import numpy as np
+import pyvista as pv
 from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtGui import QAction, QIcon, QPixmap
 from PyQt6.QtTest import QTest
@@ -19,6 +21,7 @@ from opencae.ui.viewport.result_query_panel import ResultQueryPanel
 from opencae.ui.viewport.scalar_bar import (
     _cap_rectangles,
     _disable_native_range_swatches,
+    install_scalar_bar_end_caps,
     scalar_bar_args,
 )
 from opencae.ui.viewport.view_cube import ViewCube
@@ -120,6 +123,47 @@ def test_scalar_bar_native_range_swatches_are_explicitly_disabled():
 
     assert not actor.GetDrawBelowRangeSwatch()
     assert not actor.GetDrawAboveRangeSwatch()
+
+
+def test_scalar_bar_custom_caps_use_configured_outside_colors():
+    """The cap actors must use exactly the colors selected in the contour menu."""
+    plotter = pv.Plotter(off_screen=True, window_size=(360, 360))
+    mesh = pv.Sphere(theta_resolution=8, phi_resolution=8)
+    mesh["value"] = np.asarray(mesh.points)[:, 2]
+    try:
+        plotter.add_mesh(
+            mesh,
+            scalars="value",
+            clim=(-0.5, 0.5),
+            below_color="#345678",
+            above_color="#c08040",
+            scalar_bar_args=scalar_bar_args(
+                "value",
+                plotter,
+                outside_colors=True,
+            ),
+            render=False,
+        )
+        state = install_scalar_bar_end_caps(
+            plotter,
+            "value",
+            below_color="#345678",
+            above_color="#c08040",
+        )
+        assert state is not None
+        scalar_actor = plotter.scalar_bars["value"]
+        assert not scalar_actor.GetDrawBelowRangeSwatch()
+        assert not scalar_actor.GetDrawAboveRangeSwatch()
+        assert np.allclose(
+            state["below_actor"].GetProperty().GetColor(),
+            (0x34 / 255.0, 0x56 / 255.0, 0x78 / 255.0),
+        )
+        assert np.allclose(
+            state["above_actor"].GetProperty().GetColor(),
+            (0xC0 / 255.0, 0x80 / 255.0, 0x40 / 255.0),
+        )
+    finally:
+        plotter.close()
 
 
 def test_scalar_bar_custom_caps_are_thin_and_exactly_touch_main_bar():
