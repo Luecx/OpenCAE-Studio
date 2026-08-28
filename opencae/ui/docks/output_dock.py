@@ -15,6 +15,7 @@ class _WorkspaceDock(QDockWidget):
         super().__init__(title, parent)
         self.setObjectName(object_name)
         self.panel = widget
+        widget.setProperty("workspaceSurface", True)
 
         # Use one explicit styled surface behind every lower workspace.  This is
         # more reliable than a dynamic-property selector on the panel itself and
