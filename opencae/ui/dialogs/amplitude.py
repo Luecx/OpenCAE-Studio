@@ -7,6 +7,7 @@ from PyQt6.QtGui import QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
     QAbstractItemView,
+    QGridLayout,
     QHeaderView,
     QHBoxLayout,
     QLineEdit,
@@ -69,19 +70,29 @@ class AmplitudeDialog(ApplyDialog):
         root.addWidget(field_block("Name", self.name))
         root.addWidget(SectionHeading("Amplitude Definition"))
 
-        self.mode = _combo(("Tabular", "Function"), getattr(amplitude, "source_mode", "Tabular"))
-        self.time_basis = _combo(TIME_BASES, getattr(amplitude, "time_basis", "Step time"))
-        root.addWidget(
-            field_row(
-                field_block("Definition", self.mode),
-                field_block("Time basis", self.time_basis),
-            )
+        self.mode = _combo(
+            ("Tabular", "Function"),
+            getattr(amplitude, "source_mode", "Tabular"),
+        )
+        self.time_basis = _combo(
+            TIME_BASES,
+            getattr(amplitude, "time_basis", "Step time"),
         )
 
+        # One shared grid owns both column headers and both content areas.  Using
+        # separate rows here makes small spacing/stretch differences visible as
+        # a broken vertical split, especially when the curve has more stretch.
         content = QWidget()
-        content_layout = QHBoxLayout(content)
+        content_layout = QGridLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(18)
+        content_layout.setHorizontalSpacing(16)
+        content_layout.setVerticalSpacing(12)
+        content_layout.setColumnStretch(0, 1)
+        content_layout.setColumnStretch(1, 1)
+        content_layout.setRowStretch(1, 1)
+
+        content_layout.addWidget(field_block("Definition", self.mode), 0, 0)
+        content_layout.addWidget(field_block("Time basis", self.time_basis), 0, 1)
 
         # Function-page construction immediately creates its first live preview,
         # so the preview must exist before either editor page is initialized.
@@ -90,16 +101,19 @@ class AmplitudeDialog(ApplyDialog):
         self.stack.setMinimumWidth(430)
         self.stack.addWidget(self._tabular_page(amplitude))
         self.stack.addWidget(self._function_page(amplitude))
-        content_layout.addWidget(self.stack, 5)
-        content_layout.addWidget(self.preview, 6)
+        content_layout.addWidget(self.stack, 1, 0)
+        content_layout.addWidget(self.preview, 1, 1)
         root.addWidget(content, 1)
 
         buttons = dialog_buttons(include_apply=True)
         self.bind_buttons(buttons, True)
         root.addWidget(buttons)
 
+        self._last_mode = self.mode.currentText()
         self.mode.currentIndexChanged.connect(self._mode_changed)
-        self.time_basis.currentIndexChanged.connect(lambda _index: self._update_preview())
+        self.time_basis.currentIndexChanged.connect(
+            lambda _index: self._update_preview()
+        )
         self._mode_changed()
 
     def _tabular_page(self, amplitude):
@@ -119,7 +133,9 @@ class AmplitudeDialog(ApplyDialog):
         self.table = _AmplitudePointTable()
         self.table.setColumnCount(2)
         self.table.setHorizontalHeaderLabels(("Time", "Value"))
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -143,7 +159,9 @@ class AmplitudeDialog(ApplyDialog):
         controls.addStretch(1)
         layout.addLayout(controls)
 
-        self.interpolation.currentIndexChanged.connect(lambda _index: self._update_preview())
+        self.interpolation.currentIndexChanged.connect(
+            lambda _index: self._update_preview()
+        )
         self.table.itemChanged.connect(lambda _item: self._update_preview())
         self.table.pasted.connect(self._update_preview)
         return page
@@ -178,7 +196,9 @@ class AmplitudeDialog(ApplyDialog):
         )
         self.sample_intervals = QSpinBox()
         self.sample_intervals.setRange(1, 10000)
-        self.sample_intervals.setValue(int(getattr(amplitude, "sample_intervals", 100)))
+        self.sample_intervals.setValue(
+            int(getattr(amplitude, "sample_intervals", 100))
+        )
         apply_primary_control_height(self.sample_intervals)
         layout.addWidget(
             field_row(
@@ -193,9 +213,13 @@ class AmplitudeDialog(ApplyDialog):
             getattr(amplitude, "function_parameters", {}) or {}
         )
         self.function_type.currentIndexChanged.connect(self._rebuild_parameters)
-        self.sample_start.valueChanged.connect(lambda _value: self._update_preview())
+        self.sample_start.valueChanged.connect(
+            lambda _value: self._update_preview()
+        )
         self.sample_end.valueChanged.connect(lambda _value: self._update_preview())
-        self.sample_intervals.valueChanged.connect(lambda _value: self._update_preview())
+        self.sample_intervals.valueChanged.connect(
+            lambda _value: self._update_preview()
+        )
         self._rebuild_parameters()
         return page
 
@@ -225,11 +249,24 @@ class AmplitudeDialog(ApplyDialog):
             self.parameter_layout.addWidget(field_row(*fields))
         else:
             for start in range(0, len(fields), 2):
-                self.parameter_layout.addWidget(field_row(*fields[start:start + 2]))
+                self.parameter_layout.addWidget(
+                    field_row(*fields[start:start + 2])
+                )
         self._update_preview()
 
     def _mode_changed(self, _index=None):
-        self.stack.setCurrentIndex(0 if self.mode.currentText() == "Tabular" else 1)
+        mode = self.mode.currentText()
+        previous = getattr(self, "_last_mode", mode)
+        if previous == "Function" and mode == "Tabular":
+            try:
+                points = self._function_points()
+            except (TypeError, ValueError):
+                pass
+            else:
+                self._set_table_points(points)
+                self.interpolation.setCurrentText("Linear")
+        self._last_mode = mode
+        self.stack.setCurrentIndex(0 if mode == "Tabular" else 1)
         self._update_preview()
 
     def _add_point(self):
@@ -255,8 +292,16 @@ class AmplitudeDialog(ApplyDialog):
             time, value = 0.0, 0.0
         self.table.blockSignals(True)
         self.table.insertRow(insert_at)
-        self.table.setItem(insert_at, 0, QTableWidgetItem(_number_text(time)))
-        self.table.setItem(insert_at, 1, QTableWidgetItem(_number_text(value)))
+        self.table.setItem(
+            insert_at,
+            0,
+            QTableWidgetItem(_number_text(time)),
+        )
+        self.table.setItem(
+            insert_at,
+            1,
+            QTableWidgetItem(_number_text(value)),
+        )
         self.table.blockSignals(False)
         self.table.selectRow(insert_at)
         self._update_preview()
@@ -289,7 +334,9 @@ class AmplitudeDialog(ApplyDialog):
             except (AttributeError, TypeError, ValueError):
                 if allow_invalid:
                     continue
-                raise ValueError(f"Row {row + 1} contains an invalid time or value")
+                raise ValueError(
+                    f"Row {row + 1} contains an invalid time or value"
+                )
             points.append((time, value))
         if not allow_invalid:
             if len(points) < 2:
@@ -300,7 +347,10 @@ class AmplitudeDialog(ApplyDialog):
         return points
 
     def _function_parameters(self):
-        return {key: widget.value() for key, widget in self._parameter_widgets.items()}
+        return {
+            key: widget.value()
+            for key, widget in self._parameter_widgets.items()
+        }
 
     def _function_points(self):
         return sample_function(
@@ -316,7 +366,11 @@ class AmplitudeDialog(ApplyDialog):
             if self.mode.currentText() == "Function":
                 points = self._function_points()
                 stride = max(1, len(points) // 20)
-                knots = points if len(points) <= 32 else [*points[::stride], points[-1]]
+                knots = (
+                    points
+                    if len(points) <= 32
+                    else [*points[::stride], points[-1]]
+                )
                 self.preview.set_data(points, knots)
             else:
                 knots = self._table_points()
