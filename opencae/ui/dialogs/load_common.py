@@ -45,7 +45,11 @@ class BaseLoadDialog(ApplyDialog):
         self.existing_names = tuple(existing_names)
         self.target_validator = target_validator
         self.setWindowTitle(f"{'Edit' if entity else 'Create'} {title}")
-        self.setMinimumSize(760, 520)
+        # Load editors contain target selectors plus potentially six component
+        # controls.  A taller explicit floor avoids the first-open clipping seen
+        # on KDE/Wayland and keeps the Apply/OK row reachable at all times.
+        self.setMinimumSize(760, 620)
+        self.resize(820, 680)
 
         self.root = dialog_layout(self)
         self.name = QLineEdit(entity.name if entity else (default_name or f"{title}-1"))
