@@ -34,10 +34,17 @@ def form_layout(parent: QWidget | None = None) -> QFormLayout:
 
 
 def dialog_layout(parent: QWidget) -> QVBoxLayout:
-    """Return the canonical root layout used by editor dialogs."""
+    """Return the canonical root layout used by editor dialogs.
+
+    The explicit minimum-size constraint prevents window managers from restoring
+    or interactively shrinking a dialog below the space required by its controls.
+    This is particularly important on KDE/Wayland, where otherwise table and
+    component editors can initially open with most of their content collapsed.
+    """
     layout = QVBoxLayout(parent)
     layout.setContentsMargins(*DIALOG_MARGINS)
     layout.setSpacing(DIALOG_SPACING)
+    layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
     return layout
 
 
