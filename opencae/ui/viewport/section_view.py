@@ -1,3 +1,5 @@
+"""Render and update clipped result sections with correctly mapped contour data."""
+
 from __future__ import annotations
 
 import math
@@ -168,14 +170,40 @@ class SectionViewController:
                     "point" if scalar in cut.point_data else "cell"
                 )
             self._cap_actor = self.owner.plotter.add_mesh(cut, **kwargs)
-        else:
-            cap_mapper = self._mapper(self._cap_actor)
-            if cap_mapper is None:
-                self._remove_cap()
-                return
-            cap_mapper.SetInputData(cut)
-            cap_mapper.Modified()
+
+        cap_mapper = self._mapper(self._cap_actor)
+        if cap_mapper is None or not self._bind_cap_dataset(cap_mapper, cut, scalar):
+            self._remove_cap()
+            return
         self._sync_cap_style(primary, scalar)
+
+    @staticmethod
+    def _bind_cap_dataset(mapper, dataset, scalar) -> bool:
+        """Bind a new slice through PyVista's mapper pipeline, including scalars.
+
+        PyVista's ``DataSetMapper`` inserts an ``ActiveScalarsAlgorithm`` when a
+        named array is selected.  Assigning with VTK ``SetInputData`` bypasses
+        PyVista's dataset setter and can disconnect that pipeline when a moved
+        section creates a replacement slice.  Using the public mapper API keeps
+        the selected result array deterministic across every plane movement.
+        """
+        try:
+            mapper.dataset = dataset
+            if scalar is None:
+                mapper.scalar_visibility = False
+                return True
+            if scalar in dataset.point_data:
+                preference = "point"
+            elif scalar in dataset.cell_data:
+                preference = "cell"
+            else:
+                return False
+            mapper.set_active_scalars(scalar, preference=preference)
+            mapper.scalar_visibility = True
+            mapper.Modified()
+            return True
+        except (AttributeError, KeyError, RuntimeError, TypeError, ValueError):
+            return False
 
     def _sync_cap_style(self, source_actor, scalar) -> None:
         source_mapper = self._mapper(source_actor)
@@ -190,15 +218,13 @@ class SectionViewController:
             pass
         try:
             if scalar is None or not source_mapper.GetScalarVisibility():
-                cap_mapper.ScalarVisibilityOff()
+                cap_mapper.scalar_visibility = False
             else:
-                cap_mapper.SetLookupTable(source_mapper.GetLookupTable())
-                cap_mapper.SetScalarRange(source_mapper.GetScalarRange())
-                cap_mapper.SetScalarMode(source_mapper.GetScalarMode())
-                cap_mapper.SelectColorArray(scalar)
-                cap_mapper.ScalarVisibilityOn()
+                cap_mapper.lookup_table = source_mapper.GetLookupTable()
+                cap_mapper.scalar_range = source_mapper.GetScalarRange()
+                cap_mapper.scalar_visibility = True
             cap_mapper.Modified()
-        except (AttributeError, RuntimeError, TypeError):
+        except (AttributeError, RuntimeError, TypeError, ValueError):
             pass
 
     def _remove_cap(self) -> None:
