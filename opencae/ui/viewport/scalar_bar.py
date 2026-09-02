@@ -119,6 +119,8 @@ def _disable_native_range_swatches(scalar_actor):
 def _new_cap_state(renderer):
     below_actor, below_poly = _rectangle_actor()
     above_actor, above_poly = _rectangle_actor()
+    renderer.AddActor2D(below_actor)
+    renderer.AddActor2D(above_actor)
     return {
         "below_actor": below_actor,
         "below_poly": below_poly,
@@ -181,19 +183,6 @@ def _render_window(plotter):
 
 
 def _ensure_actor(renderer, actor):
-    """Attach one cap through PyVista's public API or a plain VTK renderer."""
-    add_actor = getattr(renderer, "add_actor", None)
-    if callable(add_actor):
-        try:
-            add_actor(
-                actor,
-                reset_camera=False,
-                pickable=False,
-                render=False,
-            )
-            return
-        except (AttributeError, RuntimeError, TypeError):
-            pass
     try:
         if not renderer.HasViewProp(actor):
             renderer.AddActor2D(actor)

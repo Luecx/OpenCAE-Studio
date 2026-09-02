@@ -1,7 +1,7 @@
 PyQt6
 numpy
 scipy
-pyvista @ git+https://github.com/pyvista/pyvista.git@3ce36e3b72e5d73c10adf19256aeef6529579cc7
-pyvistaqt @ git+https://github.com/pyvista/pyvistaqt.git@c3fe1074dcb77bff723968b33a63181c08975f74
-vtk==9.7.0
+pyvista
+pyvistaqt @ git+https://github.com/pyvista/pyvistaqt.git@98a9abbd465f0c9e92eeb4c69f4c6ada1d19b84f
+vtk
 gmsh

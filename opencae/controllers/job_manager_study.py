@@ -170,22 +170,22 @@ def finish_study(manager, job_id, run_id, status, message="") -> None:
         manager._study_output(job.id, message)
 
     final_status = JobStatus.coerce(status)
-    progress = 1.0 if final_status is JobStatus.COMPLETED else job.progress
-    manager._update_job_runtime(
-        job.id,
-        status=final_status,
-        finished_at=utc_now(),
-        progress=progress,
-        progress_label=final_status.value,
+    candidate = deepcopy(job)
+    candidate.status = final_status
+    candidate.finished_at = utc_now()
+    candidate.progress = (
+        1.0 if final_status is JobStatus.COMPLETED else candidate.progress
     )
+    candidate.progress_label = final_status.value
+    manager._replace_job(candidate, f"Finished {job.name}")
 
     if isinstance(run, OptimizationRun) and run.iterations:
         _attach_topology_result(manager, job, run)
 
     manager.progress_changed.emit(
         job.id,
-        progress,
-        final_status.value,
+        candidate.progress,
+        candidate.progress_label,
     )
     manager.parent.refresh_action_states()
 

@@ -34,11 +34,12 @@ def build_model(project):
     boundary = folder(
         "Boundary Conditions",
         "boundary_conditions",
-        count=len(project.supports) + len(project.loads),
+        count=len(project.supports) + len(project.loads) + len(project.amplitudes),
     )
     root.appendRow(boundary)
     append_collection(boundary, "Supports", project.supports, "supports")
     append_collection(boundary, "Loads", project.loads, "loads")
+    append_collection(boundary, "Amplitudes", project.amplitudes, "amplitudes")
     append_steps(root, project.steps)
     append_analyses(root, project.analyses, project)
     append_studies(root, project.studies)

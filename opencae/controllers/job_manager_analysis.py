@@ -133,22 +133,19 @@ def finish_analysis(manager, job_id, adapter, output_base, code) -> None:
 
     exit_code = int(code)
     completed = exit_code == 0
-    status = (
+    candidate = deepcopy(job)
+    candidate.status = (
         JobStatus.COMPLETED
         if completed
         else JobStatus.CANCELLED
         if exit_code == 130
         else JobStatus.FAILED
     )
-    progress = 1.0 if completed else job.progress
-    manager._update_job_runtime(
-        job.id,
-        status=status,
-        exit_code=exit_code,
-        finished_at=utc_now(),
-        progress=progress,
-        progress_label=status.value,
-    )
+    candidate.exit_code = exit_code
+    candidate.finished_at = utc_now()
+    candidate.progress = 1.0 if completed else candidate.progress
+    candidate.progress_label = candidate.status.value
+    manager._replace_job(candidate, f"Finished {job.name}")
 
     source = next(
         (
@@ -163,8 +160,8 @@ def finish_analysis(manager, job_id, adapter, output_base, code) -> None:
 
     manager.progress_changed.emit(
         job.id,
-        progress,
-        status.value,
+        candidate.progress,
+        candidate.progress_label,
     )
     manager.parent.refresh_action_states()
 

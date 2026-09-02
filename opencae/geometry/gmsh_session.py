@@ -1,5 +1,3 @@
-"""Serialize short-lived Gmsh model sessions across application threads."""
-
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -14,7 +12,6 @@ _LOG = logging.getLogger(__name__)
 
 @contextmanager
 def gmsh_model(name: str):
-    """Yield one cleared Gmsh model without installing worker signal handlers."""
     try:
         import gmsh
     except ImportError as exc:
@@ -29,10 +26,7 @@ def gmsh_model(name: str):
             except AttributeError:
                 initialized = False
             if not initialized:
-                # Python signal handlers can only be installed by the main
-                # interpreter thread. Mesh generation deliberately runs in a
-                # QThread, so Gmsh must leave SIGINT ownership to Qt/Python.
-                gmsh.initialize(interruptible=False)
+                gmsh.initialize()
                 initialized_here = True
             gmsh.option.setNumber("General.Terminal", 0)
             gmsh.clear()

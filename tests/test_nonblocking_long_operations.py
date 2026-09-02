@@ -6,11 +6,10 @@ from pathlib import Path
 from time import sleep
 
 import pytest
-from PyQt6.QtCore import QEventLoop, QObject, QThread, QTimer
+from PyQt6.QtCore import QEventLoop, QThread, QTimer
 from PyQt6.QtWidgets import QApplication
 
 from opencae.controllers.background_task import BackgroundTask
-from opencae.controllers.job_manager import JobManager
 from opencae.model.core import EntityRef
 from opencae.model.entities.jobs import Job, JobStatus
 from opencae.model.project import Project
@@ -96,31 +95,6 @@ def test_runtime_job_progress_does_not_copy_document_or_enter_undo_history():
             live.id,
             {"source_ref": EntityRef("analysis-id")},
         )
-
-
-def test_starting_job_never_deepcopies_the_project_back_reference(tmp_path):
-    """Job startup mutates allowlisted runtime fields on the live entity only."""
-    job = Job(
-        name="Nonlinear Job",
-        output_file=str(tmp_path / "output.log"),
-    )
-    project = Project(
-        name="Nonlinear Project",
-        metadata={"deepcopy-unequal-marker": object()},
-        jobs=[job],
-    )
-    store = ProjectStore(project)
-    manager = JobManager(store, QObject(), settings=None, solvers={})
-
-    manager._start_job(job.id, "Starting Analysis")
-    live = store.project.resolve(job.id)
-
-    assert live.project is store.project
-    assert live.status is JobStatus.RUNNING
-    assert live.progress == 0.0
-    assert live.progress_label == "Starting Analysis"
-    assert live.started_at
-    assert live.metadata == {}
 
 
 def test_analysis_runner_never_waits_synchronously_for_solver_process():

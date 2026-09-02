@@ -3,6 +3,7 @@
 import unittest
 
 from opencae.model.core import EntityRef
+from opencae.model.entities.amplitudes import Amplitude
 from opencae.model.entities.analysis.analysis import Analysis
 from opencae.model.entities.analysis.step import AnalysisStep
 from opencae.model.entities.assembly.instance import Instance
@@ -78,6 +79,24 @@ class FEMasterDslTest(unittest.TestCase):
         self.assertIn("*NSET, NSET=ASM_NODES\n1\n2\n3", deck)
         self.assertIn("*ELSET, ELSET=ASM_ELEMENTS\n1", deck)
         self.assertIn("*SURFACE, NAME=ASM_SURFACE\n3, 1, S1", deck)
+
+    def test_amplitude_is_defined_before_and_referenced_by_load(self):
+        project = _project()
+        amplitude = Amplitude(
+            name="RAMP",
+            points=[(0.0, 0.0), (0.25, 1.0), (1.0, 1.0)],
+        )
+        project.amplitudes.append(amplitude)
+        project.loads[0].amplitude_ref = EntityRef.of(amplitude)
+        project.rebuild_index(strict=True)
+
+        deck = FEMasterAdapter().write_deck_text(project, project.analyses[0])
+
+        self.assertFalse(validate_deck(deck))
+        self.assertIn("*AMPLITUDE, NAME=RAMP, TYPE=LINEAR", deck)
+        self.assertIn("0, 0\n0.25, 1\n1, 1", deck)
+        self.assertIn("AMPLITUDE=RAMP", deck)
+        self.assertLess(deck.index("*AMPLITUDE"), deck.index("*CLOAD"))
 
 
 def _project():

@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from opencae.model.core import EntityRef
+from opencae.model.entities.amplitudes import Amplitude
 from opencae.model.entities.fields import FieldDefinition
 from opencae.model.entities.jobs import ResultField, ResultSet
 from opencae.model.entities.loads import ConcentratedLoad, TemperatureLoad
@@ -32,7 +33,7 @@ class ProjectRoundTripTest(unittest.TestCase):
         )
 
     def test_new_load_support_and_result_types_survive_json(self):
-        """Current typed loads, supports, fields and result entities round-trip."""
+        """Current typed loads, supports, amplitudes, fields and results round-trip."""
         project = _project()
         target = next(
             region
@@ -41,12 +42,20 @@ class ProjectRoundTripTest(unittest.TestCase):
         )
         target_definition = named_region_definition(target)
         temperature = FieldDefinition(name="T")
+        amplitude = Amplitude(
+            name="RAMP",
+            points=[(0.0, 0.0), (0.5, 1.0), (1.0, 0.25)],
+            interpolation="Smooth Step",
+            time_basis="Total time",
+        )
         project.fields.append(temperature)
+        project.amplitudes = [amplitude]
         project.loads = [
             ConcentratedLoad(
                 name="CLOAD",
                 target=target_definition,
                 components=[1, 2, 3, 4, 5, 6],
+                amplitude_ref=EntityRef.of(amplitude),
             ),
             TemperatureLoad(
                 name="TEMP",
@@ -80,6 +89,11 @@ class ProjectRoundTripTest(unittest.TestCase):
             loaded = load_project(path)
         self.assertIsInstance(loaded.loads[0], ConcentratedLoad)
         self.assertEqual([1, 2, 3, 4, 5, 6], loaded.loads[0].components)
+        self.assertEqual("RAMP", loaded.amplitudes[0].name)
+        self.assertEqual("Smooth Step", loaded.amplitudes[0].interpolation)
+        self.assertEqual("Total time", loaded.amplitudes[0].time_basis)
+        self.assertEqual(loaded.amplitudes[0].id, loaded.loads[0].amplitude_ref.entity_id)
+        self.assertIs(loaded.loads[0].amplitude, loaded.amplitudes[0])
         self.assertIsInstance(loaded.supports[0], DisplacementSupport)
         self.assertEqual("DISP", loaded.results[0].fields[0].name)
 

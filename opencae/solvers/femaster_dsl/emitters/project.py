@@ -7,7 +7,7 @@ from ..command import command
 from .assembly_regions import write_assembly_regions
 from .constraints import write_constraint
 from .loadcase import write_step
-from .loads import write_load, write_support
+from .loads import write_amplitude, write_load, write_support
 from .mesh import _safe, write_part_mesh
 from .reference_points import write_assembly_reference_points
 from .region_materialization import materialize_region
@@ -94,6 +94,8 @@ def write_project(project, writer, context):
             write_section(section, target, orientation_name, writer, context)
     for constraint in project.assembly.constraints:
         write_constraint(constraint, writer, context)
+    for amplitude in project.amplitudes:
+        write_amplitude(amplitude, writer, context)
     for support in project.supports:
         write_support(support, writer, context)
     for load in project.loads:
