@@ -29,7 +29,8 @@ class MaterialBrowserDialog(QDialog):
         """Build the browser from already unit-converted material rows."""
         super().__init__(parent)
         self.setWindowTitle("Material Browser")
-        self.setMinimumWidth(720)
+        self.setMinimumSize(720, 420)
+        self.resize(860, 520)
         root = dialog_layout(self)
 
         description = QLabel(
@@ -40,6 +41,7 @@ class MaterialBrowserDialog(QDialog):
         root.addWidget(description)
 
         self.table = QTableWidget(len(rows), 4, self)
+        self.table.setMinimumHeight(250)
         self.table.setHorizontalHeaderLabels(
             (
                 "Material",
