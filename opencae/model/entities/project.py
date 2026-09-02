@@ -106,9 +106,8 @@ class Project(Entity):
         return self.index.try_resolve(ref, expected_type)
 
     def references_to(self, entity_or_id):
-        """Return reverse-reference uses targeting an entity object or ID."""
+        """Return reverse-reference uses from the current lazily maintained index."""
         entity_id = getattr(entity_or_id, "id", entity_or_id)
-        self.rebuild_index()
         return self.index.references_to(str(entity_id))
 
     def render_deck(
