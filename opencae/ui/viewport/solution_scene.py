@@ -12,8 +12,17 @@ from .scene_camera import camera_position, restore_camera
 
 def show_result(scene, result, field=None, options=None):
     metadata = dict(getattr(result, "metadata", {}) or {})
-    if metadata.get("result_kind") == "topology_density":
-        _show_topology_result(scene, result, options or {})
+    identity = _result_identity(result)
+    previous_identity = getattr(scene, "_displayed_result_identity", None)
+    is_topology = metadata.get("result_kind") == "topology_density"
+
+    if is_topology:
+        _show_topology_result(
+            scene,
+            result,
+            options or {},
+            fit_on_load=identity != previous_identity,
+        )
         return
 
     options = options or {}
@@ -46,6 +55,10 @@ def show_result(scene, result, field=None, options=None):
             scene.owner.plotter.render()
             return
 
+    # A different ResultSet, or reopening a result after its actors were cleared,
+    # is new visible content and should always start framed.  Rebuilding the same
+    # ResultSet for another field/range keeps the user's current camera.
+    fit_on_load = identity != previous_identity or scene.result_actor is None
     camera = camera_position(scene.owner.plotter)
     scene.clear(render=False)
     try:
@@ -60,7 +73,8 @@ def show_result(scene, result, field=None, options=None):
         scene.owner.message.emit(f"Could not open solution: {exc}")
         scene.owner.plotter.render()
         return
-    if camera is None:
+    scene._displayed_result_identity = identity
+    if fit_on_load or camera is None:
         scene.owner.plotter.view_isometric()
         scene.owner.plotter.reset_camera()
     else:
@@ -80,7 +94,7 @@ def show_result(scene, result, field=None, options=None):
     scene.owner.plotter.render()
 
 
-def _show_topology_result(scene, result, options):
+def _show_topology_result(scene, result, options, *, fit_on_load=False):
     frames = list(dict(result.metadata or {}).get("frames", ()))
     if not frames:
         scene.owner.message.emit("The topology result contains no saved iterations")
@@ -137,10 +151,20 @@ def _show_topology_result(scene, result, options):
             grid,
             (actor, mesh_actor, boundary_actor),
         )
-    if camera is None:
+    scene._displayed_result_identity = _result_identity(result)
+    if fit_on_load or camera is None:
         scene.owner.plotter.view_isometric()
         scene.owner.plotter.reset_camera()
     else:
         restore_camera(scene.owner.plotter, camera)
     scene.owner.result_query.configure("")
     scene.owner.plotter.render()
+
+
+def _result_identity(result):
+    """Return a stable display identity even for external non-persisted results."""
+    identifier = str(getattr(result, "id", "") or "").strip()
+    if identifier:
+        return identifier
+    source = str(getattr(result, "source_file", "") or "").strip()
+    return source or f"object:{id(result)}"
