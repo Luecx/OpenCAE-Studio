@@ -18,11 +18,19 @@ from .commands import (
     make_delete_command,
     make_replace_command,
 )
+from .history_retention import trim_undo_history
 from .undo_entry import UndoEntry
 
 
 class ProjectStore(QObject):
-    """Transactional document store for user-authored Project mutations."""
+    """Transactional document store for user-authored Project mutations.
+
+    Normal OpenCAE edits are reversible command deltas. They never snapshot the
+    complete Project merely to provide rollback, which is essential when a Part
+    owns hundreds of thousands of mesh elements. Unknown external commands keep
+    the conservative snapshot fallback until they explicitly implement the
+    built-in atomic-command contract.
+    """
 
     changed = pyqtSignal(str)
     runtime_changed = pyqtSignal(str, object)
@@ -84,25 +92,33 @@ class ProjectStore(QObject):
         self.active_part_changed.emit(self.active_part())
 
     def execute(self, description: str, command: ProjectCommand):
-        """Apply one command atomically and record it only after validation."""
-        self.project.ensure_references(strict=True)
-        snapshot = deepcopy(self.project)
+        """Apply one command transactionally and append its reversible delta."""
         active_before = self.active_part_id
         selected_before = self.selection_id
+        affects_index = command.affects_project_index(self.project)
+        snapshot = self._fallback_snapshot(command)
 
         try:
             self.project = command.apply(self.project)
-            self.project.ensure_references(strict=True)
-            self._repair_active_part()
-            selected_after = (
-                selected_before
-                if selected_before in self.project.index.by_id
-                else None
-            )
         except Exception:
-            self._restore_snapshot(snapshot, active_before, selected_before)
+            if snapshot is not None:
+                self._restore_snapshot(snapshot, active_before, selected_before)
             raise
 
+        self._validate_completed_command(
+            command,
+            forward=True,
+            affects_index=affects_index,
+            snapshot=snapshot,
+            active_id=active_before,
+            selected_id=selected_before,
+        )
+        self._repair_active_part()
+        selected_after = (
+            selected_before
+            if selected_before in self.project.index.by_id
+            else None
+        )
         self._undo.append(
             UndoEntry(
                 description,
@@ -113,6 +129,7 @@ class ProjectStore(QObject):
                 selected_after,
             )
         )
+        trim_undo_history(self._undo)
         self._redo.clear()
         self._restore_selection(selected_after)
         self.changed.emit(description)
@@ -148,11 +165,9 @@ class ProjectStore(QObject):
         """Update scalar runtime metadata without document snapshots or undo history.
 
         Runtime state such as Job progress changes frequently while external work
-        is running. Sending those values through :meth:`execute` would deepcopy
-        the entire Project (including large FE meshes), rebuild references and
-        create undo entries for every progress tick. This focused path is limited
-        to top-level persistent scalar/enum fields, so it cannot alter identity,
-        ownership, EntityRef relationships, collections, or the Project index.
+        is running. This focused path is limited to top-level persistent
+        scalar/enum fields, so it cannot alter identity, ownership, EntityRef
+        relationships, collections, or the Project index.
         """
         entity = self.project.try_resolve(str(entity_id))
         if not isinstance(entity, Entity):
@@ -195,9 +210,6 @@ class ProjectStore(QObject):
                 setattr(entity, name, value)
             raise
 
-        # No reference/index-affecting field can enter this path, so the existing
-        # Project index remains valid and project-wide reference validation is
-        # intentionally not repeated here.
         self.runtime_changed.emit(entity.id, tuple(normalized))
 
     def delete_entity(
@@ -244,8 +256,6 @@ class ProjectStore(QObject):
                     f"{type(entity).__name__} '{entity.name}' does not belong "
                     "to this Project"
                 )
-            # Commands replace the graph with a validated copy. The stable ID
-            # intentionally bridges objects held by controllers across that swap.
             self._selection = EntityRef.of(live_entity)
         else:
             self._selection = entity
@@ -260,13 +270,14 @@ class ProjectStore(QObject):
         self._apply_history(self._redo, self._undo, True, "Redo")
 
     def _apply_history(self, source, target, forward, prefix):
-        """Move one history entry only after its mutation succeeds."""
+        """Move one history entry only after its mutation and validation succeed."""
         if not source:
             return
         entry = source[-1]
-        snapshot = deepcopy(self.project)
         active_before_attempt = self.active_part_id
         selected_before_attempt = self.selection_id
+        affects_index = entry.command.affects_project_index(self.project)
+        snapshot = self._fallback_snapshot(entry.command)
 
         try:
             self.project = (
@@ -274,15 +285,23 @@ class ProjectStore(QObject):
                 if forward
                 else entry.command.undo(self.project)
             )
-            self.project.ensure_references(strict=True)
         except Exception:
-            self._restore_snapshot(
-                snapshot,
-                active_before_attempt,
-                selected_before_attempt,
-            )
+            if snapshot is not None:
+                self._restore_snapshot(
+                    snapshot,
+                    active_before_attempt,
+                    selected_before_attempt,
+                )
             raise
 
+        self._validate_completed_command(
+            entry.command,
+            forward=forward,
+            affects_index=affects_index,
+            snapshot=snapshot,
+            active_id=active_before_attempt,
+            selected_id=selected_before_attempt,
+        )
         source.pop()
         target.append(entry)
         self.active_part_id = (
@@ -295,6 +314,62 @@ class ProjectStore(QObject):
         self._restore_selection(selected_id)
         self.changed.emit(f"{prefix}: {entry.description}")
         self.scene_changed.emit(prefix)
+
+    def _fallback_snapshot(self, command: ProjectCommand):
+        """Snapshot only unknown commands that lack self-contained rollback safety."""
+        if command.is_atomic():
+            return None
+        # External commands keep the old conservative contract. This is a rare
+        # compatibility path; all production OpenCAE commands are atomic deltas.
+        self.project.ensure_references(strict=True)
+        return deepcopy(self.project)
+
+    def _validate_completed_command(
+        self,
+        command: ProjectCommand,
+        *,
+        forward: bool,
+        affects_index: bool,
+        snapshot,
+        active_id,
+        selected_id,
+    ) -> None:
+        """Validate graph-changing commands and roll back a completed invalid edit."""
+        if not affects_index:
+            return
+        validation_error = None
+        try:
+            self.project.ensure_references(strict=True)
+            return
+        except Exception as exc:
+            validation_error = exc
+            if snapshot is not None:
+                self._restore_snapshot(snapshot, active_id, selected_id)
+                raise
+
+        # Built-in commands already completed atomically, so their own inverse is
+        # sufficient rollback. This stores only the changed entity/field delta,
+        # never a second copy of the full mesh-owning Project.
+        try:
+            self.project = (
+                command.undo(self.project)
+                if forward
+                else command.apply(self.project)
+            )
+            self.project.ensure_references(strict=False)
+            self.active_part_id = active_id
+            self._repair_active_part()
+            self._selection = (
+                EntityRef(selected_id)
+                if selected_id and selected_id in self.project.index.by_id
+                else None
+            )
+        except Exception as rollback_error:
+            raise RuntimeError(
+                "Command validation failed and command rollback could not restore "
+                "the Project"
+            ) from rollback_error
+        raise validation_error
 
     def _restore_snapshot(self, snapshot, active_id, selected_id):
         """Restore the exact pre-attempt graph and UI identity state."""

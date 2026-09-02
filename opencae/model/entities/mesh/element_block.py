@@ -12,10 +12,12 @@ from ..fem import Element
 @register_model_type("element_block")
 @dataclass
 class ElementBlock(SolverWritable):
-    """Compact element storage referencing a MeshState-owned definition.
+    """Compact element storage referencing one canonical mesh definition.
 
     ``definition`` is a non-serialized runtime alias so the public API remains
     object-oriented. ``definition_ref`` is the only persisted relationship.
+    Element ids/connectivity are large numeric payloads and deliberately do not
+    participate in ProjectIndex traversal.
     """
 
     definition: ElementDefinition | EntityRef | None = field(
@@ -24,8 +26,14 @@ class ElementBlock(SolverWritable):
         repr=False,
         compare=False,
     )
-    ids: list[int] = field(default_factory=list)
-    connectivity: list[tuple[int, ...]] = field(default_factory=list)
+    ids: list[int] = field(
+        default_factory=list,
+        metadata={"project_index": False},
+    )
+    connectivity: list[tuple[int, ...]] = field(
+        default_factory=list,
+        metadata={"project_index": False},
+    )
     definition_ref: EntityRef | None = None
     _mesh: object | None = field(
         init=False,

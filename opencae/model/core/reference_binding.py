@@ -1,4 +1,4 @@
-"""Validates stable references in the current persistent Project graph."""
+"""Validate stable references and region-consumer semantics for a Project."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from dataclasses import fields, is_dataclass
 from typing import Any
 
 from .entity import Entity
-from .persistent_model_field import is_persistent_model_field
+from .persistent_model_field import is_project_index_field
 from .project_index import ProjectIndex
 from .reference import EntityRef
 from .reference_type import matches_reference_type
@@ -17,17 +17,19 @@ def validate_project_references(
     index: ProjectIndex | None = None,
     strict: bool = False,
 ) -> list[str]:
-    """Return diagnostics for unresolved or type-incompatible references.
+    """Return unresolved/type-incompatible EntityRef diagnostics only.
 
-    Validation is read-only and traverses persistent fields only. Legacy name
-    binding is intentionally unsupported in the development file format.
+    This is the integrity check used by ProjectStore transactions. It deliberately
+    does not materialize or validate mesh-backed selection semantics: an unrelated
+    edit such as creating a Step must not scan hundreds of thousands of mesh IDs.
+    Full workflow validation calls :func:`validate_region_consumers` separately.
     """
     index = index or ProjectIndex(project)
     errors: list[str] = []
     active_values: set[int] = set()
 
     def walk(value: Any, path: str) -> None:
-        """Visit persistent values once per active recursion path."""
+        """Visit graph-bearing values once per active recursion path."""
         if isinstance(value, EntityRef):
             if not value.entity_id:
                 return
@@ -56,7 +58,7 @@ def validate_project_references(
         try:
             if isinstance(value, Entity) or is_dataclass(value):
                 for info in fields(value):
-                    if is_persistent_model_field(info):
+                    if is_project_index_field(info):
                         walk(
                             getattr(value, info.name),
                             f"{path}.{info.name}",
@@ -71,14 +73,19 @@ def validate_project_references(
             active_values.remove(identity)
 
     walk(project, "project")
-    errors.extend(_validate_region_consumers(project))
     if strict and errors:
         raise ValueError("Invalid model references:\n- " + "\n- ".join(errors))
     return errors
 
 
-def _validate_region_consumers(project) -> list[str]:
-    """Validate region-valued relationships with their consumer requirements."""
+def validate_region_consumers(project) -> list[str]:
+    """Validate region-valued relationships with their consumer requirements.
+
+    This is intentionally a workflow/domain validation pass rather than a
+    ProjectIndex maintenance step. Some checks inspect concrete mesh membership
+    and are therefore allowed to scale with mesh size only when validation is
+    explicitly requested.
+    """
     from opencae.model.entities.constraints import (
         ConstraintType,
         constraint_region_requirement,

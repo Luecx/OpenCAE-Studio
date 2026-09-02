@@ -1,6 +1,8 @@
+"""Own element-control editing and application for the active Part mesh."""
+
 from __future__ import annotations
 
-from copy import deepcopy
+from copy import copy, deepcopy
 
 from PyQt6.QtWidgets import QMessageBox
 
@@ -22,10 +24,16 @@ from ..region_selection import begin_region_pick, region_options
 
 
 class PartElementControls:
+    """Coordinate element-control dialogs and reversible mesh transformations."""
+
     def __init__(self, context):
         self.ctx = context
         self.dialogs = []
-        self.session = ElementControlSession(context.store, context.parent, self.dialogs)
+        self.session = ElementControlSession(
+            context.store,
+            context.parent,
+            self.dialogs,
+        )
 
     def element_controls(self):
         self._open(None)
@@ -36,7 +44,9 @@ class PartElementControls:
     def _open(self, control):
         part = self.ctx.active_part()
         if part is None or not part.mesh.element_blocks:
-            self.ctx.store.message.emit("Generate or import a mesh before editing element controls")
+            self.ctx.store.message.emit(
+                "Generate or import a mesh before editing element controls"
+            )
             return
 
         requirement = RegionRequirement(RegionProjection.ELEMENTS, (1, 2, 3), 1)
@@ -64,8 +74,15 @@ class PartElementControls:
         initial = definition_from_local_labels(part, self.ctx.selected_labels())
         dialog = ElementControlDialog(
             self.ctx.store.project,
-            lambda target: summarize(self.ctx.store.project.resolve(part.id), target),
-            lambda target, topology: preview(self.ctx.store.project.resolve(part.id), target, topology),
+            lambda target: summarize(
+                self.ctx.store.project.resolve(part.id),
+                target,
+            ),
+            lambda target, topology: preview(
+                self.ctx.store.project.resolve(part.id),
+                target,
+                topology,
+            ),
             options=region_options(
                 self.ctx.store.project,
                 owner=part,
@@ -78,21 +95,39 @@ class PartElementControls:
             parent=self.ctx.parent,
         )
         holder = {"id": control.id if control else None}
-        self.session.open(dialog, lambda values: self._commit(part.id, holder, values))
+        self.session.open(
+            dialog,
+            lambda values: self._commit(part.id, holder, values),
+        )
 
     def _commit(self, part_id, holder, values):
+        """Apply one control using exactly one intentional mesh-sized copy."""
         part = self.ctx.store.project.try_resolve(part_id)
         if part is None:
             self.ctx.store.message.emit("The edited part no longer exists")
             return
-        candidate = deepcopy(part)
+
+        # Element-order/topology conversion genuinely modifies connectivity, so
+        # one isolated MeshState copy is required for validation and rollback.
+        # Do not deepcopy the complete Part/Project, and transfer the resulting
+        # mesh directly into undo history once the operation succeeds.
+        candidate = copy(part)
+        object.__setattr__(candidate, "_project", None)
+        candidate.mesh = deepcopy(part.mesh)
         control = next(
-            (item for item in candidate.mesh.element_controls if item.id == holder["id"]),
+            (
+                item
+                for item in candidate.mesh.element_controls
+                if item.id == holder["id"]
+            ),
             None,
         )
         if control is None:
             control = ElementControl(
-                name=next_name("Element Control", candidate.mesh.element_controls)
+                name=next_name(
+                    "Element Control",
+                    candidate.mesh.element_controls,
+                )
             )
             candidate.mesh.element_controls.append(control)
             holder["id"] = control.id
@@ -104,17 +139,22 @@ class PartElementControls:
         state = preview(candidate, control.target, control.topology)
         family = (
             control.formulation
-            if control.topology.value == "line" and control.formulation != "Keep Existing"
+            if control.topology.value == "line"
+            and control.formulation != "Keep Existing"
             else ""
         )
         conflicts = incompatible_assignments(
-            self.ctx.store.project, candidate, state.selected, family
+            self.ctx.store.project,
+            candidate,
+            state.selected,
+            family,
         )
         if conflicts:
             QMessageBox.warning(
                 self.ctx.parent,
                 "Incompatible section",
-                "The element family conflicts with assigned sections:\n\n" + "\n".join(conflicts),
+                "The element family conflicts with assigned sections:\n\n"
+                + "\n".join(conflicts),
             )
             return
         selected, affected = apply_control(candidate, control)
@@ -125,8 +165,9 @@ class PartElementControls:
                 "The target contains no elements of the selected topology.",
             )
             return
-        self.ctx.service.invalidate(candidate.id, mesh_only=True)
-        self.ctx.replace_part(
-            candidate,
-            f"Applied {control.name} to {len(selected):,} elements ({len(affected):,} affected)",
+        description = (
+            f"Applied {control.name} to {len(selected):,} elements "
+            f"({len(affected):,} affected)"
         )
+        self.ctx.service.invalidate(part_id, mesh_only=True)
+        self.ctx.replace_mesh(part_id, candidate.mesh, description)

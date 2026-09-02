@@ -8,7 +8,11 @@ from dataclasses import dataclass, fields, is_dataclass
 from typing import Any
 
 from opencae.model.core import Entity
-from opencae.model.core.persistent_model_field import is_persistent_model_field
+from opencae.model.core.persistent_model_field import (
+    is_persistent_model_field,
+    is_project_index_field,
+)
+from opencae.model.core.project_index_impact import value_affects_project_index
 
 
 class ProjectCommand(ABC):
@@ -24,12 +28,42 @@ class ProjectCommand(ABC):
         """Reverse this mutation and return the mutated Project."""
         raise NotImplementedError
 
+    def is_atomic(self) -> bool:
+        """Return whether a failed apply/undo leaves the input graph unchanged.
+
+        External/custom commands default to ``False`` so ProjectStore retains a
+        conservative full-snapshot fallback for them. OpenCAE's built-in command
+        primitives override this contract and can therefore use command-local
+        rollback without copying an entire project containing a large FE mesh.
+        """
+        return False
+
+    def affects_project_index(self, project) -> bool:
+        """Return whether this mutation can alter ownership or EntityRef topology."""
+        return True
+
+    def retains_large_payload(self) -> bool:
+        """Return whether history keeps an additional mesh-sized payload alive."""
+        return False
+
 
 @dataclass(frozen=True)
 class CompositeCommand(ProjectCommand):
     """Apply several commands as one atomic logical mutation."""
 
     commands: tuple[ProjectCommand, ...]
+
+    def is_atomic(self) -> bool:
+        """A composite is atomic when every child obeys the atomic contract."""
+        return all(command.is_atomic() for command in self.commands)
+
+    def affects_project_index(self, project) -> bool:
+        """Return whether any child can alter the runtime graph index."""
+        return any(command.affects_project_index(project) for command in self.commands)
+
+    def retains_large_payload(self) -> bool:
+        """A composite is large when any child retains a large inactive value."""
+        return any(command.retains_large_payload() for command in self.commands)
 
     def apply(self, project):
         """Apply all children, rolling back already-applied children on failure."""
@@ -38,10 +72,6 @@ class CompositeCommand(ProjectCommand):
             for command in self.commands:
                 project = command.apply(project)
                 applied.append(command)
-                # Later children may address entities added/replaced by earlier
-                # children. Reindex without enforcing final-state invariants yet.
-                project.rebuild_index(strict=False)
-            project.ensure_references(strict=True)
             return project
         except Exception:
             _rollback_applied(project, applied)
@@ -54,8 +84,6 @@ class CompositeCommand(ProjectCommand):
             for command in reversed(self.commands):
                 project = command.undo(project)
                 undone.append(command)
-                project.rebuild_index(strict=False)
-            project.ensure_references(strict=True)
             return project
         except Exception:
             _restore_undone(project, undone)
@@ -71,9 +99,12 @@ class CollectionInsertCommand(ProjectCommand):
     entity: Entity
     index: int | None = None
 
+    def is_atomic(self) -> bool:
+        """Insertion prepares its detached value before touching the live list."""
+        return True
+
     def apply(self, project):
         """Insert the entity after enforcing global ID uniqueness."""
-        project.rebuild_index(strict=False)
         if self.entity.id in project.index.by_id:
             raise ValueError(
                 f"Entity '{self.entity.id}' already exists in the Project graph"
@@ -84,7 +115,8 @@ class CollectionInsertCommand(ProjectCommand):
             if self.index is None
             else min(max(int(self.index), 0), len(collection))
         )
-        collection.insert(position, deepcopy(self.entity))
+        stored = deepcopy(self.entity)
+        collection.insert(position, stored)
         project.invalidate_index()
         return project
 
@@ -111,11 +143,16 @@ class CollectionReplaceCommand(ProjectCommand):
         if self.before.id != self.after.id:
             raise ValueError("Replacement entities must preserve their immutable id")
 
+    def is_atomic(self) -> bool:
+        """Replacement prepares its detached value before assigning the list slot."""
+        return True
+
     def apply(self, project):
         """Replace the current entity with the recorded after-state."""
         collection = _collection(project, self.parent_id, self.attribute)
         index = _require_index(collection, self.before.id, self.attribute)
-        collection[index] = deepcopy(self.after)
+        stored = deepcopy(self.after)
+        collection[index] = stored
         project.invalidate_index()
         return project
 
@@ -123,7 +160,8 @@ class CollectionReplaceCommand(ProjectCommand):
         """Restore the recorded before-state."""
         collection = _collection(project, self.parent_id, self.attribute)
         index = _require_index(collection, self.after.id, self.attribute)
-        collection[index] = deepcopy(self.before)
+        stored = deepcopy(self.before)
+        collection[index] = stored
         project.invalidate_index()
         return project
 
@@ -137,6 +175,10 @@ class CollectionDeleteCommand(ProjectCommand):
     entity: Entity
     index: int
 
+    def is_atomic(self) -> bool:
+        """Deletion mutates only after all address checks have succeeded."""
+        return True
+
     def apply(self, project):
         """Delete the addressed entity from its persistent owner list."""
         collection = _collection(project, self.parent_id, self.attribute)
@@ -147,15 +189,15 @@ class CollectionDeleteCommand(ProjectCommand):
 
     def undo(self, project):
         """Reinsert the deleted entity after enforcing global ID uniqueness."""
-        project.rebuild_index(strict=False)
         if self.entity.id in project.index.by_id:
             raise ValueError(
                 f"Entity '{self.entity.id}' already exists in the Project graph"
             )
         collection = _collection(project, self.parent_id, self.attribute)
+        stored = deepcopy(self.entity)
         collection.insert(
             min(max(int(self.index), 0), len(collection)),
-            deepcopy(self.entity),
+            stored,
         )
         project.invalidate_index()
         return project
@@ -170,24 +212,47 @@ class UpdateFieldCommand(ProjectCommand):
     before: Any
     after: Any
 
-    def apply(self, project):
-        """Apply the recorded field value."""
-        owner, field_name = _field_owner(
+    def is_atomic(self) -> bool:
+        """Field values are detached before the single live assignment occurs."""
+        return True
+
+    def affects_project_index(self, project) -> bool:
+        """Return whether this field can own Entities or contain EntityRefs."""
+        owner, field_name, field_info = _field_target(
             project.resolve(self.entity_id),
             self.field_name,
         )
-        setattr(owner, field_name, deepcopy(self.after))
-        project.invalidate_index()
+        del owner, field_name
+        if not is_project_index_field(field_info):
+            return False
+        return value_affects_project_index(self.before) or value_affects_project_index(
+            self.after
+        )
+
+    def apply(self, project):
+        """Apply the recorded field value, preserving a valid index when possible."""
+        affects_index = self.affects_project_index(project)
+        owner, field_name, _field_info = _field_target(
+            project.resolve(self.entity_id),
+            self.field_name,
+        )
+        value = deepcopy(self.after)
+        setattr(owner, field_name, value)
+        if affects_index:
+            project.invalidate_index()
         return project
 
     def undo(self, project):
-        """Restore the previous field value."""
-        owner, field_name = _field_owner(
+        """Restore the previous field value, preserving a valid index when possible."""
+        affects_index = self.affects_project_index(project)
+        owner, field_name, _field_info = _field_target(
             project.resolve(self.entity_id),
             self.field_name,
         )
-        setattr(owner, field_name, deepcopy(self.before))
-        project.invalidate_index()
+        value = deepcopy(self.before)
+        setattr(owner, field_name, value)
+        if affects_index:
+            project.invalidate_index()
         return project
 
 
@@ -243,12 +308,12 @@ def make_delete_command(
 
 def entity_collection_location(project, entity_id: str) -> tuple[str, str]:
     """Return ``(parent_id, persistent list path)`` for an indexed entity."""
-    project.rebuild_index(strict=False)
-    parent_id = project.index.parent_id.get(entity_id)
+    index = project.index
+    parent_id = index.parent_id.get(entity_id)
     if parent_id is None:
         raise ValueError(f"Entity '{entity_id}' has no deletable collection owner")
-    entity_path = project.index.path.get(entity_id, "")
-    parent_path = project.index.path.get(parent_id, "")
+    entity_path = index.path.get(entity_id, "")
+    parent_path = index.path.get(parent_id, "")
     prefix = f"{parent_path}."
     if not entity_path.startswith(prefix):
         raise ValueError(f"Cannot derive collection path for entity '{entity_id}'")
@@ -280,8 +345,8 @@ def _collection(project, parent_id: str, attribute: str):
     return value
 
 
-def _persistent_field_value(owner, name: str, path: str):
-    """Read one declared persistent dataclass field from ``owner``."""
+def _persistent_field_info(owner, name: str, path: str):
+    """Return one declared persistent dataclass field from ``owner``."""
     if not is_dataclass(owner):
         raise AttributeError(
             f"Cannot traverse non-dataclass value at persistent path '{path}'"
@@ -291,6 +356,12 @@ def _persistent_field_value(owner, name: str, path: str):
         raise AttributeError(
             f"{type(owner).__name__} has no persistent field '{name}'"
         )
+    return field_info
+
+
+def _persistent_field_value(owner, name: str, path: str):
+    """Read one declared persistent dataclass field from ``owner``."""
+    _persistent_field_info(owner, name, path)
     return getattr(owner, name)
 
 
@@ -314,8 +385,8 @@ def _require_index(collection, entity_id: str, attribute: str) -> int:
     return index
 
 
-def _field_owner(entity, field_path: str):
-    """Resolve and validate one persistent field path for UpdateFieldCommand."""
+def _field_target(entity, field_path: str):
+    """Resolve one persistent field path and return owner, name, and field info."""
     parts = field_path.split(".")
     if not parts or any(not item for item in parts):
         raise ValueError("Field path must contain persistent field names")
@@ -327,32 +398,32 @@ def _field_owner(entity, field_path: str):
             ".".join(parts[:index]),
         )
     final = parts[-1]
-    _persistent_field_value(owner, final, field_path)
-    return owner, final
+    field_info = _persistent_field_info(owner, final, field_path)
+    return owner, final, field_info
 
 
 def _rollback_applied(project, applied: list[ProjectCommand]) -> None:
-    """Best-effort rollback for a failed CompositeCommand.apply()."""
+    """Rollback already-applied children after a failed CompositeCommand.apply()."""
     rollback_error = None
     for command in reversed(applied):
         try:
             project = command.undo(project)
-            project.rebuild_index(strict=False)
         except Exception as exc:  # pragma: no cover - catastrophic invariant break
             rollback_error = exc
             break
     if rollback_error is not None:
         raise RuntimeError("Composite command rollback failed") from rollback_error
+    # This path is exceptional; one full integrity refresh is appropriate after
+    # restoring the original state, rather than after every normal child edit.
     project.ensure_references(strict=False)
 
 
 def _restore_undone(project, undone: list[ProjectCommand]) -> None:
-    """Best-effort restoration for a failed CompositeCommand.undo()."""
+    """Restore already-undone children after a failed CompositeCommand.undo()."""
     rollback_error = None
     for command in reversed(undone):
         try:
             project = command.apply(project)
-            project.rebuild_index(strict=False)
         except Exception as exc:  # pragma: no cover - catastrophic invariant break
             rollback_error = exc
             break

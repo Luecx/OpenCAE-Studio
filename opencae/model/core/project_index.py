@@ -6,7 +6,7 @@ from dataclasses import fields, is_dataclass
 from typing import Any, Iterable
 
 from .entity import Entity
-from .persistent_model_field import is_persistent_model_field
+from .persistent_model_field import is_project_index_field
 from .reference import EntityRef
 from .reference_type import matches_reference_type
 from .reference_use import ReferenceUse
@@ -53,7 +53,7 @@ class ProjectIndex:
         self.parent_id[entity.id] = parent_id
         self.path[entity.id] = path
         for field_info in fields(entity):
-            if not is_persistent_model_field(field_info):
+            if not is_project_index_field(field_info):
                 continue
             self._visit_value(
                 getattr(entity, field_info.name),
@@ -79,7 +79,7 @@ class ProjectIndex:
         try:
             if is_dataclass(value):
                 for field_info in fields(value):
-                    if not is_persistent_model_field(field_info):
+                    if not is_project_index_field(field_info):
                         continue
                     self._visit_value(
                         getattr(value, field_info.name),
@@ -127,7 +127,7 @@ class ProjectIndex:
             try:
                 if is_dataclass(value):
                     for item in fields(value):
-                        if is_persistent_model_field(item):
+                        if is_project_index_field(item):
                             walk(
                                 getattr(value, item.name),
                                 f"{path}.{item.name}",
@@ -142,7 +142,7 @@ class ProjectIndex:
                 active_values.remove(identity)
 
         for field_info in fields(source):
-            if not is_persistent_model_field(field_info):
+            if not is_project_index_field(field_info):
                 continue
             walk(getattr(source, field_info.name), field_info.name)
 

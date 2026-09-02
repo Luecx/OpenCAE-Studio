@@ -6,7 +6,8 @@ from opencae.controllers.background_task import BackgroundTask
 from opencae.geometry import GeometryService
 from opencae.geometry.element_controls_apply import apply_all_controls
 from opencae.geometry.fingerprint import part_fingerprint
-from opencae.model.mesh import create_element_definition
+from opencae.model.mesh import MeshState, create_element_definition
+from opencae.store.commands import CompositeCommand, UpdateFieldCommand
 from opencae.ui.dialogs.edit_elements import EditElementsDialog
 
 from .mesh_persistence import apply_mesh_snapshot
@@ -23,7 +24,7 @@ class PartMeshGeneration:
         self._mesh_generation_token = 0
 
     def generate_mesh(self):
-        """Generate a mesh candidate off-thread and atomically replace the Part."""
+        """Generate a fresh mesh off-thread without copying the old FE payload."""
         part = self.ctx.active_part()
         if not self.ctx.require_geometry(part):
             return
@@ -38,7 +39,7 @@ class PartMeshGeneration:
             )
             return
 
-        candidate = deepcopy(part)
+        candidate = self.ctx.mesh_generation_candidate(part)
         source_fingerprint = part_fingerprint(part, include_mesh=True)
         self._mesh_generation_token += 1
         token = self._mesh_generation_token
@@ -69,7 +70,7 @@ class PartMeshGeneration:
         source_fingerprint,
         token,
     ) -> None:
-        """Commit a worker result only if the source Part is still unchanged."""
+        """Commit a worker result only if the source meshing inputs are unchanged."""
         self._mesh_task = None
         if token != self._mesh_generation_token:
             return
@@ -86,9 +87,10 @@ class PartMeshGeneration:
             return
 
         candidate, snapshot = result
-        self.ctx.service.invalidate(candidate.id, mesh_only=True)
-        self.ctx.replace_part(
-            candidate,
+        self.ctx.service.invalidate(part_id, mesh_only=True)
+        self.ctx.replace_mesh(
+            part_id,
+            candidate.mesh,
             f"Generated mesh for {part_name}",
         )
         if snapshot.seed_mismatches:
@@ -112,67 +114,87 @@ class PartMeshGeneration:
         self.ctx.store.message.emit(f"Mesh generation failed for {part_name}")
 
     def clear_mesh(self):
-        """Remove generated mesh data while retaining meshing configuration."""
+        """Clear FE payload by swapping in an empty configured MeshState."""
         part = self.ctx.active_part()
         if part is None:
             return
         # Invalidate any still-running worker result. Gmsh itself is not killed
         # unsafely; when it finishes its stale token is simply discarded.
         self._mesh_generation_token += 1
-        candidate = deepcopy(part)
-        candidate.mesh.node_count = 0
-        candidate.mesh.element_count = 0
-        candidate.mesh.mesh_dimension = 0
-        candidate.mesh.minimum_quality = None
-        candidate.mesh.mean_quality = None
-        candidate.mesh.element_definitions.clear()
-        candidate.mesh.nodes.ids.clear()
-        candidate.mesh.nodes.coordinates.clear()
-        candidate.mesh.element_blocks.clear()
-        candidate.mesh.entity_nodes.clear()
-        candidate.mesh.entity_elements.clear()
-        candidate.mesh.entity_facets.clear()
-        candidate.mesh.status = "Not generated"
+        replacement = MeshState(
+            settings=deepcopy(part.mesh.settings),
+            seeds=deepcopy(part.mesh.seeds),
+            element_controls=deepcopy(part.mesh.element_controls),
+            status="Not generated",
+            revision=part.mesh.revision,
+        )
         self.ctx.service.invalidate(part.id, mesh_only=True)
-        self.ctx.replace_part(
-            candidate,
+        self.ctx.replace_mesh(
+            part.id,
+            replacement,
             f"Cleared mesh for {part.name}",
         )
 
     def edit_elements(self):
-        """Edit one canonical element definition selected by solver metadata."""
+        """Edit element-definition metadata without cloning the generated mesh."""
         values = get_values(EditElementsDialog(self.ctx.parent))
         part = self.ctx.active_part()
         if not values or part is None:
             return
 
-        candidate = deepcopy(part)
         existing = next(
             (
                 item
-                for item in candidate.mesh.element_definitions
+                for item in part.mesh.element_definitions
                 if item.category == values["category"]
                 and item.topology == values["topology"]
             ),
             None,
         )
+        description = f"Edited {values['topology']}"
         if existing is None:
             target = create_element_definition(
                 values["category"],
                 values["topology"],
                 name=values["topology"],
             )
-            candidate.mesh.element_definitions.append(target)
+            target.order = values["order"]
+            target.formulation = values["formulation"]
+            target.count = values["count"] or target.count
+            self.ctx.store.add_entity(
+                description,
+                part.id,
+                "mesh.element_definitions",
+                target,
+            )
         else:
-            target = existing
+            commands = []
+            desired = {
+                "order": values["order"],
+                "formulation": values["formulation"],
+                "count": values["count"] or existing.count,
+            }
+            for field_name, after in desired.items():
+                before = getattr(existing, field_name)
+                if before != after:
+                    commands.append(
+                        UpdateFieldCommand(
+                            existing.id,
+                            field_name,
+                            before,
+                            after,
+                        )
+                    )
+            if not commands:
+                return
+            command = (
+                commands[0]
+                if len(commands) == 1
+                else CompositeCommand(tuple(commands))
+            )
+            self.ctx.store.execute(description, command)
 
-        target.order = values["order"]
-        target.formulation = values["formulation"]
-        target.count = values["count"] or target.count
-        self.ctx.replace_part(
-            candidate,
-            f"Edited {values['topology']}",
-        )
+        self.ctx.store.invalidate_scene(description)
 
 
 def _generate_mesh_candidate(candidate):

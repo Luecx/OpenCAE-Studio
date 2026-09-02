@@ -1,3 +1,5 @@
+"""Stores persisted mesh nodes without exposing numeric arrays to ProjectIndex."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -12,8 +14,14 @@ from ..fem import Node
 class NodeTable(SolverWritable):
     """Compact persisted node storage with an object-oriented public view."""
 
-    ids: list[int] = field(default_factory=list)
-    coordinates: list[tuple[float, float, float]] = field(default_factory=list)
+    ids: list[int] = field(
+        default_factory=list,
+        metadata={"project_index": False},
+    )
+    coordinates: list[tuple[float, float, float]] = field(
+        default_factory=list,
+        metadata={"project_index": False},
+    )
 
     def __len__(self) -> int:
         return len(self.ids)

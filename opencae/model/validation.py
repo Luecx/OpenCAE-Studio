@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from opencae.geometry.section_filter import region_families
+from opencae.model.core.reference_binding import validate_region_consumers
 from opencae.model.entities.analysis import AnalysisStep
 from opencae.model.entities.jobs import Job
 from opencae.model.entities.loads import TemperatureLoad
@@ -65,13 +66,13 @@ def validate_section_assignments(project):
 def validate_project(project, analysis=None):
     """Validate the project or the workflow relevant to one selected Analysis.
 
-    Stable EntityRef validation has one authoritative implementation in
-    ``reference_binding``. Keeping a second reflective walker here previously
-    traversed runtime dataclass cycles and caused ``RecursionError`` while
-    starting analyses.
+    Stable EntityRef validation is intentionally lightweight and maintained by
+    ProjectIndex. Mesh-backed region semantics are evaluated here, at an explicit
+    validation boundary, rather than on every unrelated undoable edit.
     """
     project.ensure_references(False)
     errors = list(project.reference_errors)
+    errors.extend(validate_region_consumers(project))
     errors.extend(_section_assignment_errors(project))
     errors.extend(_region_consumer_errors(project))
     errors.extend(_workflow_errors(project, analysis))

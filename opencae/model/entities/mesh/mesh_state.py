@@ -27,15 +27,30 @@ from .seed import Seed
 class MeshState:
     """Meshing configuration plus compact generated/authored mesh data."""
 
-    settings: MeshSettings = field(default_factory=MeshSettings)
+    settings: MeshSettings = field(
+        default_factory=MeshSettings,
+        metadata={"project_index": False},
+    )
     seeds: list[Seed] = field(default_factory=list)
     element_controls: list[ElementControl] = field(default_factory=list)
     element_definitions: list[ElementDefinition] = field(default_factory=list)
-    nodes: NodeTable = field(default_factory=NodeTable)
+    nodes: NodeTable = field(
+        default_factory=NodeTable,
+        metadata={"project_index": False},
+    )
     element_blocks: list[ElementBlock] = field(default_factory=list)
-    entity_nodes: dict[str, list[int]] = field(default_factory=dict)
-    entity_elements: dict[str, list[int]] = field(default_factory=dict)
-    entity_facets: dict[str, list[tuple[int, str]]] = field(default_factory=dict)
+    entity_nodes: dict[str, list[int]] = field(
+        default_factory=dict,
+        metadata={"project_index": False},
+    )
+    entity_elements: dict[str, list[int]] = field(
+        default_factory=dict,
+        metadata={"project_index": False},
+    )
+    entity_facets: dict[str, list[tuple[int, str]]] = field(
+        default_factory=dict,
+        metadata={"project_index": False},
+    )
     node_count: int = 0
     element_count: int = 0
     mesh_dimension: int = 0
