@@ -54,6 +54,17 @@ def css(p):
         background: {p['accent_dim']};
         border-color: {p['accent']};
     }}
+    QToolButton#ProjectionToggle {{
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 3px;
+        padding: 3px 8px;
+    }}
+    QToolButton#ProjectionToggle:hover,
+    QToolButton#ProjectionToggle:pressed {{
+        background: {p['panel_hover']};
+        border-color: {p['border_light']};
+    }}
     QToolButton#TimeManagerControl {{
         background: transparent;
         border: none;

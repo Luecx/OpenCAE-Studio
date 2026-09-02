@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtWidgets import QFileDialog, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from opencae.deck_formats.selection import resolve_profile
 from opencae.model.entities.analysis import Analysis
+from opencae.ui.core.file_dialogs import save_file
 from opencae.ui.deck_format_manager import DeckFormatManagerDialog
 from opencae.ui.dialogs.deck_preview import DeckPreviewDialog
 
@@ -94,11 +95,11 @@ class SolverController:
         analysis = self._analysis()
         if self._adapter(analysis) is None:
             return
-        path, _ = QFileDialog.getSaveFileName(
+        path = save_file(
             self.parent,
             "Write Input Deck",
-            f"{analysis.name}.inp" if analysis else "model.inp",
             "Input deck (*.inp);;All files (*)",
+            f"{analysis.name}.inp" if analysis else "model.inp",
         )
         if not path:
             return

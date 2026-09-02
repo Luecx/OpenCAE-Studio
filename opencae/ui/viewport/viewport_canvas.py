@@ -35,13 +35,13 @@ class ViewportCanvas(QWidget):
         self.notice.hide()
 
     def set_render_widget(self, widget):
-        """Attach the VTK surface and construct overlays with their final parent."""
+        """Attach the VTK surface and construct render-surface overlays in place."""
         self._render_widget = widget
         self._layout.addWidget(widget)
 
-        # Reparenting an existing QWidget onto QVTK's native child can produce
-        # BadWindow failures on X11/offscreen backends, so construct the cube
-        # directly on the final native render surface.
+        # Construct the cube directly on the final render surface.  The orbit
+        # pivot itself is now a VTK 2D actor owned by SafeQtInteractor so it
+        # cannot disappear behind the native OpenGL surface.
         self.cube = ViewCube(widget)
         self.cube.show()
         self._position_overlays()

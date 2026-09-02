@@ -243,38 +243,47 @@ def test_time_manager_uses_full_width_controls_and_compact_plot():
     assert "adjusted(56.0, 8.0, -12.0, -28.0)" in plot_source
 
 
-def test_lower_workspaces_are_independent_top_tabbed_native_docks():
+def test_lower_workspaces_share_one_movable_dock_and_status_navigation():
     dock_source = (ROOT / "opencae/ui/docks/output_dock.py").read_text(encoding="utf-8")
     layout_source = (ROOT / "opencae/app/window_layout.py").read_text(encoding="utf-8")
+    controller_source = (ROOT / "opencae/ui/docks/workspace_controller.py").read_text(encoding="utf-8")
+    status_source = (ROOT / "opencae/ui/docks/workspace_status_tabs.py").read_text(encoding="utf-8")
     menu_source = (ROOT / "opencae/ui/menus/window_menu.py").read_text(encoding="utf-8")
-    tab_style = (ROOT / "opencae/ui/core/styles/tabs.py").read_text(encoding="utf-8")
     dock_style = (ROOT / "opencae/ui/core/styles/docks.py").read_text(encoding="utf-8")
+    misc_style = (ROOT / "opencae/ui/core/styles/misc.py").read_text(encoding="utf-8")
     button_style = (ROOT / "opencae/ui/core/styles/buttons.py").read_text(encoding="utf-8")
 
-    assert "class JobsDock" in dock_source
-    assert "class LogDock" in dock_source
-    assert "class TimeManagerDock" in dock_source
-    assert "QTabWidget" not in dock_source
-    assert "OutputDock" not in dock_source
-    assert "WorkspaceDockHiddenTitleBar" in dock_source
-    assert "setTitleBarWidget(None if floating else self._docked_title_bar)" in dock_source
-    assert 'widget.setProperty("workspaceSurface", True)' in dock_source
-    assert "background: transparent; border: none;" in dock_source
-    assert "window.jobs_dock" in layout_source
-    assert "window.log_dock" in layout_source
-    assert "window.time_manager_dock" in layout_source
-    assert "tabifyDockWidget" in layout_source
-    assert "QTabWidget.TabPosition.North" in layout_source
-    assert "_WorkspaceTabInfoController" in layout_source
-    assert "frame_summary_changed.connect" in layout_source
-    assert 'tabText(int(index)) == "Time Manager"' in layout_source
+    assert "class WorkspaceDock(QDockWidget)" in dock_source
+    assert "QStackedWidget" in dock_source
+    assert "DockWidgetMovable" in dock_source
+    assert "DockWidgetFloatable" in dock_source
+    assert "setTitleBarWidget" not in dock_source
+    assert 'self.setObjectName("WorkspaceDock")' in dock_source
+    assert '"jobs": self.jobs' in dock_source
+    assert '"log": self.log' in dock_source
+    assert '"time_manager": self.time_manager' in dock_source
+    assert "self.stack.setCurrentWidget(page)" in dock_source
+    assert "self.time_manager.layout().setContentsMargins(10, 3, 2, 4)" in dock_source
+    assert "self.time_manager.sidebar.layout().setContentsMargins(14, 4, 2, 4)" in dock_source
+    assert "window.workspace_dock" in layout_source
+    assert "window.jobs_dock" not in layout_source
+    assert "window.log_dock" not in layout_source
+    assert "window.time_manager_dock" not in layout_source
+    assert "tabifyDockWidget" not in layout_source
+    assert "class WorkspaceDockController" in controller_source
+    assert "self.dock = window.workspace_dock" in controller_source
+    assert "self.dock.set_page(name)" in controller_source
+    assert "removeDockWidget" not in controller_source
+    assert "addDockWidget" not in controller_source
+    assert "class WorkspaceStatusTabs" in status_source
+    assert "layout.setContentsMargins(0, 2, 0, 0)" in status_source
+    assert "layout.addStretch(1)" in status_source
     assert "A.SHOW_JOBS" in menu_source
     assert "A.SHOW_LOG" in menu_source
     assert "A.SHOW_TIME_MANAGER" in menu_source
-    assert "border-bottom: 2px solid {p['accent']}" in tab_style
-    assert "border-top: 2px solid" not in tab_style
-    assert "background: {p['panel']};" in tab_style
     assert 'QWidget[workspaceSurface="true"]' in dock_style
+    assert 'QToolButton[workspaceStatusTab="true"]' in misc_style
+    assert "border-top: 2px solid {p['accent']}" in misc_style
     assert "QToolButton#TimeManagerControl" in button_style
     control_style = button_style.split("QToolButton#TimeManagerControl", 1)[1]
     assert "background: transparent;" in control_style

@@ -1,9 +1,9 @@
+"""Own Part creation, duplication, geometry import, and orphan-mesh import flows."""
+
 from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-
-from PyQt6.QtWidgets import QFileDialog
 
 from opencae.model.geometry import ImportedStepFeature
 from opencae.model.part import Part
@@ -16,6 +16,7 @@ from opencae.model.selection import (
     MeshNodeOperand,
     RegionDefinition,
 )
+from opencae.ui.core.file_dialogs import open_file
 from opencae.ui.dialogs.import_geometry import ImportGeometryDialog
 from opencae.ui.dialogs.import_mesh_report import ImportMeshReportDialog
 from opencae.ui.dialogs.new_part import NewPartDialog
@@ -37,7 +38,6 @@ class PartLifecycle:
         part = Part(name=values["name"], metadata={"part_type": values["part_type"]})
         self.ctx.store.add_entity(f"Created part {part.name}", self.ctx.store.project.id, "parts", part)
         self.ctx.store.set_active_part(part.id)
-
 
     def duplicate_part(self):
         source = self.ctx.store.selection
@@ -86,9 +86,12 @@ class PartLifecycle:
             self.ctx.store.add_entity(f"Imported {candidate.name}", self.ctx.store.project.id, "parts", candidate)
             self.ctx.store.set_active_part(candidate.id)
 
-
     def import_mesh(self):
-        path, _ = QFileDialog.getOpenFileName(self.ctx.parent, "Import Mesh", "", "Mesh files (*.inp *.fem *.vtk *.vtu *.msh);;All files (*)")
+        path = open_file(
+            self.ctx.parent,
+            "Import Mesh",
+            "Mesh files (*.inp *.fem *.vtk *.vtu *.msh);;All files (*)",
+        )
         if not path:
             return
         part = Part(

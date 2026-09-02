@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-from PyQt6.QtWidgets import QFileDialog
-
 from opencae.geometry.cache import CACHE
 from opencae.model.entities.jobs import ResultSet
 from opencae.model.naming import next_name
@@ -11,6 +9,7 @@ from opencae.model.project import Project
 from opencae.persistence.project_io import load_project, save_project
 from opencae.results import FrdLoader
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand
+from opencae.ui.core.file_dialogs import open_file, save_file
 from opencae.ui.dialogs.preferences import PreferencesDialog
 from opencae.ui.dialogs.project_settings import ProjectSettingsDialog
 
@@ -34,10 +33,9 @@ class ProjectController:
 
     def open(self):
         """Load a current-format project without disturbing the open one on error."""
-        path, _ = QFileDialog.getOpenFileName(
+        path = open_file(
             self.parent,
             "Open Project",
-            "",
             "OpenCAE project (*.ocae);;JSON (*.json)",
         )
         if not path:
@@ -57,10 +55,9 @@ class ProjectController:
 
     def open_results(self):
         """Attach an external FRD result set to the current Project."""
-        path, _ = QFileDialog.getOpenFileName(
+        path = open_file(
             self.parent,
             "Open Results",
-            "",
             "FRD results (*.frd);;All files (*)",
         )
         if not path:
@@ -91,11 +88,11 @@ class ProjectController:
         """Save atomically, leaving the current path unchanged after failures."""
         path = self.store.project.path
         if save_as or path is None:
-            value, _ = QFileDialog.getSaveFileName(
+            value = save_file(
                 self.parent,
                 "Save Project",
-                str(path or Path.cwd() / "project.ocae"),
                 "OpenCAE project (*.ocae)",
+                str(path or "project.ocae"),
             )
             if not value:
                 return

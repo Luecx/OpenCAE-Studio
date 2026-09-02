@@ -60,10 +60,16 @@ def run() -> int:
 
     # MainWindow transitively imports the viewport stack and therefore PyVista/
     # VTK. The startup window is already painted while those imports complete.
+    from opencae.ui.docks.workspace_controller import WorkspaceDockController
     from .main_window import MainWindow
+    from .window_state import WindowStatePersistence
 
     _progress(app, startup, 66, "Preparing 3D viewport…")
     window = MainWindow(context)
+    window.workspace_controller = WorkspaceDockController(window)
+    window._window_state = WindowStatePersistence(window)
+    window._window_state.restore()
+    app.aboutToQuit.connect(window._window_state.save)
 
     # MainWindow queues its initial viewport refresh with a zero-delay timer.
     # Do not process Qt events again while the QOpenGLWidget hierarchy is still
