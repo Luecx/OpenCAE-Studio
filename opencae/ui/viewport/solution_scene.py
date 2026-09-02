@@ -17,11 +17,15 @@ def show_result(scene, result, field=None, options=None):
     is_topology = metadata.get("result_kind") == "topology_density"
 
     if is_topology:
+        # The overlay clears its tracked actor names whenever Results is closed.
+        # This lets reopening the same topology ResultSet frame again while frame
+        # changes inside an already-visible result retain the current camera.
+        topology_visible = bool(getattr(scene.topology_overlay, "_names", ()))
         _show_topology_result(
             scene,
             result,
             options or {},
-            fit_on_load=identity != previous_identity,
+            fit_on_load=identity != previous_identity or not topology_visible,
         )
         return
 
