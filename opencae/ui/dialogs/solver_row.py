@@ -24,9 +24,13 @@ class SolverRow(QWidget):
         self.enabled.setChecked(bool(config.get("enabled")))
         layout.addWidget(self.enabled)
 
+        # ``*.*`` does not match extensionless executables on Unix-like
+        # platforms.  Keep the Windows convenience filter, but make the
+        # portable fallback truly include every file so FEMaster binaries on
+        # macOS/Linux can be selected from the native chooser.
         self.path = FilePathEditor(
             str(config.get("executable", "")),
-            "Executable files (*.exe);;All files (*.*)",
+            "Executable files (*.exe);;All files (*)",
         )
         layout.addWidget(field_block("Executable", self.path))
 
