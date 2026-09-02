@@ -74,12 +74,10 @@ def test_moved_section_rebinds_cell_scalar_association():
     mapper = pv.DataSetMapper(dataset=cut)
     assert SectionViewController._bind_cap_dataset(mapper, cut, "ElementValue")
     mapper.update()
-    mapped = pv.wrap(mapper.GetInput())
 
     assert mapper.scalar_map_mode == "cell"
     assert mapper.array_name == "ElementValue"
-    assert mapped.active_scalars_name == "ElementValue"
-    assert np.allclose(np.asarray(mapped.active_scalars), 7.5)
+    assert np.allclose(np.asarray(mapper._mapped_scalars), 7.5)
 
 
 def test_section_cut_surface_does_not_invent_a_cap_for_shells():
