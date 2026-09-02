@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QLineEdit, QToolButton, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QToolButton, QWidget
 
 from opencae.ui.templates import apply_inline_action_size, apply_primary_control_height
+from .file_dialogs import open_file
 
 
 class FilePathEditor(QWidget):
@@ -50,12 +51,12 @@ class FilePathEditor(QWidget):
         self.edit.setText(value)
 
     def _browse(self) -> None:
-        """Open a native file chooser and adopt the selected path when accepted."""
-        value, _ = QFileDialog.getOpenFileName(
+        """Open a remembered native file chooser and adopt the selected path."""
+        value = open_file(
             self,
             "Select file",
-            self.text(),
             self.file_filter,
+            self.text(),
         )
         if value:
             self.setText(value)
