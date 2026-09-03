@@ -18,6 +18,16 @@ def build(menu_bar, actions):
     menu.addAction(actions.get(A.TOGGLE_MESH))
     menu.addSeparator()
     _add_color_scheme_menu(menu, menu_bar.parentWidget(), actions)
+    menu.addSeparator()
+
+    workspace = menu.addMenu("Workspace")
+    workspace.addAction(actions.get(A.SHOW_PROJECT))
+    workspace.addSeparator()
+    workspace.addAction(actions.get(A.SHOW_JOBS))
+    workspace.addAction(actions.get(A.SHOW_LOG))
+    workspace.addAction(actions.get(A.SHOW_TIME_MANAGER))
+    workspace.addSeparator()
+    workspace.addAction(actions.get(A.RESET_LAYOUT))
     return menu
 
 
