@@ -8,8 +8,7 @@ RESULT_INFO_WIDTH = 340
 
 class ResultSelectionPanel(QFrame):
     def __init__(self, parent=None):
-        super().__init__()
-        self.setParent(parent)
+        super().__init__(parent)
         self.setObjectName("ResultSelectionPanel")
         self.hide()
         self.setFixedWidth(RESULT_INFO_WIDTH)
@@ -31,13 +30,13 @@ class ResultSelectionPanel(QFrame):
 
     def refresh_theme(self):
         self.setStyleSheet(
-            f"QFrame#ResultSelectionPanel{{background:{PALETTE['panel']};"
-            f"border:1px solid {PALETTE['border_light']};border-radius:7px;}}"
+            f"QFrame#ResultSelectionPanel{{background:{PALETTE['overlay_bg']};"
+            f"border:1px solid {PALETTE['overlay_border']};border-radius:7px;}}"
         )
         for title in self.titles:
             title.setStyleSheet(f"color:{PALETTE['muted']};font-size:8pt;")
         for value in self.values.values():
-            value.setStyleSheet(f"color:{PALETTE['text']};font-weight:600;")
+            value.setStyleSheet(f"color:{PALETTE['overlay_text']};font-weight:600;")
 
     def set_selection(self, values):
         for name, label in self.values.items():
