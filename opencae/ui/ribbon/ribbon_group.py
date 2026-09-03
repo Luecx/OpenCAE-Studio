@@ -56,7 +56,7 @@ class RibbonGroup(QFrame):
         self.setStyleSheet(
             "QFrame#RibbonGroup { "
             "background: transparent; "
-            f"border-right: 1px solid {PALETTE['border_light']}; "
+            f"border-right: 1px solid {PALETTE['ribbon_separator']}; "
             "}"
         )
         if self._title is not None:
