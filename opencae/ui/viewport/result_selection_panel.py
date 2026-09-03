@@ -1,3 +1,5 @@
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QFrame, QGridLayout, QLabel
 
 from opencae.ui.core.theme import PALETTE
@@ -10,6 +12,7 @@ class ResultSelectionPanel(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("ResultSelectionPanel")
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.hide()
         self.setFixedWidth(RESULT_INFO_WIDTH)
         layout = QGridLayout(self)
@@ -27,6 +30,13 @@ class ResultSelectionPanel(QFrame):
             self.titles.append(title)
             self.values[name] = value
         self.refresh_theme()
+
+    def paintEvent(self, event) -> None:
+        """Fill pixels outside the rounded panel with the VTK background color."""
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
+        painter.end()
+        super().paintEvent(event)
 
     def refresh_theme(self):
         self.setStyleSheet(
