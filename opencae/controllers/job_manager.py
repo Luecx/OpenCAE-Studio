@@ -203,11 +203,16 @@ class JobManager(QObject):
             monitor = TopologyJobMonitor(self.store, job.id, self.parent)
             self.topology_frame.connect(monitor.show_frame)
         else:
+            stop_callback = (
+                (lambda current=job.id: self.stop_job(current))
+                if job.id in self._runners
+                else None
+            )
             monitor = AnalysisJobMonitor(
                 self.store,
                 job.id,
                 self.parent,
-                stop_callback=lambda current=job.id: self.stop_job(current),
+                stop_callback=stop_callback,
             )
 
         self.progress_changed.connect(monitor.set_progress)
