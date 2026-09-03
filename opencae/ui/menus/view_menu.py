@@ -73,12 +73,14 @@ def _select_color_scheme(window, actions, scheme: str) -> None:
         else:
             viewport.request_refresh()
 
-    # Re-polish native and globally styled widgets after replacing QApplication
-    # QPalette/QSS. Widgets with custom paint events read the in-place PALETTE on
-    # their next update.
+    # Re-polish globally styled controls and let widgets with local/custom paint
+    # rules explicitly rebuild those rules from the in-place PALETTE.
     if isinstance(window, QWidget):
         widgets = (window, *window.findChildren(QWidget))
         for widget in widgets:
+            refresh_theme = getattr(widget, "refresh_theme", None)
+            if callable(refresh_theme):
+                refresh_theme()
             style = widget.style()
             style.unpolish(widget)
             style.polish(widget)
