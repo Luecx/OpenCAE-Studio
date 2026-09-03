@@ -21,6 +21,18 @@ _VTK_CELL_LABELS = {
     26: "Quadratic wedge (15-node)",
     27: "Quadratic pyramid (13-node)",
 }
+_STRING_CELL_LABELS = {
+    "line": "Line",
+    "triangle": "Triangle",
+    "quad": "Quadrilateral",
+    "quadrilateral": "Quadrilateral",
+    "tetra": "Tetrahedron",
+    "tetrahedron": "Tetrahedron",
+    "hexahedron": "Hexahedron",
+    "hex": "Hexahedron",
+    "wedge": "Wedge",
+    "pyramid": "Pyramid",
+}
 
 
 def node_values(grid, point, field=None):
@@ -71,11 +83,21 @@ def element_values(grid, point, field=None):
 
 def _cell_type_label(cell):
     """Return a readable finite-element topology instead of a raw VTK type id."""
-    cell_type = int(cell.type)
-    return _VTK_CELL_LABELS.get(
-        cell_type,
-        f"{type(cell).__name__.replace('Cell', '').strip() or 'VTK cell'} ({cell.n_points}-node)",
-    )
+    raw_type = getattr(cell, "type", "")
+    try:
+        cell_type = int(raw_type)
+    except (TypeError, ValueError):
+        key = str(raw_type).strip().casefold().replace("vtk_", "")
+        base = _STRING_CELL_LABELS.get(key, str(raw_type).strip().replace("_", " ").title())
+        count = len(getattr(cell, "point_ids", ()))
+        return f"{base} ({count}-node)" if count else base or "VTK cell"
+
+    label = _VTK_CELL_LABELS.get(cell_type)
+    if label:
+        return label
+    count = int(getattr(cell, "n_points", len(getattr(cell, "point_ids", ()))))
+    name = type(cell).__name__.replace("Cell", "").strip() or "VTK cell"
+    return f"{name} ({count}-node)" if count else name
 
 
 def _node_field_rows(grid, index, field):
