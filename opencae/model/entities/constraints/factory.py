@@ -1,4 +1,5 @@
 from .base import Constraint
+from .connector import ConnectorConstraint
 from .distributing_coupling import DistributingCoupling
 from .equation import EquationConstraint
 from .kinematic_coupling import KinematicCoupling
@@ -12,6 +13,7 @@ _TYPES = {
     ConstraintType.DISTRIBUTING: DistributingCoupling,
     ConstraintType.TIE: TieConstraint,
     ConstraintType.RIGID_BODY: RigidBodyConstraint,
+    ConstraintType.CONNECTOR: ConnectorConstraint,
     ConstraintType.EQUATION: EquationConstraint,
     ConstraintType.MPC: MPCConstraint,
 }
