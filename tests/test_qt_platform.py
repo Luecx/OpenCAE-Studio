@@ -111,7 +111,7 @@ def test_qt_opengl_is_configured_before_qapplication_and_top_level_widgets():
 
 
 def test_rendering_core_is_pinned_without_losing_wayland_qopenglwidget_bridge():
-    """Section rendering and native Wayland depend on independently pinned layers."""
+    """Section-cap rendering and native Wayland use independently pinned layers."""
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     for source in (requirements, pyproject):
