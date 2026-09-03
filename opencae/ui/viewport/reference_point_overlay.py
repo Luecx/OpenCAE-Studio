@@ -2,6 +2,7 @@ import numpy as np
 import pyvista as pv
 
 from opencae.model.selection import SelectableKind, ViewportHit
+from opencae.ui.core.theme import PALETTE
 from .instance_transform import transform_points
 from .safe_operations import remove_actor
 
@@ -48,7 +49,7 @@ class ReferencePointOverlay:
         self._preview_names.extend((actor_name, label_name))
         actor = plotter.add_points(
             np.asarray([point]),
-            color="#62d6a6",
+            color=PALETTE["reference_point"],
             point_size=17,
             render_points_as_spheres=True,
             lighting=False,
@@ -64,8 +65,8 @@ class ReferencePointOverlay:
             show_points=False,
             point_size=0,
             font_size=10,
-            text_color="#eafff6",
-            shape_color="#20322d",
+            text_color=PALETTE["overlay_text"],
+            shape_color=PALETTE["overlay_bg"],
             shape_opacity=.88,
             always_visible=True,
             render=False,
@@ -78,7 +79,7 @@ class ReferencePointOverlay:
         self._names.append(name)
         actor = plotter.add_points(
             np.asarray([position]),
-            color="#f3b65b",
+            color=PALETTE["reference_point"],
             point_size=14,
             render_points_as_spheres=True,
             lighting=False,
@@ -105,8 +106,8 @@ class ReferencePointOverlay:
             show_points=False,
             point_size=0,
             font_size=10,
-            text_color="#f7f9fb",
-            shape_color="#20262d",
+            text_color=PALETTE["overlay_text"],
+            shape_color=PALETTE["overlay_bg"],
             shape_opacity=.82,
             always_visible=True,
             render=False,
