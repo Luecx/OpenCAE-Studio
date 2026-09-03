@@ -21,6 +21,10 @@ def _source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
+def _uses_palette_token(source: str, token: str) -> bool:
+    return f"PALETTE['{token}']" in source or f'PALETTE["{token}"]' in source
+
+
 def test_builtin_schemes_share_one_semantic_token_contract():
     names = color_scheme_names()
     assert names == ("dark", "light", "gray")
@@ -116,10 +120,10 @@ def test_browser_search_and_viewport_popups_use_dedicated_theme_tokens():
     vtk_box = _source("opencae/ui/viewport/viewport_text_box.py")
 
     assert 'self.filter.setObjectName("BrowserSearch")' in browser
-    assert 'PALETTE["search"]' in browser
+    assert _uses_palette_token(browser, "search")
     for source in (notice, query, selection, vtk_box):
-        assert 'PALETTE["overlay_bg"]' in source
-        assert 'PALETTE["overlay_border"]' in source
+        assert _uses_palette_token(source, "overlay_bg")
+        assert _uses_palette_token(source, "overlay_border")
 
 
 def test_ribbon_separators_share_one_token_and_refresh_path():
@@ -127,9 +131,9 @@ def test_ribbon_separators_share_one_token_and_refresh_path():
     group = _source("opencae/ui/ribbon/ribbon_group.py")
     result_group = _source("opencae/ui/ribbon/result_group.py")
 
-    assert 'PALETTE["ribbon_separator"]' in page
-    assert 'PALETTE["ribbon_separator"]' in group
-    assert 'PALETTE["ribbon_separator"]' in result_group
+    assert _uses_palette_token(page, "ribbon_separator")
+    assert _uses_palette_token(group, "ribbon_separator")
+    assert _uses_palette_token(result_group, "ribbon_separator")
     assert "def refresh_theme(self):" in page
     assert "self._leading_separator.setStyleSheet" in page
 
@@ -137,36 +141,36 @@ def test_ribbon_separators_share_one_token_and_refresh_path():
 def test_key_viewport_chrome_uses_semantic_palette_tokens():
     files = {
         "opencae/ui/viewport/pyvista_geometry.py": (
-            'PALETTE["cad_face"]',
-            'PALETTE["cad_edge"]',
-            'PALETTE["selection_3d"]',
+            "cad_face",
+            "cad_edge",
+            "selection_3d",
         ),
-        "opencae/ui/viewport/pyvista_mesh.py": ('PALETTE["mesh_lines"]',),
-        "opencae/ui/viewport/surface_shading.py": ('PALETTE["mesh_surface"]',),
+        "opencae/ui/viewport/pyvista_mesh.py": ("mesh_lines",),
+        "opencae/ui/viewport/surface_shading.py": ("mesh_surface",),
         "opencae/ui/viewport/datum_overlay.py": (
-            'PALETTE["datum"]',
-            'PALETTE["datum_vector"]',
-            'PALETTE["datum_plane"]',
+            "datum",
+            "datum_vector",
+            "datum_plane",
         ),
         "opencae/ui/viewport/reference_point_overlay.py": (
-            'PALETTE["reference_point"]',
-            'PALETTE["overlay_text"]',
+            "reference_point",
+            "overlay_text",
         ),
         "opencae/ui/viewport/datum_reference_overlay.py": (
-            'PALETTE["query_marker"]',
-            'PALETTE["overlay_bg"]',
+            "query_marker",
+            "overlay_bg",
         ),
-        "opencae/ui/viewport/result_query_state.py": ('PALETTE["query_marker"]',),
+        "opencae/ui/viewport/result_query_state.py": ("query_marker",),
         "opencae/ui/viewport/view_cube.py": (
-            'PALETTE["viewport"]',
-            'PALETTE["cad_face"]',
-            'PALETTE["viewport_text"]',
+            "viewport",
+            "cad_face",
+            "viewport_text",
         ),
     }
     for path, tokens in files.items():
         source = _source(path)
         for token in tokens:
-            assert token in source, (path, token)
+            assert _uses_palette_token(source, token), (path, token)
 
 
 def test_previous_dark_only_chrome_literals_are_removed_from_migrated_components():
