@@ -50,7 +50,7 @@ def test_section_cut_surface_fills_volume_and_interpolates_contour_values():
     assert np.allclose(np.asarray(cut.point_data["Stress"]), 0.5)
 
 
-def test_moved_section_keeps_selected_point_scalar_in_pyvista_mapper_pipeline():
+def test_moved_section_keeps_selected_point_scalar_with_direct_vtk_binding():
     grid = _hexahedron()
     grid.point_data["Decoy"] = 100.0 + np.asarray(grid.points)[:, 0]
     grid.set_active_scalars("Decoy", preference="point")
@@ -70,7 +70,7 @@ def test_moved_section_keeps_selected_point_scalar_in_pyvista_mapper_pipeline():
         mapper.update()
         mapped = pv.wrap(mapper.GetInput())
 
-        assert mapper.scalar_map_mode == "point"
+        assert mapper.scalar_map_mode == "point_field"
         assert mapper.array_name == "Stress"
         assert mapped.active_scalars_name == "Stress"
         assert np.allclose(np.asarray(mapped.active_scalars), x)
@@ -86,7 +86,7 @@ def test_moved_section_rebinds_cell_scalar_association():
     assert SectionViewController._bind_cap_dataset(mapper, cut, "ElementValue")
     mapper.update()
 
-    assert mapper.scalar_map_mode == "cell"
+    assert mapper.scalar_map_mode == "cell_field"
     assert mapper.array_name == "ElementValue"
     assert np.allclose(np.asarray(mapper._mapped_scalars), 7.5)
 
