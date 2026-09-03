@@ -105,6 +105,7 @@ class ResultSectionButton(QToolButton):
         return {
             "enabled": self.section_on.isChecked(),
             "origin": None if self._origin_is_automatic else self.origin.value(),
+            "origin_auto": self._origin_is_automatic,
             "normal": self._normalized(self.normal.value()),
             "invert": self.invert.isChecked(),
             "show_plane": self.show_plane.isChecked(),
@@ -123,7 +124,14 @@ class ResultSectionButton(QToolButton):
             (self.section_on if state["enabled"] else self.section_off).setChecked(True)
         origin = state.get("origin")
         if origin is not None:
+            # Show the resolved current center numerically, but do not turn an
+            # automatically centered plane into a manual plane just because the
+            # viewport reported the resolved coordinates back to the ribbon.
             self.origin.set_value(origin)
+        if "origin_auto" in state:
+            self._origin_is_automatic = bool(state["origin_auto"])
+        elif origin is not None:
+            # Backward compatibility for state producers predating origin_auto.
             self._origin_is_automatic = False
         normal = state.get("normal")
         if normal is not None:
@@ -144,7 +152,7 @@ class ResultSectionButton(QToolButton):
         self.settings_changed.emit()
 
     def _request_center(self) -> None:
-        """Ask the viewport to center the clipping plane on the active result."""
+        """Ask the viewport to keep the clipping plane centered on the current result."""
         self._origin_is_automatic = True
         self.settings_changed.emit()
 
