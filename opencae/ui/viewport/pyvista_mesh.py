@@ -61,7 +61,7 @@ def add_mesh(plotter, snapshot, instance=None, *, hidden_elements=()):
         name=f"{prefix}generated-mesh-surface", render=False,
     )
     plotter.add_mesh(
-        surface.extract_all_edges(), color=PALETTE["mesh_lines"], line_width=1.15,
+        surface.extract_all_edges(), color=PALETTE["mesh_lines"], line_width=1.35,
         lighting=False, render_lines_as_tubes=False, pickable=False,
         name=f"{prefix}generated-mesh-lines", render=False,
     )
