@@ -194,8 +194,8 @@ class _Plotter:
         self.renders += 1
 
 
-def test_camera_controller_tracks_and_applies_face_normals() -> None:
-    """Synchronize free rotation and preserve distance on a clicked cube face."""
+def test_camera_controller_tracks_and_animates_face_normals() -> None:
+    """Synchronize free rotation and smoothly preserve distance on cube clicks."""
     _application()
     cube = ViewCube()
     plotter = _Plotter()
@@ -207,9 +207,11 @@ def test_camera_controller_tracks_and_applies_face_normals() -> None:
     assert cube.view_matrix[2] == (1.0, 0.0, 0.0)
 
     controller.set_direction((0.0, -1.0, 0.0))
-    assert plotter.camera.position == (0.0, -4.0, 0.0)
-    assert plotter.clipping_resets == 1
-    assert plotter.renders == 1
+    QTest.qWait(260)
+    expected = (0.0, -4.0, 0.0)
+    assert max(abs(a - b) for a, b in zip(plotter.camera.position, expected)) < 1.0e-9
+    assert plotter.clipping_resets > 1
+    assert plotter.renders > 1
     controller.close()
     assert plotter.camera.callback is None
 
