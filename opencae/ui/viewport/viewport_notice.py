@@ -30,11 +30,11 @@ class ViewportNotice(QFrame):
 
     def refresh_theme(self) -> None:
         self.setStyleSheet(
-            f"QFrame#ViewportNotice{{background:{PALETTE['panel']};"
-            f"border:1px solid {PALETTE['border_light']};border-radius:7px;}}"
+            f"QFrame#ViewportNotice{{background:{PALETTE['overlay_bg']};"
+            f"border:1px solid {PALETTE['overlay_border']};border-radius:7px;}}"
         )
         self.title.setStyleSheet(
-            f"color:{PALETTE['text']};font-weight:600;font-size:11pt;"
+            f"color:{PALETTE['overlay_text']};font-weight:600;font-size:11pt;"
         )
         self.body.setStyleSheet(f"color:{PALETTE['muted']};")
 
