@@ -42,10 +42,10 @@ class ResultRibbonGroup(QFrame):
 
     def refresh_theme(self):
         # Results used to keep its own faint card background even after the
-        # regular ribbon groups were flattened. Keep only the semantic separator.
+        # regular ribbon groups were flattened. Keep only the shared separator.
         self.setStyleSheet(
             "QFrame#RibbonGroup { background: transparent; "
-            f"border-right: 1px solid {PALETTE['border_light']}; }}"
+            f"border-right: 1px solid {PALETTE['ribbon_separator']}; }}"
         )
         for label in self.findChildren(QLabel, "ResultRibbonGroupTitle"):
             label.setStyleSheet(
