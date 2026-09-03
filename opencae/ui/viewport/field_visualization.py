@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import numpy as np
+from opencae.ui.core.theme import PALETTE
 from .scalar_bar import scalar_bar_args
 from .safe_operations import remove_actor
 
@@ -20,7 +21,7 @@ def add_field(plotter, grid, snapshot, field):
     for name in ("field-visualization", "generated-mesh", "generated-mesh-lines"):
         remove_actor(plotter, name)
     actor = plotter.add_mesh(target, scalars=field.name, cmap="turbo", n_colors=18, show_edges=True,
-        edge_color="#10161c", line_width=1.0, lighting=True, ambient=0.25,
+        edge_color=PALETTE["result_edge"], line_width=1.0, lighting=True, ambient=0.25,
         diffuse=0.72, scalar_bar_args=scalar_bar_args(field.name, plotter), name="field-visualization", render=False)
     plotter.render(); return actor
 
@@ -65,7 +66,7 @@ def _file_values(path, identifiers, points, components, interpolation):
             sources = rows[:, :3]; values = rows[:, 3:3 + components]
             return [_interpolate(sources, values, point, interpolation) for point in points]
         table = {str(int(row[0])): row[1:] for row in rows if len(row)}
-        return [_row_values(table.get(str(int(tag)), ()), components) for tag in identifiers]
+        return [_row_values(table.get(str(int(tag)), components) for tag in identifiers]
     except (OSError, TypeError, ValueError):
         return np.zeros((len(identifiers), components), dtype=float)
 
