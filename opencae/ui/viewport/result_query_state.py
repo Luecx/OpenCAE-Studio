@@ -6,6 +6,7 @@ import logging
 
 import numpy as np
 
+from opencae.ui.core.theme import PALETTE
 from .result_query import element_values, node_values
 from .safe_operations import disable_picking, remove_actor
 
@@ -103,7 +104,7 @@ class ResultQueryState:
             self._highlight_element(grid, index)
         self.owner.plotter.add_points(
             np.asarray([marker]),
-            color="#f2b84b",
+            color=PALETTE["query_marker"],
             point_size=14,
             render_points_as_spheres=True,
             name=self._marker,
@@ -121,7 +122,7 @@ class ResultQueryState:
             edges = grid.extract_cells([int(index)]).extract_all_edges()
             self.owner.plotter.add_mesh(
                 edges,
-                color="#f2b84b",
+                color=PALETTE["query_marker"],
                 line_width=4.0,
                 lighting=False,
                 name=self._edges,
