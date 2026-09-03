@@ -27,7 +27,6 @@ class RunAnalysisDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Run Analysis")
         self.setMinimumWidth(680)
-        self.resize(700, self.sizeHint().height())
         self._adapters = dict(solver_adapters)
         self._settings = settings
 
