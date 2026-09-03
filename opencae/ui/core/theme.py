@@ -11,8 +11,8 @@ DEFAULT_COLOR_SCHEME = "dark"
 # Keep VTK/PyVista viewport text visually consistent across overlays and results.
 # PyVista supports these generic VTK font families on all supported platforms.
 VIEWPORT_FONT_FAMILY = "arial"
-VIEWPORT_FONT_SIZE = 10
-VIEWPORT_FONT_SIZE_TITLE = 12
+VIEWPORT_FONT_SIZE = 11
+VIEWPORT_FONT_SIZE_TITLE = 13
 
 _COLOR_SCHEMES = {
     "dark": {
