@@ -87,6 +87,9 @@ def run_analysis(manager, analysis_id: str) -> None:
     )
     job = manager.store.project.resolve(job.id)
     manager.select_job(job.id)
+    # Seed the FEMaster streaming parser before any preparation/output events so
+    # the monitor can associate solver procedure headers with OpenCAE step names.
+    manager._prepare_analysis_runtime(job.id)
 
     # Both the model and formatter are snapshotted. Changing a custom profile
     # while the solver is running must not alter the submitted calculation.
@@ -149,6 +152,7 @@ def finish_analysis(manager, job_id, adapter, output_base, code) -> None:
     candidate.progress = 1.0 if completed else candidate.progress
     candidate.progress_label = candidate.status.value
     manager._replace_job(candidate, f"Finished {job.name}")
+    manager._finish_analysis_runtime(job.id, candidate.status)
 
     source = next(
         (
