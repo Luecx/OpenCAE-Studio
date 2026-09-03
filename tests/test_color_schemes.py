@@ -23,12 +23,13 @@ def _source(path: str) -> str:
 
 def test_builtin_schemes_share_one_semantic_token_contract():
     names = color_scheme_names()
-    assert names == ("dark", "light", "pycharm-gray")
+    assert names == ("dark", "light", "gray")
     expected = set(palette_for(names[0]))
     assert {
         "window",
         "panel",
         "input",
+        "search",
         "text",
         "muted",
         "accent",
@@ -40,6 +41,8 @@ def test_builtin_schemes_share_one_semantic_token_contract():
         "selection_3d",
         "overlay_bg",
         "overlay_text",
+        "overlay_border",
+        "ribbon_separator",
         "axis_x",
         "axis_y",
         "axis_z",
@@ -51,18 +54,22 @@ def test_builtin_schemes_share_one_semantic_token_contract():
 def test_schemes_are_visually_distinct_and_have_stable_labels():
     dark = palette_for("dark")
     light = palette_for("light")
-    gray = palette_for("pycharm-gray")
+    gray = palette_for("gray")
 
     assert color_scheme_label("dark") == "OpenCAE Dark"
     assert color_scheme_label("light") == "OpenCAE Light"
-    assert color_scheme_label("pycharm") == "PyCharm Gray"
-    assert normalize_color_scheme("grey") == "pycharm-gray"
+    assert color_scheme_label("gray") == "Gray"
+    assert color_scheme_label("pycharm") == "Gray"
+    assert normalize_color_scheme("grey") == "gray"
+    assert normalize_color_scheme("pycharm-gray") == "gray"
     assert normalize_color_scheme("does-not-exist") == "dark"
 
     assert dark["window"] != light["window"] != gray["window"]
     assert dark["viewport"] != light["viewport"] != gray["viewport"]
+    assert light["panel"].lower() != "#ffffff"
+    assert light["input"].lower() != "#ffffff"
     assert light["window"].lower() in stylesheet("light").lower()
-    assert gray["panel"].lower() in stylesheet("pycharm-gray").lower()
+    assert gray["panel"].lower() in stylesheet("gray").lower()
 
 
 def test_switching_scheme_mutates_shared_palette_in_place():
@@ -76,9 +83,9 @@ def test_switching_scheme_mutates_shared_palette_in_place():
         assert PALETTE == palette_for("light")
 
         selected = set_color_scheme("pycharm")
-        assert selected == "pycharm-gray"
+        assert selected == "gray"
         assert id(PALETTE) == palette_identity
-        assert PALETTE == palette_for("pycharm-gray")
+        assert PALETTE == palette_for("gray")
     finally:
         set_color_scheme(original_scheme)
 
@@ -101,6 +108,32 @@ def test_view_menu_exposes_and_persists_live_color_scheme_switching():
     assert "def refresh_icons(self)" in registry
 
 
+def test_browser_search_and_viewport_popups_use_dedicated_theme_tokens():
+    browser = _source("opencae/ui/tree/project_panel.py")
+    notice = _source("opencae/ui/viewport/viewport_notice.py")
+    query = _source("opencae/ui/viewport/result_query_panel.py")
+    selection = _source("opencae/ui/viewport/result_selection_panel.py")
+    vtk_box = _source("opencae/ui/viewport/viewport_text_box.py")
+
+    assert 'self.filter.setObjectName("BrowserSearch")' in browser
+    assert 'PALETTE["search"]' in browser
+    for source in (notice, query, selection, vtk_box):
+        assert 'PALETTE["overlay_bg"]' in source
+        assert 'PALETTE["overlay_border"]' in source
+
+
+def test_ribbon_separators_share_one_token_and_refresh_path():
+    page = _source("opencae/ui/ribbon/ribbon_page.py")
+    group = _source("opencae/ui/ribbon/ribbon_group.py")
+    result_group = _source("opencae/ui/ribbon/result_group.py")
+
+    assert 'PALETTE["ribbon_separator"]' in page
+    assert 'PALETTE["ribbon_separator"]' in group
+    assert 'PALETTE["ribbon_separator"]' in result_group
+    assert "def refresh_theme(self):" in page
+    assert "self._leading_separator.setStyleSheet" in page
+
+
 def test_key_viewport_chrome_uses_semantic_palette_tokens():
     files = {
         "opencae/ui/viewport/pyvista_geometry.py": (
@@ -118,6 +151,10 @@ def test_key_viewport_chrome_uses_semantic_palette_tokens():
         "opencae/ui/viewport/reference_point_overlay.py": (
             'PALETTE["reference_point"]',
             'PALETTE["overlay_text"]',
+        ),
+        "opencae/ui/viewport/datum_reference_overlay.py": (
+            'PALETTE["query_marker"]',
+            'PALETTE["overlay_bg"]',
         ),
         "opencae/ui/viewport/result_query_state.py": ('PALETTE["query_marker"]',),
         "opencae/ui/viewport/view_cube.py": (
@@ -140,6 +177,7 @@ def test_previous_dark_only_chrome_literals_are_removed_from_migrated_components
         "opencae/ui/viewport/pyvista_mesh.py": "#182129",
         "opencae/ui/viewport/field_visualization.py": "#10161c",
         "opencae/ui/viewport/reference_point_overlay.py": "#62d6a6",
+        "opencae/ui/viewport/datum_reference_overlay.py": "#3a321f",
         "opencae/ui/viewport/result_query_state.py": "#f2b84b",
     }
     for path, literal in checks.items():
