@@ -46,15 +46,27 @@ class StageBar(QWidget):
             if stage == "PART":
                 button.setChecked(True)
         layout.addStretch(1)
+        self.refresh_theme()
 
     def set_stage(self, stage):
         button = self.buttons.get(stage)
         if button is not None:
             button.setChecked(True)
 
+    def refresh_theme(self):
+        palette = PALETTE
+        css = f"""
+            QToolButton {{ border:none; border-bottom:3px solid transparent;
+                padding:4px 10px; font-weight:600; color:{palette['muted']}; }}
+            QToolButton:hover {{ background:{palette['panel_hover']}; color:{palette['text']}; }}
+            QToolButton:checked {{ color:{palette['text']}; border-bottom-color:{palette['accent']};
+                background:{palette['panel_alt']}; }}
+        """
+        for button in self.buttons.values():
+            button.setStyleSheet(css)
+
     @staticmethod
     def _button(stage):
-        palette = PALETTE
         button = QToolButton()
         button.setText(stage)
         button.setCheckable(True)
@@ -68,13 +80,4 @@ class StageBar(QWidget):
         }
         button.setMinimumWidth(widths.get(stage, 82))
         button.setFixedHeight(40)
-        button.setStyleSheet(
-            f"""
-            QToolButton {{ border:none; border-bottom:3px solid transparent;
-                padding:4px 10px; font-weight:600; color:{palette['muted']}; }}
-            QToolButton:hover {{ background:{palette['panel_hover']}; color:{palette['text']}; }}
-            QToolButton:checked {{ color:{palette['text']}; border-bottom-color:{palette['accent']};
-                background:{palette['panel_alt']}; }}
-            """
-        )
         return button
