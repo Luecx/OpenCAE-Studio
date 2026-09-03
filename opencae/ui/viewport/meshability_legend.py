@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
 
 from opencae.ui.core.theme import PALETTE
@@ -24,6 +25,16 @@ class MeshabilityLegend(QFrame):
         self.adjustSize()
         self.hide()
 
+    def paintEvent(self, event) -> None:
+        """Paint a rounded panel over a viewport-colored rectangular backing."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
+        painter.setBrush(QColor(PALETTE["overlay_bg"]))
+        painter.setPen(QPen(QColor(PALETTE["overlay_border"]), 1.0))
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        painter.drawRoundedRect(rect, 7.0, 7.0)
+
     def _entry(self, text: str, token: str) -> QWidget:
         container = QWidget()
         layout = QHBoxLayout(container)
@@ -45,11 +56,6 @@ class MeshabilityLegend(QFrame):
     def refresh_theme(self) -> None:
         """Refresh local swatches whose colors are not expressible as global QSS."""
         self.setStyleSheet(
-            f"QFrame#MeshabilityLegend{{"
-            f"background:{PALETTE['overlay_bg']};"
-            f"border:1px solid {PALETTE['overlay_border']};"
-            "border-radius:7px;"
-            "}"
             f"QLabel#MeshabilityLabel{{color:{PALETTE['muted']};font-size:8pt;}}"
         )
         for container in (self._regular, self._irregular):
@@ -63,3 +69,4 @@ class MeshabilityLegend(QFrame):
                 f"border:1px solid {PALETTE['overlay_border']};"
                 "border-radius:2px;"
             )
+        self.update()

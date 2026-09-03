@@ -8,6 +8,12 @@ from .styles import STYLE_MODULES
 
 DEFAULT_COLOR_SCHEME = "dark"
 
+# Keep VTK/PyVista viewport text visually consistent across overlays and results.
+# PyVista supports these generic VTK font families on all supported platforms.
+VIEWPORT_FONT_FAMILY = "arial"
+VIEWPORT_FONT_SIZE = 11
+VIEWPORT_FONT_SIZE_TITLE = 13
+
 _COLOR_SCHEMES = {
     "dark": {
         "window": "#171a1f",
@@ -45,10 +51,10 @@ _COLOR_SCHEMES = {
         "cad_edge": "#1b232b",
         "cad_vertex": "#d7dde3",
         "meshability_regular": "#72a86a",
-        "meshability_irregular": "#9a789f",
+        "meshability_irregular": "#c06ed2",
         "selection_3d": "#3296e6",
         "mesh_surface": "#89939d",
-        "mesh_lines": "#9aa6b2",
+        "mesh_lines": "#182129",
         "result_edge": "#10161c",
         "seed": "#f2b84b",
         "datum": "#ffd166",
@@ -101,10 +107,10 @@ _COLOR_SCHEMES = {
         "cad_edge": "#4f5963",
         "cad_vertex": "#34404a",
         "meshability_regular": "#4f8f4a",
-        "meshability_irregular": "#865c8d",
+        "meshability_irregular": "#7a3e90",
         "selection_3d": "#1976c9",
         "mesh_surface": "#b5bdc5",
-        "mesh_lines": "#3d4751",
+        "mesh_lines": "#34404a",
         "result_edge": "#39434c",
         "seed": "#a97205",
         "datum": "#a97800",
@@ -155,10 +161,10 @@ _COLOR_SCHEMES = {
         "cad_edge": "#25272a",
         "cad_vertex": "#d4d7dc",
         "meshability_regular": "#78a970",
-        "meshability_irregular": "#a383a8",
+        "meshability_irregular": "#c079cf",
         "selection_3d": "#4a9bd8",
         "mesh_surface": "#888d96",
-        "mesh_lines": "#a6abb3",
+        "mesh_lines": "#20242a",
         "result_edge": "#1f2226",
         "seed": "#d6a84b",
         "datum": "#e2bd68",

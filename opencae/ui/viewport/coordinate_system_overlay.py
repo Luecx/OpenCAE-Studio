@@ -3,7 +3,7 @@
 import numpy as np
 import pyvista as pv
 
-from opencae.ui.core.theme import PALETTE
+from opencae.ui.core.theme import PALETTE, VIEWPORT_FONT_FAMILY, VIEWPORT_FONT_SIZE
 from .instance_transform import transform_points, transform_vector
 from .safe_operations import remove_actor
 from .screen_scale import world_size_for_pixels
@@ -136,7 +136,8 @@ class CoordinateSystemOverlay:
                 [label],
                 name=label_name,
                 point_size=0,
-                font_size=9,
+                font_size=VIEWPORT_FONT_SIZE,
+                font_family=VIEWPORT_FONT_FAMILY,
                 text_color=color,
                 shape_opacity=0,
                 always_visible=False,
@@ -151,7 +152,8 @@ class CoordinateSystemOverlay:
             [system.name],
             name=label_name,
             point_size=0,
-            font_size=10,
+            font_size=VIEWPORT_FONT_SIZE,
+            font_family=VIEWPORT_FONT_FAMILY,
             text_color=PALETTE["overlay_text"],
             shape_color=PALETTE["overlay_bg"],
             shape_opacity=0.82,

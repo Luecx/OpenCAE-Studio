@@ -20,10 +20,10 @@ def test_standard_editor_dialogs_use_a_roomier_shared_width():
     reorder = _source("opencae/ui/dialogs/step_reorder.py")
     visibility = _source("opencae/ui/dialogs/visibility.py")
 
-    assert "DEFAULT_DIALOG_WIDTH = 640" in templates
+    assert "DEFAULT_DIALOG_WIDTH = 720" in templates
     assert "width: int = DEFAULT_DIALOG_WIDTH" in forms
     assert "width=DEFAULT_DIALOG_WIDTH" in named
-    assert "width=720" in cad
+    assert "width=900" in cad
     assert "self.setMinimumWidth(680)" in run
     assert "self.resize(700" not in run
     assert "self.setMinimumWidth(640)" in entity

@@ -8,6 +8,12 @@ from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import vtkCellArray, vtkPolyData
 from vtkmodules.vtkRenderingCore import vtkActor2D, vtkPolyDataMapper2D
 
+from opencae.ui.core.theme import (
+    PALETTE,
+    VIEWPORT_FONT_FAMILY,
+    VIEWPORT_FONT_SIZE,
+    VIEWPORT_FONT_SIZE_TITLE,
+)
 from .viewport_overlay_metrics import (
     VIEW_CUBE_SIZE,
     VIEWPORT_OVERLAY_GAP,
@@ -35,10 +41,11 @@ def scalar_bar_args(title, plotter=None, *, outside_colors=False):
         "position_y": _DEFAULT_BOTTOM,
         "width": 0.045,
         "height": _available_height(plotter),
-        "color": "#f0f3f6",
-        "title_font_size": 13,
-        "label_font_size": 11,
-        "background_color": "#20262d",
+        "color": PALETTE["viewport_text"],
+        "title_font_size": VIEWPORT_FONT_SIZE_TITLE,
+        "label_font_size": VIEWPORT_FONT_SIZE,
+        "font_family": VIEWPORT_FONT_FAMILY,
+        "background_color": PALETTE["overlay_bg"],
         "n_labels": 7,
         "fmt": "%.4g",
     }

@@ -201,6 +201,11 @@ def _validation_checks(kind, values, policy) -> tuple:
             (values["reference"], policy(kind, "master").requirement),
             (values["body"], policy(kind, "slave").requirement),
         )
+    if kind is ConstraintType.CONNECTOR:
+        return (
+            (values["master"], policy(kind, "master").requirement),
+            (values["slave"], policy(kind, "slave").requirement),
+        )
     return ()
 
 

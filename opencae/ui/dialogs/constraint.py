@@ -6,6 +6,7 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QCheckBox, QLineEdit, QMessageBox, QVBoxLayout
 
 from opencae.model.entities.constraints import (
+    CONNECTOR_TYPES,
     ConstraintType,
     constraint_region_requirement,
     direct_control_point_error,
@@ -132,6 +133,19 @@ class ConstraintDialog(ApplyDialog):
                 field_block("Tie distance", self.distance),
             )
         )
+
+        self.connector_section = section_container(root, "Connector Options")
+        self.connector_type = ChevronComboBox()
+        for value in CONNECTOR_TYPES:
+            self.connector_type.addItem(value.title(), value)
+        current_connector = str(getattr(constraint, "connector_type", "BEAM")).upper()
+        connector_index = self.connector_type.findData(current_connector)
+        self.connector_type.setCurrentIndex(max(0, connector_index))
+        apply_primary_control_height(self.connector_type)
+        self.connector_section.layout().addWidget(
+            field_block("Connector type", self.connector_type)
+        )
+
         root.addStretch(1)
 
         buttons = dialog_buttons(include_apply=True)
@@ -171,6 +185,7 @@ class ConstraintDialog(ApplyDialog):
         self.slave.finish_pick()
         kind = self.constraint_type()
         tie = kind == ConstraintType.TIE
+        connector = kind == ConstraintType.CONNECTOR
         coupling = kind in {ConstraintType.KINEMATIC, ConstraintType.DISTRIBUTING}
         self.master.set_requirement(constraint_region_requirement(kind, "master"))
         self.slave.set_requirement(constraint_region_requirement(kind, "slave"))
@@ -179,10 +194,11 @@ class ConstraintDialog(ApplyDialog):
         self.slave_field.set_label(slave_label)
         self.component_section.setVisible(coupling)
         self.tie_section.setVisible(tie)
+        self.connector_section.setVisible(connector)
 
-        # Direct control points are visual selections, whereas tie masters may
-        # intentionally use the extended named-region editor.
-        self.master.set_extended_visible(tie)
+        # Direct control points are visual selections, whereas tie masters and
+        # connector node sets may intentionally use the extended region editor.
+        self.master.set_extended_visible(tie or connector)
         self.slave.set_extended_visible(True)
         if (coupling or kind == ConstraintType.RIGID_BODY) and not self.master.definition().empty:
             if direct_control_point_error(self.master.definition()):
@@ -216,6 +232,12 @@ class ConstraintDialog(ApplyDialog):
             )
         elif kind == ConstraintType.RIGID_BODY:
             values.update(reference=self.master.definition(), body=self.slave.definition())
+        elif kind == ConstraintType.CONNECTOR:
+            values.update(
+                master=self.master.definition(),
+                slave=self.slave.definition(),
+                connector_type=str(self.connector_type.currentData() or "BEAM"),
+            )
         else:
             values.update(master=self.master.definition(), slave=self.slave.definition())
         return values
@@ -238,7 +260,7 @@ class ConstraintDialog(ApplyDialog):
             QMessageBox.warning(
                 self,
                 "Missing target",
-                "Select both master/control and slave/body regions.",
+                "Select both constraint regions.",
             )
             return False
         if self.validator:

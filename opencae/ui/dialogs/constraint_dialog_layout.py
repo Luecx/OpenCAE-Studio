@@ -27,6 +27,7 @@ def region_labels(kind) -> tuple[str, str]:
         ConstraintType.DISTRIBUTING: ("Control point", "Distributed region"),
         ConstraintType.TIE: ("Master surface", "Slave surface"),
         ConstraintType.RIGID_BODY: ("Reference point", "Rigid body region"),
+        ConstraintType.CONNECTOR: ("Node set 1", "Node set 2"),
     }.get(kind, ("Master", "Slave"))
 
 

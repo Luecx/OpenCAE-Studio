@@ -77,14 +77,15 @@ def constraint_selection_policy(kind, role: str) -> SelectionPolicy:
         kinds = _ELEMENT_KINDS
     else:
         kinds = _NODE_REGION_KINDS
-    return SelectionPolicy.create(kinds, multiple=not master or kind == ConstraintType.TIE, requirement=requirement)
+    multiple = True if kind == ConstraintType.CONNECTOR else (not master or kind == ConstraintType.TIE)
+    return SelectionPolicy.create(kinds, multiple=multiple, requirement=requirement)
 
 
 def direct_control_point_error(definition) -> str:
     """Require one directly selected vertex, mesh node, or reference point.
 
     Named regions are intentionally rejected here even when they would resolve
-    to one node.  Coupling control points are explicit visual point picks.
+    to one node. Coupling control points are explicit visual point picks.
     """
     items = RegionDefinition.from_values(definition).items
     if len(items) != 1:

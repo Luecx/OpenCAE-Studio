@@ -11,11 +11,10 @@ from .field_stack import FieldStack
 from .layouts import dialog_layout
 
 
-# Most editor dialogs contain full-width field controls, file paths, or selector
-# labels. 520 px made those surfaces feel unnecessarily cramped on ordinary
-# desktop displays, so use one roomier default and let truly compact dialogs opt
-# into a smaller width explicitly.
-DEFAULT_DIALOG_WIDTH = 640
+# Editor dialogs routinely contain full-width selectors, paths and technical
+# labels. Give those controls enough horizontal room on ordinary desktop
+# displays; truly compact dialogs can still opt into a smaller explicit width.
+DEFAULT_DIALOG_WIDTH = 720
 
 
 @dataclass(slots=True)

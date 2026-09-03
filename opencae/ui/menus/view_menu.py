@@ -18,6 +18,16 @@ def build(menu_bar, actions):
     menu.addAction(actions.get(A.TOGGLE_MESH))
     menu.addSeparator()
     _add_color_scheme_menu(menu, menu_bar.parentWidget(), actions)
+    menu.addSeparator()
+
+    workspace = menu.addMenu("Workspace")
+    workspace.addAction(actions.get(A.SHOW_PROJECT))
+    workspace.addSeparator()
+    workspace.addAction(actions.get(A.SHOW_JOBS))
+    workspace.addAction(actions.get(A.SHOW_LOG))
+    workspace.addAction(actions.get(A.SHOW_TIME_MANAGER))
+    workspace.addSeparator()
+    workspace.addAction(actions.get(A.RESET_LAYOUT))
     return menu
 
 
@@ -65,11 +75,17 @@ def _select_color_scheme(window, actions, scheme: str) -> None:
     viewport = getattr(window, "viewport", None)
     if viewport is not None:
         viewport.plotter.set_background(PALETTE["viewport"])
-        # Rebuild CAD/mesh actors so semantic 3D colors change too. Results use
-        # field colormaps rather than the UI palette, so keep their actors and
-        # only update the neutral background while a result is open.
+        # CAD and generated-mesh actors are cheap enough to rebuild. Stored
+        # results need the same treatment as well: their mesh-line actors,
+        # boundary actors and scalar bar capture palette colors at creation
+        # time. Merely rendering the existing actors leaves the old scheme in
+        # place and makes a theme switch appear broken.
         if getattr(viewport, "stage", "") == "RESULTS":
-            viewport.plotter.render()
+            page = getattr(getattr(window, "ribbon", None), "results_page", None)
+            if page is not None and getattr(page, "result", None) is not None:
+                page._emit()
+            else:
+                viewport.plotter.render()
         else:
             viewport.request_refresh()
 

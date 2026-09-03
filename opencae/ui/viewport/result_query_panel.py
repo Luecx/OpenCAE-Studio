@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QRectF, QTimer, Qt
+from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -15,7 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.ui.core.theme import PALETTE
-from opencae.ui.templates import FieldStack, SectionHeading
+from opencae.ui.templates import FieldStack, SectionHeading, field_block, field_row
 
 from .result_query_model import QueryResult
 from .result_selection_panel import RESULT_INFO_WIDTH
@@ -54,17 +55,26 @@ class ResultQueryPanel(QFrame):
         self.table.hide()
         layout.addWidget(self.table)
 
+    def paintEvent(self, event) -> None:
+        """Paint a rounded panel over a viewport-colored rectangular backing."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
+        painter.setBrush(QColor(PALETTE["overlay_bg"]))
+        painter.setPen(QPen(QColor(PALETTE["overlay_border"]), 1.0))
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        painter.drawRoundedRect(rect, 7.0, 7.0)
+
     def refresh_theme(self):
         self.setStyleSheet(
-            f"QFrame#ResultQueryPanel{{background:{PALETTE['overlay_bg']};"
-            f"color:{PALETTE['overlay_text']};"
-            f"border:1px solid {PALETTE['overlay_border']};border-radius:7px;}}"
+            f"QFrame#ResultQueryPanel{{color:{PALETTE['overlay_text']};}}"
             f"QFrame#ResultQueryPanel QTableWidget{{background:{PALETTE['panel_alt']};"
             f"color:{PALETTE['text']};border:1px solid {PALETTE['border_light']};}}"
         )
+        self.update()
 
     def show_prompt(self, mode):
-        """Prompt for the next node or element click using a normal result field."""
+        """Prompt for the next node/element click using a normal result field."""
         noun = "node" if mode == "node" else "element"
         self.show_result(
             f"Query {noun.title()}",
@@ -76,16 +86,20 @@ class ResultQueryPanel(QFrame):
         self.title.setText(str(title))
         self._clear()
         rows = result.summary or [("Result", "No values available for this selection")]
-        for key, value in rows:
-            text = QLabel(str(value))
-            text.setObjectName("ResultQueryValue")
-            text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            text.setWordWrap(True)
-            text.setSizePolicy(
-                QSizePolicy.Policy.Expanding,
-                QSizePolicy.Policy.Minimum,
-            )
-            self.form.addRow(str(key), text)
+        columns = max(1, int(getattr(result, "summary_columns", 1) or 1))
+        for start in range(0, len(rows), columns):
+            blocks = []
+            for key, value in rows[start : start + columns]:
+                text = QLabel(str(value))
+                text.setObjectName("ResultQueryValue")
+                text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+                text.setWordWrap(True)
+                text.setSizePolicy(
+                    QSizePolicy.Policy.Expanding,
+                    QSizePolicy.Policy.Minimum,
+                )
+                blocks.append(field_block(str(key), text))
+            self.form.addWidget(field_row(*blocks, spacing=10) if len(blocks) > 1 else blocks[0])
         if result.matrix:
             self._show_matrix(result.columns, result.matrix)
 

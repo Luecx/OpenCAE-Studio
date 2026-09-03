@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pyvista as pv
 
-from opencae.ui.core.theme import PALETTE
+from opencae.ui.core.theme import PALETTE, VIEWPORT_FONT_FAMILY, VIEWPORT_FONT_SIZE
 from .boundary_geometry import region_samples
 from .screen_scale import world_size_for_pixels
 from .safe_operations import remove_actor
@@ -71,7 +71,8 @@ class OrientationOverlay:
                 name=label_name,
                 show_points=False,
                 point_size=0,
-                font_size=9,
+                font_size=VIEWPORT_FONT_SIZE,
+                font_family=VIEWPORT_FONT_FAMILY,
                 text_color=color,
                 shape_opacity=0,
                 always_visible=False,
@@ -85,7 +86,8 @@ class OrientationOverlay:
             name=name,
             show_points=False,
             point_size=0,
-            font_size=10,
+            font_size=VIEWPORT_FONT_SIZE,
+            font_family=VIEWPORT_FONT_FAMILY,
             text_color=PALETTE["overlay_text"],
             shape_color=PALETTE["overlay_bg"],
             shape_opacity=.82,

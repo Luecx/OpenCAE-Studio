@@ -62,12 +62,19 @@ def run() -> int:
     app.setWindowIcon(application_icon())
     app._dialog_form_polisher = DialogFormPolisher(app)
     app.installEventFilter(app._dialog_form_polisher)
-    _progress(app, startup, 28, "Loading interface…")
+    _progress(app, startup, 26, "Loading interface…")
+
+    from opencae.geometry.gmsh_session import finalize_gmsh, initialize_gmsh
+
+    _progress(app, startup, 38, "Initializing meshing kernel…")
+    gmsh_ready = initialize_gmsh()
+    if gmsh_ready:
+        app.aboutToQuit.connect(finalize_gmsh)
 
     from .context import AppContext
 
     context = AppContext.create()
-    _progress(app, startup, 48, "Initializing project services…")
+    _progress(app, startup, 50, "Initializing project services…")
 
     # MainWindow transitively imports the viewport stack and therefore PyVista/
     # VTK. The startup window is already painted while those imports complete.
@@ -75,7 +82,7 @@ def run() -> int:
     from .main_window import MainWindow
     from .window_state import WindowStatePersistence
 
-    _progress(app, startup, 66, "Preparing 3D viewport…")
+    _progress(app, startup, 68, "Preparing 3D viewport…")
     window = MainWindow(context)
     window.workspace_controller = WorkspaceDockController(window)
     window._window_state = WindowStatePersistence(window)

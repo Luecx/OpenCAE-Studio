@@ -1,3 +1,5 @@
+from PyQt6.QtCore import QRectF
+from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QFrame, QGridLayout, QLabel
 
 from opencae.ui.core.theme import PALETTE
@@ -28,15 +30,22 @@ class ResultSelectionPanel(QFrame):
             self.values[name] = value
         self.refresh_theme()
 
+    def paintEvent(self, event) -> None:
+        """Paint a rounded panel over a viewport-colored rectangular backing."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
+        painter.setBrush(QColor(PALETTE["overlay_bg"]))
+        painter.setPen(QPen(QColor(PALETTE["overlay_border"]), 1.0))
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        painter.drawRoundedRect(rect, 7.0, 7.0)
+
     def refresh_theme(self):
-        self.setStyleSheet(
-            f"QFrame#ResultSelectionPanel{{background:{PALETTE['overlay_bg']};"
-            f"border:1px solid {PALETTE['overlay_border']};border-radius:7px;}}"
-        )
         for title in self.titles:
             title.setStyleSheet(f"color:{PALETTE['muted']};font-size:8pt;")
         for value in self.values.values():
             value.setStyleSheet(f"color:{PALETTE['overlay_text']};font-weight:600;")
+        self.update()
 
     def set_selection(self, values):
         for name, label in self.values.items():

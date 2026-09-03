@@ -6,6 +6,7 @@ class ConstraintType(StrEnum):
     DISTRIBUTING = "Distributing Coupling"
     TIE = "Tie"
     RIGID_BODY = "Rigid Body"
+    CONNECTOR = "Connector"
     EQUATION = "Equation"
     MPC = "MPC"
 

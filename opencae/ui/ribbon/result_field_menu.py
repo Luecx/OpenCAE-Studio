@@ -36,6 +36,13 @@ class ResultFieldButton(QToolButton):
         self.setMenu(menu)
 
     def set_solution(self, result, fields, preferred=None):
+        """Load one ResultSet and select its first available field by default.
+
+        Without an explicit preferred field the selectors intentionally resolve
+        to the first step, first frame and first field.  This avoids PyVista
+        falling back to an arbitrary active FRD array and gives newly opened
+        result files one deterministic contour immediately.
+        """
         self.result, self.fields = result, fields
         blockers = [QSignalBlocker(combo) for combo in self._combos()]
         self._steps(preferred)

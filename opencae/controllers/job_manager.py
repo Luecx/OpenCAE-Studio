@@ -347,6 +347,8 @@ class JobManager(QObject):
             return None
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                return None
             if int(payload.get("version", 0)) != 1:
                 return None
             details = dict(payload.get("details", {}) or {})

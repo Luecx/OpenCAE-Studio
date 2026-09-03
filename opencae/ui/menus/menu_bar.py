@@ -7,7 +7,6 @@ from . import (
     solver_menu,
     tools_menu,
     view_menu,
-    window_menu,
 )
 
 
@@ -21,7 +20,6 @@ def build_menus(window, actions):
         mesh_menu,
         tools_menu,
         solver_menu,
-        window_menu,
         help_menu,
     ):
         module.build(bar, actions)

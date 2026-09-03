@@ -28,6 +28,16 @@ from opencae.ui.templates import (
 from .field_table import FieldTable
 
 
+_FIELD_LOCATIONS = (
+    "Nodal",
+    "Element",
+    "Element-Nodal",
+    "Integration Point",
+    "Material Point",
+    "Shell Normal",
+)
+
+
 class FieldDefinitionDialog(ApplyDialog):
     """Create or edit a spatial field and one of its tabular, formula, or file sources."""
 
@@ -45,7 +55,7 @@ class FieldDefinitionDialog(ApplyDialog):
         self.field = field or FieldDefinition(name=default_name)
         self.existing = set(existing_names)
         self.setWindowTitle("Edit Field" if field else "Create Field")
-        self.setMinimumSize(760, 590)
+        self.setMinimumSize(820, 620)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 18)
@@ -58,7 +68,7 @@ class FieldDefinitionDialog(ApplyDialog):
 
         self.location = ChevronComboBox()
         self.location.setMinimumWidth(0)
-        self.location.addItems(("Element", "Nodal", "Element-Nodal"))
+        self.location.addItems(_FIELD_LOCATIONS)
         self.location.setCurrentText(self.field.location)
         apply_primary_control_height(self.location)
 
@@ -80,7 +90,11 @@ class FieldDefinitionDialog(ApplyDialog):
         root.addWidget(SectionHeading("Field Source"))
 
         self.tabs = QTabWidget()
-        self.table = FieldTable(self.field.components, self.field.table)
+        self.table = FieldTable(
+            self.field.components,
+            self.field.table,
+            location=self.field.location,
+        )
         self.tabs.addTab(self.table, "Tabular")
 
         formula_page = QWidget()
@@ -111,13 +125,23 @@ class FieldDefinitionDialog(ApplyDialog):
 
         root.addWidget(self.tabs, 1)
         self.components.valueChanged.connect(self.table.set_components)
+        self.location.currentTextChanged.connect(self._location_changed)
         self.tabs.setCurrentIndex(
             {"Tabular": 0, "Formula": 1, "File": 2}.get(self.field.source_type, 1)
         )
+        self._location_changed(self.location.currentText())
 
         buttons = dialog_buttons(include_apply=True)
         self.bind_buttons(buttons, True)
         root.addWidget(buttons)
+
+    def _location_changed(self, location: str) -> None:
+        """Apply domain-specific address columns and shell-normal vector semantics."""
+        shell_normal = str(location) == "Shell Normal"
+        if shell_normal and self.components.value() != 3:
+            self.components.setValue(3)
+        self.components.setEnabled(not shell_normal)
+        self.table.set_domain(location, self.components.value())
 
     def validate(self) -> bool:
         """Reject empty or duplicate field names before committing values."""
@@ -140,18 +164,21 @@ class FieldDefinitionDialog(ApplyDialog):
         """Return constructor values for the field represented by the active source tab."""
         count = self.components.value()
         region_id = self.region.currentValue()
+        location = self.location.currentText()
         return {
             "name": self.name.text().strip(),
-            "location": self.location.currentText(),
+            "location": location,
             "components": count,
-            "component_names": [f"C{i + 1}" for i in range(count)],
+            "component_names": [
+                "NX", "NY", "NZ"
+            ] if location == "Shell Normal" else [f"C{i + 1}" for i in range(count)],
             "region_ref": EntityRef(str(region_id), "Region") if region_id else None,
             "source_type": ("Tabular", "Formula", "File")[self.tabs.currentIndex()],
             "expression": self.formula.toPlainText().strip(),
             "table": self.table.values(),
             "file_path": self.file.text(),
             "interpolation": self.interpolation.currentText(),
-            "field_type": "Scalar" if count == 1 else "Custom",
+            "field_type": "Vector" if location == "Shell Normal" else "Scalar" if count == 1 else "Custom",
         }
 
     def prepare_new(self, default_name, existing_names) -> None:
