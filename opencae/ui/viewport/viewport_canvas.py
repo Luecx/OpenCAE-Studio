@@ -2,6 +2,7 @@
 
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
+from opencae.ui.core.theme import PALETTE
 from .meshability_legend import MeshabilityLegend
 from .result_query_panel import ResultQueryPanel
 from .result_selection_panel import ResultSelectionPanel
@@ -20,6 +21,12 @@ class ViewportCanvas(QWidget):
         """Create hidden overlays before the render widget is attached."""
         super().__init__(parent)
         self.setObjectName("ViewportCanvas")
+        # Rounded Qt overlays are siblings of the native OpenGL render widget.
+        # Their antialiased corner pixels therefore expose this host widget, not
+        # VTK itself. Painting the host with the exact renderer background makes
+        # those corners visually transparent instead of showing window/black
+        # pixels around otherwise rounded panels.
+        self.refresh_theme()
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
@@ -33,6 +40,12 @@ class ViewportCanvas(QWidget):
         self.result_selection.hide()
         self.meshability.hide()
         self.notice.hide()
+
+    def refresh_theme(self) -> None:
+        """Keep exposed overlay-corner pixels identical to the VTK background."""
+        self.setStyleSheet(
+            f"QWidget#ViewportCanvas{{background:{PALETTE['viewport']};}}"
+        )
 
     def set_render_widget(self, widget):
         """Attach the VTK surface and construct render-surface overlays in place."""

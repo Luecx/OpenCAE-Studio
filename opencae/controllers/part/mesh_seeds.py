@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.core.theme import PALETTE
 from copy import deepcopy
 
 from opencae.model.mesh import DefaultSeed, EdgeSeed
@@ -109,13 +110,13 @@ class PartMeshSeeds:
         dialog._target_preview_channel = preview_channel
         dialog.target.value_changed.connect(
             lambda value: self._viewport().show_region_preview(
-                preview_channel, value, color="#3296e6",
+                preview_channel, value, color=PALETTE["selection_3d"],
                 opacity=.62, point_size=16, show_point_labels=False,
             ) if self._viewport() else None
         )
         if self._viewport():
             self._viewport().show_region_preview(
-                preview_channel, dialog.target.definition(), color="#3296e6",
+                preview_channel, dialog.target.definition(), color=PALETTE["selection_3d"],
                 opacity=.62, point_size=16, show_point_labels=False,
             )
         return dialog

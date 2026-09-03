@@ -4,6 +4,7 @@ import numpy as np
 import pyvista as pv
 
 from opencae.model.entities.constraints import DistributingCoupling, KinematicCoupling
+from opencae.ui.core.theme import PALETTE
 from .boundary_geometry import region_samples
 from .safe_operations import remove_actor
 from .screen_scale import world_size_for_pixels
@@ -59,9 +60,9 @@ class CouplingOverlay:
         mesh = pv.PolyData(coords)
         mesh.lines = np.asarray(lines, np.int64)
         color = (
-            "#64b5f6"
+            PALETTE["accent"]
             if isinstance(constraint, KinematicCoupling)
-            else "#9acb63"
+            else PALETTE["success"]
         )
         name = f"coupling-{constraint.id or index}"
         self._names.append(name)
@@ -80,7 +81,7 @@ class CouplingOverlay:
         self._names.append(marker)
         plotter.add_mesh(
             pv.Sphere(radius=radius, center=master),
-            color="#ffd166" if selected else color,
+            color=PALETTE["datum"] if selected else color,
             opacity=1.0 if selected else .82,
             lighting=False,
             pickable=False,

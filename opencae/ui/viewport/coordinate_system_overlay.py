@@ -3,6 +3,7 @@
 import numpy as np
 import pyvista as pv
 
+from opencae.ui.core.theme import PALETTE
 from .instance_transform import transform_points, transform_vector
 from .safe_operations import remove_actor
 from .screen_scale import world_size_for_pixels
@@ -113,7 +114,7 @@ class CoordinateSystemOverlay:
         for suffix, vector, color, label in zip(
             ("x", "y", "z"),
             (x, y, z),
-            ("#ef6666", "#70d184", "#6ca6ff"),
+            (PALETTE["axis_x"], PALETTE["axis_y"], PALETTE["axis_z"]),
             labels,
         ):
             name = f"csys-{key}-{suffix}"
@@ -151,8 +152,8 @@ class CoordinateSystemOverlay:
             name=label_name,
             point_size=0,
             font_size=10,
-            text_color="#f0f3f6",
-            shape_color="#20262d",
+            text_color=PALETTE["overlay_text"],
+            shape_color=PALETTE["overlay_bg"],
             shape_opacity=0.82,
             always_visible=False,
             render=False,
@@ -164,7 +165,7 @@ class CoordinateSystemOverlay:
         circle = _ring_geometry(origin, normal, radius)
         plotter.add_mesh(
             circle,
-            color="#8fd3ff",
+            color=PALETTE["accent_hover"],
             line_width=2,
             lighting=False,
             pickable=False,

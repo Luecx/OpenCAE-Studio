@@ -33,6 +33,7 @@ class SectionViewController:
         self._state = {
             "enabled": False,
             "origin": None,
+            "origin_auto": True,
             "normal": (1.0, 0.0, 0.0),
             "invert": False,
             "show_plane": True,
@@ -48,9 +49,14 @@ class SectionViewController:
     def apply(self, settings: dict | None, grid, actors) -> None:
         self.clear_scene()
         incoming = dict(settings or {})
+        incoming_origin = incoming.get("origin")
+        origin_auto = bool(
+            incoming.get("origin_auto", incoming_origin is None)
+        )
         self._state.update(
             enabled=bool(incoming.get("enabled", False)),
-            origin=incoming.get("origin"),
+            origin=incoming_origin,
+            origin_auto=origin_auto,
             normal=self._normalize(incoming.get("normal", (1.0, 0.0, 0.0))),
             invert=bool(incoming.get("invert", False)),
             show_plane=bool(incoming.get("show_plane", True)),
@@ -63,7 +69,7 @@ class SectionViewController:
 
         bounds = tuple(float(value) for value in grid.bounds)
         origin = self._state["origin"]
-        if origin is None:
+        if self._state["origin_auto"] or origin is None:
             origin = self._bounds_center(bounds)
         origin = tuple(float(value) for value in origin)
         self._state["origin"] = origin
@@ -95,19 +101,30 @@ class SectionViewController:
 
         The plane widget and interaction state stay alive.  Only the source grid,
         actor list and interpolated cut face are refreshed, avoiding a visible
-        widget rebuild on every animation tick.
+        widget rebuild on every animation tick. Automatic origins continue to
+        track the current result bounds instead of becoming stale after the first
+        rendered frame.
         """
         self._grid = grid
         self._actors = tuple(actor for actor in actors if actor is not None)
         if not self._state["enabled"] or grid is None:
             self._remove_cap()
             return
+        if self._state["origin_auto"]:
+            bounds = tuple(float(value) for value in grid.bounds)
+            origin = self._bounds_center(bounds)
+            self._state["origin"] = origin
+            self._update_plane(origin, self._state["normal"])
+            self._move_widget_origin(origin)
         self._apply_clipping()
         self._update_cap()
 
     def _widget_changed(self, normal, origin) -> None:
         if not self._state["enabled"]:
             return
+        # Dragging the plane is an explicit user override. From this point the
+        # origin must remain fixed until "Center on current result" is requested.
+        self._state["origin_auto"] = False
         self._state["origin"] = tuple(float(value) for value in origin)
         self._state["normal"] = self._normalize(normal)
         self._update_plane(self._state["origin"], self._state["normal"])
@@ -140,6 +157,7 @@ class SectionViewController:
                 mapper.Modified()
 
     def _update_cap(self) -> None:
+        """Create or refresh the visible filled surface on the clipping plane."""
         primary = self._actors[0] if self._actors else None
         if primary is None or self._grid is None:
             self._remove_cap()
@@ -162,7 +180,11 @@ class SectionViewController:
                 "render": False,
                 "reset_camera": False,
                 "show_scalar_bar": False,
-                "lighting": True,
+                # The cap represents an artificial material section. Keeping it
+                # unlit avoids normal-orientation dependent dark/invisible faces.
+                "lighting": False,
+                "smooth_shading": False,
+                "show_edges": False,
             }
             if scalar is not None:
                 kwargs["scalars"] = scalar
@@ -175,32 +197,46 @@ class SectionViewController:
         if cap_mapper is None or not self._bind_cap_dataset(cap_mapper, cut, scalar):
             self._remove_cap()
             return
+
+        # A section cap must never inherit clipping from the result actors.  It
+        # lies exactly on the clipping plane and clipping it again can make the
+        # whole slice disappear on some VTK/OpenGL backends.
+        try:
+            cap_mapper.RemoveAllClippingPlanes()
+            cap_mapper.Modified()
+        except (AttributeError, RuntimeError):
+            pass
         self._sync_cap_style(primary, scalar)
+        try:
+            self._cap_actor.SetVisibility(True)
+        except (AttributeError, RuntimeError):
+            pass
 
     @staticmethod
     def _bind_cap_dataset(mapper, dataset, scalar) -> bool:
-        """Bind a new slice through PyVista's mapper pipeline, including scalars.
+        """Bind one materialized cut directly through stable VTK mapper APIs.
 
-        PyVista's ``DataSetMapper`` inserts an ``ActiveScalarsAlgorithm`` when a
-        named array is selected.  Assigning with VTK ``SetInputData`` bypasses
-        PyVista's dataset setter and can disconnect that pipeline when a moved
-        section creates a replacement slice.  Using the public mapper API keeps
-        the selected result array deterministic across every plane movement.
+        The section slice is already a concrete PolyData dataset, so it does not
+        need PyVista's ActiveScalarsAlgorithm wrapper. Binding the dataset and
+        selected array explicitly keeps the cap renderable across PyVista mapper
+        implementation changes while retaining point/cell result association.
         """
         try:
-            mapper.dataset = dataset
+            mapper.SetInputData(dataset)
             if scalar is None:
-                mapper.scalar_visibility = False
-                return True
-            if scalar in dataset.point_data:
-                preference = "point"
+                mapper.ScalarVisibilityOff()
+            elif scalar in dataset.point_data:
+                mapper.SetScalarModeToUsePointFieldData()
+                mapper.SelectColorArray(str(scalar))
+                mapper.ScalarVisibilityOn()
             elif scalar in dataset.cell_data:
-                preference = "cell"
+                mapper.SetScalarModeToUseCellFieldData()
+                mapper.SelectColorArray(str(scalar))
+                mapper.ScalarVisibilityOn()
             else:
                 return False
-            mapper.set_active_scalars(scalar, preference=preference)
-            mapper.scalar_visibility = True
             mapper.Modified()
+            mapper.Update()
             return True
         except (AttributeError, KeyError, RuntimeError, TypeError, ValueError):
             return False
@@ -214,16 +250,27 @@ class SectionViewController:
             source_property = source_actor.GetProperty()
             cap_property = self._cap_actor.GetProperty()
             cap_property.DeepCopy(source_property)
+            # The source actor may use backend-/display-specific representation,
+            # culling or lighting settings. A generated section must always be a
+            # two-sided surface regardless of those settings.
+            cap_property.SetRepresentationToSurface()
+            cap_property.SetFrontfaceCulling(False)
+            cap_property.SetBackfaceCulling(False)
+            cap_property.SetEdgeVisibility(False)
+            cap_property.SetLighting(False)
         except (AttributeError, RuntimeError, TypeError):
             pass
         try:
             if scalar is None or not source_mapper.GetScalarVisibility():
-                cap_mapper.scalar_visibility = False
+                cap_mapper.ScalarVisibilityOff()
             else:
-                cap_mapper.lookup_table = source_mapper.GetLookupTable()
-                cap_mapper.scalar_range = source_mapper.GetScalarRange()
-                cap_mapper.scalar_visibility = True
+                lookup = source_mapper.GetLookupTable()
+                if lookup is not None:
+                    cap_mapper.SetLookupTable(lookup)
+                cap_mapper.SetScalarRange(*source_mapper.GetScalarRange())
+                cap_mapper.ScalarVisibilityOn()
             cap_mapper.Modified()
+            cap_mapper.Update()
         except (AttributeError, RuntimeError, TypeError, ValueError):
             pass
 
@@ -248,6 +295,17 @@ class SectionViewController:
         except (AttributeError, RuntimeError):
             pass
         self._widget = None
+
+    def _move_widget_origin(self, origin) -> None:
+        """Move an existing plane widget when automatic centering follows a frame."""
+        widget = self._widget
+        if widget is None:
+            return
+        try:
+            widget.SetOrigin(*origin)
+            widget.Modified()
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            pass
 
     def _publish(self) -> None:
         self.owner.section_changed.emit(dict(self._state))
@@ -294,11 +352,13 @@ class SectionViewController:
 
 
 def section_cut_surface(grid, origin, normal):
-    """Return a filled 2-D cut through volumetric cells, or ``None``.
+    """Return a filled triangulated 2-D cut through volumetric cells, or ``None``.
 
     Slicing a 3-D VTK cell produces 2-D polygons and interpolates its point
     arrays onto the intersection.  Slicing shells produces only 1-D lines; those
-    are deliberately rejected because a shell has no volume to cap.
+    are deliberately rejected because a shell has no volume to cap.  Triangles
+    are used for the final render surface to avoid backend-specific polygon
+    tessellation differences while retaining interpolated result arrays.
     """
     if grid is None or origin is None:
         return None
@@ -310,6 +370,12 @@ def section_cut_surface(grid, origin, normal):
         return None
     if not _contains_surface_cells(cut):
         return None
+    try:
+        triangulated = cut.triangulate()
+        if triangulated is not None and getattr(triangulated, "n_cells", 0):
+            cut = triangulated
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        pass
     return cut
 
 

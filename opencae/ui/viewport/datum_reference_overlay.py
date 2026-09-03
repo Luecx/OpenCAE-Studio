@@ -5,21 +5,17 @@ import re
 import numpy as np
 import pyvista as pv
 
+from opencae.ui.core.theme import PALETTE
 from .safe_operations import remove_actor
-
-
-_HIGHLIGHT = "#ffd166"
-_LABEL_TEXT = "#fff8df"
-_LABEL_BACKGROUND = "#3a321f"
 
 
 class DatumReferenceOverlay:
     """Keep every reference used by an open datum dialog visible.
 
     Datum construction is sequential: for example Point 1 is chosen before
-    Point 2, or an edge is chosen before a parameter is entered.  Normal picker
+    Point 2, or an edge is chosen before a parameter is entered. Normal picker
     state ends after each single click, so it cannot be the persistent visual
-    source of truth.  This overlay remembers the dialog references and styles
+    source of truth. This overlay remembers the dialog references and styles
     their existing actors until the dialog changes method or closes.
     """
 
@@ -90,7 +86,7 @@ class DatumReferenceOverlay:
                 return
             plotter.add_points(
                 np.asarray([point]),
-                color=_HIGHLIGHT,
+                color=PALETTE["query_marker"],
                 point_size=19,
                 render_points_as_spheres=True,
                 lighting=False,
@@ -108,7 +104,7 @@ class DatumReferenceOverlay:
             mesh.lines = np.asarray([len(points), *range(len(points))], dtype=np.int64)
             plotter.add_mesh(
                 mesh,
-                color=_HIGHLIGHT,
+                color=PALETTE["query_marker"],
                 line_width=7.0,
                 render_lines_as_tubes=True,
                 lighting=False,
@@ -131,8 +127,8 @@ class DatumReferenceOverlay:
             show_points=False,
             point_size=0,
             font_size=10,
-            text_color=_LABEL_TEXT,
-            shape_color=_LABEL_BACKGROUND,
+            text_color=PALETTE["overlay_text"],
+            shape_color=PALETTE["overlay_bg"],
             shape_opacity=.88,
             always_visible=True,
             render=False,
@@ -210,7 +206,7 @@ def _style(actor, kind):
     prop = actor.GetProperty()
     mapper = actor.GetMapper()
     mapper.ScalarVisibilityOff()
-    rgb = pv.Color(_HIGHLIGHT).float_rgb
+    rgb = pv.Color(PALETTE["query_marker"]).float_rgb
     prop.SetColor(rgb)
     prop.SetLighting(False)
     if kind == "face":

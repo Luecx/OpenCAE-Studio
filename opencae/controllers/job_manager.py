@@ -9,10 +9,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import fields
+import json
+from pathlib import Path
 
 from PyQt6.QtCore import QCoreApplication, QObject, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
+from opencae.jobs.femaster_output_parser import FEMasterOutputParser
 from opencae.model.entities.jobs import Job, JobSourceKind, JobStatus
 from opencae.results import FrdLoader
 from opencae.ui.monitors import AnalysisJobMonitor, TopologyJobMonitor
@@ -32,6 +35,11 @@ _RUNTIME_JOB_FIELDS = frozenset({
     "progress",
     "progress_label",
 })
+_TERMINAL_JOB_STATUSES = {
+    JobStatus.COMPLETED,
+    JobStatus.FAILED,
+    JobStatus.CANCELLED,
+}
 
 
 class JobManager(QObject):
@@ -40,6 +48,7 @@ class JobManager(QObject):
     selection_changed = pyqtSignal(str)
     output_appended = pyqtSignal(str, str)
     progress_changed = pyqtSignal(str, float, str)
+    analysis_runtime_changed = pyqtSignal(str, object, object)
     topology_frame = pyqtSignal(str, object, object, object, object)
 
     def __init__(self, store, parent, settings, solvers):
@@ -52,6 +61,7 @@ class JobManager(QObject):
         self.selected_job_id = ""
         self._runners: dict[str, object] = {}
         self._monitors: dict[str, object] = {}
+        self._analysis_runtime_parsers: dict[str, FEMasterOutputParser] = {}
         self._output_store = JobOutputStore(lambda: self.store.project)
         self._result_loader = FrdLoader()
         self._pending_output: dict[str, list[str]] = {}
@@ -82,8 +92,6 @@ class JobManager(QObject):
         if value is not None:
             self.store.select(value)
         self.selection_changed.emit(self.selected_job_id)
-        # Selecting a row no longer owns any output presentation. Solver text is
-        # loaded only when a dedicated monitor is opened.
         self.parent.refresh_action_states()
 
     def _repair_selection(self, *_args) -> None:
@@ -174,8 +182,6 @@ class JobManager(QObject):
         if runner is None or not isinstance(job, Job):
             return
 
-        # Persist STOPPING before terminating the process so every observer sees
-        # a valid intermediate state rather than inferring it from a button click.
         candidate = deepcopy(job)
         candidate.status = JobStatus.STOPPING
         candidate.progress_label = JobStatus.STOPPING.value
@@ -214,10 +220,30 @@ class JobManager(QObject):
                 self.parent,
                 stop_callback=stop_callback,
             )
+            self.analysis_runtime_changed.connect(monitor.set_runtime_state)
 
         self.progress_changed.connect(monitor.set_progress)
         self.output_appended.connect(monitor.append_output)
-        monitor.set_output(job.id, self.output_for(job.id))
+        transcript = self.output_for(job.id)
+        monitor.set_output(job.id, transcript)
+        if job.source_kind is not JobSourceKind.STUDY:
+            parser = self._analysis_runtime_parsers.get(job.id)
+            if parser is not None:
+                details, steps = parser.snapshot()
+                monitor.set_runtime_state(job.id, details, steps)
+            else:
+                persisted = self._load_analysis_runtime_snapshot(job.id)
+                if persisted is not None:
+                    details, steps = persisted
+                    monitor.set_runtime_state(job.id, details, steps)
+                else:
+                    parser = self._prepare_analysis_runtime(job.id)
+                    if parser is not None:
+                        parser.feed(transcript)
+                        if job.status in _TERMINAL_JOB_STATUSES:
+                            parser.finish(job.status.value)
+                        details, steps = parser.snapshot()
+                        monitor.set_runtime_state(job.id, details, steps)
         monitor.destroyed.connect(
             lambda _value=None, current=job.id: self._monitors.pop(current, None)
         )
@@ -242,6 +268,93 @@ class JobManager(QObject):
             return
         self.parent.show_solution(result)
 
+    def _prepare_analysis_runtime(self, job_id) -> FEMasterOutputParser | None:
+        """Create a fresh FEMaster parser seeded with the Analysis step order."""
+        job = self.store.project.try_resolve(str(job_id or ""))
+        if not isinstance(job, Job) or str(job.solver).casefold() != "femaster":
+            return None
+        analysis = self.store.project.try_resolve(job.source_ref)
+        resolved_steps = getattr(analysis, "resolved_steps", None)
+        steps = ()
+        if callable(resolved_steps):
+            try:
+                steps = tuple(resolved_steps(self.store.project))
+            except (AttributeError, KeyError, TypeError, ValueError):
+                steps = ()
+        parser = FEMasterOutputParser(
+            {
+                "name": str(getattr(step, "name", "Step") or "Step"),
+                "procedure": str(getattr(step, "step_type", "") or ""),
+            }
+            for step in steps
+        )
+        self._analysis_runtime_parsers[job.id] = parser
+        return parser
+
+    def _emit_analysis_runtime(self, job_id, parser: FEMasterOutputParser) -> None:
+        """Publish one detached runtime snapshot to any open Analysis monitor."""
+        details, steps = parser.snapshot()
+        self.analysis_runtime_changed.emit(str(job_id), details, steps)
+
+    def _finish_analysis_runtime(self, job_id, status) -> None:
+        """Finalize, publish and persist structured FEMaster runtime state."""
+        key = str(job_id)
+        parser = self._analysis_runtime_parsers.get(key)
+        if parser is None:
+            return
+        parser.finish(str(getattr(status, "value", status)))
+        self._emit_analysis_runtime(key, parser)
+        self._persist_analysis_runtime_snapshot(key, parser)
+        self._analysis_runtime_parsers.pop(key, None)
+
+    def _analysis_runtime_snapshot_path(self, job_id) -> Path | None:
+        """Return the sidecar path for one Job without mutating project state."""
+        job = self.store.project.try_resolve(str(job_id or ""))
+        directory = str(getattr(job, "directory", "") or "").strip() if job else ""
+        if not directory:
+            return None
+        return Path(directory) / "analysis_runtime.json"
+
+    def _persist_analysis_runtime_snapshot(
+        self,
+        job_id,
+        parser: FEMasterOutputParser,
+    ) -> None:
+        """Persist small structured state separately from the potentially huge log."""
+        path = self._analysis_runtime_snapshot_path(job_id)
+        if path is None:
+            return
+        details, steps = parser.snapshot()
+        payload = {"version": 1, "details": details, "steps": steps}
+        temporary = path.with_name(f"{path.name}.tmp")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temporary.write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            temporary.replace(path)
+        except OSError:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def _load_analysis_runtime_snapshot(self, job_id):
+        """Load a completed runtime sidecar when reopening a persisted Job."""
+        path = self._analysis_runtime_snapshot_path(job_id)
+        if path is None or not path.is_file():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if int(payload.get("version", 0)) != 1:
+                return None
+            details = dict(payload.get("details", {}) or {})
+            steps = [dict(item or {}) for item in payload.get("steps", ()) or ()]
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+        return details, steps
+
     def _start_job(self, job_id, label: str) -> None:
         """Move a prepared Job into the canonical RUNNING state."""
         job = self.store.project.resolve(job_id)
@@ -256,17 +369,20 @@ class JobManager(QObject):
         self.progress_changed.emit(job.id, 0.0, str(label))
 
     def _append_output(self, job_id, text) -> None:
-        """Buffer solver output so high-volume stdout cannot starve Qt's event loop."""
+        """Buffer solver output and derive structured FEMaster state in parallel."""
         job_key = str(job_id)
         addition = str(text)
         if not addition:
             return
+
+        parser = self._analysis_runtime_parsers.get(job_key)
+        if parser is not None and parser.feed(addition):
+            self._emit_analysis_runtime(job_key, parser)
+
         self._pending_output.setdefault(job_key, []).append(addition)
         size = self._pending_output_chars.get(job_key, 0) + len(addition)
         self._pending_output_chars[job_key] = size
 
-        # Flush at most roughly 25 times/s during ordinary streaming. Very large
-        # chunks are committed immediately to keep transient memory bounded.
         if size >= 64 * 1024:
             self._flush_pending_output(job_key)
         elif not self._output_flush_timer.isActive():
@@ -286,8 +402,6 @@ class JobManager(QObject):
                 continue
             addition = "".join(parts)
             self._output_store.append(key, addition)
-            # Monitors can remain open while another Job is selected, so each
-            # event carries its Job id and the monitor performs final filtering.
             self.output_appended.emit(key, addition)
 
         if self._pending_output and not self._output_flush_timer.isActive():
@@ -322,11 +436,6 @@ class JobManager(QObject):
         if not isinstance(current, Job):
             return
 
-        # This hot path is deliberately incapable of changing relationships,
-        # identity, paths or settings. Those remain ordinary document edits and
-        # must use ProjectStore.replace_entity()/execute(). Runtime-only fields
-        # such as Entity._project are detached by deepcopy and are intentionally
-        # excluded from this persistent-state guard.
         for field_info in fields(current):
             name = field_info.name
             if (

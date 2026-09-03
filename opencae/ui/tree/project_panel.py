@@ -31,22 +31,19 @@ class ProjectPanel(QWidget):
         self.tabs = QTabBar()
         self.tabs.setObjectName("BrowserTabBar")
         self.tabs.setDrawBase(False)
-        self.tabs.addTab(make_icon(IconKind.PART, 16), "Project")
-        self.tabs.addTab(make_icon(IconKind.RESULTS, 16), "Solution")
+        self.tabs.addTab("Project")
+        self.tabs.addTab("Solution")
         self.tabs.setExpanding(True)
         self.tabs.currentChanged.connect(self._tab_changed)
         layout.addWidget(self.tabs)
 
-        toolbar = QWidget()
-        toolbar.setObjectName("BrowserToolbar")
-        toolbar.setStyleSheet(
-            f"QWidget#BrowserToolbar {{ background:{PALETTE['panel']}; "
-            f"border:none; border-bottom:1px solid {PALETTE['border']}; }}"
-        )
-        row = QHBoxLayout(toolbar)
+        self.toolbar = QWidget()
+        self.toolbar.setObjectName("BrowserToolbar")
+        row = QHBoxLayout(self.toolbar)
         row.setContentsMargins(7, 6, 5, 6)
         row.setSpacing(4)
         self.filter = QLineEdit()
+        self.filter.setObjectName("BrowserSearch")
         self.filter.setPlaceholderText("Filter…")
         self.filter.setClearButtonEnabled(True)
         row.addWidget(self.filter, 1)
@@ -54,7 +51,7 @@ class ProjectPanel(QWidget):
         self.collapse_button = self._small_button("−")
         row.addWidget(self.expand_button)
         row.addWidget(self.collapse_button)
-        layout.addWidget(toolbar)
+        layout.addWidget(self.toolbar)
 
         self.stack = QStackedWidget()
         self.tree = ProjectTree(store, actions, parent=None, visibility=visibility)
@@ -65,6 +62,25 @@ class ProjectPanel(QWidget):
         self.filter.textChanged.connect(self._filter)
         self.expand_button.clicked.connect(self._expand)
         self.collapse_button.clicked.connect(self._collapse)
+        self.refresh_theme()
+
+    def refresh_theme(self):
+        self.toolbar.setStyleSheet(
+            f"QWidget#BrowserToolbar {{ background:{PALETTE['panel']}; "
+            f"border:none; border-bottom:1px solid {PALETTE['border']}; }}"
+        )
+        self.filter.setStyleSheet(
+            f"QLineEdit#BrowserSearch {{"
+            f"background:{PALETTE['search']};"
+            f"color:{PALETTE['text']};"
+            f"border:1px solid {PALETTE['border_light']};"
+            "border-radius:4px; padding:5px 9px;"
+            "}"
+            f"QLineEdit#BrowserSearch:hover {{border-color:{PALETTE['border_hover']};}}"
+            f"QLineEdit#BrowserSearch:focus {{border-color:{PALETTE['accent']};}}"
+        )
+        self.tabs.setTabIcon(0, make_icon(IconKind.PART, 16))
+        self.tabs.setTabIcon(1, make_icon(IconKind.RESULTS, 16))
 
     def set_browser(self, name):
         self.tabs.setCurrentIndex(1 if name == "solution" else 0)

@@ -12,6 +12,7 @@ from opencae.ui.templates import (
     dialog_buttons,
     scaffold_dialog,
 )
+from opencae.ui.templates.dialogs import DEFAULT_DIALOG_WIDTH
 
 from .apply_dialog import ApplyDialog
 
@@ -26,7 +27,7 @@ class NamedEntityDialog(ApplyDialog):
         *,
         existing_names=(),
         parent=None,
-        width=520,
+        width=DEFAULT_DIALOG_WIDTH,
     ):
         """Build the common name field and leave room for subclass-specific content."""
         super().__init__(parent)

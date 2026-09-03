@@ -34,17 +34,24 @@ class ResultRibbonGroup(QFrame):
         self._collapsed = False
         self.setObjectName("RibbonGroup")
         self.setFrameShape(QFrame.Shape.NoFrame)
-        # Results used to keep its own faint card background even after the
-        # regular ribbon groups were flattened.  Keep the semantic separator,
-        # but let the group and its buttons sit directly on the ribbon surface.
-        self.setStyleSheet(
-            "QFrame#RibbonGroup { background: transparent; "
-            f"border-right: 1px solid {PALETTE['border_light']}; }}"
-        )
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(_GROUP_LEFT_MARGIN, 4, _GROUP_RIGHT_MARGIN, 2)
         self._layout.setSpacing(1)
         self._build_expanded()
+        self.refresh_theme()
+
+    def refresh_theme(self):
+        # Results used to keep its own faint card background even after the
+        # regular ribbon groups were flattened. Keep only the shared separator.
+        self.setStyleSheet(
+            "QFrame#RibbonGroup { background: transparent; "
+            f"border-right: 1px solid {PALETTE['ribbon_separator']}; }}"
+        )
+        for label in self.findChildren(QLabel, "ResultRibbonGroupTitle"):
+            label.setStyleSheet(
+                f"color:{PALETTE['accent']};font-size:8pt;font-weight:600;"
+                "letter-spacing:1px;border:none;background:transparent;"
+            )
 
     @staticmethod
     def _widget_width(widget):
@@ -80,6 +87,7 @@ class ResultRibbonGroup(QFrame):
             self._build_collapsed()
         else:
             self._build_expanded()
+        self.refresh_theme()
 
     def _clear_layout(self, layout):
         while layout.count():
@@ -101,11 +109,8 @@ class ResultRibbonGroup(QFrame):
             widget.show()
         self._layout.addLayout(row)
         label = QLabel(self.title)
+        label.setObjectName("ResultRibbonGroupTitle")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setStyleSheet(
-            f"color:{PALETTE['accent']};font-size:8pt;font-weight:600;"
-            "letter-spacing:1px;border:none;background:transparent;"
-        )
         self._layout.addWidget(label)
 
     def _build_collapsed(self):

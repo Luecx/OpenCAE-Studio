@@ -6,11 +6,11 @@ from opencae.ui.core.theme import PALETTE
 def apply_viewport_text_box(actor) -> None:
     """Apply a translucent palette-backed rectangle to one VTK text actor."""
     text_property = actor.GetTextProperty()
-    text_property.SetColor(*_rgb(PALETTE["text"]))
-    text_property.SetBackgroundColor(*_rgb(PALETTE["panel"]))
+    text_property.SetColor(*_rgb(PALETTE["overlay_text"]))
+    text_property.SetBackgroundColor(*_rgb(PALETTE["overlay_bg"]))
     text_property.SetBackgroundOpacity(0.92)
     text_property.SetFrame(True)
-    text_property.SetFrameColor(*_rgb(PALETTE["border_light"]))
+    text_property.SetFrameColor(*_rgb(PALETTE["overlay_border"]))
     text_property.SetFrameWidth(1)
 
 

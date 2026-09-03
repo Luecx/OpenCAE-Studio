@@ -148,10 +148,11 @@ class ViewCube(QWidget):
         """Paint one depth-shaded main, edge, or corner surface."""
         kind, label, world_normal, _vertices = face
         active = world_normal == self._hovered_normal
+        cad_base = QColor(PALETTE["cad_face"])
         base = {
-            "main": QColor("#52697d"),
-            "edge": QColor("#34495b"),
-            "corner": QColor("#293b4b"),
+            "main": cad_base.darker(125),
+            "edge": cad_base.darker(155),
+            "corner": cad_base.darker(180),
         }[kind]
         light = max(
             0.0,
@@ -160,7 +161,9 @@ class ViewCube(QWidget):
         fill = QColor(
             PALETTE["accent"] if active else base.lighter(82 + round(30 * light))
         )
-        outline = QColor(PALETTE["accent_hover"] if active else "#91a5b5")
+        outline = QColor(
+            PALETTE["accent_hover"] if active else PALETTE["border_hover"]
+        )
         painter.setPen(QPen(outline, 1.55 if active else 0.85))
         painter.setBrush(fill)
         painter.drawPolygon(polygon)
@@ -175,7 +178,7 @@ class ViewCube(QWidget):
         font.setWeight(QFont.Weight.DemiBold)
         font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.0)
         painter.setFont(font)
-        painter.setPen(QColor("#f4f7fa"))
+        painter.setPen(QColor(PALETTE["viewport_text"]))
         painter.drawText(polygon.boundingRect(), Qt.AlignmentFlag.AlignCenter, label)
 
     def _normal_at(self, point: QPointF) -> Point3D | None:

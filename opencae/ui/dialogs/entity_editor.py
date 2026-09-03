@@ -20,7 +20,7 @@ class EntityEditorDialog(QDialog):
         self.entity = entity
         title = f"Edit {type(entity).__name__}"
         self.setWindowTitle(title)
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(640)
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
         self._editors = {}
 

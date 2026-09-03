@@ -4,6 +4,17 @@ import pyvista as pv
 from opencae.ui.viewport.section_view import SectionViewController, section_cut_surface
 
 
+class _Signal:
+    def emit(self, *_args):
+        pass
+
+
+class _Owner:
+    def __init__(self, plotter):
+        self.plotter = plotter
+        self.section_changed = _Signal()
+
+
 def _hexahedron():
     points = np.asarray(
         [
@@ -39,7 +50,7 @@ def test_section_cut_surface_fills_volume_and_interpolates_contour_values():
     assert np.allclose(np.asarray(cut.point_data["Stress"]), 0.5)
 
 
-def test_moved_section_keeps_selected_point_scalar_in_pyvista_mapper_pipeline():
+def test_moved_section_keeps_selected_point_scalar_with_direct_vtk_binding():
     grid = _hexahedron()
     grid.point_data["Decoy"] = 100.0 + np.asarray(grid.points)[:, 0]
     grid.set_active_scalars("Decoy", preference="point")
@@ -59,10 +70,12 @@ def test_moved_section_keeps_selected_point_scalar_in_pyvista_mapper_pipeline():
         mapper.update()
         mapped = pv.wrap(mapper.GetInput())
 
-        assert mapper.scalar_map_mode == "point"
+        # Direct VTK binding selects the displayed field on the mapper without
+        # mutating the dataset's own active-scalars metadata.
+        assert mapper.scalar_map_mode == "point_field"
         assert mapper.array_name == "Stress"
-        assert mapped.active_scalars_name == "Stress"
-        assert np.allclose(np.asarray(mapped.active_scalars), x)
+        assert "Stress" in mapped.point_data
+        assert np.allclose(np.asarray(mapped.point_data["Stress"]), x)
 
 
 def test_moved_section_rebinds_cell_scalar_association():
@@ -74,10 +87,65 @@ def test_moved_section_rebinds_cell_scalar_association():
     mapper = pv.DataSetMapper(dataset=cut)
     assert SectionViewController._bind_cap_dataset(mapper, cut, "ElementValue")
     mapper.update()
+    mapped = pv.wrap(mapper.GetInput())
 
-    assert mapper.scalar_map_mode == "cell"
+    assert mapper.scalar_map_mode == "cell_field"
     assert mapper.array_name == "ElementValue"
-    assert np.allclose(np.asarray(mapper._mapped_scalars), 7.5)
+    assert "ElementValue" in mapped.cell_data
+    assert np.allclose(np.asarray(mapped.cell_data["ElementValue"]), 7.5)
+
+
+def test_section_cap_actor_is_visible_unclipped_two_sided_surface():
+    """The generated result cut must survive the actual actor/render pipeline."""
+    grid = _hexahedron()
+    plotter = pv.Plotter(off_screen=True, window_size=(320, 320))
+    plotter.set_background("black")
+    try:
+        source = plotter.add_mesh(
+            grid,
+            scalars="Stress",
+            clim=(0.0, 1.0),
+            show_scalar_bar=False,
+            render=False,
+        )
+        controller = SectionViewController(_Owner(plotter))
+        controller.apply(
+            {
+                "enabled": True,
+                "origin": (0.5, 0.5, 0.5),
+                "origin_auto": False,
+                "normal": (1.0, 0.0, 0.0),
+                "show_plane": False,
+            },
+            grid,
+            (source,),
+        )
+
+        cap = controller._cap_actor
+        assert cap is not None
+        assert cap.GetVisibility()
+        mapper = cap.GetMapper()
+        clipping_planes = mapper.GetClippingPlanes()
+        assert clipping_planes is None or clipping_planes.GetNumberOfItems() == 0
+        prop = cap.GetProperty()
+        assert prop.GetRepresentation() == 2  # VTK_SURFACE
+        assert not prop.GetFrontfaceCulling()
+        assert not prop.GetBackfaceCulling()
+        assert not prop.GetLighting()
+
+        # Exercise VTK rendering rather than stopping at geometry assertions.
+        # Hide the clipped shell so every non-background pixel comes from the cap.
+        source.SetVisibility(False)
+        plotter.camera_position = [
+            (2.5, 0.5, 0.5),
+            (0.5, 0.5, 0.5),
+            (0.0, 0.0, 1.0),
+        ]
+        image = np.asarray(plotter.screenshot(return_img=True))
+        rgb = image[..., :3]
+        assert np.count_nonzero(np.any(rgb > 8, axis=2)) > 500
+    finally:
+        plotter.close()
 
 
 def test_section_cut_surface_does_not_invent_a_cap_for_shells():

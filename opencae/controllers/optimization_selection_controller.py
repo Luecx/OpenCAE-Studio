@@ -13,6 +13,7 @@ from opencae.model.entities.optimization import (
     TopologyOptimization,
     TopologySymmetry,
 )
+from opencae.ui.core.theme import PALETTE
 
 
 class OptimizationSelectionMixin:
@@ -49,28 +50,28 @@ class OptimizationSelectionMixin:
             self.parent.viewport.show_region_preview(
                 "optimization-selection-design",
                 entity.design_domain,
-                color="#4fa3d9",
+                color=PALETTE["design_domain"],
                 opacity=0.38,
             )
             if not entity.frozen_solid.empty:
                 self.parent.viewport.show_region_preview(
                     "optimization-selection-solid",
                     entity.frozen_solid,
-                    color="#5fbf75",
+                    color=PALETTE["success"],
                     opacity=0.75,
                 )
             if not entity.frozen_void.empty:
                 self.parent.viewport.show_region_preview(
                     "optimization-selection-void",
                     entity.frozen_void,
-                    color="#cf6b75",
+                    color=PALETTE["danger"],
                     opacity=0.75,
                 )
         elif isinstance(entity, OptimizationResponse):
             self.parent.viewport.show_region_preview(
                 "optimization-selection-response",
                 entity.region,
-                color="#64b5f6",
+                color=PALETTE["accent"],
                 opacity=0.62,
             )
         elif isinstance(
@@ -82,7 +83,7 @@ class OptimizationSelectionMixin:
                 self.parent.viewport.show_region_preview(
                     "optimization-selection-response",
                     response.region,
-                    color="#64b5f6",
+                    color=PALETTE["accent"],
                     opacity=0.62,
                 )
         elif isinstance(entity, TopologySymmetry):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pyvista as pv
 
+from opencae.ui.core.theme import PALETTE
 from .boundary_geometry import region_samples
 from .screen_scale import world_size_for_pixels
 from .safe_operations import remove_actor
@@ -48,7 +49,7 @@ class OrientationOverlay:
 
     def _draw(self, plotter, origin, axes, orientation, index):
         scale = world_size_for_pixels(plotter, origin, 42)
-        colors = ("#ef6666", "#70d184", "#6ca6ff")
+        colors = (PALETTE["axis_x"], PALETTE["axis_y"], PALETTE["axis_z"])
         labels = ("1", "2", "3")
         prefix = f"orientation-{orientation.id or index}"
         for suffix, axis, color, label in zip(labels, axes, colors, labels):
@@ -85,8 +86,8 @@ class OrientationOverlay:
             show_points=False,
             point_size=0,
             font_size=10,
-            text_color="#f0f3f6",
-            shape_color="#20262d",
+            text_color=PALETTE["overlay_text"],
+            shape_color=PALETTE["overlay_bg"],
             shape_opacity=.82,
             always_visible=False,
             render=False,

@@ -38,17 +38,28 @@ def run() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("OpenCAE Studio")
     app.setOrganizationName("OpenCAE")
+    app.setStyle("Fusion")
+
+    # Color preference is intentionally applied before constructing even the
+    # lightweight splash. Every widget can therefore read the same process-wide
+    # semantic PALETTE at construction time, including custom local painters.
+    from opencae.store.app_settings import AppSettings
+    from opencae.ui.core.theme import DEFAULT_COLOR_SCHEME, apply_color_scheme
+
+    appearance = AppSettings()
+    scheme = apply_color_scheme(
+        app,
+        appearance.value("appearance/color_scheme", DEFAULT_COLOR_SCHEME),
+    )
+    appearance.set_value("appearance/color_scheme", scheme)
 
     startup = StartupWindow()
     startup.show()
     _progress(app, startup, 8, "Starting application…")
 
     from opencae.ui.core.dialog_form_polisher import DialogFormPolisher
-    from opencae.ui.core.theme import stylesheet
 
     app.setWindowIcon(application_icon())
-    app.setStyle("Fusion")
-    app.setStyleSheet(stylesheet())
     app._dialog_form_polisher = DialogFormPolisher(app)
     app.installEventFilter(app._dialog_form_polisher)
     _progress(app, startup, 28, "Loading interface…")

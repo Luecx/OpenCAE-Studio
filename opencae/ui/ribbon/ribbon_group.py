@@ -15,12 +15,7 @@ class RibbonGroup(QFrame):
         super().__init__(parent)
         self.setObjectName("RibbonGroup")
         self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setStyleSheet(
-            "QFrame#RibbonGroup { "
-            "background: transparent; "
-            f"border-right: 1px solid {PALETTE['border_light']}; "
-            "}"
-        )
+        self._title = None
 
         layout = QVBoxLayout(self)
         # Keep the group caption close to the lower edge so two-line action
@@ -52,9 +47,20 @@ class RibbonGroup(QFrame):
             # repeating the group title below the group button.
             layout.addSpacing(13)
         else:
-            title = QLabel(spec.title)
-            title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            title.setStyleSheet(
+            self._title = QLabel(spec.title)
+            self._title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(self._title)
+        self.refresh_theme()
+
+    def refresh_theme(self):
+        self.setStyleSheet(
+            "QFrame#RibbonGroup { "
+            "background: transparent; "
+            f"border-right: 1px solid {PALETTE['ribbon_separator']}; "
+            "}"
+        )
+        if self._title is not None:
+            self._title.setStyleSheet(
                 f"color:{PALETTE['accent']};"
                 "font-size:8pt;"
                 "font-weight:600;"
@@ -62,4 +68,3 @@ class RibbonGroup(QFrame):
                 "border:none;"
                 "background:transparent;"
             )
-            layout.addWidget(title)

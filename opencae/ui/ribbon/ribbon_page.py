@@ -50,12 +50,6 @@ class ResponsiveRibbonPage(QWidget):
             separator = QWidget(self)
             separator.setObjectName("RibbonLeadingSeparator")
             separator.setFixedWidth(_LEADING_SEPARATOR_WIDTH)
-            separator.setStyleSheet(
-                "QWidget#RibbonLeadingSeparator { "
-                "background: transparent; "
-                f"border-right: 1px solid {PALETTE['border_light']}; "
-                "}"
-            )
             layout.addWidget(separator)
             self._leading_separator = separator
 
@@ -72,7 +66,20 @@ class ResponsiveRibbonPage(QWidget):
         layout.addWidget(self._groups_host, 1)
 
         self._render_groups(self._collapsed_titles)
+        self.refresh_theme()
         QTimer.singleShot(0, self._refresh_responsive_layout)
+
+    def refresh_theme(self):
+        """Refresh every ribbon divider from the same semantic separator token."""
+        if self._leading_separator is not None:
+            self._leading_separator.setStyleSheet(
+                "QWidget#RibbonLeadingSeparator { "
+                "background: transparent; "
+                f"border-right: 1px solid {PALETTE['ribbon_separator']}; "
+                "}"
+            )
+        for group in self._group_widgets:
+            group.refresh_theme()
 
     def minimumSizeHint(self):
         """Do not let the current expansion state block further shrinking."""
@@ -164,6 +171,7 @@ class ResponsiveRibbonPage(QWidget):
             self._groups_layout.addWidget(group)
             self._group_widgets.append(group)
         self._groups_layout.addStretch(1)
+        self.refresh_theme()
         self._groups_host.updateGeometry()
         self.updateGeometry()
 

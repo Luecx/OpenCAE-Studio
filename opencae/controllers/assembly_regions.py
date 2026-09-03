@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.core.theme import PALETTE
 from opencae.model.naming import next_name
 from opencae.model.regions import create_region
 from opencae.model.selection import RegionProjection, region_definition_error
@@ -71,7 +72,7 @@ class AssemblyRegions:
         def preview(definition):
             self.parent.viewport.suspend_model_selection_preview()
             self.parent.viewport.show_region_preview(
-                preview_channel, definition, color="#3296e6",
+                preview_channel, definition, color=PALETTE["selection_3d"],
                 opacity=.62, point_size=17, show_point_labels=True,
             )
 

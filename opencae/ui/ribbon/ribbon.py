@@ -65,10 +65,7 @@ class Ribbon(QWidget):
         self.current_stage = ""
         self.last_project_stage = "PART"
         self.setObjectName("Ribbon")
-        self.setStyleSheet(
-            f"QWidget#Ribbon {{ background:{PALETTE['panel']}; "
-            f"border-bottom:1px solid {PALETTE['border']}; }}"
-        )
+        self.refresh_theme()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -109,6 +106,12 @@ class Ribbon(QWidget):
             self.stack.addWidget(page)
         layout.addWidget(self.stack)
         self.set_stage("PART")
+
+    def refresh_theme(self):
+        self.setStyleSheet(
+            f"QWidget#Ribbon {{ background:{PALETTE['panel']}; "
+            f"border-bottom:1px solid {PALETTE['border']}; }}"
+        )
 
     def set_stage(self, stage):
         if stage not in STAGES or stage == self.current_stage:

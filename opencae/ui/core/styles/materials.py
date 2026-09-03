@@ -58,8 +58,8 @@ def css(p):
     }}
     QLabel#MaterialBehaviorStatus[defined="true"] {{
         color: {p['success']};
-        background: #173526;
-        border-color: #254d38;
+        background: {p['success_dim']};
+        border-color: {p['success_border']};
     }}
 
     QToolButton#MaterialBehaviorAction {{

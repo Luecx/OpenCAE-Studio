@@ -40,7 +40,7 @@ class VisibilityDialog(QDialog):
         self.setWindowTitle("Part Visibility")
         self.setModal(False)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
-        self.setMinimumSize(500, 520)
+        self.setMinimumSize(640, 520)
 
         root = dialog_layout(self)
         hint = FieldLabel(
@@ -99,8 +99,6 @@ class VisibilityDialog(QDialog):
         root.addLayout(actions)
 
         buttons = dialog_buttons(close_instead_of_cancel=True)
-        # A close-only utility dialog does not need an OK action; hide it while
-        # retaining the shared button-box styling and close semantics.
         ok = buttons.button(buttons.StandardButton.Ok)
         if ok is not None:
             ok.hide()

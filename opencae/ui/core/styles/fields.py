@@ -21,7 +21,7 @@ def css(p):
     }}
 
     QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
-        background: {p['window']};
+        background: {p['input']};
         border: 1px solid {p['border_light']};
         border-radius: 3px;
         padding: 5px 9px;
@@ -83,7 +83,7 @@ def css(p):
         border-right: 0px;
     }}
     QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {{
-        border-color: #53606d;
+        border-color: {p['border_hover']};
     }}
     QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
         border-color: {p['accent']};
@@ -100,7 +100,8 @@ def css(p):
     QComboBox QAbstractItemView {{
         background: {p['panel_alt']};
         border: 1px solid {p['border_light']};
-        selection-background-color: {p['accent_dim']};
+        selection-background-color: {p['selection']};
+        selection-color: {p['selection_text']};
         padding: 2px;
         outline: 0px;
     }}
@@ -161,7 +162,7 @@ def css(p):
         width: 15px;
         height: 15px;
         border: 1px solid {p['border_light']};
-        background: {p['window']};
+        background: {p['input']};
         border-radius: 2px;
     }}
     QCheckBox::indicator:checked {{
@@ -170,7 +171,7 @@ def css(p):
     }}
 
     /* Radios use a real circular ring and center dot instead of the platform
-       default indicator, which otherwise clashes with the flat dark theme. */
+       default indicator, which otherwise clashes with the flat theme. */
     QRadioButton {{
         spacing: 8px;
         color: {p['text']};
@@ -180,7 +181,7 @@ def css(p):
         height: 16px;
         border: 2px solid {p['border_light']};
         border-radius: 9px;
-        background: {p['window']};
+        background: {p['input']};
     }}
     QRadioButton::indicator:hover {{
         border-color: {p['accent_hover']};
@@ -193,14 +194,14 @@ def css(p):
             fx: 0.5, fy: 0.5,
             stop: 0 {p['accent']},
             stop: 0.33 {p['accent']},
-            stop: 0.35 {p['window']},
-            stop: 1 {p['window']}
+            stop: 0.35 {p['input']},
+            stop: 1 {p['input']}
         );
     }}
     QRadioButton::indicator:checked:hover {{
         border-color: {p['accent_hover']};
     }}
-    QRadioButton:disabled {{ color: {p['muted']}; }}
+    QRadioButton:disabled {{ color: {p['disabled']}; }}
     QRadioButton::indicator:disabled {{
         border-color: {p['border']};
         background: {p['panel']};

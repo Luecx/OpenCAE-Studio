@@ -13,6 +13,7 @@ from opencae.model.selection import (
     RegionSelectionItem,
     ViewportSelection,
 )
+from opencae.ui.core.theme import PALETTE
 
 _MODEL_SELECTION_PREFIX = "model-selection"
 
@@ -67,7 +68,7 @@ def show_model_selection(viewport, entity):
         viewport.show_region_preview(
             f"{_MODEL_SELECTION_PREFIX}-master",
             master,
-            color="#ffd166",
+            color=PALETTE["datum"],
             opacity=.90,
             point_size=23,
             show_point_labels=True,
@@ -75,7 +76,7 @@ def show_model_selection(viewport, entity):
         viewport.show_region_preview(
             f"{_MODEL_SELECTION_PREFIX}-slave",
             slave,
-            color="#42a5f5",
+            color=PALETTE["selection_3d"],
             opacity=.62,
             point_size=17,
             show_point_labels=False,

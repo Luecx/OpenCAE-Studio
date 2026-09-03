@@ -28,28 +28,32 @@ class RotationPivotIndicator:
         self._outline = vtkActor2D()
         self._outline.SetMapper(mapper)
         self._outline.SetPickable(False)
-        outline = QColor(PALETTE["panel_alt"])
-        self._outline.GetProperty().SetColor(
-            outline.redF(), outline.greenF(), outline.blueF()
-        )
         self._outline.GetProperty().SetLineWidth(6.0)
         self._outline.SetVisibility(False)
 
         self._ring = vtkActor2D()
         self._ring.SetMapper(mapper)
         self._ring.SetPickable(False)
-        accent = QColor(PALETTE["accent"])
-        self._ring.GetProperty().SetColor(
-            accent.redF(), accent.greenF(), accent.blueF()
-        )
         self._ring.GetProperty().SetLineWidth(3.0)
         self._ring.SetVisibility(False)
+        self.refresh_theme()
 
         # PyVista's Renderer deliberately disables direct VTK PascalCase
         # methods. add_actor accepts vtkProp instances, including vtkActor2D,
         # while retaining PyVista's renderer bookkeeping.
         renderer.add_actor(self._outline, reset_camera=False, render=False)
         renderer.add_actor(self._ring, reset_camera=False, render=False)
+
+    def refresh_theme(self) -> None:
+        """Refresh the outline/ring colors without recreating the VTK actors."""
+        outline = QColor(PALETTE["panel_alt"])
+        self._outline.GetProperty().SetColor(
+            outline.redF(), outline.greenF(), outline.blueF()
+        )
+        accent = QColor(PALETTE["accent"])
+        self._ring.GetProperty().SetColor(
+            accent.redF(), accent.greenF(), accent.blueF()
+        )
 
     def set_center(self, x: float, y: float) -> None:
         """Place the circle center in VTK display-pixel coordinates."""
