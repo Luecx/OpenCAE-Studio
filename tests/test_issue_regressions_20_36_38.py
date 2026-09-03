@@ -38,9 +38,18 @@ def test_analysis_start_opens_live_monitor_with_job_scoped_stop():
 
     assert workflow.index("manager.open_selected_monitor()") < workflow.index("runner.start()")
     assert "def stop_job(self, job_id)" in manager
-    assert "stop_callback=lambda current=job.id: self.stop_job(current)" in manager
+    assert "if job.id in self._runners" in manager
+    assert "stop_callback=stop_callback" in manager
     assert "self.stop_button = QPushButton(\"Stop\")" in monitor
     assert "callback()" in monitor
+
+
+def test_persisted_nonterminal_job_without_runner_has_no_stop_callback():
+    manager = _source("opencae/controllers/job_manager.py")
+
+    assert "stop_callback = (" in manager
+    assert "if job.id in self._runners" in manager
+    assert "else None" in manager
 
 
 def test_job_runtime_guard_ignores_detached_nonpersistent_backreferences():
@@ -70,3 +79,10 @@ def test_new_models_imports_and_results_request_initial_framing():
     assert "fit_on_load = identity != previous_identity or scene.result_actor is None" in results
     assert "if fit_on_load or camera is None:" in results
     assert "scene.owner.plotter.reset_camera()" in results
+
+
+def test_reopened_topology_result_frames_when_overlay_was_cleared():
+    results = _source("opencae/ui/viewport/solution_scene.py")
+
+    assert 'topology_visible = bool(getattr(scene.topology_overlay, "_names", ()))' in results
+    assert "fit_on_load=identity != previous_identity or not topology_visible" in results
