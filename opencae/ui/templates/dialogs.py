@@ -11,6 +11,13 @@ from .field_stack import FieldStack
 from .layouts import dialog_layout
 
 
+# Most editor dialogs contain full-width field controls, file paths, or selector
+# labels. 520 px made those surfaces feel unnecessarily cramped on ordinary
+# desktop displays, so use one roomier default and let truly compact dialogs opt
+# into a smaller width explicitly.
+DEFAULT_DIALOG_WIDTH = 640
+
+
 @dataclass(slots=True)
 class DialogScaffold:
     """References the reusable root and semantic field stack for one dialog."""
@@ -23,7 +30,7 @@ def scaffold_dialog(
     dialog: QDialog,
     title: str,
     *,
-    width: int = 520,
+    width: int = DEFAULT_DIALOG_WIDTH,
     modal: bool = True,
     delete_on_close: bool = False,
 ) -> DialogScaffold:
