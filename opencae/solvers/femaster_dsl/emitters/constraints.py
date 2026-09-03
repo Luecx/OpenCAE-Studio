@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from opencae.model.entities.constraints import (
+    ConnectorConstraint,
     DistributingCoupling,
     EquationConstraint,
     KinematicCoupling,
@@ -106,6 +107,34 @@ def write_constraint(value, writer, context):
             cache_key=("rigid-body", value.id),
         ).name
         command(writer, "RBM", ELSET=body, SET=reference)
+        return
+
+    if isinstance(value, ConnectorConstraint):
+        first = materialize_region(
+            value.master,
+            RegionProjection.NODES,
+            writer,
+            context,
+            owner=value,
+            proposed_name=f"__{value.name}_NSET1",
+            cache_key=("connector-first", value.id),
+        ).name
+        second = materialize_region(
+            value.slave,
+            RegionProjection.NODES,
+            writer,
+            context,
+            owner=value,
+            proposed_name=f"__{value.name}_NSET2",
+            cache_key=("connector-second", value.id),
+        ).name
+        command(
+            writer,
+            "CONNECTOR",
+            TYPE=value.connector_type,
+            NSET1=first,
+            NSET2=second,
+        )
         return
 
     if isinstance(value, EquationConstraint):
