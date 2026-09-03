@@ -5,6 +5,7 @@ import pyvista as pv
 
 from opencae.model.entities.datums import DatumPlane, DatumPoint, DatumVector
 from opencae.model.selection import SelectableKind, ViewportHit
+from opencae.ui.core.theme import PALETTE
 from .instance_transform import transform_points, transform_vector
 from .screen_scale import world_size_for_pixels
 from .safe_operations import remove_actor
@@ -12,7 +13,7 @@ from .safe_operations import remove_actor
 
 class DatumOverlay:
     def __init__(self, namespace="model-datum"):
-        # Every overlay owner needs its own actor namespace.  Preview and model
+        # Every overlay owner needs its own actor namespace. Preview and model
         # datums used to share names such as ``datum-point-part-0``; clearing a
         # dialog preview could therefore remove the permanent scene actor.
         self.namespace = str(namespace).strip() or "datum"
@@ -55,7 +56,7 @@ class DatumOverlay:
         self._names.append(name)
         actor = plotter.add_mesh(
             pv.PolyData([position]),
-            color="#ffd166",
+            color=PALETTE["datum"],
             point_size=15,
             render_points_as_spheres=True,
             lighting=False,
@@ -83,7 +84,7 @@ class DatumOverlay:
         self._names.append(name)
         actor = plotter.add_mesh(
             pv.Arrow(start=origin, direction=direction, scale=scale),
-            color="#63c7d8",
+            color=PALETTE["datum_vector"],
             lighting=False,
             pickable=True,
             name=name,
@@ -116,10 +117,10 @@ class DatumOverlay:
         self._names.append(name)
         actor = plotter.add_mesh(
             mesh,
-            color="#8f78d8",
+            color=PALETTE["datum_plane"],
             opacity=.16,
             show_edges=True,
-            edge_color="#b7a7ef",
+            edge_color=PALETTE["datum_plane_edge"],
             line_width=1.8,
             lighting=False,
             pickable=True,
@@ -186,12 +187,12 @@ class DatumOverlay:
             point_size=0,
             show_points=False,
             font_size=10,
-            text_color="#f7f9fb",
+            text_color=PALETTE["overlay_text"],
             always_visible=True,
             render=False,
         )
         if boxed:
-            options.update(shape_color="#242a30", shape_opacity=.84)
+            options.update(shape_color=PALETTE["overlay_bg"], shape_opacity=.84)
         else:
             options.update(shape=None)
         plotter.add_point_labels(np.asarray([point]), [text], **options)
