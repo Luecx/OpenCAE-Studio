@@ -32,10 +32,7 @@ class ResultQueryPanel(QFrame):
         self.setFixedWidth(RESULT_INFO_WIDTH)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
         self.hide()
-        self.setStyleSheet(
-            f"QFrame#ResultQueryPanel{{background:{PALETTE['panel']};"
-            f"border:1px solid {PALETTE['border_light']};border-radius:7px;}}"
-        )
+        self.refresh_theme()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
@@ -56,6 +53,12 @@ class ResultQueryPanel(QFrame):
         self.table.setWordWrap(True)
         self.table.hide()
         layout.addWidget(self.table)
+
+    def refresh_theme(self):
+        self.setStyleSheet(
+            f"QFrame#ResultQueryPanel{{background:{PALETTE['panel']};"
+            f"border:1px solid {PALETTE['border_light']};border-radius:7px;}}"
+        )
 
     def show_prompt(self, mode):
         """Prompt for the next node or element click using a normal result field."""
