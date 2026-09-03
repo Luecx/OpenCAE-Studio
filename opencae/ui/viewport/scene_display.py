@@ -19,12 +19,18 @@ class SceneDisplayMixin:
         }
 
     def same_display_context(self, previous, current):
-        """Return whether two workflow stages can reuse the same base scene."""
-        return (
-            self._assembly_stage(previous) == self._assembly_stage(current)
-            and current != "RESULTS"
-            and previous != "RESULTS"
-        )
+        """Return whether two workflow stages can reuse the same base scene.
+
+        Entering Results deliberately keeps the current scene alive until the
+        selected ResultSet replaces it.  Scheduling an intermediate base-scene
+        rebuild here races result loading and can otherwise clear a freshly
+        loaded FRD on the next Qt event turn.
+        """
+        if current == "RESULTS":
+            return True
+        if previous == "RESULTS":
+            return False
+        return self._assembly_stage(previous) == self._assembly_stage(current)
 
     def update_stage_overlays(self, stage):
         """Update only overlays whose visibility depends on the workflow stage."""
