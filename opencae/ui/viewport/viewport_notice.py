@@ -16,29 +16,27 @@ class ViewportNotice(QFrame):
         super().__init__(parent)
         self.setObjectName("ViewportNotice")
         self.setFixedWidth(440)
-        self.setStyleSheet(
-            f"""
-            QFrame#ViewportNotice {{
-                background:{PALETTE['panel']};
-                border:1px solid {PALETTE['border_light']};
-                border-radius:7px;
-            }}
-            """
-        )
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 14, 18, 14)
         layout.setSpacing(6)
         self.title = QLabel()
-        self.title.setStyleSheet(
-            f"color:{PALETTE['text']};font-weight:600;font-size:11pt;"
-        )
         self.body = QLabel()
         self.body.setWordWrap(True)
         self.body.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.body.setStyleSheet(f"color:{PALETTE['muted']};")
         layout.addWidget(self.title)
         layout.addWidget(self.body)
+        self.refresh_theme()
         self.hide()
+
+    def refresh_theme(self) -> None:
+        self.setStyleSheet(
+            f"QFrame#ViewportNotice{{background:{PALETTE['panel']};"
+            f"border:1px solid {PALETTE['border_light']};border-radius:7px;}}"
+        )
+        self.title.setStyleSheet(
+            f"color:{PALETTE['text']};font-weight:600;font-size:11pt;"
+        )
+        self.body.setStyleSheet(f"color:{PALETTE['muted']};")
 
     def set_message(self, title: str, body: str) -> None:
         """Show one title/body notice and resize to its wrapped contents."""
