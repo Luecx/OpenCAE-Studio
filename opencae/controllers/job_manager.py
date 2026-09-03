@@ -319,10 +319,15 @@ class JobManager(QObject):
 
         # This hot path is deliberately incapable of changing relationships,
         # identity, paths or settings. Those remain ordinary document edits and
-        # must use ProjectStore.replace_entity()/execute().
+        # must use ProjectStore.replace_entity()/execute(). Runtime-only fields
+        # such as Entity._project are detached by deepcopy and are intentionally
+        # excluded from this persistent-state guard.
         for field_info in fields(current):
             name = field_info.name
-            if name in _RUNTIME_JOB_FIELDS:
+            if (
+                name in _RUNTIME_JOB_FIELDS
+                or field_info.metadata.get("serialize", True) is False
+            ):
                 continue
             if getattr(current, name) != getattr(candidate, name):
                 raise ValueError(
