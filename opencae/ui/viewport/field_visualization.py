@@ -66,7 +66,7 @@ def _file_values(path, identifiers, points, components, interpolation):
             sources = rows[:, :3]; values = rows[:, 3:3 + components]
             return [_interpolate(sources, values, point, interpolation) for point in points]
         table = {str(int(row[0])): row[1:] for row in rows if len(row)}
-        return [_row_values(table.get(str(int(tag)), components) for tag in identifiers]
+        return [_row_values(table.get(str(int(tag)), ()), components) for tag in identifiers]
     except (OSError, TypeError, ValueError):
         return np.zeros((len(identifiers), components), dtype=float)
 
