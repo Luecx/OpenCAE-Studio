@@ -5,6 +5,8 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QProgressBar, QVBoxLayout, QWidget
 
+from opencae.ui.core.theme import PALETTE
+
 
 class StartupWindow(QWidget):
     """Small non-activating splash surface that remains responsive during startup."""
@@ -26,27 +28,27 @@ class StartupWindow(QWidget):
         self.setObjectName("StartupWindow")
         self.setFixedSize(520, 210)
         self.setStyleSheet(
-            """
-            QWidget#StartupWindow {
-                background: #20252b;
-                border: 1px solid #4b5560;
+            f"""
+            QWidget#StartupWindow {{
+                background: {PALETTE['panel_alt']};
+                border: 1px solid {PALETTE['border_light']};
                 border-radius: 10px;
-            }
-            QLabel { color: #e8edf2; border: none; }
-            QLabel#StartupTitle { font-size: 24px; font-weight: 700; }
-            QLabel#StartupStatus { color: #aeb8c2; }
-            QProgressBar {
+            }}
+            QLabel {{ color: {PALETTE['text']}; border: none; }}
+            QLabel#StartupTitle {{ font-size: 24px; font-weight: 700; }}
+            QLabel#StartupStatus {{ color: {PALETTE['muted']}; }}
+            QProgressBar {{
                 min-height: 8px;
                 max-height: 8px;
                 border: none;
                 border-radius: 4px;
-                background: #343b43;
+                background: {PALETTE['border']};
                 text-align: center;
-            }
-            QProgressBar::chunk {
+            }}
+            QProgressBar::chunk {{
                 border-radius: 4px;
-                background: #4da3ff;
-            }
+                background: {PALETTE['accent']};
+            }}
             """
         )
 
