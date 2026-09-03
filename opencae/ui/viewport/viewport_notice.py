@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
 from opencae.ui.core.theme import PALETTE
@@ -15,6 +16,11 @@ class ViewportNotice(QFrame):
         """Create the notice title and wrapped explanatory text."""
         super().__init__(parent)
         self.setObjectName("ViewportNotice")
+        # Rounded Qt widgets sit above a native OpenGL surface. Transparent corner
+        # pixels can therefore expose the platform's native black backing store
+        # instead of the VTK image. Paint the complete widget as viewport first;
+        # the rounded QSS panel is drawn on top and leaves matching corner pixels.
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.setFixedWidth(440)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 14, 18, 14)
@@ -27,6 +33,13 @@ class ViewportNotice(QFrame):
         layout.addWidget(self.body)
         self.refresh_theme()
         self.hide()
+
+    def paintEvent(self, event) -> None:
+        """Provide deterministic viewport-colored pixels outside rounded corners."""
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
+        painter.end()
+        super().paintEvent(event)
 
     def refresh_theme(self) -> None:
         self.setStyleSheet(
