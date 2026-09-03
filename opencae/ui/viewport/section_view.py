@@ -33,6 +33,7 @@ class SectionViewController:
         self._state = {
             "enabled": False,
             "origin": None,
+            "origin_auto": True,
             "normal": (1.0, 0.0, 0.0),
             "invert": False,
             "show_plane": True,
@@ -48,9 +49,14 @@ class SectionViewController:
     def apply(self, settings: dict | None, grid, actors) -> None:
         self.clear_scene()
         incoming = dict(settings or {})
+        incoming_origin = incoming.get("origin")
+        origin_auto = bool(
+            incoming.get("origin_auto", incoming_origin is None)
+        )
         self._state.update(
             enabled=bool(incoming.get("enabled", False)),
-            origin=incoming.get("origin"),
+            origin=incoming_origin,
+            origin_auto=origin_auto,
             normal=self._normalize(incoming.get("normal", (1.0, 0.0, 0.0))),
             invert=bool(incoming.get("invert", False)),
             show_plane=bool(incoming.get("show_plane", True)),
@@ -63,7 +69,7 @@ class SectionViewController:
 
         bounds = tuple(float(value) for value in grid.bounds)
         origin = self._state["origin"]
-        if origin is None:
+        if self._state["origin_auto"] or origin is None:
             origin = self._bounds_center(bounds)
         origin = tuple(float(value) for value in origin)
         self._state["origin"] = origin
@@ -95,19 +101,30 @@ class SectionViewController:
 
         The plane widget and interaction state stay alive.  Only the source grid,
         actor list and interpolated cut face are refreshed, avoiding a visible
-        widget rebuild on every animation tick.
+        widget rebuild on every animation tick. Automatic origins continue to
+        track the current result bounds instead of becoming stale after the first
+        rendered frame.
         """
         self._grid = grid
         self._actors = tuple(actor for actor in actors if actor is not None)
         if not self._state["enabled"] or grid is None:
             self._remove_cap()
             return
+        if self._state["origin_auto"]:
+            bounds = tuple(float(value) for value in grid.bounds)
+            origin = self._bounds_center(bounds)
+            self._state["origin"] = origin
+            self._update_plane(origin, self._state["normal"])
+            self._move_widget_origin(origin)
         self._apply_clipping()
         self._update_cap()
 
     def _widget_changed(self, normal, origin) -> None:
         if not self._state["enabled"]:
             return
+        # Dragging the plane is an explicit user override. From this point the
+        # origin must remain fixed until "Center on current result" is requested.
+        self._state["origin_auto"] = False
         self._state["origin"] = tuple(float(value) for value in origin)
         self._state["normal"] = self._normalize(normal)
         self._update_plane(self._state["origin"], self._state["normal"])
@@ -248,6 +265,17 @@ class SectionViewController:
         except (AttributeError, RuntimeError):
             pass
         self._widget = None
+
+    def _move_widget_origin(self, origin) -> None:
+        """Move an existing plane widget when automatic centering follows a frame."""
+        widget = self._widget
+        if widget is None:
+            return
+        try:
+            widget.SetOrigin(*origin)
+            widget.Modified()
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            pass
 
     def _publish(self) -> None:
         self.owner.section_changed.emit(dict(self._state))
