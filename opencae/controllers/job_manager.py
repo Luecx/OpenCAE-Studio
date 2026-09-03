@@ -13,6 +13,7 @@ from dataclasses import fields
 from PyQt6.QtCore import QCoreApplication, QObject, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QMessageBox
 
+from opencae.jobs.femaster_output_parser import FEMasterOutputParser
 from opencae.model.entities.jobs import Job, JobSourceKind, JobStatus
 from opencae.results import FrdLoader
 from opencae.ui.monitors import AnalysisJobMonitor, TopologyJobMonitor
@@ -32,6 +33,11 @@ _RUNTIME_JOB_FIELDS = frozenset({
     "progress",
     "progress_label",
 })
+_TERMINAL_JOB_STATUSES = {
+    JobStatus.COMPLETED,
+    JobStatus.FAILED,
+    JobStatus.CANCELLED,
+}
 
 
 class JobManager(QObject):
@@ -40,6 +46,7 @@ class JobManager(QObject):
     selection_changed = pyqtSignal(str)
     output_appended = pyqtSignal(str, str)
     progress_changed = pyqtSignal(str, float, str)
+    analysis_runtime_changed = pyqtSignal(str, object, object)
     topology_frame = pyqtSignal(str, object, object, object, object)
 
     def __init__(self, store, parent, settings, solvers):
@@ -52,6 +59,7 @@ class JobManager(QObject):
         self.selected_job_id = ""
         self._runners: dict[str, object] = {}
         self._monitors: dict[str, object] = {}
+        self._analysis_runtime_parsers: dict[str, FEMasterOutputParser] = {}
         self._output_store = JobOutputStore(lambda: self.store.project)
         self._result_loader = FrdLoader()
         self._pending_output: dict[str, list[str]] = {}
@@ -214,10 +222,23 @@ class JobManager(QObject):
                 self.parent,
                 stop_callback=stop_callback,
             )
+            self.analysis_runtime_changed.connect(monitor.set_runtime_state)
 
         self.progress_changed.connect(monitor.set_progress)
         self.output_appended.connect(monitor.append_output)
-        monitor.set_output(job.id, self.output_for(job.id))
+        transcript = self.output_for(job.id)
+        monitor.set_output(job.id, transcript)
+        if job.source_kind is not JobSourceKind.STUDY:
+            parser = self._analysis_runtime_parsers.get(job.id)
+            if parser is None:
+                parser = self._prepare_analysis_runtime(job.id)
+                if parser is not None:
+                    parser.feed(transcript)
+                    if job.status in _TERMINAL_JOB_STATUSES:
+                        parser.finish(job.status.value)
+            if parser is not None:
+                details, steps = parser.snapshot()
+                monitor.set_runtime_state(job.id, details, steps)
         monitor.destroyed.connect(
             lambda _value=None, current=job.id: self._monitors.pop(current, None)
         )
@@ -242,6 +263,42 @@ class JobManager(QObject):
             return
         self.parent.show_solution(result)
 
+    def _prepare_analysis_runtime(self, job_id) -> FEMasterOutputParser | None:
+        """Create a fresh FEMaster parser seeded with the Analysis step order."""
+        job = self.store.project.try_resolve(str(job_id or ""))
+        if not isinstance(job, Job) or str(job.solver).casefold() != "femaster":
+            return None
+        analysis = self.store.project.try_resolve(job.source_ref)
+        resolved_steps = getattr(analysis, "resolved_steps", None)
+        steps = ()
+        if callable(resolved_steps):
+            try:
+                steps = tuple(resolved_steps(self.store.project))
+            except (AttributeError, KeyError, TypeError, ValueError):
+                steps = ()
+        parser = FEMasterOutputParser(
+            {
+                "name": str(getattr(step, "name", "Step") or "Step"),
+                "procedure": str(getattr(step, "step_type", "") or ""),
+            }
+            for step in steps
+        )
+        self._analysis_runtime_parsers[job.id] = parser
+        return parser
+
+    def _emit_analysis_runtime(self, job_id, parser: FEMasterOutputParser) -> None:
+        """Publish one detached runtime snapshot to any open Analysis monitor."""
+        details, steps = parser.snapshot()
+        self.analysis_runtime_changed.emit(str(job_id), details, steps)
+
+    def _finish_analysis_runtime(self, job_id, status) -> None:
+        """Finalize structured FEMaster runtime state with the Job terminal status."""
+        parser = self._analysis_runtime_parsers.get(str(job_id))
+        if parser is None:
+            return
+        parser.finish(str(getattr(status, "value", status)))
+        self._emit_analysis_runtime(job_id, parser)
+
     def _start_job(self, job_id, label: str) -> None:
         """Move a prepared Job into the canonical RUNNING state."""
         job = self.store.project.resolve(job_id)
@@ -256,11 +313,16 @@ class JobManager(QObject):
         self.progress_changed.emit(job.id, 0.0, str(label))
 
     def _append_output(self, job_id, text) -> None:
-        """Buffer solver output so high-volume stdout cannot starve Qt's event loop."""
+        """Buffer solver output and derive structured FEMaster state in parallel."""
         job_key = str(job_id)
         addition = str(text)
         if not addition:
             return
+
+        parser = self._analysis_runtime_parsers.get(job_key)
+        if parser is not None and parser.feed(addition):
+            self._emit_analysis_runtime(job_key, parser)
+
         self._pending_output.setdefault(job_key, []).append(addition)
         size = self._pending_output_chars.get(job_key, 0) + len(addition)
         self._pending_output_chars[job_key] = size
