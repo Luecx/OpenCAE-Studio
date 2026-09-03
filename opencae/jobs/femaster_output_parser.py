@@ -125,8 +125,16 @@ class FEMasterOutputParser:
             self._in_post_checks = False
             self._current_check = None
 
-        if stripped in _PROCEDURE_HEADERS:
-            self._begin_step(_PROCEDURE_HEADERS[stripped])
+        procedure = next(
+            (
+                value
+                for header, value in _PROCEDURE_HEADERS.items()
+                if stripped.startswith(header)
+            ),
+            None,
+        )
+        if procedure is not None:
+            self._begin_step(procedure)
             return
 
         if stripped == "Post-checks":
