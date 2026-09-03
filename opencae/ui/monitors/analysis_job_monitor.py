@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog,
     QGridLayout,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
     QProgressBar,
@@ -39,12 +40,13 @@ class AnalysisJobMonitor(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.job_id = str(job_id)
         self._stop_callback = stop_callback
+        self._structured_runtime_seen = False
         job = store.project.try_resolve(self.job_id)
         self.setWindowTitle(
             f"Analysis Monitor - {getattr(job, 'name', 'Job')}"
         )
-        self.resize(1120, 650)
-        self.setMinimumSize(820, 460)
+        self.resize(1180, 660)
+        self.setMinimumSize(860, 480)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
@@ -61,7 +63,7 @@ class AnalysisJobMonitor(QDialog):
         splitter.addWidget(self._build_runtime_panel(store, job))
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes((790, 310))
+        splitter.setSizes((790, 370))
         layout.addWidget(splitter, 1)
         self.splitter = splitter
 
@@ -94,7 +96,7 @@ class AnalysisJobMonitor(QDialog):
     def _build_runtime_panel(self, store, job) -> QWidget:
         """Create the structured right-hand runtime and post-check summary."""
         panel = QWidget(self)
-        panel.setMinimumWidth(300)
+        panel.setMinimumWidth(340)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(8, 0, 0, 0)
         layout.setSpacing(10)
@@ -111,6 +113,7 @@ class AnalysisJobMonitor(QDialog):
             value = QLabel("—")
             value.setObjectName("AnalysisMonitorDetailValue")
             value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            value.setWordWrap(True)
             details.addWidget(name, row, 0, Qt.AlignmentFlag.AlignTop)
             details.addWidget(value, row, 1, Qt.AlignmentFlag.AlignTop)
             self.detail_values[key] = value
@@ -120,16 +123,20 @@ class AnalysisJobMonitor(QDialog):
         layout.addWidget(SectionHeading("Step / Post Checks"))
         self.post_checks = QTreeWidget(panel)
         self.post_checks.setObjectName("AnalysisMonitorPostChecks")
-        self.post_checks.setColumnCount(2)
-        self.post_checks.setHeaderLabels(("Step / Check", "Status"))
+        self.post_checks.setColumnCount(3)
+        self.post_checks.setHeaderLabels(("Step / Check", "Status", "Values"))
         self.post_checks.setRootIsDecorated(True)
         self.post_checks.setAlternatingRowColors(False)
+        header = self.post_checks.header()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.post_checks, 1)
         self._seed_known_steps(store, job)
 
         note = QLabel(
-            "Detailed frame, iteration and post-check values will be populated "
-            "from the FEMaster runtime log."
+            "FEMaster runtime details are parsed live from solver output; "
+            "OpenCAE step names provide the stable loadcase identity."
         )
         note.setObjectName("AnalysisMonitorParserNote")
         note.setWordWrap(True)
@@ -150,16 +157,23 @@ class AnalysisJobMonitor(QDialog):
         for step in steps:
             title = str(getattr(step, "name", "Step") or "Step")
             procedure = str(getattr(step, "step_type", "") or "")
-            item = QTreeWidgetItem((title, "Waiting"))
-            if procedure:
-                item.setToolTip(0, procedure)
+            item = QTreeWidgetItem((title, "Waiting", procedure))
             self.post_checks.addTopLevelItem(item)
+
+    def set_runtime_state(self, job_id, details, steps):
+        """Apply one complete structured FEMaster parser snapshot."""
+        if str(job_id) != self.job_id:
+            return
+        self.set_runtime_details(job_id, details)
+        self.set_post_checks(job_id, steps)
 
     def set_runtime_details(self, job_id, values):
         """Apply already-parsed FEMaster runtime fields to the right-hand summary."""
         if str(job_id) != self.job_id:
             return
         data = dict(values or {})
+        if any(str(data.get(key, "")).strip() not in {"", "—", "Waiting"} for key in ("step", "procedure")):
+            self._structured_runtime_seen = True
         for key, widget in self.detail_values.items():
             if key in data:
                 widget.setText(str(data[key] if data[key] not in (None, "") else "—"))
@@ -171,17 +185,26 @@ class AnalysisJobMonitor(QDialog):
         self.post_checks.clear()
         for step in tuple(steps or ()):
             data = dict(step or {})
-            root = QTreeWidgetItem((str(data.get("name", "Step")), str(data.get("status", ""))))
+            root = QTreeWidgetItem(
+                (
+                    str(data.get("name", "Step")),
+                    str(data.get("status", "")),
+                    str(data.get("procedure", "")),
+                )
+            )
             for check in tuple(data.get("checks", ()) or ()):
                 check_data = dict(check or {})
-                root.addChild(
-                    QTreeWidgetItem(
-                        (
-                            str(check_data.get("name", "Check")),
-                            str(check_data.get("status", "")),
-                        )
+                frame = str(check_data.get("frame", "") or "")
+                check_name = str(check_data.get("name", "Check"))
+                label = f"{frame} · {check_name}" if frame else check_name
+                child = QTreeWidgetItem(
+                    (
+                        label,
+                        str(check_data.get("status", "")),
+                        str(check_data.get("detail", "")),
                     )
                 )
+                root.addChild(child)
             root.setExpanded(True)
             self.post_checks.addTopLevelItem(root)
 
@@ -191,7 +214,8 @@ class AnalysisJobMonitor(QDialog):
             return
         label = str(label)
         self.phase.setText(label)
-        self.detail_values["state"].setText(label or "—")
+        if not self._structured_runtime_seen:
+            self.detail_values["state"].setText(label or "—")
         self.progress.setValue(
             round(min(max(float(value), 0.0), 1.0) * 1000)
         )
