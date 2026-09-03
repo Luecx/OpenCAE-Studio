@@ -310,7 +310,7 @@ class StepDialog(QDialog):
             QMessageBox.warning(
                 self,
                 "Duplicate name",
-                f"An step named '{self.name.text().strip()}' already exists.",
+                f"A step named '{self.name.text().strip()}' already exists.",
             )
             return
         if self.step.step_type == "Nonlinear Static":
