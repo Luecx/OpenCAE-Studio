@@ -43,6 +43,7 @@ class ProjectPanel(QWidget):
         row.setContentsMargins(7, 6, 5, 6)
         row.setSpacing(4)
         self.filter = QLineEdit()
+        self.filter.setObjectName("BrowserSearch")
         self.filter.setPlaceholderText("Filter…")
         self.filter.setClearButtonEnabled(True)
         row.addWidget(self.filter, 1)
@@ -67,6 +68,16 @@ class ProjectPanel(QWidget):
         self.toolbar.setStyleSheet(
             f"QWidget#BrowserToolbar {{ background:{PALETTE['panel']}; "
             f"border:none; border-bottom:1px solid {PALETTE['border']}; }}"
+        )
+        self.filter.setStyleSheet(
+            f"QLineEdit#BrowserSearch {{"
+            f"background:{PALETTE['search']};"
+            f"color:{PALETTE['text']};"
+            f"border:1px solid {PALETTE['border_light']};"
+            "border-radius:4px; padding:5px 9px;"
+            "}"
+            f"QLineEdit#BrowserSearch:hover {{border-color:{PALETTE['border_hover']};}}"
+            f"QLineEdit#BrowserSearch:focus {{border-color:{PALETTE['accent']};}}"
         )
         self.tabs.setTabIcon(0, make_icon(IconKind.PART, 16))
         self.tabs.setTabIcon(1, make_icon(IconKind.RESULTS, 16))
