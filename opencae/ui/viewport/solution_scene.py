@@ -57,6 +57,11 @@ def show_result(scene, result, field=None, options=None):
                     scene.result_undeformed_actor,
                 ),
             )
+            _style_result_lines(
+                scene.result_mesh_actor,
+                scene.result_boundary_actor,
+                scene.result_undeformed_actor,
+            )
             scene.owner.plotter.render()
             return
 
@@ -78,6 +83,11 @@ def show_result(scene, result, field=None, options=None):
         scene.owner.message.emit(f"Could not open solution: {exc}")
         scene.owner.plotter.render()
         return
+    _style_result_lines(
+        scene.result_mesh_actor,
+        scene.result_boundary_actor,
+        scene.result_undeformed_actor,
+    )
     scene._displayed_result_identity = identity
     if fit_on_load or camera is None:
         scene.owner.plotter.view_isometric()
@@ -94,7 +104,7 @@ def show_result(scene, result, field=None, options=None):
             scene.result_undeformed_actor,
         ),
     )
-    scene.owner.plotter.add_axes(color=PALETTE["viewport_text"])
+    scene.owner.plotter.add_axes(color=PALETTE["axes"])
     scene.owner.result_query.configure(options.get("query", ""), field)
     scene.owner.plotter.render()
 
@@ -151,6 +161,7 @@ def _show_topology_result(scene, result, options, *, fit_on_load=False):
     )
     if topology_actors is not None:
         actor, grid, mesh_actor, boundary_actor = topology_actors
+        _style_result_lines(mesh_actor, boundary_actor, None)
         scene.owner.section_view.apply(
             options.get("section", {}),
             grid,
@@ -164,6 +175,31 @@ def _show_topology_result(scene, result, options, *, fit_on_load=False):
         restore_camera(scene.owner.plotter, camera)
     scene.owner.result_query.configure("")
     scene.owner.plotter.render()
+
+
+def _style_result_lines(mesh_actor, boundary_actor, undeformed_actor):
+    """Keep result line work crisp and theme-aware after every actor rebuild."""
+    _style_line_actor(mesh_actor, PALETTE["mesh_lines"], 1.35)
+    _style_line_actor(boundary_actor, PALETTE["result_edge"], 1.65)
+    _style_line_actor(undeformed_actor, PALETTE["muted"], 1.15)
+
+
+def _style_line_actor(actor, color, width):
+    if actor is None:
+        return
+    try:
+        prop = actor.GetProperty()
+        prop.SetColor(*_rgb(color))
+        prop.SetLineWidth(float(width))
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        pass
+
+
+def _rgb(color):
+    value = str(color).strip().lstrip("#")
+    if len(value) != 6:
+        return 0.0, 0.0, 0.0
+    return tuple(int(value[index:index + 2], 16) / 255.0 for index in (0, 2, 4))
 
 
 def _result_identity(result):
