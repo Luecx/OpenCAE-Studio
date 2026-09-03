@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtGui import QColor, QPainter
+from PyQt6.QtCore import QRectF, QTimer, Qt
+from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -30,7 +30,6 @@ class ResultQueryPanel(QFrame):
         """Build the fixed-width result query overlay using canonical field labels."""
         super().__init__(parent)
         self.setObjectName("ResultQueryPanel")
-        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.setFixedWidth(RESULT_INFO_WIDTH)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
         self.hide()
@@ -57,20 +56,22 @@ class ResultQueryPanel(QFrame):
         layout.addWidget(self.table)
 
     def paintEvent(self, event) -> None:
-        """Fill pixels outside the rounded panel with the VTK background color."""
+        """Paint a rounded panel over a viewport-colored rectangular backing."""
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
-        painter.end()
-        super().paintEvent(event)
+        painter.setBrush(QColor(PALETTE["overlay_bg"]))
+        painter.setPen(QPen(QColor(PALETTE["overlay_border"]), 1.0))
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        painter.drawRoundedRect(rect, 7.0, 7.0)
 
     def refresh_theme(self):
         self.setStyleSheet(
-            f"QFrame#ResultQueryPanel{{background:{PALETTE['overlay_bg']};"
-            f"color:{PALETTE['overlay_text']};"
-            f"border:1px solid {PALETTE['overlay_border']};border-radius:7px;}}"
+            f"QFrame#ResultQueryPanel{{color:{PALETTE['overlay_text']};}}"
             f"QFrame#ResultQueryPanel QTableWidget{{background:{PALETTE['panel_alt']};"
             f"color:{PALETTE['text']};border:1px solid {PALETTE['border_light']};}}"
         )
+        self.update()
 
     def show_prompt(self, mode):
         """Prompt for the next node/element click using a normal result field."""
