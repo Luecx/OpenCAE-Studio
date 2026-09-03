@@ -2,7 +2,8 @@ from opencae.model.entities.jobs import ResultField
 
 
 def step_ids(fields):
-    return list(dict.fromkeys(int(field.metadata.get("step_id", 1)) for field in fields))
+    """Return result steps in deterministic solver order."""
+    return sorted({int(field.metadata.get("step_id", 1)) for field in fields})
 
 
 def step_label(result, step_id, index):
