@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from opencae.optimization import build_mesh_index
+from opencae.ui.core.theme import PALETTE
 from .result_visualization import add_result, update_result
 from .scene_camera import camera_position, restore_camera
 
@@ -60,7 +61,7 @@ def show_result(scene, result, field=None, options=None):
             return
 
     # A different ResultSet, or reopening a result after its actors were cleared,
-    # is new visible content and should always start framed.  Rebuilding the same
+    # is new visible content and should always start framed. Rebuilding the same
     # ResultSet for another field/range keeps the user's current camera.
     fit_on_load = identity != previous_identity or scene.result_actor is None
     camera = camera_position(scene.owner.plotter)
@@ -93,7 +94,7 @@ def show_result(scene, result, field=None, options=None):
             scene.result_undeformed_actor,
         ),
     )
-    scene.owner.plotter.add_axes(color="#dce3e8")
+    scene.owner.plotter.add_axes(color=PALETTE["viewport_text"])
     scene.owner.result_query.configure(options.get("query", ""), field)
     scene.owner.plotter.render()
 
