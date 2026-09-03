@@ -4,6 +4,7 @@ import numpy as np
 import pyvista as pv
 
 from opencae.model.selection import RegionDefinition, RegionProjection, RegionRequirement, RegionResolver
+from opencae.ui.core.theme import PALETTE
 from .vtk_cell_data import cell_array
 from .safe_operations import remove_actor
 
@@ -39,7 +40,7 @@ class RegionOverlay:
         points = grid.points[np.isin(ids, list(tags))]
         if not len(points): return
         name = f"region-nodes-{instance_id or 'part'}"; self._names.append(name)
-        plotter.add_mesh(pv.PolyData(points), color="#ffd166", point_size=12, render_points_as_spheres=True, lighting=False, name=name, render=False)
+        plotter.add_mesh(pv.PolyData(points), color=PALETTE["datum"], point_size=12, render_points_as_spheres=True, lighting=False, name=name, render=False)
 
     def _elements(self, plotter, scene, instance_id, tags):
         grid = self._grid(scene, instance_id)
@@ -47,4 +48,13 @@ class RegionOverlay:
         ids = cell_array(grid, "element_id"); indices = np.where(np.isin(ids, list(tags)))[0]
         if not len(indices): return
         name = f"region-elements-{instance_id or 'part'}"; self._names.append(name)
-        plotter.add_mesh(grid.extract_cells(indices), color="#3296e6", opacity=0.65, show_edges=True, edge_color="#d9efff", lighting=True, name=name, render=False)
+        plotter.add_mesh(
+            grid.extract_cells(indices),
+            color=PALETTE["selection_3d"],
+            opacity=0.65,
+            show_edges=True,
+            edge_color=PALETTE["viewport_text"],
+            lighting=True,
+            name=name,
+            render=False,
+        )
