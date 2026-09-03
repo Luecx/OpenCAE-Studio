@@ -8,6 +8,12 @@ from .styles import STYLE_MODULES
 
 DEFAULT_COLOR_SCHEME = "dark"
 
+# Keep VTK/PyVista viewport text visually consistent across overlays and results.
+# PyVista supports these generic VTK font families on all supported platforms.
+VIEWPORT_FONT_FAMILY = "arial"
+VIEWPORT_FONT_SIZE = 10
+VIEWPORT_FONT_SIZE_TITLE = 12
+
 _COLOR_SCHEMES = {
     "dark": {
         "window": "#171a1f",
@@ -48,7 +54,7 @@ _COLOR_SCHEMES = {
         "meshability_irregular": "#9a789f",
         "selection_3d": "#3296e6",
         "mesh_surface": "#89939d",
-        "mesh_lines": "#9aa6b2",
+        "mesh_lines": "#26313b",
         "result_edge": "#10161c",
         "seed": "#f2b84b",
         "datum": "#ffd166",
@@ -158,7 +164,7 @@ _COLOR_SCHEMES = {
         "meshability_irregular": "#a383a8",
         "selection_3d": "#4a9bd8",
         "mesh_surface": "#888d96",
-        "mesh_lines": "#a6abb3",
+        "mesh_lines": "#2b2f34",
         "result_edge": "#1f2226",
         "seed": "#d6a84b",
         "datum": "#e2bd68",
