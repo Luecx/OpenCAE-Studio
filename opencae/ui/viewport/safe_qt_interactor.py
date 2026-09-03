@@ -98,6 +98,21 @@ class SafeQtInteractor(QtInteractor):
         self._pan_display_position = None
         self._rotation_pivot = None
 
+    def clear(self, *args, **kwargs):
+        """Clear scene props and invalidate transient VTK navigation overlays."""
+        result = super().clear(*args, **kwargs)
+        # Plotter.clear() removes vtkActor2D props as well as 3D scene actors.
+        # Keeping the old Python object would leave the orbit marker detached
+        # from the renderer, which is why it disappeared after opening Results.
+        self._rotation_pivot = None
+        return result
+
+    def refresh_theme(self) -> None:
+        """Refresh transient VTK navigation colors when the UI scheme changes."""
+        pivot = self._rotation_pivot
+        if pivot is not None:
+            pivot.refresh_theme()
+
     def set_parallel_projection(self, enabled: bool) -> bool:
         """Toggle perspective/parallel camera projection without a visible scale jump."""
         return _set_parallel_projection(self, enabled)
