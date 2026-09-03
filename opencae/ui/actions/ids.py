@@ -45,6 +45,7 @@ class A:
     ASM_RP = "assembly.rp"; CONSTRAINT = "assembly.constraint"
     CONSTRAINT_KINEMATIC = "constraint.kinematic"; CONSTRAINT_DISTRIBUTING = "constraint.distributing"
     CONSTRAINT_TIE = "constraint.tie"; CONSTRAINT_RIGID = "constraint.rigid"
+    CONSTRAINT_CONNECTOR = "constraint.connector"
     CONSTRAINT_EQUATION = "constraint.equation"; CONSTRAINT_MPC = "constraint.mpc"
     FIXED = "bc.fixed"; DISPLACEMENT = "bc.displacement"
     SYMMETRY = "bc.symmetry"; AMPLITUDE = "load.amplitude"
