@@ -214,31 +214,29 @@ class SectionViewController:
 
     @staticmethod
     def _bind_cap_dataset(mapper, dataset, scalar) -> bool:
-        """Bind a new slice through PyVista's mapper pipeline, including scalars.
+        """Bind one materialized cut directly through stable VTK mapper APIs.
 
-        PyVista's ``DataSetMapper`` inserts an ``ActiveScalarsAlgorithm`` when a
-        named array is selected.  Assigning with VTK ``SetInputData`` bypasses
-        PyVista's dataset setter and can disconnect that pipeline when a moved
-        section creates a replacement slice.  Using the public mapper API keeps
-        the selected result array deterministic across every plane movement.
+        The section slice is already a concrete PolyData dataset, so it does not
+        need PyVista's ActiveScalarsAlgorithm wrapper. Binding the dataset and
+        selected array explicitly keeps the cap renderable across PyVista mapper
+        implementation changes while retaining point/cell result association.
         """
         try:
-            mapper.dataset = dataset
+            mapper.SetInputData(dataset)
             if scalar is None:
-                mapper.scalar_visibility = False
+                mapper.ScalarVisibilityOff()
+            elif scalar in dataset.point_data:
+                mapper.SetScalarModeToUsePointFieldData()
+                mapper.SelectColorArray(str(scalar))
+                mapper.ScalarVisibilityOn()
+            elif scalar in dataset.cell_data:
+                mapper.SetScalarModeToUseCellFieldData()
+                mapper.SelectColorArray(str(scalar))
+                mapper.ScalarVisibilityOn()
             else:
-                if scalar in dataset.point_data:
-                    preference = "point"
-                elif scalar in dataset.cell_data:
-                    preference = "cell"
-                else:
-                    return False
-                mapper.set_active_scalars(scalar, preference=preference)
-                mapper.scalar_visibility = True
+                return False
             mapper.Modified()
-            update = getattr(mapper, "update", None)
-            if callable(update):
-                update()
+            mapper.Update()
             return True
         except (AttributeError, KeyError, RuntimeError, TypeError, ValueError):
             return False
@@ -254,7 +252,7 @@ class SectionViewController:
             cap_property.DeepCopy(source_property)
             # The source actor may use backend-/display-specific representation,
             # culling or lighting settings. A generated section must always be a
-            # two-sided opaque surface regardless of those settings.
+            # two-sided surface regardless of those settings.
             cap_property.SetRepresentationToSurface()
             cap_property.SetFrontfaceCulling(False)
             cap_property.SetBackfaceCulling(False)
@@ -264,15 +262,15 @@ class SectionViewController:
             pass
         try:
             if scalar is None or not source_mapper.GetScalarVisibility():
-                cap_mapper.scalar_visibility = False
+                cap_mapper.ScalarVisibilityOff()
             else:
-                cap_mapper.lookup_table = source_mapper.GetLookupTable()
-                cap_mapper.scalar_range = source_mapper.GetScalarRange()
-                cap_mapper.scalar_visibility = True
+                lookup = source_mapper.GetLookupTable()
+                if lookup is not None:
+                    cap_mapper.SetLookupTable(lookup)
+                cap_mapper.SetScalarRange(*source_mapper.GetScalarRange())
+                cap_mapper.ScalarVisibilityOn()
             cap_mapper.Modified()
-            update = getattr(cap_mapper, "update", None)
-            if callable(update):
-                update()
+            cap_mapper.Update()
         except (AttributeError, RuntimeError, TypeError, ValueError):
             pass
 
