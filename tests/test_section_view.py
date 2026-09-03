@@ -70,10 +70,12 @@ def test_moved_section_keeps_selected_point_scalar_with_direct_vtk_binding():
         mapper.update()
         mapped = pv.wrap(mapper.GetInput())
 
+        # Direct VTK binding selects the displayed field on the mapper without
+        # mutating the dataset's own active-scalars metadata.
         assert mapper.scalar_map_mode == "point_field"
         assert mapper.array_name == "Stress"
-        assert mapped.active_scalars_name == "Stress"
-        assert np.allclose(np.asarray(mapped.active_scalars), x)
+        assert "Stress" in mapped.point_data
+        assert np.allclose(np.asarray(mapped.point_data["Stress"]), x)
 
 
 def test_moved_section_rebinds_cell_scalar_association():
@@ -85,10 +87,12 @@ def test_moved_section_rebinds_cell_scalar_association():
     mapper = pv.DataSetMapper(dataset=cut)
     assert SectionViewController._bind_cap_dataset(mapper, cut, "ElementValue")
     mapper.update()
+    mapped = pv.wrap(mapper.GetInput())
 
     assert mapper.scalar_map_mode == "cell_field"
     assert mapper.array_name == "ElementValue"
-    assert np.allclose(np.asarray(mapper._mapped_scalars), 7.5)
+    assert "ElementValue" in mapped.cell_data
+    assert np.allclose(np.asarray(mapped.cell_data["ElementValue"]), 7.5)
 
 
 def test_section_cap_actor_is_visible_unclipped_two_sided_surface():
