@@ -14,7 +14,7 @@ class StepReorderDialog(QDialog):
         """Build the ordered list and compact move actions."""
         super().__init__(parent)
         self.setWindowTitle("Reorder Steps")
-        self.setMinimumSize(480, 440)
+        self.setMinimumSize(640, 440)
 
         root = dialog_layout(self)
         root.addWidget(SectionHeading("Step Order"))
