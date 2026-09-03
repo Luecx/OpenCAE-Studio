@@ -9,7 +9,9 @@ from opencae.app.qt_platform import is_wayland_session, recommended_qt_platform
 
 
 ROOT = Path(__file__).resolve().parents[1]
+_PYVISTA_RENDERING_COMMIT = "3ce36e3b72e5d73c10adf19256aeef6529579cc7"
 _PYVISTAQT_WAYLAND_COMMIT = "98a9abbd465f0c9e92eeb4c69f4c6ada1d19b84f"
+_VTK_RENDERING_VERSION = "vtk==9.7.0"
 
 
 def test_wayland_session_is_detected_from_session_type():
@@ -108,9 +110,13 @@ def test_qt_opengl_is_configured_before_qapplication_and_top_level_widgets():
     assert source.index("configure_qt_opengl()") < source.index("StartupWindow")
 
 
-def test_pyvistaqt_is_pinned_to_merged_wayland_qopenglwidget_bridge():
+def test_rendering_core_is_pinned_without_losing_wayland_qopenglwidget_bridge():
+    """Section rendering and native Wayland depend on independently pinned layers."""
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert _PYVISTAQT_WAYLAND_COMMIT in requirements
-    assert _PYVISTAQT_WAYLAND_COMMIT in pyproject
+    for source in (requirements, pyproject):
+        assert _PYVISTA_RENDERING_COMMIT in source
+        assert _PYVISTAQT_WAYLAND_COMMIT in source
+        assert _VTK_RENDERING_VERSION in source
+    assert "git+https://github.com/pyvista/pyvista.git" in requirements
     assert "git+https://github.com/pyvista/pyvistaqt.git" in requirements
