@@ -1,15 +1,15 @@
-"""Provides general application appearance and behavior preferences."""
+"""Provides general application behavior and layout preferences."""
 
 from __future__ import annotations
 
 from PyQt6.QtWidgets import QCheckBox, QVBoxLayout, QWidget
 
 from opencae.ui.core.widgets import ChevronComboBox
-from opencae.ui.templates import SectionHeading, apply_primary_control_height, field_block, field_row
+from opencae.ui.templates import SectionHeading, apply_primary_control_height, field_block
 
 
 class GeneralPage(QWidget):
-    """Edit theme, icon sizing, confirmation and layout-restoration preferences."""
+    """Edit icon sizing, confirmation and layout-restoration preferences."""
 
     def __init__(self, settings, parent=None):
         """Build general settings using the same label-above hierarchy as dialogs."""
@@ -19,20 +19,14 @@ class GeneralPage(QWidget):
         root.setSpacing(16)
 
         root.addWidget(SectionHeading("Appearance"))
-        self.theme = _combo(
-            ("Dark", "Light", "System"),
-            str(settings.value("ui/theme", "Dark")),
-        )
+        # Color Scheme is intentionally owned only by View → Color Scheme. Keeping
+        # a second Theme/Color Scheme control here created two competing UI paths
+        # for one persisted appearance setting.
         self.icon_scale = _combo(
             ("Compact", "Normal", "Large"),
             str(settings.value("ui/icon_scale", "Normal")),
         )
-        root.addWidget(
-            field_row(
-                field_block("Theme", self.theme),
-                field_block("Icon scale", self.icon_scale),
-            )
-        )
+        root.addWidget(field_block("Icon scale", self.icon_scale))
 
         root.addWidget(SectionHeading("Behavior"))
         self.confirm_delete = QCheckBox("Confirm destructive actions")
@@ -50,7 +44,6 @@ class GeneralPage(QWidget):
     def values(self):
         """Return the preference values represented by this page."""
         return {
-            "theme": self.theme.currentText(),
             "icon_scale": self.icon_scale.currentText(),
             "confirm_delete": self.confirm_delete.isChecked(),
             "restore_layout": self.restore_layout.isChecked(),
