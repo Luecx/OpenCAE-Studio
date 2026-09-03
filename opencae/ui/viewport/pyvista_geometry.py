@@ -6,15 +6,12 @@ import numpy as np
 import pyvista as pv
 
 from opencae.geometry.meshability import surface_classification
+from opencae.ui.core.theme import PALETTE
 from .assembly_context import ActorReference
 from .geometry_render_cache import GEOMETRY_RENDER_CACHE
 from .instance_transform import rotation_matrix, transform_points
 from .surface_shading import face_color
 
-FACE_COLOR = "#7f8d99"
-EDGE_COLOR = "#1b232b"
-VERTEX_COLOR = "#d7dde3"
-SELECTED_COLOR = "#3296e6"
 _BASE_COLORS = {}
 
 
@@ -68,7 +65,11 @@ def add_geometry(
             if color_by_meshability
             else None
         )
-        color = face_color(classification)
+        color = (
+            face_color(classification)
+            if classification is not None
+            else PALETTE["cad_face"]
+        )
         actor = plotter.add_mesh(
             mesh,
             color=color,
@@ -123,7 +124,7 @@ def add_geometry(
         )
         actor = plotter.add_mesh(
             mesh,
-            color=EDGE_COLOR,
+            color=PALETTE["cad_edge"],
             line_width=3.6,
             lighting=False,
             render_lines_as_tubes=True,
@@ -148,7 +149,7 @@ def add_geometry(
         )
         actor = plotter.add_mesh(
             mesh,
-            color=VERTEX_COLOR,
+            color=PALETTE["cad_vertex"],
             point_size=8.0,
             render_points_as_spheres=True,
             lighting=False,
@@ -173,13 +174,13 @@ def set_actor_selected(actor, selected: bool, kind: str = "face"):
     base = _BASE_COLORS.get(
         actor,
         {
-            "face": FACE_COLOR,
-            "edge": EDGE_COLOR,
-            "vertex": VERTEX_COLOR,
-            "rp": "#f3b65b",
-        }.get(kind, FACE_COLOR),
+            "face": PALETTE["cad_face"],
+            "edge": PALETTE["cad_edge"],
+            "vertex": PALETTE["cad_vertex"],
+            "rp": PALETTE["reference_point"],
+        }.get(kind, PALETTE["cad_face"]),
     )
-    color = SELECTED_COLOR if selected else base
+    color = PALETTE["selection_3d"] if selected else base
     rgb = color if isinstance(color, tuple) else pv.Color(color).float_rgb
     actor.GetProperty().SetColor(rgb)
     if kind == "edge":
