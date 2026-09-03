@@ -46,8 +46,8 @@ class MeshabilityLegend(QFrame):
         """Refresh local swatches whose colors are not expressible as global QSS."""
         self.setStyleSheet(
             f"QFrame#MeshabilityLegend{{"
-            f"background:{PALETTE['panel']};"
-            f"border:1px solid {PALETTE['border_light']};"
+            f"background:{PALETTE['overlay_bg']};"
+            f"border:1px solid {PALETTE['overlay_border']};"
             "border-radius:7px;"
             "}"
             f"QLabel#MeshabilityLabel{{color:{PALETTE['muted']};font-size:8pt;}}"
@@ -60,6 +60,6 @@ class MeshabilityLegend(QFrame):
             color = PALETTE.get(token, PALETTE["cad_face"])
             swatch.setStyleSheet(
                 f"background:{color};"
-                f"border:1px solid {PALETTE['border_light']};"
+                f"border:1px solid {PALETTE['overlay_border']};"
                 "border-radius:2px;"
             )
