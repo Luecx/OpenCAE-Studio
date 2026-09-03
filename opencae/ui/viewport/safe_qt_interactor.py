@@ -7,7 +7,11 @@ from math import radians, sqrt, tan
 from PyQt6.QtCore import Qt
 from pyvistaqt import QtInteractor
 
-from opencae.ui.core.theme import PALETTE
+from opencae.ui.core.theme import (
+    PALETTE,
+    VIEWPORT_FONT_FAMILY,
+    VIEWPORT_FONT_SIZE,
+)
 from opencae.ui.viewport.rotation_pivot_indicator import RotationPivotIndicator
 
 
@@ -112,6 +116,24 @@ class SafeQtInteractor(QtInteractor):
         """Create the orientation axes with the active viewport text color."""
         kwargs["color"] = PALETTE["axes"]
         return super().add_axes(*args, **kwargs)
+
+    def add_point_labels(self, *args, **kwargs):
+        """Apply one canonical font and theme legacy label colors centrally."""
+        kwargs["font_size"] = VIEWPORT_FONT_SIZE
+        kwargs["font_family"] = VIEWPORT_FONT_FAMILY
+
+        # A few older preview call sites still pass the former dark-only colors.
+        # Normalize them here so temporary labels remain readable in light mode.
+        if str(kwargs.get("text_color", "")).lower() in {"#f7f9fb", "#f0f3f6"}:
+            kwargs["text_color"] = PALETTE["overlay_text"]
+        if str(kwargs.get("shape_color", "")).lower() == "#20262d":
+            kwargs["shape_color"] = PALETTE["overlay_bg"]
+        return super().add_point_labels(*args, **kwargs)
+
+    def add_text(self, *args, **kwargs):
+        """Keep free-standing VTK viewport text on the canonical label size."""
+        kwargs["font_size"] = VIEWPORT_FONT_SIZE
+        return super().add_text(*args, **kwargs)
 
     def refresh_theme(self) -> None:
         """Refresh transient VTK navigation and orientation colors."""
