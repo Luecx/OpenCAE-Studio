@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.core.theme import PALETTE
 from PyQt6.QtWidgets import QInputDialog
 
 from opencae.geometry.section_filter import compatible_sections
@@ -81,7 +82,7 @@ class PartRegions:
         def preview(definition):
             self.ctx.parent.viewport.suspend_model_selection_preview()
             self.ctx.parent.viewport.show_region_preview(
-                preview_channel, definition, color="#3296e6",
+                preview_channel, definition, color=PALETTE["selection_3d"],
                 opacity=.62, point_size=17, show_point_labels=True,
             )
 
@@ -220,7 +221,7 @@ class PartRegions:
 
         def preview(definition):
             self.ctx.parent.viewport.show_region_preview(
-                preview_channel, definition, color="#3296e6",
+                preview_channel, definition, color=PALETTE["selection_3d"],
                 opacity=.62, point_size=16, show_point_labels=False,
             )
 
