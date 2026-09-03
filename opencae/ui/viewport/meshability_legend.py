@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QPainter
+from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
 
 from opencae.ui.core.theme import PALETTE
@@ -13,7 +13,6 @@ class MeshabilityLegend(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("MeshabilityLegend")
-        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 7, 10, 7)
@@ -27,11 +26,14 @@ class MeshabilityLegend(QFrame):
         self.hide()
 
     def paintEvent(self, event) -> None:
-        """Fill pixels outside the rounded panel with the VTK background color."""
+        """Paint a rounded panel over a viewport-colored rectangular backing."""
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
-        painter.end()
-        super().paintEvent(event)
+        painter.setBrush(QColor(PALETTE["overlay_bg"]))
+        painter.setPen(QPen(QColor(PALETTE["overlay_border"]), 1.0))
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        painter.drawRoundedRect(rect, 7.0, 7.0)
 
     def _entry(self, text: str, token: str) -> QWidget:
         container = QWidget()
@@ -54,11 +56,6 @@ class MeshabilityLegend(QFrame):
     def refresh_theme(self) -> None:
         """Refresh local swatches whose colors are not expressible as global QSS."""
         self.setStyleSheet(
-            f"QFrame#MeshabilityLegend{{"
-            f"background:{PALETTE['overlay_bg']};"
-            f"border:1px solid {PALETTE['overlay_border']};"
-            "border-radius:7px;"
-            "}"
             f"QLabel#MeshabilityLabel{{color:{PALETTE['muted']};font-size:8pt;}}"
         )
         for container in (self._regular, self._irregular):
@@ -72,3 +69,4 @@ class MeshabilityLegend(QFrame):
                 f"border:1px solid {PALETTE['overlay_border']};"
                 "border-radius:2px;"
             )
+        self.update()
