@@ -33,7 +33,6 @@ _FOCUS = {
     "ANALYSIS": {"analyses"},
     "STUDIES": {"studies"},
 }
-_HIDDEN_COLOR = "#59616b"
 
 
 class ProjectTree(QTreeView):
@@ -88,6 +87,11 @@ class ProjectTree(QTreeView):
                 self._expand_path(restored)
         finally:
             del blocker
+
+    def refresh_theme(self):
+        """Reapply model-owned item brushes after a live color-scheme change."""
+        self.set_stage_focus(self.current_stage, collapse=False)
+        self.viewport().update()
 
     def _expanded_paths(self):
         return {
@@ -215,7 +219,7 @@ class ProjectTree(QTreeView):
         font.setItalic(hidden)
         node.setFont(font)
         color = (
-            _HIDDEN_COLOR
+            PALETTE["disabled"]
             if hidden
             else PALETTE["text"]
             if selected
@@ -241,7 +245,7 @@ class ProjectTree(QTreeView):
             font.setBold(False)
             node.setFont(font)
             node.setForeground(
-                QBrush(QColor(_HIDDEN_COLOR if hidden else PALETTE["text"]))
+                QBrush(QColor(PALETTE["disabled"] if hidden else PALETTE["text"]))
             )
 
     def _item_hidden(self, node):
