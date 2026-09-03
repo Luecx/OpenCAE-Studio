@@ -221,8 +221,14 @@ class MainWindow(QMainWindow):
     def show_solution(self, result, field=None):
         self.ribbon.set_stage("RESULTS")
         self.project_dock.panel.set_browser("solution")
-        if self.ribbon.results_page is not None:
-            self.ribbon.results_page.set_solution(result, field)
+        page = self.ribbon.results_page
+        if page is not None:
+            page.set_solution(result, field)
+            # ResultFieldButton resolves an unspecified conventional result to
+            # first step -> first frame -> first field. Mirror that exact choice
+            # in the Solution tree so opening an FRD reveals what is rendered.
+            selected_field = page.choose.current_field() or field
+            self.project_dock.solution_tree.select_solution(result, selected_field)
 
     def delete_result(self, result):
         project = self.context.store.project
