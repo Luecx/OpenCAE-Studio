@@ -157,6 +157,7 @@ class SectionViewController:
                 mapper.Modified()
 
     def _update_cap(self) -> None:
+        """Create or refresh the visible filled surface on the clipping plane."""
         primary = self._actors[0] if self._actors else None
         if primary is None or self._grid is None:
             self._remove_cap()
@@ -179,7 +180,11 @@ class SectionViewController:
                 "render": False,
                 "reset_camera": False,
                 "show_scalar_bar": False,
-                "lighting": True,
+                # The cap represents an artificial material section. Keeping it
+                # unlit avoids normal-orientation dependent dark/invisible faces.
+                "lighting": False,
+                "smooth_shading": False,
+                "show_edges": False,
             }
             if scalar is not None:
                 kwargs["scalars"] = scalar
@@ -192,7 +197,20 @@ class SectionViewController:
         if cap_mapper is None or not self._bind_cap_dataset(cap_mapper, cut, scalar):
             self._remove_cap()
             return
+
+        # A section cap must never inherit clipping from the result actors.  It
+        # lies exactly on the clipping plane and clipping it again can make the
+        # whole slice disappear on some VTK/OpenGL backends.
+        try:
+            cap_mapper.RemoveAllClippingPlanes()
+            cap_mapper.Modified()
+        except (AttributeError, RuntimeError):
+            pass
         self._sync_cap_style(primary, scalar)
+        try:
+            self._cap_actor.SetVisibility(True)
+        except (AttributeError, RuntimeError):
+            pass
 
     @staticmethod
     def _bind_cap_dataset(mapper, dataset, scalar) -> bool:
@@ -208,16 +226,19 @@ class SectionViewController:
             mapper.dataset = dataset
             if scalar is None:
                 mapper.scalar_visibility = False
-                return True
-            if scalar in dataset.point_data:
-                preference = "point"
-            elif scalar in dataset.cell_data:
-                preference = "cell"
             else:
-                return False
-            mapper.set_active_scalars(scalar, preference=preference)
-            mapper.scalar_visibility = True
+                if scalar in dataset.point_data:
+                    preference = "point"
+                elif scalar in dataset.cell_data:
+                    preference = "cell"
+                else:
+                    return False
+                mapper.set_active_scalars(scalar, preference=preference)
+                mapper.scalar_visibility = True
             mapper.Modified()
+            update = getattr(mapper, "update", None)
+            if callable(update):
+                update()
             return True
         except (AttributeError, KeyError, RuntimeError, TypeError, ValueError):
             return False
@@ -231,6 +252,14 @@ class SectionViewController:
             source_property = source_actor.GetProperty()
             cap_property = self._cap_actor.GetProperty()
             cap_property.DeepCopy(source_property)
+            # The source actor may use backend-/display-specific representation,
+            # culling or lighting settings. A generated section must always be a
+            # two-sided opaque surface regardless of those settings.
+            cap_property.SetRepresentationToSurface()
+            cap_property.SetFrontfaceCulling(False)
+            cap_property.SetBackfaceCulling(False)
+            cap_property.SetEdgeVisibility(False)
+            cap_property.SetLighting(False)
         except (AttributeError, RuntimeError, TypeError):
             pass
         try:
@@ -241,6 +270,9 @@ class SectionViewController:
                 cap_mapper.scalar_range = source_mapper.GetScalarRange()
                 cap_mapper.scalar_visibility = True
             cap_mapper.Modified()
+            update = getattr(cap_mapper, "update", None)
+            if callable(update):
+                update()
         except (AttributeError, RuntimeError, TypeError, ValueError):
             pass
 
@@ -322,11 +354,13 @@ class SectionViewController:
 
 
 def section_cut_surface(grid, origin, normal):
-    """Return a filled 2-D cut through volumetric cells, or ``None``.
+    """Return a filled triangulated 2-D cut through volumetric cells, or ``None``.
 
     Slicing a 3-D VTK cell produces 2-D polygons and interpolates its point
     arrays onto the intersection.  Slicing shells produces only 1-D lines; those
-    are deliberately rejected because a shell has no volume to cap.
+    are deliberately rejected because a shell has no volume to cap.  Triangles
+    are used for the final render surface to avoid backend-specific polygon
+    tessellation differences while retaining interpolated result arrays.
     """
     if grid is None or origin is None:
         return None
@@ -338,6 +372,12 @@ def section_cut_surface(grid, origin, normal):
         return None
     if not _contains_surface_cells(cut):
         return None
+    try:
+        triangulated = cut.triangulate()
+        if triangulated is not None and getattr(triangulated, "n_cells", 0):
+            cut = triangulated
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        pass
     return cut
 
 
