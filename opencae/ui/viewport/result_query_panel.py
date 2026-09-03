@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -29,6 +30,7 @@ class ResultQueryPanel(QFrame):
         """Build the fixed-width result query overlay using canonical field labels."""
         super().__init__(parent)
         self.setObjectName("ResultQueryPanel")
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.setFixedWidth(RESULT_INFO_WIDTH)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
         self.hide()
@@ -54,6 +56,13 @@ class ResultQueryPanel(QFrame):
         self.table.hide()
         layout.addWidget(self.table)
 
+    def paintEvent(self, event) -> None:
+        """Fill pixels outside the rounded panel with the VTK background color."""
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
+        painter.end()
+        super().paintEvent(event)
+
     def refresh_theme(self):
         self.setStyleSheet(
             f"QFrame#ResultQueryPanel{{background:{PALETTE['overlay_bg']};"
@@ -64,7 +73,7 @@ class ResultQueryPanel(QFrame):
         )
 
     def show_prompt(self, mode):
-        """Prompt for the next node or element click using a normal result field."""
+        """Prompt for the next node/element click using a normal result field."""
         noun = "node" if mode == "node" else "element"
         self.show_result(
             f"Query {noun.title()}",
