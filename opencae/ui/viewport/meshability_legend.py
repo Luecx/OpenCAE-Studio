@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
 
 from opencae.ui.core.theme import PALETTE
@@ -12,6 +13,7 @@ class MeshabilityLegend(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("MeshabilityLegend")
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 7, 10, 7)
@@ -23,6 +25,13 @@ class MeshabilityLegend(QFrame):
         self.refresh_theme()
         self.adjustSize()
         self.hide()
+
+    def paintEvent(self, event) -> None:
+        """Fill pixels outside the rounded panel with the VTK background color."""
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(PALETTE["viewport"]))
+        painter.end()
+        super().paintEvent(event)
 
     def _entry(self, text: str, token: str) -> QWidget:
         container = QWidget()
