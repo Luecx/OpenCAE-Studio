@@ -56,8 +56,11 @@ class ResultQueryPanel(QFrame):
 
     def refresh_theme(self):
         self.setStyleSheet(
-            f"QFrame#ResultQueryPanel{{background:{PALETTE['panel']};"
-            f"border:1px solid {PALETTE['border_light']};border-radius:7px;}}"
+            f"QFrame#ResultQueryPanel{{background:{PALETTE['overlay_bg']};"
+            f"color:{PALETTE['overlay_text']};"
+            f"border:1px solid {PALETTE['overlay_border']};border-radius:7px;}}"
+            f"QFrame#ResultQueryPanel QTableWidget{{background:{PALETTE['panel_alt']};"
+            f"color:{PALETTE['text']};border:1px solid {PALETTE['border_light']};}}"
         )
 
     def show_prompt(self, mode):
