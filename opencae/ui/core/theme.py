@@ -48,7 +48,7 @@ _COLOR_SCHEMES = {
         "meshability_irregular": "#9a789f",
         "selection_3d": "#3296e6",
         "mesh_surface": "#89939d",
-        "mesh_lines": "#182129",
+        "mesh_lines": "#6d7884",
         "result_edge": "#10161c",
         "seed": "#f2b84b",
         "datum": "#ffd166",
