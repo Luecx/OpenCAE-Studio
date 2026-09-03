@@ -164,9 +164,14 @@ class JobManager(QObject):
 
     def stop_selected(self) -> None:
         """Request cancellation of the selected live Job."""
-        runner = self._runners.get(self.selected_job_id)
-        job = self.selected_job()
-        if runner is None or job is None:
+        self.stop_job(self.selected_job_id)
+
+    def stop_job(self, job_id) -> None:
+        """Request cancellation of one live Job without relying on UI selection."""
+        job_key = str(job_id or "")
+        runner = self._runners.get(job_key)
+        job = self.store.project.try_resolve(job_key)
+        if runner is None or not isinstance(job, Job):
             return
 
         # Persist STOPPING before terminating the process so every observer sees
@@ -198,7 +203,17 @@ class JobManager(QObject):
             monitor = TopologyJobMonitor(self.store, job.id, self.parent)
             self.topology_frame.connect(monitor.show_frame)
         else:
-            monitor = AnalysisJobMonitor(self.store, job.id, self.parent)
+            stop_callback = (
+                (lambda current=job.id: self.stop_job(current))
+                if job.id in self._runners
+                else None
+            )
+            monitor = AnalysisJobMonitor(
+                self.store,
+                job.id,
+                self.parent,
+                stop_callback=stop_callback,
+            )
 
         self.progress_changed.connect(monitor.set_progress)
         self.output_appended.connect(monitor.append_output)
@@ -309,10 +324,15 @@ class JobManager(QObject):
 
         # This hot path is deliberately incapable of changing relationships,
         # identity, paths or settings. Those remain ordinary document edits and
-        # must use ProjectStore.replace_entity()/execute().
+        # must use ProjectStore.replace_entity()/execute(). Runtime-only fields
+        # such as Entity._project are detached by deepcopy and are intentionally
+        # excluded from this persistent-state guard.
         for field_info in fields(current):
             name = field_info.name
-            if name in _RUNTIME_JOB_FIELDS:
+            if (
+                name in _RUNTIME_JOB_FIELDS
+                or field_info.metadata.get("serialize", True) is False
+            ):
                 continue
             if getattr(current, name) != getattr(candidate, name):
                 raise ValueError(

@@ -52,6 +52,7 @@ class ProjectController:
         # succeeded. Only then can its geometry cache be discarded.
         CACHE.clear()
         self.store.replace(project, f"Opened {path}")
+        self._fit_loaded_content()
 
     def open_results(self):
         """Attach an external FRD result set to the current Project."""
@@ -177,6 +178,12 @@ class ProjectController:
             raise ValueError(
                 f"Project uses unknown unit system '{project.unit_system}'"
             )
+
+    def _fit_loaded_content(self):
+        """Frame newly opened project content on the next coalesced scene rebuild."""
+        viewport = getattr(self.parent, "viewport", None)
+        if viewport is not None:
+            viewport.request_refresh(fit=True)
 
     @staticmethod
     def _apply_project_settings(project, values):

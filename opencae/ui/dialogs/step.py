@@ -35,7 +35,9 @@ class StepDialog(QDialog):
         self.step = step
         self.existing_names = tuple(existing_names)
         self.setWindowTitle(f"Edit {step.name}")
-        self.setMinimumSize(720, 680 if step.step_type == "Nonlinear Static" else 520)
+        nonlinear = step.step_type == "Nonlinear Static"
+        self.setMinimumSize(760, 780 if nonlinear else 520)
+        self.resize(820, 820 if nonlinear else 620)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 20, 24, 18)
@@ -95,6 +97,7 @@ class StepDialog(QDialog):
 
         tabs = QTabWidget()
         tabs.setObjectName("NonlinearStepTabs")
+        tabs.setMinimumHeight(290)
 
         increments = QWidget()
         increment_layout = QVBoxLayout(increments)

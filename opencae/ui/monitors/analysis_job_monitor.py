@@ -1,20 +1,31 @@
 """Progress and solver-output window for a running Analysis Job."""
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QDialog, QLabel, QProgressBar, QVBoxLayout
+from PyQt6.QtWidgets import (
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QVBoxLayout,
+)
 
 from opencae.ui.core.widgets import MonospaceOutputView
 from opencae.ui.templates import SectionHeading
 
 
+_TERMINAL_LABELS = {"completed", "failed", "cancelled", "stopping"}
+
+
 class AnalysisJobMonitor(QDialog):
     """Show one Analysis Job's structured progress and its solver output."""
 
-    def __init__(self, store, job_id, parent=None):
+    def __init__(self, store, job_id, parent=None, *, stop_callback=None):
         """Build a persistent monitor for one Job id."""
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.job_id = str(job_id)
+        self._stop_callback = stop_callback
         job = store.project.try_resolve(self.job_id)
         self.setWindowTitle(
             f"Analysis Monitor - {getattr(job, 'name', 'Job')}"
@@ -34,6 +45,16 @@ class AnalysisJobMonitor(QDialog):
         layout.addWidget(self.progress)
         layout.addWidget(SectionHeading("Solver Output"))
         layout.addWidget(self.output, 1)
+
+        actions = QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.addStretch(1)
+        self.stop_button = QPushButton("Stop")
+        self.stop_button.setToolTip("Terminate this solver job")
+        self.stop_button.clicked.connect(self._stop)
+        actions.addWidget(self.stop_button)
+        layout.addLayout(actions)
+
         self.set_progress(
             self.job_id,
             getattr(job, "progress", 0.0),
@@ -44,9 +65,14 @@ class AnalysisJobMonitor(QDialog):
         """Apply a progress event only when it belongs to this monitor's Job."""
         if str(job_id) != self.job_id:
             return
-        self.phase.setText(str(label))
+        label = str(label)
+        self.phase.setText(label)
         self.progress.setValue(
             round(min(max(float(value), 0.0), 1.0) * 1000)
+        )
+        self.stop_button.setEnabled(
+            callable(self._stop_callback)
+            and label.strip().casefold() not in _TERMINAL_LABELS
         )
 
     def set_output(self, job_id, text):
@@ -60,3 +86,11 @@ class AnalysisJobMonitor(QDialog):
         if str(job_id) != self.job_id:
             return
         self.output.append_output(text)
+
+    def _stop(self):
+        """Request cancellation for this monitor's Job only once per click."""
+        callback = self._stop_callback
+        if not callable(callback):
+            return
+        self.stop_button.setEnabled(False)
+        callback()

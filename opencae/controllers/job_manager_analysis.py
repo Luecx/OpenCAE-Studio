@@ -121,6 +121,9 @@ def run_analysis(manager, analysis_id: str) -> None:
         )
     )
     manager._start_job(job.id, "Starting Analysis")
+    # A solve should immediately provide visible feedback instead of requiring a
+    # second manual "Monitor" action while the process is already running.
+    manager.open_selected_monitor()
     runner.start()
 
 

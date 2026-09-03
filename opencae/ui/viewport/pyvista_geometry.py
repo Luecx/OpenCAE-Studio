@@ -92,6 +92,13 @@ def add_geometry(
             prop.SetDiffuse(0.12)
             prop.SetSpecular(0.0)
             prop.SetSpecularPower(1.0)
+            # CAD faces are triangulated internally for rendering, but those
+            # tessellation edges are not model topology and must never masquerade
+            # as an FE mesh when a face highlight enables edge visibility.
+            prop.SetEdgeVisibility(False)
+            set_edge_opacity = getattr(prop, "SetEdgeOpacity", None)
+            if set_edge_opacity is not None:
+                set_edge_opacity(0.0)
         except (AttributeError, RuntimeError):
             pass
         actor.GetProperty().BackfaceCullingOff()

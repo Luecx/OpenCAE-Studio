@@ -166,6 +166,7 @@ class PartLifecycle:
                 candidate,
             )
             self.ctx.store.set_active_part(candidate.id)
+        self._fit_loaded_content()
 
     def import_mesh(self):
         path = open_file(
@@ -210,6 +211,7 @@ class PartLifecycle:
         self.ctx.store.invalidate_scene("Mesh imported")
         if hasattr(self.ctx.parent, "viewport"):
             self.ctx.parent.viewport.set_display_mode("mesh")
+        self._fit_loaded_content()
 
         report = imported.report
         if report.has_unimported_keywords or report.warnings:
@@ -245,6 +247,12 @@ class PartLifecycle:
         candidate.mesh.status = "Outdated"
         if self.ctx.validate_geometry(candidate, "Geometry source update failed"):
             self.ctx.commit_geometry_candidate(candidate, f"Edited {target.name}")
+
+    def _fit_loaded_content(self):
+        """Frame imported CAD/mesh content after the scene mutation is coalesced."""
+        viewport = getattr(self.ctx.parent, "viewport", None)
+        if viewport is not None:
+            viewport.request_refresh(fit=True)
 
 
 def _apply_imported_regions(part, imported) -> None:
