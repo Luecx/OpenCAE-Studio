@@ -36,9 +36,16 @@ class ResultFieldButton(QToolButton):
         self.setMenu(menu)
 
     def set_solution(self, result, fields, preferred=None):
+        """Load one ResultSet while allowing an explicit no-field geometry view."""
         self.result, self.fields = result, fields
         blockers = [QSignalBlocker(combo) for combo in self._combos()]
         self._steps(preferred)
+        if preferred is None:
+            # Selecting a ResultSet itself means "show its geometry".  A contour
+            # is only activated after a concrete field is selected in the tree or
+            # this menu, so loading an FRD can never result in a blank viewport.
+            self.field.setCurrentIndex(-1)
+            self.component.clear()
         del blockers
         self.selection_changed.emit()
         self._emit_navigation()
