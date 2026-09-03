@@ -9,6 +9,7 @@ from .scalar_bar import install_scalar_bar_end_caps, scalar_bar_args
 
 _LOADER = FrdLoader()
 _SOURCE_POINT_INDEX = "_opencae_source_point_index"
+_DISPLAY_SCALAR = "_opencae_display_scalar"
 
 
 def add_result(plotter, result, field=None, options=None):
@@ -18,11 +19,12 @@ def add_result(plotter, result, field=None, options=None):
     scalar = _scalar_name(field)
     range_settings = options.get("range", {})
     clim = _clim(grid, scalar, range_settings)
+    display_scalar = _render_scalar(grid, scalar, clim)
     mapping = contour_plot_kwargs(range_settings)
     show_edges = bool(options.get("mesh_lines", True))
     actor = plotter.add_mesh(
         grid,
-        scalars=scalar,
+        scalars=display_scalar,
         clim=clim,
         cmap="turbo",
         n_colors=mapping["n_colors"],
@@ -99,6 +101,8 @@ def update_result(
     options = options or {}
     original, grid = _result_grids(result, field, options)
     scalar = _scalar_name(field)
+    clim = _clim(grid, scalar, options.get("range", {}))
+    display_scalar = _render_scalar(grid, scalar, clim)
 
     mapper = _replace_actor_input(result_actor, grid)
     if mapper is None:
@@ -106,11 +110,10 @@ def update_result(
     if scalar and scalar in grid.point_data:
         try:
             mapper.SetScalarModeToUsePointFieldData()
-            mapper.SelectColorArray(scalar)
+            mapper.SelectColorArray(display_scalar)
             mapper.ScalarVisibilityOn()
         except (AttributeError, RuntimeError, TypeError):
             pass
-        clim = _clim(grid, scalar, options.get("range", {}))
         if clim is not None:
             try:
                 mapper.SetScalarRange(*clim)
@@ -432,6 +435,38 @@ def _clim(grid, scalar, settings):
     if minimum == maximum:
         maximum = minimum + max(abs(minimum), 1.0) * 1e-12
     return minimum, maximum
+
+
+def _render_scalar(grid, scalar, clim):
+    """Nudge values at a display bound just inside the range for robust coloring.
+
+    VTK treats values outside ``clim`` with the dedicated below/above colors.
+    Floating-point roundoff can therefore make a value that is physically equal
+    to a configured bound (notably zero) appear as an outside-range value. Keep
+    the original result array untouched for queries and derive one internal
+    render-only scalar array with a tiny tolerance around both bounds.
+    """
+    if not scalar or scalar not in grid.point_data or clim is None:
+        return scalar
+    minimum, maximum = (float(value) for value in clim)
+    span = maximum - minimum
+    if not np.isfinite(span) or span <= 0.0:
+        return scalar
+
+    scale = max(abs(minimum), abs(maximum), 1.0)
+    epsilon = max(span * 1.0e-9, np.finfo(float).eps * scale * 64.0)
+    epsilon = min(epsilon, span * 1.0e-6)
+    if not np.isfinite(epsilon) or epsilon <= 0.0:
+        return scalar
+
+    displayed = np.asarray(grid.point_data[scalar], dtype=float).copy()
+    finite = np.isfinite(displayed)
+    lower = finite & (displayed >= minimum - epsilon) & (displayed <= minimum + epsilon)
+    upper = finite & (displayed >= maximum - epsilon) & (displayed <= maximum + epsilon)
+    displayed[lower] = minimum + epsilon
+    displayed[upper] = maximum - epsilon
+    grid.point_data[_DISPLAY_SCALAR] = displayed
+    return _DISPLAY_SCALAR
 
 
 def _deformed(grid, options, *, copy_grid=True):
