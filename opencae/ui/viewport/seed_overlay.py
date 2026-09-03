@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pyvista as pv
 
+from opencae.ui.core.theme import PALETTE
 from .seed_sampling import divisions, edge_overrides, sample_polyline
 from .safe_operations import remove_actor
 
@@ -41,7 +42,7 @@ class SeedOverlay:
             labels.append(str(count))
         if all_points:
             plotter.add_mesh(
-                pv.PolyData(np.asarray(all_points)), color="#f2b84b",
+                pv.PolyData(np.asarray(all_points)), color=PALETTE["seed"],
                 point_size=7.0, render_points_as_spheres=True,
                 lighting=False, pickable=False, name=self.POINTS,
                 render=False,
@@ -49,8 +50,10 @@ class SeedOverlay:
         if centers:
             plotter.add_point_labels(
                 np.asarray(centers), labels, name=self.LABELS, font_size=10,
-                text_color="#f7f9fb", point_size=0, shape="rounded_rect",
-                fill_shape=True, margin=4, always_visible=False, render=False,
+                text_color=PALETTE["overlay_text"], point_size=0,
+                shape_color=PALETTE["overlay_bg"], shape_opacity=.84,
+                shape="rounded_rect", fill_shape=True, margin=4,
+                always_visible=False, render=False,
             )
         plotter.render()
 
