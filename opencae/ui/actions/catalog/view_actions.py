@@ -26,6 +26,18 @@ def _reset_layout(window):
         controller.reset()
 
 
+def _show_documentation(window):
+    from opencae.ui.dialogs.help_dialogs import DocumentationDialog
+
+    DocumentationDialog(window).exec()
+
+
+def _show_shortcuts(window):
+    from opencae.ui.dialogs.help_dialogs import KeyboardShortcutsDialog
+
+    KeyboardShortcutsDialog(window.actions, window).exec()
+
+
 def specs(window):
     return (
         ActionSpec(A.FIT_VIEW,"Fit View",I.FIT_VIEW,window.fit_view,"F"),
@@ -35,7 +47,7 @@ def specs(window):
         ActionSpec(A.SHOW_LOG,"Log",I.INFO,lambda:_toggle_workspace(window, "log")),
         ActionSpec(A.SHOW_TIME_MANAGER,"Time Manager",I.INFO,lambda:_toggle_workspace(window, "time_manager")),
         ActionSpec(A.RESET_LAYOUT,"Reset Layout",I.SETTINGS,lambda:_reset_layout(window)),
-        ActionSpec(A.DOCUMENTATION,"Documentation",I.INFO,window.show_documentation),
-        ActionSpec(A.SHORTCUTS,"Keyboard Shortcuts",I.INFO,window.show_shortcuts),
+        ActionSpec(A.DOCUMENTATION,"Documentation",I.INFO,lambda:_show_documentation(window)),
+        ActionSpec(A.SHORTCUTS,"Keyboard Shortcuts",I.INFO,lambda:_show_shortcuts(window)),
         ActionSpec(A.ABOUT,"About",I.INFO,window.show_about),
     )
