@@ -4,7 +4,7 @@ import logging
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QKeyEvent, QStandardItem, QStandardItemModel
-from PyQt6.QtWidgets import QMenu, QTreeView
+from PyQt6.QtWidgets import QAbstractItemView, QMenu, QTreeView
 
 from opencae.results import FrdLoader
 from opencae.results.navigation import (
@@ -109,6 +109,75 @@ class SolutionTree(QTreeView):
         self.setModel(model)
         self.collapseAll()
         self._expand_first_chain()
+
+    def select_solution(self, result, field=None):
+        """Reveal and select the tree item corresponding to the shown result field."""
+        index = self._matching_index(result, field)
+        if not index.isValid():
+            index = self._matching_index(result, None)
+        if not index.isValid():
+            return
+
+        ancestors = []
+        parent = index.parent()
+        while parent.isValid():
+            ancestors.append(parent)
+            parent = parent.parent()
+        for ancestor in reversed(ancestors):
+            self.expand(ancestor)
+        self.setCurrentIndex(index)
+        self.scrollTo(index, QAbstractItemView.ScrollHint.EnsureVisible)
+
+    def _matching_index(self, result, field):
+        model = self.model()
+        if model is None:
+            return model.index(-1, -1) if model is not None else self.rootIndex()
+
+        wanted_result = self._result_key(result)
+        wanted_field = self._field_key(field)
+
+        def walk(parent):
+            for row in range(model.rowCount(parent)):
+                index = model.index(row, 0, parent)
+                candidate_result = index.data(Qt.ItemDataRole.UserRole)
+                candidate_field = index.data(Qt.ItemDataRole.UserRole + 1)
+                if self._result_key(candidate_result) == wanted_result:
+                    if field is None:
+                        if not index.parent().isValid():
+                            return index
+                    elif self._field_key(candidate_field) == wanted_field:
+                        return index
+                nested = walk(index)
+                if nested.isValid():
+                    return nested
+            return model.index(-1, -1)
+
+        return walk(self.rootIndex())
+
+    @staticmethod
+    def _result_key(result):
+        if result is None:
+            return None
+        identifier = str(getattr(result, "id", "") or "").strip()
+        if identifier:
+            return ("id", identifier)
+        source = str(getattr(result, "source_file", "") or "").strip()
+        return ("source", source) if source else ("object", id(result))
+
+    @staticmethod
+    def _field_key(field):
+        if field is None:
+            return None
+        if isinstance(field, dict):
+            return ("topology", int(field.get("topology_frame_index", -1)))
+        metadata = dict(getattr(field, "metadata", {}) or {})
+        return (
+            "field",
+            str(getattr(field, "name", "")),
+            int(metadata.get("step_id", 1)),
+            int(metadata.get("frame_id", 1)),
+            str(metadata.get("component", "Magnitude")),
+        )
 
     def _append_topology_frames(self, parent, result, metadata):
         group = self._item(
