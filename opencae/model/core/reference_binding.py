@@ -176,4 +176,15 @@ def validate_region_consumers(project) -> list[str]:
                 constraint.body,
                 constraint_region_requirement(kind, "slave"),
             )
+        elif kind == ConstraintType.CONNECTOR:
+            check(
+                constraint,
+                constraint.master,
+                constraint_region_requirement(kind, "master"),
+            )
+            check(
+                constraint,
+                constraint.slave,
+                constraint_region_requirement(kind, "slave"),
+            )
     return errors
