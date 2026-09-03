@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QWidget
 
 from opencae.ui.templates import dialog_buttons, scaffold_dialog
+from opencae.ui.templates.dialogs import DEFAULT_DIALOG_WIDTH
 from .apply_dialog import ApplyDialog
 from .fields import FieldSpec, create_editor, editor_value
 
@@ -13,7 +14,7 @@ class FormDialog(ApplyDialog):
         title: str,
         fields: tuple[FieldSpec, ...],
         parent: QWidget | None = None,
-        width: int = 520,
+        width: int = DEFAULT_DIALOG_WIDTH,
         allow_apply: bool = False,
     ):
         super().__init__(parent)
