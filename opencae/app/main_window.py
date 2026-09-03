@@ -108,6 +108,7 @@ class MainWindow(QMainWindow):
             A.CONSTRAINT_DISTRIBUTING,
             A.CONSTRAINT_TIE,
             A.CONSTRAINT_RIGID,
+            A.CONSTRAINT_CONNECTOR,
             A.CONSTRAINT_EQUATION,
             A.CONSTRAINT_MPC,
             A.FIXED,
@@ -258,12 +259,14 @@ class MainWindow(QMainWindow):
         self.context.store.message.emit(f"Deleted result {stored.name}")
 
     def show_documentation(self):
-        self.context.store.message.emit("Documentation is not bundled yet")
+        from opencae.ui.dialogs.help_dialogs import DocumentationDialog
+
+        DocumentationDialog(self).exec()
 
     def show_shortcuts(self):
-        self.context.store.message.emit(
-            "Shortcuts: Ctrl+N/O/S, Ctrl+Z/Y, F5, F7, F"
-        )
+        from opencae.ui.dialogs.help_dialogs import KeyboardShortcutsDialog
+
+        KeyboardShortcutsDialog(self.actions, self).exec()
 
     def reset_layout(self):
         self.addDockWidget(
