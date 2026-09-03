@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.ui.core.theme import PALETTE
-from opencae.ui.templates import FieldStack, SectionHeading
+from opencae.ui.templates import FieldStack, SectionHeading, field_block, field_row
 
 from .result_query_model import QueryResult
 from .result_selection_panel import RESULT_INFO_WIDTH
@@ -86,16 +86,20 @@ class ResultQueryPanel(QFrame):
         self.title.setText(str(title))
         self._clear()
         rows = result.summary or [("Result", "No values available for this selection")]
-        for key, value in rows:
-            text = QLabel(str(value))
-            text.setObjectName("ResultQueryValue")
-            text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            text.setWordWrap(True)
-            text.setSizePolicy(
-                QSizePolicy.Policy.Expanding,
-                QSizePolicy.Policy.Minimum,
-            )
-            self.form.addRow(str(key), text)
+        columns = max(1, int(getattr(result, "summary_columns", 1) or 1))
+        for start in range(0, len(rows), columns):
+            blocks = []
+            for key, value in rows[start : start + columns]:
+                text = QLabel(str(value))
+                text.setObjectName("ResultQueryValue")
+                text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+                text.setWordWrap(True)
+                text.setSizePolicy(
+                    QSizePolicy.Policy.Expanding,
+                    QSizePolicy.Policy.Minimum,
+                )
+                blocks.append(field_block(str(key), text))
+            self.form.addWidget(field_row(*blocks, spacing=10) if len(blocks) > 1 else blocks[0])
         if result.matrix:
             self._show_matrix(result.columns, result.matrix)
 
