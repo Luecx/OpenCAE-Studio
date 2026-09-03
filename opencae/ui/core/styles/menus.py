@@ -14,6 +14,6 @@ def css(p):
     }}
     QMenu::item {{ padding: 7px 30px 7px 26px; border-radius: 3px; }}
     QMenu::item:selected {{ background: {p['accent_dim']}; }}
-    QMenu::item:disabled {{ color: #66717c; }}
+    QMenu::item:disabled {{ color: {p['disabled']}; }}
     QMenu::separator {{ height: 1px; background: {p['border']}; margin: 5px 8px; }}
     """
