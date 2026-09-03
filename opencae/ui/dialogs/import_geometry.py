@@ -19,7 +19,7 @@ class ImportGeometryDialog(FormDialog):
             FieldSpec('heal','Heal imported shape','bool',getattr(settings,'heal_on_import',True)), FieldSpec('sew_faces','Sew adjacent faces','bool',getattr(settings,'sew_faces',True)),
             FieldSpec('make_solids','Create solids from shells','bool',getattr(settings,'make_solids',True)), FieldSpec('remove_degenerate','Remove degenerate entities','bool',getattr(settings,'remove_degenerate',True)),
             FieldSpec('tolerance','Import tolerance','float',getattr(settings,'tolerance',1e-7),minimum=1e-12,maximum=1.0,decimals=10),
-        ),parent,width=620)
+        ),parent,width=720)
     def values(self):
         values=super().values()
         if values['file'] and values['part_name']=='Part-1':values['part_name']=Path(values['file']).stem
