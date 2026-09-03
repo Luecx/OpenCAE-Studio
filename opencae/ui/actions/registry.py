@@ -25,6 +25,10 @@ class ActionRegistry:
     def get(self, action_id):
         return self._actions[action_id]
 
+    def items(self):
+        """Return stable action-id/QAction pairs for documentation-style UI."""
+        return tuple(self._actions.items())
+
     def refresh_icons(self) -> None:
         """Regenerate theme-colored action icons without recreating actions."""
         make_icon = __import__(
