@@ -1,74 +1,147 @@
-"""Provides the multi-page application Preferences dialog."""
+"""Unified multi-page application Settings dialog."""
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QDialog, QHBoxLayout, QMessageBox, QStackedWidget, QWidget
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QHBoxLayout, QMessageBox, QStackedWidget
 
-from opencae.ui.preferences import GeneralPage, PreferencesNavigation, SolversPage, UnitSystemsPage
-from opencae.ui.templates import VerticalSeparator, dialog_buttons, dialog_layout
+from opencae.ui.preferences import (
+    AppearancePage,
+    FilesPage,
+    GeneralPage,
+    GeometryPage,
+    InputDecksPage,
+    MeshingPage,
+    PreferencesNavigation,
+    ResultsPage,
+    SolversPage,
+    UnitSystemsPage,
+    ViewportPage,
+)
+from opencae.ui.templates import dialog_buttons, dialog_layout
 
 
 class PreferencesDialog(QDialog):
-    """Edit general, solver and unit-system settings in one persistent page shell."""
+    """Edit all application/workstation settings through one authoritative surface."""
 
-    def __init__(self, settings, parent=None, initial_page="General"):
-        """Build left navigation and right preference pages with canonical dialog spacing."""
+    applied = pyqtSignal(dict)
+
+    def __init__(self, settings, solvers=None, parent=None, initial_page="General"):
         super().__init__(parent)
         self.settings = settings
-        self.setWindowTitle("Preferences")
-        self.resize(1080, 720)
+        self.solvers = dict(solvers or {})
+        self.setWindowTitle("Settings")
+        self.resize(1120, 760)
+        self.setMinimumSize(900, 620)
 
         root = dialog_layout(self)
         body = QHBoxLayout()
         body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(20)
+        body.setSpacing(0)
 
         self.navigation = PreferencesNavigation()
         body.addWidget(self.navigation)
-        body.addWidget(VerticalSeparator())
 
         self.stack = QStackedWidget()
+        self.stack.setObjectName("PreferencesPageStack")
         body.addWidget(self.stack, 1)
         root.addLayout(body, 1)
 
-        self.general = GeneralPage(settings)
-        self.solvers = SolversPage(settings.solver_configs)
-        self.units = UnitSystemsPage(settings.unit_systems, settings.selected_unit_system)
-        for title, page in (
-            ("General", self.general),
-            ("Solvers", self.solvers),
-            ("Unit Systems", self.units),
-        ):
-            self.navigation.add_page(title)
-            self.stack.addWidget(page)
+        manager_callback = None
+        controllers = getattr(parent, "controllers", None)
+        solver_controller = getattr(controllers, "solver", None)
+        if solver_controller is not None:
+            manager_callback = getattr(solver_controller, "format_manager", None)
 
-        self.navigation.currentRowChanged.connect(self.stack.setCurrentIndex)
-        self.navigation.setCurrentRow(
-            {"General": 0, "Solvers": 1, "Unit Systems": 2}.get(initial_page, 0)
+        self.general = GeneralPage(settings)
+        self.appearance = AppearancePage(settings)
+        self.viewport = ViewportPage(settings)
+        self.files = FilesPage(settings)
+        self.geometry = GeometryPage(settings)
+        self.meshing = MeshingPage(settings)
+        self.solvers_page = SolversPage(settings)
+        self.input_decks = InputDecksPage(
+            settings,
+            self.solvers,
+            manager_callback,
+        )
+        self.results = ResultsPage(settings)
+        self.units = UnitSystemsPage(
+            settings.unit_systems,
+            settings.selected_unit_system,
         )
 
-        buttons = dialog_buttons()
-        buttons.accepted.connect(self._accept)
+        self._pages = {
+            "General": self.general,
+            "Appearance": self.appearance,
+            "Viewport": self.viewport,
+            "Files & Projects": self.files,
+            "Geometry": self.geometry,
+            "Meshing": self.meshing,
+            "Solvers": self.solvers_page,
+            "Input Decks": self.input_decks,
+            "Results": self.results,
+            "Unit Systems": self.units,
+        }
+        groups = (
+            ("GENERAL", ("General", "Appearance")),
+            ("WORKSPACE", ("Viewport", "Files & Projects", "Results")),
+            ("MODELING", ("Geometry", "Meshing")),
+            ("EXECUTION", ("Solvers", "Input Decks")),
+            ("SYSTEM", ("Unit Systems",)),
+        )
+        for group, titles in groups:
+            for title in titles:
+                self.navigation.add_page(group, title)
+                self.stack.addWidget(self._pages[title])
+
+        self.navigation.page_changed.connect(self._show_page)
+        self.navigation.select_page(initial_page)
+
+        buttons = dialog_buttons(include_apply=True)
+        apply_button = buttons.button(QDialogButtonBox.StandardButton.Apply)
+        if apply_button is not None:
+            apply_button.clicked.connect(lambda: self._apply(close=False))
+        buttons.accepted.connect(lambda: self._apply(close=True))
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
 
-    def _accept(self):
-        """Validate editable unit systems before closing Preferences successfully."""
+    def _show_page(self, title: str) -> None:
+        page = self._pages.get(str(title))
+        if page is not None:
+            self.stack.setCurrentWidget(page)
+
+    def _apply(self, *, close: bool) -> None:
+        """Validate dependent pages and emit one complete settings snapshot."""
         error = self.units.validate()
         if error:
             QMessageBox.warning(self, "Invalid unit systems", error)
             return
-        self.accept()
+        self.applied.emit(self.values())
+        if close:
+            self.accept()
 
-    def values(self):
-        """Return all edited application settings in the controller's expected shape."""
-        systems, selected = self.units.values()
-        values = self.general.values()
-        values.update(
-            {
-                "solver_configs": self.solvers.values(),
-                "unit_systems": systems,
-                "selected_unit_system": selected,
-            }
-        )
-        return values
+    def values(self) -> dict[str, object]:
+        """Return all application settings without mixing project-owned values in."""
+        preference_values: dict[str, object] = {}
+        for page in (
+            self.general,
+            self.appearance,
+            self.viewport,
+            self.files,
+            self.geometry,
+            self.meshing,
+            self.results,
+        ):
+            preference_values.update(page.values())
+        preference_values.update(self.input_decks.values())
+
+        solver_values = self.solvers_page.values()
+        systems, selected_unit = self.units.values()
+        return {
+            "preferences": preference_values,
+            "solver_configs": solver_values["solver_configs"],
+            "selected_solver": solver_values["selected_solver"],
+            "unit_systems": systems,
+            "selected_unit_system": selected_unit,
+        }

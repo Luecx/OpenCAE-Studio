@@ -11,13 +11,13 @@ from opencae.ui.templates import FieldLabel, SectionHeading, field_block
 
 
 class PreferencePage(QWidget):
-    """Build one Settings page with a header, semantic sections and value readers."""
+    """Build one Settings page with a header, sections and exact-key value readers."""
 
     def __init__(self, title: str, description: str, parent=None):
         super().__init__(parent)
         self._readers: dict[str, Callable[[], object]] = {}
         self.root = QVBoxLayout(self)
-        self.root.setContentsMargins(2, 2, 8, 8)
+        self.root.setContentsMargins(28, 24, 28, 24)
         self.root.setSpacing(14)
 
         heading = QLabel(str(title))
@@ -31,7 +31,7 @@ class PreferencePage(QWidget):
         self.root.addSpacing(6)
 
     def add_section(self, title: str, description: str = "") -> None:
-        """Start a visual setting family, optionally with muted explanatory text."""
+        """Start one visual setting family with optional explanatory text."""
         self.root.addWidget(SectionHeading(str(title)))
         if description:
             label = FieldLabel(str(description))
@@ -107,5 +107,5 @@ def _setting(settings, key: str, default):
         return reader(key, default)
     value = settings.value(key, default)
     if isinstance(default, bool):
-        return str(value).strip().lower() not in {"0", "false", "no", "off"}
+        return str(value).strip().casefold() not in {"0", "false", "no", "off", ""}
     return value

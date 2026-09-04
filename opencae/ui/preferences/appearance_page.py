@@ -1,4 +1,4 @@
-"""Application-scale appearance preferences that are independent of color schemes."""
+"""Application-scale appearance preferences independent of color schemes."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class AppearancePage(PreferencePage):
             suffix=" %",
         )
         note = FieldLabel(
-            "Color scheme is intentionally controlled only from View → Color Scheme so the application has one authoritative theme selector."
+            "Color scheme remains under View → Color Scheme so there is exactly one authoritative theme selector."
         )
         note.setWordWrap(True)
         self.root.addWidget(note)

@@ -6,12 +6,12 @@ from .page import PreferencePage
 
 
 class ViewportPage(PreferencePage):
-    """Edit persistent camera and orientation-control defaults for the 3D viewport."""
+    """Edit persistent camera, orientation and framing defaults."""
 
     def __init__(self, settings, parent=None):
         super().__init__(
             "Viewport",
-            "Choose the persistent camera projection and orientation controls shown around the model.",
+            "Choose persistent camera defaults and orientation controls shown around the model.",
             parent,
         )
         self.add_section("Camera")
@@ -23,6 +23,13 @@ class ViewportPage(PreferencePage):
             kind="choice",
             choices=("Perspective", "Parallel"),
         )
+        self.add_toggle(
+            settings,
+            "viewport/auto_fit_loaded_content",
+            "Automatically fit newly opened projects, CAD and imported meshes",
+            default=True,
+        )
+
         self.add_section("Orientation")
         self.add_toggle(
             settings,

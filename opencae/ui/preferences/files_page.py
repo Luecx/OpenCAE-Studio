@@ -13,7 +13,7 @@ class FilesPage(PreferencePage):
     def __init__(self, settings, parent=None):
         super().__init__(
             "Files & Projects",
-            "Configure where native file choosers start. Project data itself remains stored with the project.",
+            "Configure where OpenCAE file choosers start. Project data itself remains stored with the project.",
             parent,
         )
         self.add_section("File dialogs")
@@ -24,7 +24,7 @@ class FilesPage(PreferencePage):
             default=True,
         )
         directory = DirectoryPathEditor(
-            str(_setting(settings, "files/default_directory", "") or "")
+            str(settings.preference("files/default_directory", "") or "")
         )
         self.add_custom_field(
             "files/default_directory",
@@ -33,8 +33,3 @@ class FilesPage(PreferencePage):
             directory.text,
         )
         self.finish()
-
-
-def _setting(settings, key: str, default):
-    reader = getattr(settings, "preference", None)
-    return reader(key, default) if callable(reader) else settings.value(key, default)
