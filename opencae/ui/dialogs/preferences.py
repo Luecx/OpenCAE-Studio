@@ -91,6 +91,18 @@ class PreferencesDialog(QDialog):
             "Results": self.results,
             "Unit Systems": self.units,
         }
+        search_terms = {
+            "General": ("icon", "delete", "destructive", "layout", "restore"),
+            "Appearance": ("font", "scale", "interface", "density"),
+            "Viewport": ("camera", "projection", "perspective", "parallel", "fit", "viewcube"),
+            "Files & Projects": ("directory", "file", "open", "save", "history"),
+            "Geometry": ("heal", "sew", "solid", "degenerate", "tolerance", "datum", "reference"),
+            "Meshing": ("gmsh", "algorithm", "order", "optimization", "recombine", "threads"),
+            "Solvers": ("femaster", "abaqus", "calculix", "executable", "arguments", "backend"),
+            "Input Decks": ("profile", "generator", "deck", "format", "keyword"),
+            "Results": ("mesh lines", "boundary", "undeformed", "postprocessing"),
+            "Unit Systems": ("units", "length", "force", "mass", "temperature"),
+        }
         self._hosts = {}
         groups = (
             ("GENERAL", ("General", "Appearance")),
@@ -101,7 +113,7 @@ class PreferencesDialog(QDialog):
         )
         for group, titles in groups:
             for title in titles:
-                self.navigation.add_page(group, title)
+                self.navigation.add_page(group, title, search_terms.get(title, ()))
                 host = self._scroll_host(self._pages[title])
                 self._hosts[title] = host
                 self.stack.addWidget(host)
