@@ -8,7 +8,6 @@ mesh entries here are only defaults copied into newly created Parts.
 PREFERENCE_DEFAULTS = {
     "ui/confirm_delete": True,
     "ui/restore_layout": True,
-    "ui/icon_scale": "Normal",
     "appearance/font_scale": 100,
     "viewport/projection": "Perspective",
     "viewport/show_view_cube": True,
