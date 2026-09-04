@@ -16,7 +16,6 @@ def specs(c):
         ActionSpec(A.STEP_MATRIX, "Collectors", I.MATRIX, c.analysis.manage_collectors),
         ActionSpec(A.ANALYSIS_NEW, "New Analysis", I.NEW_ANALYSIS, c.analysis.new_analysis),
         ActionSpec(A.ANALYSIS_EDIT, "Edit Analysis", I.EDIT, c.analysis.edit_active_analysis),
-        ActionSpec(A.SOLVER_SETTINGS, "Solver Settings", I.SETTINGS, c.analysis.settings_dialog),
         ActionSpec(
             A.DECK_FORMAT_MANAGER,
             "Input Deck Formats…",
