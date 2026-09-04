@@ -313,9 +313,10 @@ def test_constraint_control_point_is_direct_single_pick_without_extended_menu():
     requirements = (ROOT / "model/entities/constraints/requirements.py").read_text(encoding="utf-8")
     dialog = (ROOT / "ui/dialogs/constraint.py").read_text(encoding="utf-8")
     assert "_POINT_KINDS" in requirements
-    assert "multiple=not master or kind == ConstraintType.TIE" in requirements
+    assert "not master or kind == ConstraintType.TIE" in requirements
+    assert "kind == ConstraintType.CONNECTOR" in requirements
     assert "direct_control_point_error" in dialog
-    assert "self.master.set_extended_visible(tie)" in dialog
+    assert "self.master.set_extended_visible(tie or connector)" in dialog
 
 
 def test_load_support_and_section_dialogs_keep_persistent_preview_channels():

@@ -70,7 +70,6 @@ def test_analysis_ribbon_separates_definition_and_execution_groups():
                 "VALIDATE",
                 "PREVIEW_DECK",
                 "WRITE_DECK",
-                "SOLVER_SETTINGS",
                 "ANALYSIS_RUN",
             ),
         ),
@@ -227,3 +226,56 @@ def test_visibility_state_emits_topology_scope_without_entity_invalidation():
     assert topology == [("part-1", "faces")]
     assert entities == []
     assert state.hidden_topology("part-1", "faces") == frozenset({7})
+
+
+def test_qaction_checked_bool_cannot_become_settings_dialog_parent(monkeypatch):
+    """QAction.triggered(False) must still open the General Settings page safely."""
+    from opencae.controllers import project_controller as module
+
+    captured = {}
+
+    class _Signal:
+        def connect(self, callback):
+            captured["callback"] = callback
+
+    class _Dialog:
+        def __init__(self, settings, solvers=None, parent=None, initial_page="General"):
+            captured.update(
+                settings=settings,
+                solvers=solvers,
+                parent=parent,
+                initial_page=initial_page,
+            )
+            self.applied = _Signal()
+
+        def exec(self):
+            captured["exec"] = True
+            return 0
+
+    monkeypatch.setattr(module, "PreferencesDialog", _Dialog)
+    solvers = {"FEMaster": object()}
+    parent = SimpleNamespace(context=SimpleNamespace(solvers=solvers))
+    settings = object()
+    controller = module.ProjectController(SimpleNamespace(), parent, settings)
+
+    controller.preferences(False)
+
+    assert captured["settings"] is settings
+    assert captured["solvers"] is solvers
+    assert captured["parent"] is parent
+    assert captured["initial_page"] == "General"
+    assert captured["exec"] is True
+
+
+def test_global_settings_has_one_menu_entry_and_no_solver_duplicates():
+    """Configuration is discoverable through one menu without Analysis/Solver duplicates."""
+    tools = (ROOT / "opencae/ui/menus/tools_menu.py").read_text(encoding="utf-8")
+    solver = (ROOT / "opencae/ui/menus/solver_menu.py").read_text(encoding="utf-8")
+    ribbon = (ROOT / "opencae/ui/ribbon/analysis_page.py").read_text(encoding="utf-8")
+    context = (ROOT / "opencae/ui/tree/context_menu.py").read_text(encoding="utf-8")
+
+    assert tools.count("A.PREFERENCES") == 1
+    assert "A.SOLVER_SETTINGS" not in tools
+    assert "A.SOLVER_SETTINGS" not in solver
+    assert "A.SOLVER_SETTINGS" not in ribbon
+    assert "A.SOLVER_SETTINGS" not in context

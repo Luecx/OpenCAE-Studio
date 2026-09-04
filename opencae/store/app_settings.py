@@ -1,3 +1,5 @@
+"""Persist application/workstation settings independently of project documents."""
+
 from __future__ import annotations
 
 import json
@@ -7,6 +9,13 @@ from PyQt6.QtCore import QSettings
 
 from opencae.deck_formats import DeckProfile
 from opencae.units import UnitSystem, default_systems
+
+from .app_preference_defaults import (
+    GEOMETRY_DEFAULT_KEYS,
+    MESH_DEFAULT_KEYS,
+    PREFERENCE_DEFAULTS,
+)
+
 
 _DEFAULT_SOLVERS = {
     "FEMaster": {"enabled": False, "executable": "", "extra_arguments": ""},
@@ -26,6 +35,67 @@ class AppSettings:
 
     def set_value(self, key: str, value) -> None:
         self._settings.setValue(key, value)
+
+    def sync(self) -> None:
+        """Flush pending workstation settings to the platform settings backend."""
+        self._settings.sync()
+
+    def preference(self, key: str, default=None):
+        """Read one scalar preference with the canonical default's Python type."""
+        fallback = PREFERENCE_DEFAULTS.get(key, default)
+        raw = self.value(key, fallback)
+        if isinstance(fallback, bool):
+            if isinstance(raw, bool):
+                return raw
+            return str(raw).strip().casefold() not in {"0", "false", "no", "off", ""}
+        if isinstance(fallback, int) and not isinstance(fallback, bool):
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                return int(fallback)
+        if isinstance(fallback, float):
+            try:
+                return float(raw)
+            except (TypeError, ValueError):
+                return float(fallback)
+        return raw
+
+    def set_preference(self, key: str, value) -> None:
+        """Persist one application preference using its exact canonical key."""
+        self.set_value(str(key), value)
+
+    def geometry_default_values(self) -> dict[str, object]:
+        """Return GeometrySettings-compatible values for newly created Parts."""
+        return {
+            field: self.preference(key, PREFERENCE_DEFAULTS[key])
+            for field, key in GEOMETRY_DEFAULT_KEYS.items()
+        }
+
+    def mesh_default_values(self) -> dict[str, object]:
+        """Return MeshSettings-compatible values for newly created Parts."""
+        return {
+            field: self.preference(key, PREFERENCE_DEFAULTS[key])
+            for field, key in MESH_DEFAULT_KEYS.items()
+        }
+
+    def default_deck_profile_id(self, solver_name: str, adapter=None) -> str:
+        """Return a persisted solver deck default or the adapter's built-in profile."""
+        from opencae.deck_formats.selection import (
+            compatible_profile_ids,
+            default_profile_id,
+        )
+
+        if adapter is None:
+            return str(self.value(f"solver/default_deck_profile/{solver_name}", ""))
+        fallback = default_profile_id(adapter)
+        requested = str(
+            self.value(f"solver/default_deck_profile/{solver_name}", fallback) or fallback
+        )
+        return (
+            requested
+            if requested in compatible_profile_ids(self, adapter)
+            else fallback
+        )
 
     def _json_value(self, key: str, default):
         raw = self.value(key, "")
