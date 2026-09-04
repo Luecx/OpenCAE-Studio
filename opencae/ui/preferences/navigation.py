@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QLabel, QLineEdit, QListWidget, QListWidgetItem, QVB
 
 _GROUP_ROLE = Qt.ItemDataRole.UserRole
 _PAGE_ROLE = Qt.ItemDataRole.UserRole + 1
+_SEARCH_ROLE = Qt.ItemDataRole.UserRole + 2
 
 
 class PreferencesNavigation(QWidget):
@@ -41,8 +42,8 @@ class PreferencesNavigation(QWidget):
         self.search.textChanged.connect(self._filter)
         self.list.currentItemChanged.connect(self._current_item_changed)
 
-    def add_page(self, group: str, title: str) -> None:
-        """Add one flat page item and create its group heading on first use."""
+    def add_page(self, group: str, title: str, keywords=()) -> None:
+        """Add one page and searchable field terms under a semantic group heading."""
         group = str(group)
         if not any(
             self.list.item(index).data(_GROUP_ROLE) == group
@@ -61,6 +62,8 @@ class PreferencesNavigation(QWidget):
         item = QListWidgetItem(str(title))
         item.setData(_GROUP_ROLE, group)
         item.setData(_PAGE_ROLE, str(title))
+        terms = " ".join(str(value) for value in keywords)
+        item.setData(_SEARCH_ROLE, f"{title} {group} {terms}".strip())
         item.setSizeHint(QSize(0, 36))
         self.list.addItem(item)
         self._pages[str(title)] = item
@@ -76,8 +79,9 @@ class PreferencesNavigation(QWidget):
     def _filter(self, text: str) -> None:
         query = str(text).strip().casefold()
         visible_groups = set()
-        for title, item in self._pages.items():
-            visible = not query or query in title.casefold()
+        for item in self._pages.values():
+            search_text = str(item.data(_SEARCH_ROLE) or "").casefold()
+            visible = not query or query in search_text
             item.setHidden(not visible)
             if visible:
                 visible_groups.add(str(item.data(_GROUP_ROLE)))
