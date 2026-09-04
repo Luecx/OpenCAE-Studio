@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -124,9 +124,7 @@ class PreferencesDialog(QDialog):
         host.setObjectName("PreferencesPageScroll")
         host.setFrameShape(QFrame.Shape.NoFrame)
         host.setWidgetResizable(True)
-        host.setHorizontalScrollBarPolicy(
-            host.horizontalScrollBarPolicy().ScrollBarAlwaysOff
-        )
+        host.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         host.setWidget(page)
         return host
 
