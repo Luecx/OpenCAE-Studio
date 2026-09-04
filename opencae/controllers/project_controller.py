@@ -9,9 +9,11 @@ from opencae.model.project import Project
 from opencae.persistence.project_io import load_project, save_project
 from opencae.results import FrdLoader
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand
+from opencae.ui.core.application_preferences import apply_application_preferences
 from opencae.ui.core.file_dialogs import open_file, save_file
 from opencae.ui.dialogs.preferences import PreferencesDialog
 from opencae.ui.dialogs.project_settings import ProjectSettingsDialog
+from opencae.ui.preferences.runtime import apply_window_preferences
 
 from .dialog_runner import get_values
 
@@ -48,8 +50,6 @@ class ProjectController:
             self.store.message.emit(f"Could not open project: {exc}")
             return
 
-        # The old document stays fully intact until loading and validation have
-        # succeeded. Only then can its geometry cache be discarded.
         CACHE.clear()
         self.store.replace(project, f"Opened {path}")
         self._fit_loaded_content()
@@ -131,29 +131,65 @@ class ProjectController:
                     ),
                 )
             )
-            self.store.execute("Updated project settings", command)
+            self.store.execute("Updated project properties", command)
 
     def preferences(self, page="General"):
-        """Apply application preferences and update the active unit system."""
-        values = get_values(PreferencesDialog(self.settings, self.parent, page))
-        if not values:
-            return
-        self.settings.solver_configs = values.pop("solver_configs")
-        self.settings.unit_systems = values.pop("unit_systems")
-        selected = values.pop("selected_unit_system")
-        self.settings.selected_unit_system = selected
-        for key, value in values.items():
-            self.settings.set_value("ui/" + key, value)
-        enabled = self.settings.enabled_solvers()
-        if self.settings.selected_solver not in enabled:
-            self.settings.selected_solver = enabled[0] if enabled else ""
-        self.set_unit_system(selected)
-        self.parent.ribbon.refresh_solvers()
+        """Open the authoritative application Settings dialog."""
+        # QAction.triggered forwards a checked bool to slots. Treat that as the
+        # normal no-argument invocation rather than as an initial page name.
+        if isinstance(page, bool):
+            page = "General"
+
+        context = getattr(self.parent, "context", None)
+        solvers = getattr(context, "solvers", {}) if context is not None else {}
+        dialog = PreferencesDialog(
+            self.settings,
+            solvers=solvers,
+            parent=self.parent,
+            initial_page=str(page or "General"),
+        )
+        dialog.applied.connect(self._apply_preferences)
+        dialog.exec()
+
+    def _apply_preferences(self, values):
+        """Persist one validated Settings snapshot and refresh live-safe UI state."""
+        preferences = dict(values.get("preferences", {}) or {})
+        for key, value in preferences.items():
+            self.settings.set_preference(key, value)
+
+        self.settings.solver_configs = dict(values.get("solver_configs", {}) or {})
+        requested_solver = str(values.get("selected_solver", "") or "")
+        configs = self.settings.solver_configs
+        self.settings.selected_solver = (
+            requested_solver if requested_solver in configs else next(iter(configs), "")
+        )
+
+        systems = list(values.get("unit_systems", ()) or ())
+        if systems:
+            self.settings.unit_systems = systems
+        selected_unit = str(values.get("selected_unit_system", "") or "")
+        if selected_unit:
+            self.settings.selected_unit_system = selected_unit
+
+        self.settings.sync()
+
+        from PyQt6.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None:
+            apply_application_preferences(app, self.settings)
+        apply_window_preferences(self.parent, self.settings)
+
+        if selected_unit:
+            self.set_unit_system(selected_unit)
+        ribbon = getattr(self.parent, "ribbon", None)
+        if ribbon is not None and hasattr(ribbon, "refresh_solvers"):
+            ribbon.refresh_solvers()
         self.parent.refresh_action_states()
-        self.store.message.emit("Preferences updated")
+        self.store.message.emit("Settings updated")
 
     def unit_preferences(self):
-        """Open the Unit Systems preferences page."""
+        """Open the Unit Systems page in the global Settings dialog."""
         self.preferences("Unit Systems")
 
     def set_unit_system(self, name):
@@ -161,6 +197,8 @@ class ProjectController:
         if name not in {item.name for item in self.settings.unit_systems}:
             return
         self.settings.selected_unit_system = name
+        if self.store.project.unit_system == name:
+            return
         self.store.execute(
             f"Changed unit system to {name}",
             UpdateFieldCommand(
@@ -180,7 +218,11 @@ class ProjectController:
             )
 
     def _fit_loaded_content(self):
-        """Frame newly opened project content on the next coalesced scene rebuild."""
+        """Frame newly opened project content when the viewport preference allows it."""
+        if not bool(
+            self.settings.preference("viewport/auto_fit_loaded_content", True)
+        ):
+            return
         viewport = getattr(self.parent, "viewport", None)
         if viewport is not None:
             viewport.request_refresh(fit=True)
