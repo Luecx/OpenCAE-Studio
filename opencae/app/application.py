@@ -40,10 +40,11 @@ def run() -> int:
     app.setOrganizationName("OpenCAE")
     app.setStyle("Fusion")
 
-    # Color preference is intentionally applied before constructing even the
-    # lightweight splash. Every widget can therefore read the same process-wide
-    # semantic PALETTE at construction time, including custom local painters.
+    # Apply process-wide visual preferences before constructing even the
+    # lightweight splash. Every widget therefore starts from the same theme and
+    # font scale, and the stylesheet can inherit the platform font cleanly.
     from opencae.store.app_settings import AppSettings
+    from opencae.ui.core.application_preferences import apply_application_preferences
     from opencae.ui.core.theme import DEFAULT_COLOR_SCHEME, apply_color_scheme
 
     appearance = AppSettings()
@@ -52,6 +53,7 @@ def run() -> int:
         appearance.value("appearance/color_scheme", DEFAULT_COLOR_SCHEME),
     )
     appearance.set_value("appearance/color_scheme", scheme)
+    apply_application_preferences(app, appearance)
 
     startup = StartupWindow()
     startup.show()
