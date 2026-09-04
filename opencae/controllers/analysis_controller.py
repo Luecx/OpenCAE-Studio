@@ -6,7 +6,6 @@ from copy import deepcopy
 
 from PyQt6.QtWidgets import QDialog
 
-from opencae.deck_formats.selection import default_profile_id
 from opencae.model.core import EntityRef
 from opencae.model.entities.analysis import Analysis, AnalysisStep
 from opencae.model.naming import next_name_from_names
@@ -14,7 +13,6 @@ from opencae.solvers.registry import available_solvers
 from opencae.store.commands import UpdateFieldCommand
 from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
 from opencae.ui.dialogs.run_analysis import RunAnalysisDialog
-from opencae.ui.dialogs.solver_settings import SolverSettingsDialog
 from opencae.ui.dialogs.step import StepDialog
 from opencae.ui.dialogs.step_collectors import StepCollectorsDialog
 from opencae.ui.dialogs.step_reorder import StepReorderDialog
@@ -198,7 +196,7 @@ class AnalysisController:
             ),
             solver=solver,
             deck_profile_id=(
-                default_profile_id(adapter)
+                self.settings.default_deck_profile_id(solver, adapter)
                 if adapter is not None
                 else "builtin:femaster"
             ),
@@ -288,20 +286,3 @@ class AnalysisController:
             return
         if self.jobs is not None:
             self.jobs.validate_analysis(analysis.id)
-
-    def settings_dialog(self):
-        dialog = SolverSettingsDialog(
-            self.settings.solver_configs,
-            self.parent,
-        )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        self.settings.solver_configs = dialog.values()
-        enabled = self.settings.enabled_solvers()
-        if self.settings.selected_solver not in enabled:
-            self.settings.selected_solver = enabled[0] if enabled else ""
-        self.store.message.emit("Solver settings updated")
-        ribbon = getattr(self.parent, "ribbon", None)
-        if ribbon and hasattr(ribbon, "refresh_solvers"):
-            ribbon.refresh_solvers()
-        self.parent.refresh_action_states()
