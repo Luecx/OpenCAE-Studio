@@ -103,4 +103,5 @@ def test_preferences_no_longer_expose_a_second_theme_selector():
     assert 'settings.value("ui/theme"' not in source
     assert "self.theme" not in source
     assert '"theme":' not in source
-    assert 'field_block("Icon scale", self.icon_scale)' in source
+    assert '"appearance/color_scheme"' not in source
+    assert '"ui/icon_scale"' in source
