@@ -3,7 +3,15 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QHBoxLayout, QMessageBox, QStackedWidget
+from PyQt6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QFrame,
+    QHBoxLayout,
+    QMessageBox,
+    QScrollArea,
+    QStackedWidget,
+)
 
 from opencae.ui.preferences import (
     AppearancePage,
@@ -83,6 +91,7 @@ class PreferencesDialog(QDialog):
             "Results": self.results,
             "Unit Systems": self.units,
         }
+        self._hosts = {}
         groups = (
             ("GENERAL", ("General", "Appearance")),
             ("WORKSPACE", ("Viewport", "Files & Projects", "Results")),
@@ -93,10 +102,12 @@ class PreferencesDialog(QDialog):
         for group, titles in groups:
             for title in titles:
                 self.navigation.add_page(group, title)
-                self.stack.addWidget(self._pages[title])
+                host = self._scroll_host(self._pages[title])
+                self._hosts[title] = host
+                self.stack.addWidget(host)
 
         self.navigation.page_changed.connect(self._show_page)
-        self.navigation.select_page(initial_page)
+        self.navigation.select_page(str(initial_page or "General"))
 
         buttons = dialog_buttons(include_apply=True)
         apply_button = buttons.button(QDialogButtonBox.StandardButton.Apply)
@@ -106,10 +117,23 @@ class PreferencesDialog(QDialog):
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
 
+    @staticmethod
+    def _scroll_host(page):
+        """Wrap one page in a frameless scroll area for smaller displays."""
+        host = QScrollArea()
+        host.setObjectName("PreferencesPageScroll")
+        host.setFrameShape(QFrame.Shape.NoFrame)
+        host.setWidgetResizable(True)
+        host.setHorizontalScrollBarPolicy(
+            host.horizontalScrollBarPolicy().ScrollBarAlwaysOff
+        )
+        host.setWidget(page)
+        return host
+
     def _show_page(self, title: str) -> None:
-        page = self._pages.get(str(title))
-        if page is not None:
-            self.stack.setCurrentWidget(page)
+        host = self._hosts.get(str(title))
+        if host is not None:
+            self.stack.setCurrentWidget(host)
 
     def _apply(self, *, close: bool) -> None:
         """Validate dependent pages and emit one complete settings snapshot."""
