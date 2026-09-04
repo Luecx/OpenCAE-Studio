@@ -1,5 +1,6 @@
 """Miscellaneous application stylesheet rules."""
 
+
 def css(p):
     return f"""
     QToolBar#RibbonHost {{
@@ -57,15 +58,19 @@ def css(p):
         padding: 0px 10px; margin: 0px; color: {p['muted']};
         background: transparent; border: none; border-radius: 5px;
     }}
-    QListWidget#PreferencesNavigationList::item:hover {{ color: {p['text']}; background: {p['panel_hover']}; }}
+    QListWidget#PreferencesNavigationList::item:hover {{
+        color: {p['text']}; background: {p['panel_hover']};
+    }}
     QListWidget#PreferencesNavigationList::item:selected {{
-        color: {p['selection_text']}; background: {p['selection']}; border: none;
+        color: {p['text']}; background: {p['panel_active']}; border: 1px solid {p['border']};
     }}
     QLabel[preferencesGroupHeader="true"] {{
         color: {p['disabled']}; background: transparent; border: none;
         padding: 8px 8px 2px 8px; font-size: 10px; font-weight: 600;
     }}
     QStackedWidget#PreferencesPageStack {{ background: {p['panel']}; border: none; padding: 0px; }}
+    QScrollArea#PreferencesPageScroll {{ background: {p['panel']}; border: none; }}
+    QScrollArea#PreferencesPageScroll > QWidget > QWidget {{ background: {p['panel']}; }}
     QLabel#PreferencesPageTitle {{
         color: {p['text']}; background: transparent; font-size: 19px; font-weight: 600;
     }}
