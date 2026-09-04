@@ -70,7 +70,6 @@ def test_analysis_ribbon_separates_definition_and_execution_groups():
                 "VALIDATE",
                 "PREVIEW_DECK",
                 "WRITE_DECK",
-                "SOLVER_SETTINGS",
                 "ANALYSIS_RUN",
             ),
         ),
