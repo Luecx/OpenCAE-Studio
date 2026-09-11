@@ -34,9 +34,7 @@ class PartMeshGeneration:
         if not self.ctx.require_geometry(part):
             return
         if not part.mesh.seeds:
-            self.ctx.store.message.emit(
-                "Create a part or edge seed before meshing"
-            )
+            self.ctx.store.message.emit("Create a part or edge seed before meshing")
             return
         if self._mesh_task is not None and self._mesh_task.isRunning():
             self.ctx.store.message.emit(
@@ -89,14 +87,12 @@ class PartMeshGeneration:
         current = self.ctx.store.project.try_resolve(part_id)
         if current is None:
             self.ctx.store.message.emit(
-                f"Discarded generated mesh for {part_name}; "
-                "the Part no longer exists"
+                f"Discarded generated mesh for {part_name}; the Part no longer exists"
             )
             return
         if part_fingerprint(current, include_mesh=True) != source_fingerprint:
             self.ctx.store.message.emit(
-                f"Discarded generated mesh for {part_name}; "
-                "the Part changed while meshing"
+                f"Discarded generated mesh for {part_name}; the Part changed while meshing"
             )
             return
 
@@ -126,9 +122,7 @@ class PartMeshGeneration:
         if token != self._mesh_generation_token:
             return
         self.ctx.error("Mesh generation failed", error)
-        self.ctx.store.message.emit(
-            f"Mesh generation failed for {part_name}"
-        )
+        self.ctx.store.message.emit(f"Mesh generation failed for {part_name}")
 
     def clear_mesh(self):
         part = self.ctx.active_part()
@@ -174,7 +168,7 @@ class PartMeshGeneration:
             self.ctx.store.add_entity(
                 description,
                 part.id,
-                "mesh.element_definitions",
+                "mesh.finite_elements.element_definitions",
                 target,
             )
         else:
@@ -197,11 +191,7 @@ class PartMeshGeneration:
                     )
             if not commands:
                 return
-            command = (
-                commands[0]
-                if len(commands) == 1
-                else CompositeCommand(tuple(commands))
-            )
+            command = commands[0] if len(commands) == 1 else CompositeCommand(tuple(commands))
             self.ctx.store.execute(description, command)
 
         self.ctx.store.invalidate_scene(description)

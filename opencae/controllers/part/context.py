@@ -24,12 +24,14 @@ class PartContext:
         self.store = store
         self.parent = parent
         self.units = units
+        self.app_settings = getattr(getattr(parent, "context", None), "settings", None)
         self.service = GeometryService()
 
     def active_part(self):
         return self.store.active_part()
 
     def replace_mesh(self, part_id, mesh, description):
+        """Install a detached MeshState by zero-copy ownership transfer."""
         self.store.execute(
             description,
             OwnedFieldSwapCommand(part_id, "mesh", mesh),
@@ -67,6 +69,7 @@ class PartContext:
         return candidate
 
     def commit_geometry_candidate(self, candidate, description):
+        """Commit geometry plus orthogonal mesh validity, never FE payloads."""
         live = self.store.project.try_resolve(candidate.id)
         if live is None:
             self.store.message.emit("The edited part no longer exists")
@@ -80,13 +83,13 @@ class PartContext:
                 commands.append(
                     UpdateFieldCommand(live.id, field_name, before, after)
                 )
-        if live.mesh.status != candidate.mesh.status:
+        if live.mesh.lifecycle.validity != candidate.mesh.lifecycle.validity:
             commands.append(
                 UpdateFieldCommand(
                     live.id,
-                    "mesh.status",
-                    live.mesh.status,
-                    candidate.mesh.status,
+                    "mesh.lifecycle.validity",
+                    live.mesh.lifecycle.validity,
+                    candidate.mesh.lifecycle.validity,
                 )
             )
         if not commands:

@@ -67,14 +67,18 @@ class GeometryAssociationState(StrEnum):
 @register_model_type("mesh_lifecycle_state")
 @dataclass
 class MeshLifecycleState:
-    """Describe mesh state without conflating provenance with validity."""
+    """Describe mesh state without conflating provenance with validity.
 
-    origin: MeshEntityOrigin | str = MeshEntityOrigin.AUTHORED
+    ``GENERATED`` is the neutral default for a populated mesh reconstructed from
+    compact storage. An empty mesh still reports ``Not generated`` through the
+    compatibility facade, while the first authored entity explicitly changes
+    the origin to ``AUTHORED``.
+    """
+
+    origin: MeshEntityOrigin | str = MeshEntityOrigin.GENERATED
     edit_state: MeshEditState | str = MeshEditState.CLEAN
     validity: MeshValidity | str = MeshValidity.CURRENT
-    geometry_association: GeometryAssociationState | str = (
-        GeometryAssociationState.NONE
-    )
+    geometry_association: GeometryAssociationState | str = GeometryAssociationState.NONE
     revision: str = ""
 
     def __post_init__(self) -> None:
@@ -86,9 +90,7 @@ class MeshLifecycleState:
         )
 
     def mark_modified(self, *, detached=False) -> None:
-        self.edit_state = (
-            MeshEditState.DETACHED if detached else MeshEditState.MODIFIED
-        )
+        self.edit_state = MeshEditState.DETACHED if detached else MeshEditState.MODIFIED
         if detached:
             self.geometry_association = GeometryAssociationState.DETACHED
 
