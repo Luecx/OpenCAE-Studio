@@ -1,4 +1,4 @@
-"""Coordinates mesh generation, clearing, and element-definition editing."""
+"""Coordinates mesh generation, clearing, remeshing policy, and definitions."""
 
 from copy import deepcopy
 
@@ -6,9 +6,16 @@ from opencae.controllers.background_task import BackgroundTask
 from opencae.geometry import GeometryService
 from opencae.geometry.element_controls_apply import apply_all_controls
 from opencae.geometry.fingerprint import part_fingerprint
-from opencae.model.mesh import MeshState, create_element_definition
+from opencae.model.mesh import (
+    MeshLifecycleState,
+    MeshState,
+    create_element_definition,
+    merge_remesh_result,
+    requires_remesh_decision,
+)
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand
 from opencae.ui.dialogs.edit_elements import EditElementsDialog
+from opencae.ui.dialogs.remesh_policy import RemeshPolicyDialog
 
 from .mesh_persistence import apply_mesh_snapshot
 from ..dialog_runner import get_values
@@ -18,13 +25,11 @@ class PartMeshGeneration:
     """Controller flow for persistent mesh state on the active Part."""
 
     def __init__(self, context):
-        """Bind the shared Part-controller context."""
         self.ctx = context
         self._mesh_task: BackgroundTask | None = None
         self._mesh_generation_token = 0
 
     def generate_mesh(self):
-        """Generate a fresh mesh off-thread without copying the old FE payload."""
         part = self.ctx.active_part()
         if not self.ctx.require_geometry(part):
             return
@@ -38,6 +43,12 @@ class PartMeshGeneration:
                 f"Mesh generation for {part.name} is already running"
             )
             return
+
+        policy = None
+        if requires_remesh_decision(part.mesh):
+            policy = get_values(RemeshPolicyDialog(self.ctx.parent))
+            if policy is None:
+                return
 
         candidate = self.ctx.mesh_generation_candidate(part)
         source_fingerprint = part_fingerprint(part, include_mesh=True)
@@ -55,6 +66,7 @@ class PartMeshGeneration:
                 part_name,
                 source_fingerprint,
                 token,
+                policy,
             ),
             on_error=lambda error: self._mesh_failed(error, part_name, token),
             parent=self.ctx.parent,
@@ -69,24 +81,27 @@ class PartMeshGeneration:
         part_name,
         source_fingerprint,
         token,
+        policy,
     ) -> None:
-        """Commit a worker result only if the source meshing inputs are unchanged."""
         self._mesh_task = None
         if token != self._mesh_generation_token:
             return
         current = self.ctx.store.project.try_resolve(part_id)
         if current is None:
             self.ctx.store.message.emit(
-                f"Discarded generated mesh for {part_name}; the Part no longer exists"
+                f"Discarded generated mesh for {part_name}; "
+                "the Part no longer exists"
             )
             return
         if part_fingerprint(current, include_mesh=True) != source_fingerprint:
             self.ctx.store.message.emit(
-                f"Discarded generated mesh for {part_name}; the Part changed while meshing"
+                f"Discarded generated mesh for {part_name}; "
+                "the Part changed while meshing"
             )
             return
 
         candidate, snapshot = result
+        merge_remesh_result(current.mesh, candidate.mesh, policy)
         self.ctx.service.invalidate(part_id, mesh_only=True)
         self.ctx.replace_mesh(
             part_id,
@@ -111,22 +126,18 @@ class PartMeshGeneration:
         if token != self._mesh_generation_token:
             return
         self.ctx.error("Mesh generation failed", error)
-        self.ctx.store.message.emit(f"Mesh generation failed for {part_name}")
+        self.ctx.store.message.emit(
+            f"Mesh generation failed for {part_name}"
+        )
 
     def clear_mesh(self):
-        """Clear FE payload by swapping in an empty configured MeshState."""
         part = self.ctx.active_part()
         if part is None:
             return
-        # Invalidate any still-running worker result. Gmsh itself is not killed
-        # unsafely; when it finishes its stale token is simply discarded.
         self._mesh_generation_token += 1
         replacement = MeshState(
-            settings=deepcopy(part.mesh.settings),
-            seeds=deepcopy(part.mesh.seeds),
-            element_controls=deepcopy(part.mesh.element_controls),
-            status="Not generated",
-            revision=part.mesh.revision,
+            recipe=deepcopy(part.mesh.recipe),
+            lifecycle=MeshLifecycleState(revision=part.mesh.revision),
         )
         self.ctx.service.invalidate(part.id, mesh_only=True)
         self.ctx.replace_mesh(
@@ -136,7 +147,6 @@ class PartMeshGeneration:
         )
 
     def edit_elements(self):
-        """Edit element-definition metadata without cloning the generated mesh."""
         values = get_values(EditElementsDialog(self.ctx.parent))
         part = self.ctx.active_part()
         if not values or part is None:
@@ -198,7 +208,6 @@ class PartMeshGeneration:
 
 
 def _generate_mesh_candidate(candidate):
-    """Build and persist one local mesh candidate without touching live Qt state."""
     snapshot = GeometryService().generate_mesh(candidate)
     apply_mesh_snapshot(candidate, snapshot)
     apply_all_controls(candidate)

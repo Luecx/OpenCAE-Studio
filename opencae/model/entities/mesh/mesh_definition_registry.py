@@ -11,7 +11,7 @@ def definition_for(
     mesh,
     reference: EntityRef | str | None,
 ) -> ElementDefinition | None:
-    """Resolve one block definition reference within a MeshState."""
+    """Resolve one block definition reference within a mesh aggregate."""
     entity_id = (
         reference.entity_id
         if isinstance(reference, EntityRef)
@@ -48,8 +48,8 @@ def replace_element_blocks(mesh, blocks: list[ElementBlock]) -> None:
             by_key[key] = definition
             canonical.append(definition)
 
-    object.__setattr__(mesh, "element_definitions", canonical)
-    object.__setattr__(mesh, "element_blocks", list(blocks))
+    _set_definitions(mesh, canonical)
+    _set_blocks(mesh, list(blocks))
     for block, source in zip(
         mesh.element_blocks,
         source_definitions,
@@ -62,19 +62,18 @@ def replace_element_blocks(mesh, blocks: list[ElementBlock]) -> None:
 
 def bind_element_blocks(mesh, register_missing: bool = True) -> None:
     """Bind current blocks and optionally register runtime definitions."""
-    if "element_blocks" not in mesh.__dict__:
-        return
+    blocks = list(getattr(mesh, "element_blocks", ()))
     definitions = list(getattr(mesh, "element_definitions", ()))
     by_id = {definition.id: definition for definition in definitions}
     bindings: list[tuple[ElementBlock, ElementDefinition]] = []
 
-    for block in mesh.element_blocks:
+    for block in blocks:
         definition = by_id.get(block.definition_ref.entity_id)
         runtime_definition = block.definition
         if definition is None and runtime_definition is not None:
             if not register_missing:
                 raise ValueError(
-                    "ElementBlock definition is not owned by MeshState"
+                    "ElementBlock definition is not owned by its mesh"
                 )
             equivalent = next(
                 (
@@ -97,7 +96,7 @@ def bind_element_blocks(mesh, register_missing: bool = True) -> None:
             )
         bindings.append((block, definition))
 
-    object.__setattr__(mesh, "element_definitions", definitions)
+    _set_definitions(mesh, definitions)
     for block, definition in bindings:
         _bind_block(mesh, block, definition)
     refresh_definition_counts(mesh)
@@ -124,6 +123,22 @@ def definition_key(definition: ElementDefinition) -> tuple:
         definition.formulation,
         int(definition.gmsh_type),
     )
+
+
+def _set_definitions(mesh, values) -> None:
+    finite_elements = getattr(mesh, "finite_elements", None)
+    if finite_elements is not None:
+        finite_elements.element_definitions = list(values)
+    else:
+        object.__setattr__(mesh, "element_definitions", list(values))
+
+
+def _set_blocks(mesh, values) -> None:
+    finite_elements = getattr(mesh, "finite_elements", None)
+    if finite_elements is not None:
+        finite_elements.element_blocks = list(values)
+    else:
+        object.__setattr__(mesh, "element_blocks", list(values))
 
 
 def _bind_block(

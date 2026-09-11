@@ -1,11 +1,10 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ...core import register_model_type
-from opencae.model.selection import RegionProjection
-from .region import Region
+from .region import NodeRegion
 
 
 @register_model_type("node_set")
 @dataclass
-class NodeSet(Region):
-    preferred_projection: RegionProjection = field(init=False, default=RegionProjection.NODES)
+class NodeSet(NodeRegion):
+    """Legacy persisted alias for NodeRegion."""

@@ -15,23 +15,20 @@ def part_for(project, part_id: str) -> Part:
 
 
 def metadata(mesh) -> tuple:
-    """Capture scalar derived state invalidated by a manual edit."""
+    """Capture small derived/lifecycle state invalidated by a manual edit."""
     return (
-        mesh.status,
-        mesh.minimum_quality,
-        mesh.mean_quality,
+        deepcopy(mesh.lifecycle),
+        deepcopy(mesh.quality),
         mesh.mesh_dimension,
     )
 
 
 def restore_metadata(mesh, values: tuple) -> None:
-    """Restore scalar derived state after undoing a mesh edit."""
-    (
-        mesh.status,
-        mesh.minimum_quality,
-        mesh.mean_quality,
-        mesh.mesh_dimension,
-    ) = values
+    """Restore lifecycle/quality state after undoing a mesh edit."""
+    lifecycle, quality, mesh_dimension = values
+    mesh.lifecycle = deepcopy(lifecycle)
+    mesh.quality = deepcopy(quality)
+    mesh.mesh_dimension = mesh_dimension
 
 
 def associations(mesh, *, node_ids=(), element_ids=()) -> dict:

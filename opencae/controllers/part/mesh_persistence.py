@@ -2,14 +2,18 @@
 
 from opencae.geometry.element_summary import definition_from_block
 from opencae.model.entities.fem import MeshEntityOrigin
-from opencae.model.entities.mesh import MeshStatus
+from opencae.model.entities.mesh import (
+    GeometryAssociationState,
+    MeshEditState,
+    MeshValidity,
+)
 from opencae.model.entities.parts import PartSourceKind
 from opencae.model.mesh import ElementBlock, NodeTable
 from opencae.model.selection import element_side_indices
 
 
 def apply_mesh_snapshot(candidate, snapshot) -> None:
-    """Replace one Part candidate's generated mesh from a service snapshot."""
+    """Replace FE payload and initialize orthogonal lifecycle state."""
     origin = (
         MeshEntityOrigin.IMPORTED
         if candidate.source_type is PartSourceKind.ORPHAN_MESH
@@ -56,28 +60,31 @@ def apply_mesh_snapshot(candidate, snapshot) -> None:
     candidate.mesh.node_count = len(snapshot.points)
     candidate.mesh.element_count = sum(len(block) for block in blocks)
     candidate.mesh.mesh_dimension = snapshot.dimension
-    candidate.mesh.status = MeshStatus.CURRENT
     candidate.mesh.revision = str(
         getattr(snapshot, "fingerprint", "")
         or candidate.mesh.revision
         or "generated"
     )
     candidate.mesh.entity_facets = _derive_entity_facets(candidate)
+
+    candidate.mesh.lifecycle.origin = origin
+    candidate.mesh.lifecycle.edit_state = MeshEditState.CLEAN
+    candidate.mesh.lifecycle.validity = MeshValidity.CURRENT
+    candidate.mesh.lifecycle.geometry_association = (
+        GeometryAssociationState.ATTACHED
+        if not candidate.mesh.associations.empty
+        else GeometryAssociationState.NONE
+    )
+
     if snapshot.qualities is not None and len(snapshot.qualities):
         candidate.mesh.minimum_quality = float(snapshot.qualities.min())
         candidate.mesh.mean_quality = float(snapshot.qualities.mean())
+    else:
+        candidate.mesh.quality.invalidate()
 
 
 def _derive_entity_facets(part):
-    """Persist CAD-face to oriented element-side associations at mesh time.
-
-    Gmsh reports ``getElements(2, face_tag)`` using the ids of its generated
-    *surface* elements.  For a 3D mesh those ids are not the ids of the volume
-    elements stored by OpenCAE, so they must never be used to filter solid
-    elements.  Solid sides are instead identified from the persisted CAD-face
-    node membership.  For a native 2D/shell mesh the entity element ids are in
-    the same dimension and remain the most precise membership signal.
-    """
+    """Persist CAD-face to oriented element-side associations at mesh time."""
     result = {}
     for label, node_ids in part.mesh.entity_nodes.items():
         if not str(label).startswith("Face-"):
@@ -105,10 +112,6 @@ def _derive_entity_facets(part):
                         if element_nodes and element_nodes.issubset(nodes):
                             facets.append((element_id, "SPOS"))
                     continue
-
-                # For solid meshes, Face-* entity_elements contains Gmsh's
-                # lower-dimensional surface-element ids, not our volume ids.
-                # Match each oriented solid side against the CAD face's nodes.
                 for side, indices in element_side_indices(
                     block.definition.topology
                 ):

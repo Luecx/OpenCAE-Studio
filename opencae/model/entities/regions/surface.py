@@ -1,11 +1,10 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ...core import register_model_type
-from opencae.model.selection import RegionProjection
-from .region import Region
+from .region import SurfaceRegion
 
 
 @register_model_type("surface")
 @dataclass
-class Surface(Region):
-    preferred_projection: RegionProjection = field(init=False, default=RegionProjection.FACETS)
+class Surface(SurfaceRegion):
+    """Legacy persisted alias for SurfaceRegion."""
