@@ -13,7 +13,10 @@ from .result_status import ResultStatus
 class ResultSet(Entity):
     """Persistent result metadata linked to the Job that produced it."""
 
-    job_ref: EntityRef | None = None
+    job_ref: EntityRef | None = field(
+        default=None,
+        metadata={"reference_type": "Job"},
+    )
     source_file: str = ""
     status: ResultStatus | str = ResultStatus.UNAVAILABLE
     fields: list[ResultField] = field(default_factory=list)

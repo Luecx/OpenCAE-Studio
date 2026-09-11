@@ -48,4 +48,10 @@ def create_element(
                 f"Node {node.id} does not belong to Part '{part.name}'"
             )
 
-    return part.mesh.add_element(element_type, node_values, element_id)
+    element = part.mesh.add_element(element_type, node_values, element_id)
+
+    # The first element of a definition creates an Entity-owned
+    # ElementDefinition inside MeshState. Keep the public authoring boundary's
+    # ProjectIndex contract identical to all other entity-creating operations.
+    model._refresh()
+    return element

@@ -7,7 +7,12 @@ from typing import Iterator
 
 from ...core import EntityRef, register_model_type
 from ..elements.base import ElementDefinition
-from ..fem import Element, Node, element_class_for_definition
+from ..fem import (
+    Element,
+    MeshEntityOrigin,
+    Node,
+    element_class_for_definition,
+)
 from .element_block import ElementBlock
 from .element_control import ElementControl
 from .mesh_definition_registry import (
@@ -92,14 +97,15 @@ class MeshState:
 
     def add_node(
         self,
-        coordinates: tuple[float, float, float],
+        coordinates: Node | tuple[float, float, float],
         node_id: int | None = None,
+        *,
+        origin: MeshEntityOrigin | str = MeshEntityOrigin.AUTHORED,
     ) -> Node:
         """Add one authored Node and update compact mesh metadata."""
-        node = self.nodes.add(coordinates, node_id)
+        node = self.nodes.add(coordinates, node_id, origin)
         self.node_count = len(self.nodes)
-        if self.status is MeshStatus.NOT_GENERATED:
-            self.status = MeshStatus.AUTHORED
+        self._mark_authored()
         return node
 
     def next_element_id(self) -> int:
@@ -118,6 +124,8 @@ class MeshState:
         element_type: type[Element],
         nodes: tuple[Node, ...] | list[Node],
         element_id: int | None = None,
+        *,
+        origin: MeshEntityOrigin | str = MeshEntityOrigin.AUTHORED,
     ) -> Element:
         """Add one authored Element after validating type and node ownership."""
         if not isinstance(element_type, type) or not issubclass(
@@ -129,7 +137,10 @@ class MeshState:
         element = element_type(
             element_id or self.next_element_id(),
             tuple(nodes),
+            origin,
         )
+        if any(element.id in block.ids for block in self.element_blocks):
+            raise ValueError(f"Element id {element.id} already exists")
         node_ids = set(self.nodes.ids)
         missing = [node.id for node in element.nodes if node.id not in node_ids]
         if missing:
@@ -154,18 +165,171 @@ class MeshState:
         block.add(element)
         self.element_count = sum(len(item) for item in self.element_blocks)
         refresh_definition_counts(self)
-        if self.status is MeshStatus.NOT_GENERATED:
-            self.status = MeshStatus.AUTHORED
+        self._mark_authored()
         return element
+
+    def node(self, node_id: int) -> Node:
+        """Return one current node value by stable positive ID."""
+        return self.nodes.get(node_id)
+
+    def element(self, element_id: int) -> Element:
+        """Return one current element value reconstructed from compact storage."""
+        block = self._block_for_element(element_id)
+        index = block.position(element_id)
+        nodes = tuple(self.nodes.get(node_id) for node_id in block.connectivity[index])
+        element_type = element_class_for_definition(block.definition)
+        return element_type(element_id, nodes, block.origins[index])
+
+    def incident_element_ids(self, node_id: int) -> tuple[int, ...]:
+        """Return all elements whose connectivity contains the requested node."""
+        node_id = int(node_id)
+        return tuple(
+            element_id
+            for block in self.element_blocks
+            for element_id, connectivity in zip(
+                block.ids,
+                block.connectivity,
+                strict=True,
+            )
+            if node_id in connectivity
+        )
+
+    def move_node(
+        self,
+        node_id: int,
+        coordinates: tuple[float, float, float],
+    ) -> Node:
+        """Move one node, detach affected CAD membership, and invalidate quality."""
+        incident = self.incident_element_ids(node_id)
+        node = self.nodes.update(node_id, coordinates)
+        self._detach_from_geometry(node_ids=(node_id,), element_ids=incident)
+        self._mark_authored()
+        return node
+
+    def remove_node(self, node_id: int) -> Node:
+        """Remove an unused node while refusing dangling element connectivity."""
+        incident = self.incident_element_ids(node_id)
+        if incident:
+            joined = ", ".join(str(value) for value in incident[:8])
+            suffix = "…" if len(incident) > 8 else ""
+            raise ValueError(
+                f"Node {node_id} is used by element(s) {joined}{suffix}; "
+                "delete or reconnect those elements first"
+            )
+        node = self.nodes.remove(node_id)
+        self._detach_from_geometry(node_ids=(node_id,))
+        self.node_count = len(self.nodes)
+        self._mark_authored()
+        return node
+
+    def replace_element(
+        self,
+        element_id: int,
+        element_type: type[Element],
+        nodes: tuple[Node, ...] | list[Node],
+    ) -> Element:
+        """Replace one element's type/connectivity while preserving its ID."""
+        before_block = self._block_for_element(element_id)
+        after = element_type(
+            int(element_id),
+            tuple(nodes),
+            MeshEntityOrigin.AUTHORED,
+        )
+        owned_ids = set(self.nodes.ids)
+        missing = [node.id for node in after.nodes if node.id not in owned_ids]
+        if missing:
+            raise ValueError(f"Element references missing node ids: {missing}")
+
+        if isinstance(before_block.definition, element_type.definition_type):
+            before_block.replace(after)
+        else:
+            before_block.remove(element_id)
+            self._remove_empty_block(before_block)
+            self.add_element(
+                element_type,
+                after.nodes,
+                element_id,
+                origin=MeshEntityOrigin.AUTHORED,
+            )
+        self._detach_from_geometry(element_ids=(element_id,))
+        refresh_definition_counts(self)
+        self._mark_authored()
+        return after
+
+    def remove_element(self, element_id: int) -> Element:
+        """Remove one element and all of its optional CAD associations."""
+        element = self.element(element_id)
+        block = self._block_for_element(element_id)
+        block.remove(element_id)
+        self._remove_empty_block(block)
+        self._detach_from_geometry(element_ids=(element_id,))
+        self.element_count = sum(len(item) for item in self.element_blocks)
+        refresh_definition_counts(self)
+        self._mark_authored()
+        return element
+
+    def _block_for_element(self, element_id: int) -> ElementBlock:
+        """Return the unique compact block containing an element ID."""
+        matches = [
+            block for block in self.element_blocks if int(element_id) in block.ids
+        ]
+        if not matches:
+            raise KeyError(f"Element {element_id} does not exist")
+        if len(matches) > 1:
+            raise ValueError(f"Element id {element_id} exists in multiple blocks")
+        return matches[0]
+
+    def _remove_empty_block(self, block: ElementBlock) -> None:
+        """Drop empty compact blocks and their now-unreferenced definitions."""
+        if len(block):
+            return
+        self.element_blocks.remove(block)
+        referenced = {
+            item.definition_ref.entity_id for item in self.element_blocks
+        }
+        self.element_definitions = [
+            definition
+            for definition in self.element_definitions
+            if definition.id in referenced
+        ]
+        bind_element_blocks(self)
+
+    def _detach_from_geometry(self, *, node_ids=(), element_ids=()) -> None:
+        """Remove optional CAD membership for manually changed mesh objects."""
+        nodes = {int(value) for value in node_ids}
+        elements = {int(value) for value in element_ids}
+        if nodes:
+            self.entity_nodes = {
+                key: [value for value in values if int(value) not in nodes]
+                for key, values in self.entity_nodes.items()
+            }
+        if elements:
+            self.entity_elements = {
+                key: [value for value in values if int(value) not in elements]
+                for key, values in self.entity_elements.items()
+            }
+            self.entity_facets = {
+                key: [
+                    value for value in values if int(value[0]) not in elements
+                ]
+                for key, values in self.entity_facets.items()
+            }
+
+    def _mark_authored(self) -> None:
+        """Invalidate derived quality and mark a mesh containing manual edits."""
+        self.status = MeshStatus.AUTHORED
+        self.minimum_quality = None
+        self.mean_quality = None
 
     def iter_elements(self) -> Iterator[Element]:
         """Yield authored Element objects reconstructed from compact blocks."""
         nodes = {node.id: node for node in self.nodes}
         for block in self.element_blocks:
             element_type = element_class_for_definition(block.definition)
-            for element_id, connectivity in zip(
+            for element_id, connectivity, origin in zip(
                 block.ids,
                 block.connectivity,
+                block.origins,
                 strict=True,
             ):
                 try:
@@ -177,4 +341,4 @@ class MeshState:
                         f"Element {element_id} references missing node "
                         f"{exc.args[0]}"
                     ) from exc
-                yield element_type(element_id, element_nodes)
+                yield element_type(element_id, element_nodes, origin)

@@ -15,11 +15,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from opencae.model.entities.analysis import StepType
 from opencae.ui.core.widgets import ChevronComboBox
 from opencae.ui.templates import (
     CheckList,
     SectionHeading,
     apply_primary_control_height,
+    dialog_layout,
     dialog_buttons,
     field_block,
     field_row,
@@ -35,13 +37,11 @@ class StepDialog(QDialog):
         self.step = step
         self.existing_names = tuple(existing_names)
         self.setWindowTitle(f"Edit {step.name}")
-        nonlinear = step.step_type == "Nonlinear Static"
+        nonlinear = step.step_type is StepType.NONLINEAR_STATIC
         self.setMinimumSize(760, 780 if nonlinear else 520)
         self.resize(820, 820 if nonlinear else 620)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 18)
-        root.setSpacing(16)
+        root = dialog_layout(self)
 
         self.name = QLineEdit(step.name)
         apply_primary_control_height(self.name)
@@ -50,7 +50,10 @@ class StepDialog(QDialog):
         self.modes.setValue(step.number_of_modes)
         apply_primary_control_height(self.modes)
 
-        if step.step_type in {"Eigenfrequency", "Linear Buckling"}:
+        if step.step_type in {
+            StepType.EIGENFREQUENCY,
+            StepType.LINEAR_BUCKLING,
+        }:
             root.addWidget(
                 field_row(
                     field_block("Name", self.name),
@@ -61,7 +64,7 @@ class StepDialog(QDialog):
             root.addWidget(field_block("Name", self.name))
 
         self._nonlinear_settings = None
-        if step.step_type == "Nonlinear Static":
+        if step.step_type is StepType.NONLINEAR_STATIC:
             root.addWidget(SectionHeading("Nonlinear Controls"))
             root.addWidget(self._build_nonlinear_controls())
 
@@ -313,7 +316,7 @@ class StepDialog(QDialog):
                 f"A step named '{self.name.text().strip()}' already exists.",
             )
             return
-        if self.step.step_type == "Nonlinear Static":
+        if self.step.step_type is StepType.NONLINEAR_STATIC:
             path = self.nonlinear_control.currentData() == "PATH"
             minimum = (
                 self.minimum_arc_length.value()
@@ -375,7 +378,7 @@ class StepDialog(QDialog):
             "support_ids": self.supports.selected_values(),
             "load_ids": self.loads.selected_values() if self.loads else [],
         }
-        if self.step.step_type == "Nonlinear Static":
+        if self.step.step_type is StepType.NONLINEAR_STATIC:
             result["time_period"] = self.time_period.value()
             result["settings"] = self._nonlinear_values()
         return result

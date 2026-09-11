@@ -1,15 +1,16 @@
 """Emit analysis loadcases and their numerical controls for FEMaster."""
 
+from opencae.model.entities.analysis import StepType
+
 from ..command import command
 
 _TYPES = {
-    "Linear Static": "LINEARSTATIC",
-    "Linear Static Topology": "LINEARSTATICTOPO",
-    "Nonlinear Static": "NONLINEARSTATIC",
-    "Eigenfrequency": "EIGENFREQ",
-    "Linear Buckling": "LINEARBUCKLING",
-    "Transient": "LINEARTRANSIENT",
-    "Linear Transient": "LINEARTRANSIENT",
+    StepType.LINEAR_STATIC: "LINEARSTATIC",
+    StepType.LINEAR_STATIC_TOPOLOGY: "LINEARSTATICTOPO",
+    StepType.NONLINEAR_STATIC: "NONLINEARSTATIC",
+    StepType.EIGENFREQUENCY: "EIGENFREQ",
+    StepType.LINEAR_BUCKLING: "LINEARBUCKLING",
+    StepType.TRANSIENT: "LINEARTRANSIENT",
 }
 
 
@@ -41,11 +42,11 @@ def write_step(step, writer, context):
 
     settings = dict(step.settings or {})
     if step.step_type in {
-        "Linear Static",
-        "Linear Static Topology",
-        "Nonlinear Static",
-        "Linear Buckling",
-        "Transient",
+        StepType.LINEAR_STATIC,
+        StepType.LINEAR_STATIC_TOPOLOGY,
+        StepType.NONLINEAR_STATIC,
+        StepType.LINEAR_BUCKLING,
+        StepType.TRANSIENT,
     }:
         command(
             writer,
@@ -54,20 +55,20 @@ def write_step(step, writer, context):
             METHOD=settings.get("method", "DIRECT"),
         )
     if step.step_type in {
-        "Linear Static",
-        "Linear Static Topology",
-        "Nonlinear Static",
+        StepType.LINEAR_STATIC,
+        StepType.LINEAR_STATIC_TOPOLOGY,
+        StepType.NONLINEAR_STATIC,
     }:
         command(
             writer,
             "CONSTRAINTMETHOD",
             TYPE=settings.get("constraint_method", "NULLSPACE"),
         )
-    if step.step_type in {"Eigenfrequency", "Linear Buckling"}:
+    if step.step_type in {StepType.EIGENFREQUENCY, StepType.LINEAR_BUCKLING}:
         command(writer, "NUMEIGENVALUES", [(step.number_of_modes,)])
-    if step.step_type == "Nonlinear Static":
+    if step.step_type is StepType.NONLINEAR_STATIC:
         _write_nonlinear(step, settings, writer)
-    if step.step_type == "Transient":
+    if step.step_type is StepType.TRANSIENT:
         command(
             writer,
             "TIME",

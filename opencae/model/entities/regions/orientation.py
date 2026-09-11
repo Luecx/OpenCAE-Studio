@@ -6,8 +6,14 @@ from ...core import Entity, EntityRef, register_model_type
 @register_model_type("orientation")
 @dataclass
 class Orientation(Entity):
-    region_ref: EntityRef = field(default_factory=lambda: EntityRef(expected_type="Region"))
-    coordinate_system_ref: EntityRef | None = None
+    region_ref: EntityRef = field(
+        default_factory=lambda: EntityRef(expected_type="Region"),
+        metadata={"reference_type": "Region"},
+    )
+    coordinate_system_ref: EntityRef | None = field(
+        default=None,
+        metadata={"reference_type": "CoordinateSystem"},
+    )
     orientation_type: str = "Material"
 
     def write_abaqus(self, writer, context) -> None: return None

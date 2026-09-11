@@ -48,6 +48,18 @@ class PartPage(ResponsiveRibbonPage):
                 icon_action_id=A.GENERATE_MESH,
             ),
             RibbonGroupSpec(
+                "MESH EDIT",
+                (
+                    A.CREATE_NODE,
+                    A.EDIT_NODE,
+                    A.DELETE_NODE,
+                    A.CREATE_ELEMENT,
+                    A.EDIT_ELEMENT,
+                    A.DELETE_ELEMENT,
+                ),
+                icon_action_id=A.CREATE_ELEMENT,
+            ),
+            RibbonGroupSpec(
                 "REGIONS",
                 (
                     A.NODE_SET,

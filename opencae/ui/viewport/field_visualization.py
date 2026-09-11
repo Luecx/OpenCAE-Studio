@@ -4,6 +4,12 @@ from __future__ import annotations
 
 import math
 import numpy as np
+
+from opencae.model.entities.fields import (
+    FieldInterpolation,
+    FieldLocation,
+    FieldSourceKind,
+)
 from opencae.ui.core.theme import PALETTE
 from .scalar_bar import scalar_bar_args
 from .safe_operations import remove_actor
@@ -12,11 +18,11 @@ from .safe_operations import remove_actor
 def add_field(plotter, grid, snapshot, field):
     if grid is None: return None
     target = grid.copy(deep=True); location = field.location
-    sample_points = target.cell_centers().points if location == "Element" else target.points
+    sample_points = target.cell_centers().points if location is FieldLocation.ELEMENT else target.points
     identifiers = np.arange(1, len(sample_points) + 1)
-    if location != "Element" and snapshot is not None: identifiers = snapshot.node_tags
+    if location is not FieldLocation.ELEMENT and snapshot is not None: identifiers = snapshot.node_tags
     values = _field_values(field, sample_points, identifiers)
-    if location == "Element": target.cell_data[field.name] = values
+    if location is FieldLocation.ELEMENT: target.cell_data[field.name] = values
     else: target.point_data[field.name] = values
     for name in ("field-visualization", "generated-mesh", "generated-mesh-lines"):
         remove_actor(plotter, name)
@@ -28,10 +34,10 @@ def add_field(plotter, grid, snapshot, field):
 
 def _field_values(field, points, identifiers):
     count = len(points); components = max(1, int(field.components))
-    if field.source_type == "Tabular":
+    if field.source_type is FieldSourceKind.TABULAR:
         table = {str(row[0]): row[1:] for row in field.table if row}
         data = [_row_values(table.get(str(int(tag)), ()), components) for tag in identifiers]
-    elif field.source_type == "Formula":
+    elif field.source_type is FieldSourceKind.FORMULA:
         data = [_formula_values(field.expression, point, components) for point in points]
     else:
         data = _file_values(field.file_path, identifiers, points, components, field.interpolation)
@@ -72,10 +78,11 @@ def _file_values(path, identifiers, points, components, interpolation):
 
 
 def _interpolate(sources, values, point, method):
+    method = FieldInterpolation.coerce(method)
     distances = np.linalg.norm(sources - np.asarray(point, dtype=float), axis=1)
     nearest = int(np.argmin(distances))
-    if method == "Nearest" or distances[nearest] < 1.0e-12:
+    if method is FieldInterpolation.NEAREST or distances[nearest] < 1.0e-12:
         return values[nearest]
-    power = 3.0 if method == "Cubic" else 1.0
+    power = 3.0 if method is FieldInterpolation.CUBIC else 1.0
     weights = 1.0 / np.maximum(distances, 1.0e-12) ** power
     return np.sum(values * weights[:, None], axis=0) / np.sum(weights)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from opencae.model.entities.analysis import StepType
 from opencae.model.entities.optimization import (
     ConstraintOperator,
     ResponseType,
@@ -43,7 +44,7 @@ def validate_topology_optimization(
         errors.append("Select a Linear Static Analysis")
     else:
         steps = analysis.resolved_steps(project)
-        if len(steps) != 1 or steps[0].step_type != "Linear Static":
+        if len(steps) != 1 or steps[0].step_type is not StepType.LINEAR_STATIC:
             errors.append(
                 "Topology Optimization requires an Analysis referencing exactly "
                 "one Linear Static Step"

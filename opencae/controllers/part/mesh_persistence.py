@@ -1,15 +1,24 @@
 """Persists generated geometry-service mesh snapshots into Part mesh state."""
 
 from opencae.geometry.element_summary import definition_from_block
+from opencae.model.entities.fem import MeshEntityOrigin
+from opencae.model.entities.mesh import MeshStatus
+from opencae.model.entities.parts import PartSourceKind
 from opencae.model.mesh import ElementBlock, NodeTable
 from opencae.model.selection import element_side_indices
 
 
 def apply_mesh_snapshot(candidate, snapshot) -> None:
     """Replace one Part candidate's generated mesh from a service snapshot."""
+    origin = (
+        MeshEntityOrigin.IMPORTED
+        if candidate.source_type is PartSourceKind.ORPHAN_MESH
+        else MeshEntityOrigin.GENERATED
+    )
     candidate.mesh.nodes = NodeTable(
         ids=[int(value) for value in snapshot.node_tags],
         coordinates=[tuple(map(float, row)) for row in snapshot.points],
+        origins=[origin] * len(snapshot.node_tags),
     )
     candidate.mesh.entity_nodes = {
         key: list(values) for key, values in snapshot.entity_nodes.items()
@@ -38,6 +47,7 @@ def apply_mesh_snapshot(candidate, snapshot) -> None:
                 definition=definition_from_block(block),
                 ids=[int(value) for value in ids],
                 connectivity=connectivity,
+                origins=[origin] * len(connectivity),
             )
         )
         next_id += len(block.connectivity)
@@ -46,7 +56,7 @@ def apply_mesh_snapshot(candidate, snapshot) -> None:
     candidate.mesh.node_count = len(snapshot.points)
     candidate.mesh.element_count = sum(len(block) for block in blocks)
     candidate.mesh.mesh_dimension = snapshot.dimension
-    candidate.mesh.status = "Current"
+    candidate.mesh.status = MeshStatus.CURRENT
     candidate.mesh.revision = str(
         getattr(snapshot, "fingerprint", "")
         or candidate.mesh.revision

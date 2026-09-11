@@ -3,6 +3,10 @@ from __future__ import annotations
 import pytest
 
 from opencae.api import Hex8, Model, Tet4
+from opencae.model.entities.analysis import Analysis
+from opencae.model.entities.fields import FieldDefinition
+from opencae.model.entities.jobs import Job
+from opencae.model.entities.loads import TemperatureLoad
 
 
 def test_public_relationships_are_python_objects_not_strings():
@@ -41,6 +45,27 @@ def test_nodes_and_elements_have_clean_object_connectivity():
     assert element.nodes == nodes
     assert element.connectivity == tuple(node.id for node in nodes)
     assert tuple(part.mesh.iter_elements()) == (element,)
+
+    definition = part.mesh.element_definitions[0]
+    assert model.project.resolve(definition.id) is definition
+
+
+def test_object_reference_aliases_use_declared_model_types():
+    """Non-trivial reference names must not invent model type contracts."""
+    analysis = Analysis(name="Analysis")
+    job = Job(name="Job")
+    job.source = analysis
+    assert job.source is analysis
+    assert job.source_ref.expected_type == "Analysis|Study"
+
+    with pytest.raises(TypeError):
+        job.source = FieldDefinition(name="Not a job source")
+
+    field = FieldDefinition(name="Temperature")
+    load = TemperatureLoad(name="Temperature Load")
+    load.temperature_field = field
+    assert load.temperature_field is field
+    assert load.temperature_field_ref.expected_type == "FieldDefinition"
 
 
 def test_element_topology_is_validated_at_construction():

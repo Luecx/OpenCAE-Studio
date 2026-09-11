@@ -32,7 +32,7 @@ class Analysis(Entity):
         if items and self.analysis_type == "General":
             kinds = {step.step_type for step in items}
             if len(kinds) == 1:
-                self.analysis_type = next(iter(kinds))
+                self.analysis_type = next(iter(kinds)).value
 
     def write_abaqus(self, writer, context) -> None:
         """Write all referenced Steps using the Abaqus exporter."""

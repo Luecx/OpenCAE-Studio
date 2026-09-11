@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from opencae.model.geometry import ImportedStepFeature
-from opencae.model.part import Part
+from opencae.model.entities.parts import Part, PartSourceKind
+from opencae.model.entities.mesh import MeshStatus
 from opencae.model.naming import next_name
 from opencae.model.core import EntityRef, clone_entity_graph
 from opencae.model.entities.regions import create_region
@@ -46,6 +47,7 @@ class PartLifecycle:
             return
         part = Part(
             name=values["name"],
+            source_type=PartSourceKind.MANUAL,
             metadata={"part_type": values["part_type"]},
         )
         self.ctx.store.add_entity(
@@ -134,9 +136,13 @@ class PartLifecycle:
         candidate = (
             self.ctx.geometry_candidate(active)
             if editing_existing
-            else Part(name=values["part_name"])
+            else Part(
+                name=values["part_name"],
+                source_type=PartSourceKind.CAD,
+            )
         )
         candidate.name = values["part_name"]
+        candidate.source_type = PartSourceKind.CAD
         candidate.geometry_settings.heal_on_import = values["heal"]
         candidate.geometry_settings.sew_faces = values["sew_faces"]
         candidate.geometry_settings.make_solids = values["make_solids"]
@@ -149,7 +155,7 @@ class PartLifecycle:
             )
         ]
         if editing_existing:
-            candidate.mesh.status = "Outdated"
+            candidate.mesh.status = MeshStatus.OUTDATED
         if not self.ctx.validate_geometry(candidate, "Import failed"):
             return
 
@@ -181,7 +187,7 @@ class PartLifecycle:
                 Path(path).stem or "Mesh Part",
                 self.ctx.store.project.parts,
             ),
-            source_type="Orphan Mesh",
+            source_type=PartSourceKind.ORPHAN_MESH,
             metadata={
                 "part_type": "3D deformable",
                 "source_file": str(path),

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QCheckBox, QLineEdit, QMessageBox, QVBoxLayout
+from PyQt6.QtWidgets import QCheckBox, QLineEdit, QMessageBox
 
 from opencae.model.entities.constraints import (
     CONNECTOR_TYPES,
@@ -19,6 +19,7 @@ from opencae.ui.templates import (
     NumericUnitInput,
     SectionHeading,
     apply_primary_control_height,
+    dialog_layout,
     dialog_buttons,
     field_block,
     field_row,
@@ -63,9 +64,7 @@ class ConstraintDialog(ApplyDialog):
 
         self.setWindowTitle("Edit Constraint" if constraint else "Create Constraint")
         self.setMinimumSize(760, 560)
-        root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 18)
-        root.setSpacing(16)
+        root = dialog_layout(self)
 
         self.name = QLineEdit(getattr(constraint, "name", default_name))
         apply_primary_control_height(self.name)

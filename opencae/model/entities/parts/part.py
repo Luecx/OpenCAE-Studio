@@ -1,3 +1,5 @@
+"""Defines the Part aggregate and its owned geometry and mesh resources."""
+
 from dataclasses import dataclass, field
 
 from ...core import Entity, register_model_type
@@ -10,12 +12,15 @@ from ..regions.reference_point import ReferencePoint
 from ..regions.region import Region
 from ..regions.section_assignment import SectionAssignment
 from ..datums import Datum
+from .part_source_kind import PartSourceKind
 
 
 @register_model_type("part")
 @dataclass
 class Part(Entity):
-    source_type: str = "CAD"
+    """Own geometry, mesh, regions, and assignments for one model Part."""
+
+    source_type: PartSourceKind | str = PartSourceKind.MANUAL
     geometry_settings: GeometrySettings = field(default_factory=GeometrySettings)
     geometry: list[GeometryFeature] = field(default_factory=list)
     mesh: MeshState = field(default_factory=MeshState)
@@ -26,7 +31,14 @@ class Part(Entity):
     orientations: list[Orientation] = field(default_factory=list)
     section_assignments: list[SectionAssignment] = field(default_factory=list)
 
+    def __setattr__(self, name, value) -> None:
+        """Keep the Part origin canonical across construction and mutation."""
+        if name == "source_type":
+            value = PartSourceKind.coerce(value)
+        super().__setattr__(name, value)
+
     def write_abaqus(self, writer, context) -> None:
+        """Write the Part-owned Abaqus records through the legacy domain hook."""
         writer.line(f"*PART, NAME={self.name}")
         for region in self.regions:
             region.write_abaqus(writer, context)
@@ -35,4 +47,5 @@ class Part(Entity):
         writer.line("*END PART")
 
     def write_femaster(self, writer, context) -> None:
+        """Defer FEMaster Part output to its dedicated project emitter."""
         return None

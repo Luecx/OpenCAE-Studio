@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import QDialog
 
 from opencae.deck_formats.selection import default_profile_id
 from opencae.model.core import EntityRef
-from opencae.model.entities.analysis import Analysis, AnalysisStep
+from opencae.model.entities.analysis import Analysis, AnalysisStep, StepType
 from opencae.model.naming import next_name_from_names
 from opencae.solvers.registry import available_solvers
 from opencae.store.commands import UpdateFieldCommand
@@ -61,7 +61,9 @@ class AnalysisController:
                 else ""
             )
 
-    def create_step(self, step_type):
+    def create_step(self, step_type: StepType | str):
+        """Create a project Step from one canonical procedure kind."""
+        step_type = StepType.coerce(step_type)
         project = self.store.project
         name = next_name_from_names(
             step_type,
@@ -72,7 +74,7 @@ class AnalysisController:
             step_type=step_type,
             load_refs=(
                 []
-                if step_type == "Eigenfrequency"
+                if step_type is StepType.EIGENFREQUENCY
                 else [EntityRef.of(item, "Load") for item in project.loads]
             ),
             support_refs=[

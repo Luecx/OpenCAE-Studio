@@ -1,4 +1,4 @@
-"""Installs object-facing aliases for persisted ``*_ref`` entity fields."""
+"""Installs object-facing aliases for explicitly typed ``*_ref`` fields."""
 
 from __future__ import annotations
 
@@ -27,14 +27,23 @@ def install_object_reference_aliases(cls: type) -> None:
             public_name,
             EntityObjectReference(
                 field_info.name,
-                expected_type_from_field(field_info.name),
+                reference_type_for_field(field_info),
             ),
         )
 
 
-def expected_type_from_field(name: str) -> str:
-    """Derive a default model type name from a snake-case ``*_ref`` field."""
-    return "".join(
-        part.capitalize()
-        for part in name.removesuffix("_ref").split("_")
-    )
+def reference_type_for_field(field_info) -> str:
+    """Return the declared object type for one persisted reference field.
+
+    Field names are display-oriented implementation details and cannot express
+    aliases such as ``temperature_field_ref -> FieldDefinition`` or union
+    relationships such as ``source_ref -> Entity``. Requiring metadata keeps
+    one authoritative contract for generated object-facing properties.
+    """
+    expected_type = str(field_info.metadata.get("reference_type", "")).strip()
+    if not expected_type:
+        raise TypeError(
+            f"{field_info.name} must declare metadata "
+            "{'reference_type': '<ModelType>'}"
+        )
+    return expected_type

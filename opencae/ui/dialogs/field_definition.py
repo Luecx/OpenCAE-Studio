@@ -13,29 +13,26 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.model.core import EntityRef
-from opencae.model.entities.fields import FieldDefinition
+from opencae.model.entities.fields import (
+    FieldDefinition,
+    FieldInterpolation,
+    FieldLocation,
+    FieldSourceKind,
+    FieldValueKind,
+)
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.file_path import FilePathEditor
 from opencae.ui.core.widgets import ChevronComboBox, ReferenceSelector
 from opencae.ui.templates import (
     SectionHeading,
     apply_primary_control_height,
+    dialog_layout,
     dialog_buttons,
     field_block,
     field_row,
 )
 
 from .field_table import FieldTable
-
-
-_FIELD_LOCATIONS = (
-    "Nodal",
-    "Element",
-    "Element-Nodal",
-    "Integration Point",
-    "Material Point",
-    "Shell Normal",
-)
 
 
 class FieldDefinitionDialog(ApplyDialog):
@@ -57,9 +54,7 @@ class FieldDefinitionDialog(ApplyDialog):
         self.setWindowTitle("Edit Field" if field else "Create Field")
         self.setMinimumSize(820, 620)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 18)
-        root.setSpacing(16)
+        root = dialog_layout(self)
 
         self.name = QLineEdit(self.field.name)
         apply_primary_control_height(self.name)
@@ -68,7 +63,7 @@ class FieldDefinitionDialog(ApplyDialog):
 
         self.location = ChevronComboBox()
         self.location.setMinimumWidth(0)
-        self.location.addItems(_FIELD_LOCATIONS)
+        self.location.addItems([location.value for location in FieldLocation])
         self.location.setCurrentText(self.field.location)
         apply_primary_control_height(self.location)
 
@@ -115,7 +110,9 @@ class FieldDefinitionDialog(ApplyDialog):
         )
         self.interpolation = ChevronComboBox()
         self.interpolation.setMinimumWidth(0)
-        self.interpolation.addItems(("Nearest", "Linear", "Cubic"))
+        self.interpolation.addItems(
+            [interpolation.value for interpolation in FieldInterpolation]
+        )
         self.interpolation.setCurrentText(self.field.interpolation)
         apply_primary_control_height(self.interpolation)
         file_layout.addWidget(field_block("File", self.file))
@@ -127,7 +124,7 @@ class FieldDefinitionDialog(ApplyDialog):
         self.components.valueChanged.connect(self.table.set_components)
         self.location.currentTextChanged.connect(self._location_changed)
         self.tabs.setCurrentIndex(
-            {"Tabular": 0, "Formula": 1, "File": 2}.get(self.field.source_type, 1)
+            list(FieldSourceKind).index(self.field.source_type)
         )
         self._location_changed(self.location.currentText())
 
@@ -137,7 +134,7 @@ class FieldDefinitionDialog(ApplyDialog):
 
     def _location_changed(self, location: str) -> None:
         """Apply domain-specific address columns and shell-normal vector semantics."""
-        shell_normal = str(location) == "Shell Normal"
+        shell_normal = FieldLocation.coerce(location) is FieldLocation.SHELL_NORMAL
         if shell_normal and self.components.value() != 3:
             self.components.setValue(3)
         self.components.setEnabled(not shell_normal)
@@ -164,21 +161,29 @@ class FieldDefinitionDialog(ApplyDialog):
         """Return constructor values for the field represented by the active source tab."""
         count = self.components.value()
         region_id = self.region.currentValue()
-        location = self.location.currentText()
+        location = FieldLocation.coerce(self.location.currentText())
         return {
             "name": self.name.text().strip(),
             "location": location,
             "components": count,
             "component_names": [
                 "NX", "NY", "NZ"
-            ] if location == "Shell Normal" else [f"C{i + 1}" for i in range(count)],
+            ] if location is FieldLocation.SHELL_NORMAL else [f"C{i + 1}" for i in range(count)],
             "region_ref": EntityRef(str(region_id), "Region") if region_id else None,
-            "source_type": ("Tabular", "Formula", "File")[self.tabs.currentIndex()],
+            "source_type": tuple(FieldSourceKind)[self.tabs.currentIndex()],
             "expression": self.formula.toPlainText().strip(),
             "table": self.table.values(),
             "file_path": self.file.text(),
-            "interpolation": self.interpolation.currentText(),
-            "field_type": "Vector" if location == "Shell Normal" else "Scalar" if count == 1 else "Custom",
+            "interpolation": FieldInterpolation.coerce(
+                self.interpolation.currentText()
+            ),
+            "field_type": (
+                FieldValueKind.VECTOR
+                if location is FieldLocation.SHELL_NORMAL
+                else FieldValueKind.SCALAR
+                if count == 1
+                else FieldValueKind.CUSTOM
+            ),
         }
 
     def prepare_new(self, default_name, existing_names) -> None:

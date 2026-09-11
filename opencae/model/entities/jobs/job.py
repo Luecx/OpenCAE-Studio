@@ -17,13 +17,16 @@ class Job(Entity):
     are accepted at construction and normalized immediately.
     """
 
-    source_ref: EntityRef | None = None
+    source_ref: EntityRef | None = field(
+        default=None,
+        metadata={"reference_type": "Analysis|Study"},
+    )
     source_kind: JobSourceKind | str = JobSourceKind.ANALYSIS
     # Legacy field accepted from older project files. New files serialize only
     # ``source_ref`` so there is one canonical relationship.
     analysis_ref: EntityRef | None = field(
         default=None,
-        metadata={"serialize": False},
+        metadata={"serialize": False, "reference_type": "Analysis"},
     )
     solver: str = "FEMaster"
     status: JobStatus | str = JobStatus.PREPARED

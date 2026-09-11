@@ -13,6 +13,12 @@ def matches_reference_type(entity, expected_type: str) -> bool:
     if not expected_type:
         return True
 
+    alternatives = tuple(
+        value.strip() for value in str(expected_type).split("|") if value.strip()
+    )
+    if len(alternatives) > 1:
+        return any(matches_reference_type(entity, value) for value in alternatives)
+
     expected = _normalized(expected_type)
     names = {_normalized(cls.__name__) for cls in type(entity).mro()}
     if expected in names:

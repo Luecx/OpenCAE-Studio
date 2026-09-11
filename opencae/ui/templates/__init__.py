@@ -51,6 +51,7 @@ from .read_only_value import ReadOnlyValue
 from .section_heading import SectionHeading
 from .tables import read_only_table
 from .vector3_input import Vector3Input
+from .viewport_tool_button import ViewportToolButton
 from .vertical_separator import VerticalSeparator
 
 __all__ = [
@@ -69,6 +70,7 @@ __all__ = [
     "ReadOnlyValue",
     "SectionHeading",
     "Vector3Input",
+    "ViewportToolButton",
     "VerticalSeparator",
     "button",
     "label",

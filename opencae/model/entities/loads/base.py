@@ -9,8 +9,14 @@ from opencae.model.selection import RegionDefinition
 class Load(Entity):
     load_type: str = "Load"
     target: RegionDefinition = field(default_factory=RegionDefinition)
-    coordinate_system_ref: EntityRef | None = None
-    amplitude_ref: EntityRef | None = None
+    coordinate_system_ref: EntityRef | None = field(
+        default=None,
+        metadata={"reference_type": "CoordinateSystem"},
+    )
+    amplitude_ref: EntityRef | None = field(
+        default=None,
+        metadata={"reference_type": "Amplitude"},
+    )
 
     def __post_init__(self):
         from opencae.model.selection import as_region_definition

@@ -10,4 +10,11 @@ def build(menu_bar, actions):
     menu.addAction(actions.get(A.MESH_SETTINGS))
     menu.addAction(actions.get(A.GENERATE_MESH))
     menu.addAction(actions.get(A.CLEAR_MESH))
+    menu.addSeparator()
+    menu.addAction(actions.get(A.CREATE_NODE))
+    menu.addAction(actions.get(A.EDIT_NODE))
+    menu.addAction(actions.get(A.DELETE_NODE))
+    menu.addAction(actions.get(A.CREATE_ELEMENT))
+    menu.addAction(actions.get(A.EDIT_ELEMENT))
+    menu.addAction(actions.get(A.DELETE_ELEMENT))
     return menu

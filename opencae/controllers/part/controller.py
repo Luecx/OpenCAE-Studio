@@ -9,6 +9,7 @@ from .element_controls import PartElementControls
 from .datums import PartDatums
 from .lifecycle import PartLifecycle
 from .mesh_generation import PartMeshGeneration
+from .mesh_editing import PartMeshEditing
 from .mesh_settings import PartMeshSettings
 from .mesh_seeds import PartMeshSeeds
 from .partitions import PartPartitions
@@ -27,12 +28,14 @@ class PartController:
         self.mesh_settings_manager = PartMeshSettings(self.context)
         self.element_control_manager = PartElementControls(self.context)
         self.generation = PartMeshGeneration(self.context)
+        self.mesh_editing = PartMeshEditing(self.context)
         self.regions = PartRegions(self.context)
         self.datums = PartDatums(self.context)
         self.visibility_manager = PartVisibility(self.context)
         self._delegates = (
             self.lifecycle, self.partitions, self.settings, self.seeds,
             self.mesh_settings_manager, self.element_control_manager, self.generation,
+            self.mesh_editing,
             self.regions, self.datums, self.visibility_manager,
         )
 

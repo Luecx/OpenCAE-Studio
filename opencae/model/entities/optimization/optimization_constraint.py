@@ -12,7 +12,8 @@ class OptimizationConstraint(Entity):
     """A response limit consumed by the OC and bisection update."""
 
     response_ref: EntityRef = field(
-        default_factory=lambda: EntityRef(expected_type="OptimizationResponse")
+        default_factory=lambda: EntityRef(expected_type="OptimizationResponse"),
+        metadata={"reference_type": "OptimizationResponse"},
     )
     operator: ConstraintOperator | str = ConstraintOperator.LESS_EQUAL
     limit: float = 0.3

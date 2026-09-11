@@ -5,6 +5,7 @@ from .element import Element
 from .element_types import ELEMENT_TYPES, element_class_for_definition
 from .hex8 import Hex8
 from .line2 import Line2
+from .mesh_entity_origin import MeshEntityOrigin
 from .node import Node
 from .plane_quad4 import PlaneQuad4
 from .plane_tri3 import PlaneTri3
@@ -18,6 +19,7 @@ from .wedge6 import Wedge6
 __all__ = [
     "Node",
     "Element",
+    "MeshEntityOrigin",
     "Line2",
     "Beam2",
     "Truss2",

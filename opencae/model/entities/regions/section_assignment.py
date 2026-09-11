@@ -7,9 +7,15 @@ from opencae.model.selection import RegionDefinition, as_region_definition
 @register_model_type("section_assignment")
 @dataclass
 class SectionAssignment(Entity):
-    section_ref: EntityRef = field(default_factory=lambda: EntityRef(expected_type="Section"))
+    section_ref: EntityRef = field(
+        default_factory=lambda: EntityRef(expected_type="Section"),
+        metadata={"reference_type": "Section"},
+    )
     target: RegionDefinition = field(default_factory=RegionDefinition)
-    orientation_ref: EntityRef | None = None
+    orientation_ref: EntityRef | None = field(
+        default=None,
+        metadata={"reference_type": "Orientation"},
+    )
 
     def __post_init__(self): self.target = as_region_definition(self.target)
 

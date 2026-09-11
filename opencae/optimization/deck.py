@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from opencae.model.core import DeckWriter, ExportContext
+from opencae.model.entities.analysis import StepType
 from opencae.model.selection import RegionProjection
 from opencae.solvers.femaster_dsl.command import command
 from opencae.solvers.femaster_dsl.emitters.assembly_regions import write_assembly_regions
@@ -41,7 +42,7 @@ def render_topology_deck(project, optimization, mesh_index, density: np.ndarray)
             "Topology Optimization currently requires exactly one Analysis Step"
         )
     step = steps[0]
-    if step.step_type != "Linear Static":
+    if step.step_type is not StepType.LINEAR_STATIC:
         raise ValueError(
             "Topology Optimization currently requires a Linear Static Analysis"
         )

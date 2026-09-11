@@ -26,7 +26,7 @@ def test_standard_dialogs_and_reported_editors_have_real_minimum_geometry():
     assert "self.setMinimumSize(720, 420)" in materials
     assert "self.table.setMinimumHeight(250)" in materials
     assert "self.setMinimumSize(760, 620)" in loads
-    assert 'nonlinear = step.step_type == "Nonlinear Static"' in steps
+    assert "nonlinear = step.step_type is StepType.NONLINEAR_STATIC" in steps
     assert "self.setMinimumSize(760, 780 if nonlinear else 520)" in steps
     assert "tabs.setMinimumHeight(290)" in steps
 
@@ -79,6 +79,13 @@ def test_new_models_imports_and_results_request_initial_framing():
     assert "fit_on_load = identity != previous_identity or scene.result_actor is None" in results
     assert "if fit_on_load or camera is None:" in results
     assert "scene.owner.plotter.reset_camera()" in results
+
+
+def test_step_dialog_uses_the_canonical_step_type_enum():
+    """Guard the UI against reintroducing a second set of procedure literals."""
+    source = _source("opencae/ui/dialogs/step.py")
+    assert "StepType.NONLINEAR_STATIC" in source
+    assert 'step.step_type == "Nonlinear Static"' not in source
 
 
 def test_reopened_topology_result_frames_when_overlay_was_cleared():

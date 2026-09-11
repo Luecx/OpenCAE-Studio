@@ -7,6 +7,7 @@ from copy import deepcopy
 from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.core import EntityRef
+from opencae.model.entities.analysis import StepType
 from opencae.model.entities.optimization import TopologyOptimization
 from opencae.model.selection import RegionProjection, RegionRequirement
 from opencae.ui.core.named_entity_dialog import NamedEntityDialog
@@ -40,7 +41,7 @@ class TopologyOptimizationDialog(NamedEntityDialog):
             (analysis.name, analysis.id)
             for analysis in project.analyses
             if any(
-                step.step_type == "Linear Static"
+                step.step_type is StepType.LINEAR_STATIC
                 for step in analysis.resolved_steps(project)
             )
         ]

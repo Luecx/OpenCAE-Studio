@@ -8,5 +8,8 @@ from .base import Load
 @dataclass
 class TemperatureLoad(Load):
     load_type: str = field(init=False, default="Temperature")
-    temperature_field_ref: EntityRef | None = None
+    temperature_field_ref: EntityRef | None = field(
+        default=None,
+        metadata={"reference_type": "FieldDefinition"},
+    )
     reference_temperature: float = 0.0
