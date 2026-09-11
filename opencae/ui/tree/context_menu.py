@@ -79,7 +79,6 @@ MAP = {
     "analysis": (
         A.ANALYSIS_NEW,
         A.ANALYSIS_EDIT,
-        A.SOLVER_SETTINGS,
         A.VALIDATE,
         A.PREVIEW_DECK,
         A.WRITE_DECK,

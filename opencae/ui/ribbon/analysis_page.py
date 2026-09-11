@@ -33,7 +33,6 @@ class AnalysisPage(ResponsiveRibbonPage):
                     A.VALIDATE,
                     A.PREVIEW_DECK,
                     A.WRITE_DECK,
-                    A.SOLVER_SETTINGS,
                     A.ANALYSIS_RUN,
                 ),
             ),

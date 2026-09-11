@@ -24,6 +24,7 @@ class PartContext:
         self.store = store
         self.parent = parent
         self.units = units
+        self.app_settings = getattr(getattr(parent, "context", None), "settings", None)
         self.service = GeometryService()
 
     def active_part(self):

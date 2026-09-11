@@ -61,11 +61,14 @@ class A:
     ANALYSIS_NEW = "analysis.new"
     ANALYSIS_EDIT = "analysis.edit"
     ANALYSIS_RUN = "analysis.run"
-    SOLVER_SETTINGS = "analysis.solver_settings"
     DECK_FORMAT_MANAGER = "solver.deck_format_manager"
     VALIDATE = "analysis.validate"
     PREVIEW_DECK = "analysis.preview_deck"
     WRITE_DECK = "analysis.write_deck"
+
+    # Compatibility alias: Solver Settings was folded into the one global
+    # application Settings surface. It must not be registered or shown twice.
+    SOLVER_SETTINGS = PREFERENCES
 
     STUDY_NEW_TOPOLOGY = "study.new_topology"
     STUDY_EDIT = "study.edit"

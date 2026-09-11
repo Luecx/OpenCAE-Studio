@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from opencae.model.geometry import ImportedStepFeature
-from opencae.model.part import Part
-from opencae.model.naming import next_name
+from opencae.geometry.cache import CACHE
+from opencae.geometry.mesh_import import read_mesh_with_report
 from opencae.model.core import EntityRef, clone_entity_graph
+from opencae.model.geometry import GeometrySettings, ImportedStepFeature
+from opencae.model.mesh import MeshSettings
+from opencae.model.naming import next_name
+from opencae.model.part import Part
 from opencae.model.entities.regions import create_region
 from opencae.model.selection import (
     MeshElementOperand,
@@ -21,10 +24,8 @@ from opencae.ui.core.file_dialogs import open_file
 from opencae.ui.dialogs.import_geometry import ImportGeometryDialog
 from opencae.ui.dialogs.import_mesh_report import ImportMeshReportDialog
 from opencae.ui.dialogs.new_part import NewPartDialog
-from opencae.geometry.mesh_import import read_mesh_with_report
-from opencae.geometry.cache import CACHE
-from .mesh_persistence import apply_mesh_snapshot
 
+from .mesh_persistence import apply_mesh_snapshot
 from ..dialog_runner import get_values
 
 
@@ -33,6 +34,25 @@ class PartLifecycle:
 
     def __init__(self, context):
         self.ctx = context
+
+    def _geometry_defaults(self) -> GeometrySettings:
+        """Create detached geometry defaults from workstation Settings."""
+        settings = self.ctx.app_settings
+        values = settings.geometry_default_values() if settings is not None else {}
+        return GeometrySettings(**values)
+
+    def _mesh_defaults(self) -> MeshSettings:
+        """Create detached mesh defaults from workstation Settings."""
+        settings = self.ctx.app_settings
+        values = settings.mesh_default_values() if settings is not None else {}
+        return MeshSettings(**values)
+
+    def _new_part(self, **kwargs) -> Part:
+        """Create a Part initialized from application defaults, never live project state."""
+        part = Part(**kwargs)
+        part.geometry_settings = self._geometry_defaults()
+        part.mesh.settings = self._mesh_defaults()
+        return part
 
     def new_part(self, parent=None):
         values = get_values(
@@ -44,7 +64,7 @@ class PartLifecycle:
         )
         if not values:
             return
-        part = Part(
+        part = self._new_part(
             name=values["name"],
             metadata={"part_type": values["part_type"]},
         )
@@ -112,9 +132,11 @@ class PartLifecycle:
     def import_geometry(self):
         """Import CAD geometry without cloning an existing generated mesh."""
         active = self.ctx.active_part()
+        editing_existing = bool(active and not active.geometry)
+        dialog_part = active if editing_existing else None
         values = get_values(
             ImportGeometryDialog(
-                active,
+                dialog_part,
                 existing_names=[p.name for p in self.ctx.store.project.parts],
                 parent=self.ctx.parent,
                 default_part_name=next_name(
@@ -125,16 +147,16 @@ class PartLifecycle:
                     "Import Geometry",
                     active.geometry if active else [],
                 ),
+                default_settings=self._geometry_defaults(),
             )
         )
         if not values:
             return
 
-        editing_existing = bool(active and not active.geometry)
         candidate = (
             self.ctx.geometry_candidate(active)
             if editing_existing
-            else Part(name=values["part_name"])
+            else self._new_part(name=values["part_name"])
         )
         candidate.name = values["part_name"]
         candidate.geometry_settings.heal_on_import = values["heal"]
@@ -176,7 +198,7 @@ class PartLifecycle:
         )
         if not path:
             return
-        part = Part(
+        part = self._new_part(
             name=next_name(
                 Path(path).stem or "Mesh Part",
                 self.ctx.store.project.parts,
@@ -249,7 +271,12 @@ class PartLifecycle:
             self.ctx.commit_geometry_candidate(candidate, f"Edited {target.name}")
 
     def _fit_loaded_content(self):
-        """Frame imported CAD/mesh content after the scene mutation is coalesced."""
+        """Frame imported CAD/mesh content when the application preference allows it."""
+        settings = self.ctx.app_settings
+        if settings is not None and not bool(
+            settings.preference("viewport/auto_fit_loaded_content", True)
+        ):
+            return
         viewport = getattr(self.ctx.parent, "viewport", None)
         if viewport is not None:
             viewport.request_refresh(fit=True)

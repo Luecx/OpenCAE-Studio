@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QSizePolicy, QToolBar
 
 from opencae.ui.docks.output_dock import WorkspaceDock
 from opencae.ui.docks.project_dock import ProjectDock
+from opencae.ui.preferences.runtime import apply_window_preferences, wire_window_preferences
 from opencae.ui.ribbon.ribbon import Ribbon
 from opencae.ui.status_unit_system import UnitSystemStatus
 from opencae.ui.viewport.stage_guidance import assembly_guidance
@@ -143,10 +144,12 @@ def _sync_viewport_guidance(window, stage=None):
 
 
 def build_status(window):
-    """Build the status bar and active unit-system control."""
+    """Build the status bar, unit control, and apply persisted live UI preferences."""
     window.statusBar().showMessage("Ready")
     window.units = UnitSystemStatus(window)
     window.units.system_selected.connect(window.controllers.project.set_unit_system)
     window.units.edit_requested.connect(window.controllers.project.unit_preferences)
     window.statusBar().addPermanentWidget(window.units)
     window.refresh_title()
+    apply_window_preferences(window, window.context.settings)
+    wire_window_preferences(window, window.context.settings)

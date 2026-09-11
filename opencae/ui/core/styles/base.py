@@ -1,8 +1,10 @@
+"""Base application stylesheet rules that intentionally inherit the Qt system font."""
+
+
 def css(p):
+    """Return global colors without forcing a platform-specific font family or size."""
     return f"""
     * {{
-        font-family: 'Segoe UI', 'Inter', sans-serif;
-        font-size: 10pt;
         color: {p['text']};
     }}
     QMainWindow, QDialog {{ background: {p['window']}; }}
