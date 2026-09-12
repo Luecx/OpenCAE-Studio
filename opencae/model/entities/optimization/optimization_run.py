@@ -1,22 +1,29 @@
 """Stores topology-specific state for one Job-backed study execution."""
 
-from dataclasses import dataclass, field
+from __future__ import annotations
 
-from ...core import Entity, EntityRef, register_model_type
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+from ...core import Entity, register_model_type
 from ..jobs.job_status import JobStatus
 from .optimization_iteration import OptimizationIteration
+
+if TYPE_CHECKING:
+    from ..jobs import Job
+    from .topology_optimization import TopologyOptimization
 
 
 @register_model_type("optimization_run")
 @dataclass
 class OptimizationRun(Entity):
-    """Persistent topology state linked to the generic Job that produced it."""
+    """Persistent topology state linked directly to its Study and Job objects."""
 
-    optimization_ref: EntityRef = field(
-        default_factory=lambda: EntityRef(expected_type="TopologyOptimization"),
+    optimization: TopologyOptimization | None = field(
+        default=None,
         metadata={"reference_type": "TopologyOptimization"},
     )
-    job_ref: EntityRef | None = field(
+    job: Job | None = field(
         default=None,
         metadata={"reference_type": "Job"},
     )
@@ -29,7 +36,6 @@ class OptimizationRun(Entity):
     message: str = ""
 
     def __setattr__(self, name, value) -> None:
-        """Normalize the shared execution lifecycle state on assignment."""
         if name == "status":
             value = JobStatus.coerce(value)
         super().__setattr__(name, value)
