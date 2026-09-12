@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PyQt6.QtWidgets import QDialog
+
 from opencae.geometry.cache import CACHE
 from opencae.geometry.mesh_import import read_mesh_with_report
 from opencae.model.core import EntityRef, clone_entity_graph
@@ -25,6 +27,7 @@ from opencae.ui.core.file_dialogs import open_file
 from opencae.ui.dialogs.import_geometry import ImportGeometryDialog
 from opencae.ui.dialogs.import_mesh_report import ImportMeshReportDialog
 from opencae.ui.dialogs.new_part import NewPartDialog
+from opencae.ui.sketcher import SketchFeatureDialog
 
 from .mesh_persistence import apply_mesh_snapshot
 from ..dialog_runner import get_values
@@ -53,11 +56,14 @@ class PartLifecycle:
         return part
 
     def new_part(self, parent=None):
-        values = get_values(NewPartDialog(
-            [part.name for part in self.ctx.store.project.parts],
-            parent=parent or self.ctx.parent,
-            default_name=next_name("Part", self.ctx.store.project.parts),
-        ))
+        parent = parent or self.ctx.parent
+        values = get_values(
+            NewPartDialog(
+                [part.name for part in self.ctx.store.project.parts],
+                parent=parent,
+                default_name=next_name("Part", self.ctx.store.project.parts),
+            )
+        )
         if not values:
             return
         part = self._new_part(
@@ -65,10 +71,32 @@ class PartLifecycle:
             source_type=PartSourceKind.MANUAL,
             metadata={"part_type": values["part_type"]},
         )
+
+        requested = str(values.get("geometry_mode", "Empty") or "Empty")
+        if requested != "Empty":
+            mode = {
+                "Planar sketch": "Planar",
+                "Extrusion": "Extrusion",
+                "Revolve": "Revolve",
+            }.get(requested, "Extrusion")
+            dialog = SketchFeatureDialog(
+                None,
+                mode=mode,
+                feature_name="Sketch-1",
+                parent=parent,
+            )
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            part.geometry = [dialog.feature]
+            if not self.ctx.validate_geometry(part, "Sketch feature failed"):
+                return
+
         self.ctx.store.add_entity(
             f"Created part {part.name}", self.ctx.store.project.id, "parts", part
         )
         self.ctx.store.set_active_part(part.id)
+        if part.geometry:
+            self._fit_loaded_content()
 
     def duplicate_part(self):
         source = self.ctx.store.selection
@@ -82,7 +110,9 @@ class PartLifecycle:
         self.ctx.store.execute(
             f"Duplicated part {source.name} as {clone.name}",
             OwnedCollectionInsertCommand(
-                self.ctx.store.project.id, "parts", clone,
+                self.ctx.store.project.id,
+                "parts",
+                clone,
                 len(self.ctx.store.project.parts),
             ),
         )
@@ -91,20 +121,26 @@ class PartLifecycle:
         self.ctx.store.invalidate_scene("Part duplicated")
 
     def edit_part(self, part):
-        values = get_values(NewPartDialog(
-            [item.name for item in self.ctx.store.project.parts],
-            part,
-            self.ctx.parent,
-        ))
+        values = get_values(
+            NewPartDialog(
+                [item.name for item in self.ctx.store.project.parts],
+                part,
+                self.ctx.parent,
+            )
+        )
         if not values:
             return
         metadata = dict(part.metadata)
         metadata["part_type"] = values["part_type"]
         commands = []
         if values["name"] != part.name:
-            commands.append(UpdateFieldCommand(part.id, "name", part.name, values["name"]))
+            commands.append(
+                UpdateFieldCommand(part.id, "name", part.name, values["name"])
+            )
         if metadata != part.metadata:
-            commands.append(UpdateFieldCommand(part.id, "metadata", part.metadata, metadata))
+            commands.append(
+                UpdateFieldCommand(part.id, "metadata", part.metadata, metadata)
+            )
         if commands:
             self.ctx.store.execute(
                 f"Edited part {part.name}", CompositeCommand(tuple(commands))
@@ -114,16 +150,18 @@ class PartLifecycle:
         active = self.ctx.active_part()
         editing_existing = bool(active and not active.geometry)
         dialog_part = active if editing_existing else None
-        values = get_values(ImportGeometryDialog(
-            dialog_part,
-            existing_names=[p.name for p in self.ctx.store.project.parts],
-            parent=self.ctx.parent,
-            default_part_name=next_name("Part", self.ctx.store.project.parts),
-            default_feature_name=next_name(
-                "Import Geometry", active.geometry if active else []
-            ),
-            default_settings=self._geometry_defaults(),
-        ))
+        values = get_values(
+            ImportGeometryDialog(
+                dialog_part,
+                existing_names=[p.name for p in self.ctx.store.project.parts],
+                parent=self.ctx.parent,
+                default_part_name=next_name("Part", self.ctx.store.project.parts),
+                default_feature_name=next_name(
+                    "Import Geometry", active.geometry if active else []
+                ),
+                default_settings=self._geometry_defaults(),
+            )
+        )
         if not values:
             return
         candidate = (
@@ -140,9 +178,9 @@ class PartLifecycle:
         candidate.geometry_settings.make_solids = values["make_solids"]
         candidate.geometry_settings.remove_degenerate = values["remove_degenerate"]
         candidate.geometry_settings.tolerance = values["tolerance"]
-        candidate.geometry = [ImportedStepFeature(
-            name=values["name"], source_file=values["file"]
-        )]
+        candidate.geometry = [
+            ImportedStepFeature(name=values["name"], source_file=values["file"])
+        ]
         if editing_existing:
             candidate.mesh.lifecycle.validity = MeshValidity.OUTDATED
         if not self.ctx.validate_geometry(candidate, "Import failed"):
@@ -153,21 +191,26 @@ class PartLifecycle:
             )
         else:
             self.ctx.store.add_entity(
-                f"Imported {candidate.name}", self.ctx.store.project.id,
-                "parts", candidate,
+                f"Imported {candidate.name}",
+                self.ctx.store.project.id,
+                "parts",
+                candidate,
             )
             self.ctx.store.set_active_part(candidate.id)
         self._fit_loaded_content()
 
     def import_mesh(self):
         path = open_file(
-            self.ctx.parent, "Import Mesh",
+            self.ctx.parent,
+            "Import Mesh",
             "Mesh files (*.inp *.fem *.vtk *.vtu *.msh);;All files (*)",
         )
         if not path:
             return
         part = self._new_part(
-            name=next_name(Path(path).stem or "Mesh Part", self.ctx.store.project.parts),
+            name=next_name(
+                Path(path).stem or "Mesh Part", self.ctx.store.project.parts
+            ),
             source_type=PartSourceKind.ORPHAN_MESH,
             metadata={"part_type": "3D deformable", "source_file": str(path)},
         )
@@ -182,7 +225,9 @@ class PartLifecycle:
         self.ctx.store.execute(
             f"Imported mesh {part.name}",
             OwnedCollectionInsertCommand(
-                self.ctx.store.project.id, "parts", part,
+                self.ctx.store.project.id,
+                "parts",
+                part,
                 len(self.ctx.store.project.parts),
             ),
         )
@@ -203,11 +248,14 @@ class PartLifecycle:
         candidate, target = self.ctx.feature_copy(feature)
         if target is None:
             return
-        values = get_values(ImportGeometryDialog(
-            candidate, target,
-            [p.name for p in self.ctx.store.project.parts],
-            self.ctx.parent,
-        ))
+        values = get_values(
+            ImportGeometryDialog(
+                candidate,
+                target,
+                [p.name for p in self.ctx.store.project.parts],
+                self.ctx.parent,
+            )
+        )
         if not values:
             return
         candidate.name = values["part_name"]
@@ -220,7 +268,9 @@ class PartLifecycle:
         target.source_file = values["file"]
         candidate.mesh.lifecycle.validity = MeshValidity.OUTDATED
         if self.ctx.validate_geometry(candidate, "Geometry source update failed"):
-            self.ctx.commit_geometry_candidate(candidate, f"Edited {target.name}")
+            self.ctx.commit_geometry_candidate(
+                candidate, f"Edited {target.name}"
+            )
 
     def _fit_loaded_content(self):
         settings = self.ctx.app_settings
@@ -238,37 +288,67 @@ def _apply_imported_regions(part, imported) -> None:
     revision = str(part.mesh.revision or "")
     valid_nodes = {int(value) for value in part.mesh.nodes.ids}
     valid_elements = {
-        int(value) for block in part.mesh.element_blocks for value in block.ids
+        int(value)
+        for block in part.mesh.element_blocks
+        for value in block.ids
     }
     regions = []
     for name, node_ids in imported.node_sets.items():
         definition = RegionDefinition.from_values(
-            MeshNodeOperand(owner_ref=owner_ref, node_id=node_id, mesh_revision=revision)
-            for node_id in node_ids if int(node_id) in valid_nodes
+            MeshNodeOperand(
+                owner_ref=owner_ref,
+                node_id=node_id,
+                mesh_revision=revision,
+            )
+            for node_id in node_ids
+            if int(node_id) in valid_nodes
         )
         if not definition.empty:
-            regions.append(create_region(
-                "Node Set", name=name, definition=definition, geometry_backed=False
-            ))
+            regions.append(
+                create_region(
+                    "Node Set",
+                    name=name,
+                    definition=definition,
+                    geometry_backed=False,
+                )
+            )
     for name, element_ids in imported.element_sets.items():
         definition = RegionDefinition.from_values(
-            MeshElementOperand(owner_ref=owner_ref, element_id=element_id, mesh_revision=revision)
-            for element_id in element_ids if int(element_id) in valid_elements
+            MeshElementOperand(
+                owner_ref=owner_ref,
+                element_id=element_id,
+                mesh_revision=revision,
+            )
+            for element_id in element_ids
+            if int(element_id) in valid_elements
         )
         if not definition.empty:
-            regions.append(create_region(
-                "Element Set", name=name, definition=definition, geometry_backed=False
-            ))
+            regions.append(
+                create_region(
+                    "Element Set",
+                    name=name,
+                    definition=definition,
+                    geometry_backed=False,
+                )
+            )
     for name, facets in imported.surfaces.items():
         definition = RegionDefinition.from_values(
             MeshFacetOperand(
-                owner_ref=owner_ref, element_id=element_id,
-                local_face=side, mesh_revision=revision,
+                owner_ref=owner_ref,
+                element_id=element_id,
+                local_face=side,
+                mesh_revision=revision,
             )
-            for element_id, side in facets if int(element_id) in valid_elements
+            for element_id, side in facets
+            if int(element_id) in valid_elements
         )
         if not definition.empty:
-            regions.append(create_region(
-                "Surface", name=name, definition=definition, geometry_backed=False
-            ))
+            regions.append(
+                create_region(
+                    "Surface",
+                    name=name,
+                    definition=definition,
+                    geometry_backed=False,
+                )
+            )
     part.regions.extend(regions)
