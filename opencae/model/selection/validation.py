@@ -34,13 +34,7 @@ def validate_region_definition(
     instance_id: str = "",
     allow_part_local: bool = False,
 ) -> list[RegionDiagnostic]:
-    """Validate references and selection semantics without materializing members.
-
-    Dialogs and normal model mutations keep the immutable ``RegionDefinition``
-    intact.  Geometry-to-node/element/facet projection is deliberately left to
-    solver deck generation, where a current mesh is guaranteed to be relevant.
-    """
-
+    """Validate object relationships and selection semantics without projection."""
     if requirement is None:
         requirement = RegionRequirement()
     elif not isinstance(requirement, RegionRequirement):
@@ -54,24 +48,26 @@ def validate_region_definition(
         stack=set(),
         inherited_instance=str(instance_id or ""),
     )
-
     if state.terminal_count < requirement.min_count:
-        diagnostics.append(RegionDiagnostic(
-            "too_few_operands",
-            f"Target contains {state.terminal_count} valid selection operand(s); "
-            f"at least {requirement.min_count} required",
-        ))
+        diagnostics.append(
+            RegionDiagnostic(
+                "too_few_operands",
+                f"Target contains {state.terminal_count} valid selection operand(s); "
+                f"at least {requirement.min_count} required",
+            )
+        )
     if requirement.max_count is not None and state.terminal_count > requirement.max_count:
-        diagnostics.append(RegionDiagnostic(
-            "too_many_operands",
-            f"Target contains {state.terminal_count} selection operand(s); "
-            f"at most {requirement.max_count} allowed",
-        ))
+        diagnostics.append(
+            RegionDiagnostic(
+                "too_many_operands",
+                f"Target contains {state.terminal_count} selection operand(s); "
+                f"at most {requirement.max_count} allowed",
+            )
+        )
     if requirement.require_unique_occurrence and len(state.occurrence_ids) > 1:
-        diagnostics.append(RegionDiagnostic(
-            "multiple_occurrences",
-            "Target spans multiple assembly occurrences",
-        ))
+        diagnostics.append(
+            RegionDiagnostic("multiple_occurrences", "Target spans multiple assembly occurrences")
+        )
     return diagnostics
 
 
@@ -90,57 +86,62 @@ def region_definition_error(
         instance_id=instance_id,
         allow_part_local=allow_part_local,
     )
-    return "\n".join(dict.fromkeys(item.message for item in diagnostics if item.severity == "error"))
+    return "\n".join(
+        dict.fromkeys(item.message for item in diagnostics if item.severity == "error")
+    )
 
 
 def _walk(state, definition, diagnostics, *, stack, inherited_instance):
     for index, item in enumerate(definition.items):
         operand = item.operand
         if isinstance(operand, UnresolvedOperand):
-            diagnostics.append(RegionDiagnostic(
-                "unresolved_legacy_selection",
-                f"Unresolved legacy selection: {operand.legacy_label}",
-                index,
-            ))
+            diagnostics.append(
+                RegionDiagnostic(
+                    "unresolved_legacy_selection",
+                    f"Unresolved legacy selection: {operand.legacy_label}",
+                    index,
+                )
+            )
             continue
         if isinstance(operand, NamedRegionOperand):
-            region = state.project.try_resolve(operand.region_ref)
-            if region is None:
-                diagnostics.append(RegionDiagnostic(
-                    "missing_region",
-                    f"Region '{operand.region_ref.entity_id}' does not exist",
-                    index,
-                ))
+            region = operand.region
+            if region is None or state.project.try_resolve(region) is not region:
+                diagnostics.append(
+                    RegionDiagnostic("missing_region", "Region no longer exists", index)
+                )
                 continue
             if region.id in stack:
-                diagnostics.append(RegionDiagnostic(
-                    "region_cycle",
-                    f"Region cycle involving '{region.name}'",
-                    index,
-                ))
+                diagnostics.append(
+                    RegionDiagnostic(
+                        "region_cycle", f"Region cycle involving '{region.name}'", index
+                    )
+                )
                 continue
             expected_projection = state.requirement.projection
             if (
-                expected_projection in {
+                expected_projection
+                in {
                     RegionProjection.NODES,
                     RegionProjection.ELEMENTS,
                     RegionProjection.FACETS,
                 }
                 and region.preferred_projection != expected_projection
             ):
-                diagnostics.append(RegionDiagnostic(
-                    "incompatible_region_type",
-                    f"{region.name} is typed as {_projection_label(region.preferred_projection)}; "
-                    f"this target requires {_projection_label(expected_projection)}",
-                    index,
-                ))
+                diagnostics.append(
+                    RegionDiagnostic(
+                        "incompatible_region_type",
+                        f"{region.name} is typed as {_projection_label(region.preferred_projection)}; "
+                        f"this target requires {_projection_label(expected_projection)}",
+                        index,
+                    )
+                )
                 continue
-            nested_instance = _id(operand.instance_ref) or inherited_instance
+            nested_instance = _id(operand.instance) or inherited_instance
             occurrence_error = _occurrence_error(state.project, nested_instance)
             if occurrence_error:
-                diagnostics.append(RegionDiagnostic(
-                    occurrence_error[0], occurrence_error[1], index
-                ))
+                diagnostics.append(
+                    RegionDiagnostic(occurrence_error[0], occurrence_error[1], index)
+                )
                 continue
             _walk(
                 state,
@@ -166,44 +167,56 @@ def _validate_terminal(state, operand, inherited_instance):
     projection = requirement.projection
 
     if isinstance(operand, ReferencePointOperand):
-        point = state.project.try_resolve(operand.reference_point_ref)
-        if point is None:
+        point = operand.reference_point
+        if point is None or state.project.try_resolve(point) is not point:
             return "missing_reference_point", "Reference point no longer exists"
-        if projection not in {RegionProjection.NODES, RegionProjection.SINGLE_CONTROL_NODE}:
+        if projection not in {
+            RegionProjection.NODES,
+            RegionProjection.SINGLE_CONTROL_NODE,
+        }:
             return "invalid_target_kind", "Reference points are not valid for this target"
         parent = state.project.try_resolve(state.project.index.parent_id.get(point.id))
-        occurrence = _id(operand.instance_ref) or inherited_instance
+        occurrence = _id(operand.instance) or inherited_instance
         occurrence_error = _occurrence_error(
-            state.project, occurrence, parent if _is_part(parent) else None
+            state.project,
+            occurrence,
+            parent if _is_part(parent) else None,
         )
         if occurrence_error:
             return occurrence_error
         if _is_part(parent) and not (occurrence or state.allow_part_local):
-            return "missing_occurrence", f"Part reference point '{point.name}' requires an assembly instance occurrence"
+            return (
+                "missing_occurrence",
+                f"Part reference point '{point.name}' requires an assembly instance occurrence",
+            )
         return None
 
     if isinstance(operand, WholeModelOperand):
-        owner = state.project.try_resolve(operand.owner_ref) if operand.owner_ref else None
-        occurrence = _id(operand.instance_ref) or inherited_instance
+        owner = operand.owner
+        occurrence = _id(operand.instance) or inherited_instance
         occurrence_error = _occurrence_error(
-            state.project, occurrence, owner if _is_part(owner) else None
+            state.project,
+            occurrence,
+            owner if _is_part(owner) else None,
         )
         if occurrence_error:
             return occurrence_error
-        if operand.owner_ref and owner is None:
+        if owner is not None and state.project.try_resolve(owner) is not owner:
             return "missing_owner", "Whole-model selection owner no longer exists"
         if _is_part(owner) and not (occurrence or state.allow_part_local):
-            return "missing_occurrence", f"Whole-part selection in '{owner.name}' requires an assembly instance occurrence"
+            return (
+                "missing_occurrence",
+                f"Whole-part selection in '{owner.name}' requires an assembly instance occurrence",
+            )
         return None
 
-    owner_ref = getattr(operand, "owner_ref", None)
-    declared_owner = state.project.try_resolve(owner_ref)
-    if owner_ref and declared_owner is None:
+    declared_owner = getattr(operand, "owner", None)
+    if declared_owner is not None and state.project.try_resolve(declared_owner) is not declared_owner:
         return "missing_owner", "Selection owner no longer exists"
     declared_part = (
         declared_owner
         if _is_part(declared_owner)
-        else state.project.try_resolve(declared_owner.part_ref)
+        else declared_owner.part
         if _is_instance(declared_owner)
         else None
     )
@@ -217,34 +230,51 @@ def _validate_terminal(state, operand, inherited_instance):
     if occurrence_error:
         return occurrence_error
     if _is_part(owner) and not occurrence and not state.allow_part_local:
-        return "missing_occurrence", f"Part selection in '{part.name}' requires an assembly instance occurrence"
+        return (
+            "missing_occurrence",
+            f"Part selection in '{part.name}' requires an assembly instance occurrence",
+        )
 
     if isinstance(operand, GeometryOperand):
         if int(operand.dimension) not in requirement.allowed_dimensions:
-            return "invalid_dimension", f"{_geometry_label(operand.dimension, operand.tag)} is not allowed for this target"
+            return (
+                "invalid_dimension",
+                f"{_geometry_label(operand.dimension, operand.tag)} is not allowed for this target",
+            )
         stale = _stale_geometry(part, operand)
-        if stale:
-            return "stale_geometry_selection", stale
-        return None
+        return ("stale_geometry_selection", stale) if stale else None
 
     if isinstance(operand, MeshNodeOperand):
-        if projection not in {RegionProjection.NODES, RegionProjection.SINGLE_CONTROL_NODE}:
+        if projection not in {
+            RegionProjection.NODES,
+            RegionProjection.SINGLE_CONTROL_NODE,
+        }:
             return "invalid_target_kind", "Mesh nodes are not valid for this target"
         stale = _stale_mesh(part, operand)
         if stale:
             return "stale_mesh_selection", stale
-        if operand.node_id not in {int(value) for value in part.mesh.nodes.ids}:
-            return "missing_node", f"Node {operand.node_id} does not exist in '{part.name}'"
+        node = operand.node
+        try:
+            canonical = part.mesh.node(node.id)
+        except (AttributeError, KeyError, TypeError, ValueError):
+            canonical = None
+        if canonical is not node:
+            return "missing_node", "Selected Node does not exist in the Part"
         return None
 
     if isinstance(operand, MeshElementOperand):
-        if projection not in {RegionProjection.NODES, RegionProjection.ELEMENTS, RegionProjection.FACETS}:
+        if projection not in {
+            RegionProjection.NODES,
+            RegionProjection.ELEMENTS,
+            RegionProjection.FACETS,
+        }:
             return "invalid_target_kind", "Mesh elements are not valid for this target"
         stale = _stale_mesh(part, operand)
         if stale:
             return "stale_mesh_selection", stale
-        if not _element_exists(part, operand.element_id):
-            return "missing_element", f"Element {operand.element_id} does not exist in '{part.name}'"
+        element_id = getattr(operand.element, "id", -1)
+        if not _element_exists(part, element_id):
+            return "missing_element", "Selected Element does not exist in the Part"
         return None
 
     if isinstance(operand, MeshFacetOperand):
@@ -253,30 +283,29 @@ def _validate_terminal(state, operand, inherited_instance):
         stale = _stale_mesh(part, operand)
         if stale:
             return "stale_mesh_selection", stale
-        if not _element_exists(part, operand.element_id):
-            return "missing_element", f"Element {operand.element_id} does not exist in '{part.name}'"
+        element_id = getattr(operand.element, "id", -1)
+        if not _element_exists(part, element_id):
+            return "missing_element", "Selected Element does not exist in the Part"
         return None
 
     return "invalid_target_kind", f"Unsupported target operand: {type(operand).__name__}"
 
 
 def _owner(project, operand, inherited_instance):
-    occurrence = _id(getattr(operand, "instance_ref", None)) or inherited_instance or ""
-    owner = project.try_resolve(getattr(operand, "owner_ref", None))
-    if owner is None and occurrence:
-        owner = project.try_resolve(occurrence)
+    instance = getattr(operand, "instance", None)
+    occurrence = _id(instance) or inherited_instance or ""
+    owner = getattr(operand, "owner", None)
     if _is_instance(owner):
-        occurrence = owner.id
-        return owner, project.try_resolve(owner.part_ref), occurrence
-    if occurrence:
+        return owner, owner.part, owner.id
+    if instance is None and occurrence:
         instance = project.try_resolve(occurrence)
-        if _is_instance(instance):
-            return instance, project.try_resolve(instance.part_ref), instance.id
+    if _is_instance(instance):
+        return instance, instance.part, instance.id
     return owner, owner if _is_part(owner) else None, occurrence
 
 
 def _occurrence_id(operand, inherited_instance):
-    return _id(getattr(operand, "instance_ref", None)) or inherited_instance or ""
+    return _id(getattr(operand, "instance", None)) or inherited_instance or ""
 
 
 def _occurrence_error(project, occurrence, expected_part=None):
@@ -286,8 +315,8 @@ def _occurrence_error(project, occurrence, expected_part=None):
     if not _is_instance(instance):
         return "missing_occurrence", f"Assembly occurrence '{occurrence}' does not exist"
     if expected_part is not None:
-        actual_part = project.try_resolve(instance.part_ref)
-        if actual_part is None or actual_part.id != expected_part.id:
+        actual_part = instance.part
+        if actual_part is None or actual_part is not expected_part:
             return (
                 "occurrence_owner_mismatch",
                 f"Occurrence '{instance.name}' does not instantiate part '{expected_part.name}'",
@@ -319,7 +348,7 @@ def _stale_geometry(part, operand):
 
 def _element_exists(part, element_id):
     target = int(element_id)
-    return any(target in {int(value) for value in block.ids} for block in part.mesh.element_blocks)
+    return any(target in set(map(int, block.ids)) for block in part.mesh.element_blocks)
 
 
 def _projection_label(value):
@@ -337,8 +366,8 @@ def _geometry_label(dimension, tag):
     return f"{labels.get(int(dimension), 'Geometry')}-{int(tag)}"
 
 
-def _id(ref):
-    return str(ref.entity_id) if ref else ""
+def _id(value):
+    return str(getattr(value, "id", "") or "")
 
 
 def _is_part(value):
