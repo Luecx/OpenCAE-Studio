@@ -1,33 +1,30 @@
 """Defines one persistent execution record for an Analysis or Study."""
 
-from dataclasses import dataclass, field
-from typing import Any
+from __future__ import annotations
 
-from ...core import Entity, EntityRef, register_model_type
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
+
+from ...core import Entity, register_model_type
 from .job_source_kind import JobSourceKind
 from .job_status import JobStatus
+
+if TYPE_CHECKING:
+    from ..analysis import Analysis
+    from ..studies import Study
+    from .result_set import ResultSet
 
 
 @register_model_type("job")
 @dataclass
 class Job(Entity):
-    """Persistent run identity shared by solver and study executions.
+    """Persistent run identity with direct source/result object relationships."""
 
-    The entity stores canonical lifecycle/source enums. Legacy serialized strings
-    are accepted at construction and normalized immediately.
-    """
-
-    source_ref: EntityRef | None = field(
+    source: Analysis | Study | None = field(
         default=None,
         metadata={"reference_type": "Analysis|Study"},
     )
     source_kind: JobSourceKind | str = JobSourceKind.ANALYSIS
-    # Legacy field accepted from older project files. New files serialize only
-    # ``source_ref`` so there is one canonical relationship.
-    analysis_ref: EntityRef | None = field(
-        default=None,
-        metadata={"serialize": False, "reference_type": "Analysis"},
-    )
     solver: str = "FEMaster"
     status: JobStatus | str = JobStatus.PREPARED
     exit_code: int | None = None
@@ -39,11 +36,13 @@ class Job(Entity):
     output_file: str = ""
     progress: float = 0.0
     progress_label: str = "Prepared"
-    result_refs: list[EntityRef] = field(default_factory=list)
+    results: list[ResultSet] = field(
+        default_factory=list,
+        metadata={"reference_type": "ResultSet"},
+    )
     settings: dict[str, Any] = field(default_factory=dict)
 
     def __setattr__(self, name, value):
-        """Normalize finite-domain fields at every mutation boundary."""
         if name == "status":
             value = JobStatus.coerce(value)
         elif name == "source_kind":
@@ -51,23 +50,12 @@ class Job(Entity):
         super().__setattr__(name, value)
 
     def __post_init__(self) -> None:
-        """Migrate legacy Analysis references and clamp persisted progress."""
-        if self.source_ref is None and self.analysis_ref is not None:
-            self.source_ref = self.analysis_ref
-            self.source_kind = JobSourceKind.ANALYSIS
-
-        if self.source_kind is JobSourceKind.ANALYSIS:
-            self.analysis_ref = self.source_ref
-
-        # Project files may contain progress produced by interrupted versions;
-        # clamping keeps the persistent invariant independent of UI widgets.
         self.progress = min(max(float(self.progress), 0.0), 1.0)
         if self.exit_code is not None:
             self.exit_code = int(self.exit_code)
 
     @property
     def running(self) -> bool:
-        """Return whether the Job is still considered active by the UI."""
         return self.status in {
             JobStatus.PREPARED,
             JobStatus.RUNNING,
@@ -75,9 +63,7 @@ class Job(Entity):
         }
 
     def write_abaqus(self, writer, context) -> None:
-        """Jobs do not contribute solver deck records."""
         return None
 
     def write_femaster(self, writer, context) -> None:
-        """Jobs do not contribute solver deck records."""
         return None
