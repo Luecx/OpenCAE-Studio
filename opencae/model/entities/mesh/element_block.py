@@ -1,30 +1,26 @@
-"""Stores compact element connectivity linked to one canonical definition."""
+"""Stores compact element payload with direct definition/object relationships."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from ...core import EntityRef, SolverWritable, as_entity_ref, register_model_type
+from ...core import SolverWritable, register_model_type
 from ..elements.base import ElementDefinition
-from ..fem import Element, MeshEntityOrigin
+from ..fem import Element, MeshEntityOrigin, element_class_for_definition
+
+if TYPE_CHECKING:
+    from .mesh_state import MeshState
 
 
 @register_model_type("element_block")
 @dataclass
 class ElementBlock(SolverWritable):
-    """Compact element storage referencing one canonical mesh definition.
+    """Compact element storage exposing identity-stable Element objects."""
 
-    ``definition`` is a non-serialized runtime alias so the public API remains
-    object-oriented. ``definition_ref`` is the only persisted relationship.
-    Element ids/connectivity are large numeric payloads and deliberately do not
-    participate in ProjectIndex traversal.
-    """
-
-    definition: ElementDefinition | EntityRef | None = field(
+    definition: ElementDefinition | None = field(
         default=None,
-        metadata={"serialize": False},
-        repr=False,
-        compare=False,
+        metadata={"reference_type": "ElementDefinition"},
     )
     ids: list[int] = field(
         default_factory=list,
@@ -38,40 +34,22 @@ class ElementBlock(SolverWritable):
         default_factory=list,
         metadata={"project_index": False},
     )
-    definition_ref: EntityRef | None = None
-    _mesh: object | None = field(
+    _mesh: MeshState | None = field(
         init=False,
         default=None,
         repr=False,
         compare=False,
+        metadata={"serialize": False},
+    )
+    _objects: dict[int, Element] = field(
+        init=False,
+        default_factory=dict,
+        repr=False,
+        compare=False,
+        metadata={"serialize": False, "project_index": False},
     )
 
     def __post_init__(self) -> None:
-        """Normalize public object input or a persisted reference."""
-        if self.definition is not None and self.definition_ref is not None:
-            runtime_ref = as_entity_ref(self.definition, "ElementDefinition")
-            persisted_ref = as_entity_ref(
-                self.definition_ref,
-                "ElementDefinition",
-            )
-            if runtime_ref.entity_id != persisted_ref.entity_id:
-                raise TypeError(
-                    "Pass either definition or definition_ref, not conflicting both"
-                )
-            source = self.definition
-        else:
-            source = (
-                self.definition
-                if self.definition is not None
-                else self.definition_ref
-            )
-        if source is None:
-            raise TypeError("ElementBlock requires an element definition")
-
-        self.definition_ref = as_entity_ref(source, "ElementDefinition")
-        self.definition = (
-            source if isinstance(source, ElementDefinition) else None
-        )
         self.ids = [int(value) for value in self.ids]
         self.connectivity = [
             tuple(int(node_id) for node_id in row)
@@ -80,41 +58,52 @@ class ElementBlock(SolverWritable):
         if not self.origins and self.ids:
             self.origins = [MeshEntityOrigin.GENERATED] * len(self.ids)
         else:
-            self.origins = [
-                MeshEntityOrigin.coerce(value) for value in self.origins
-            ]
+            self.origins = [MeshEntityOrigin.coerce(value) for value in self.origins]
+        self._objects = {}
         if len(self.ids) != len(self.connectivity):
-            raise ValueError(
-                "ElementBlock ids and connectivity must have equal length"
-            )
+            raise ValueError("ElementBlock ids and connectivity must have equal length")
         if len(self.ids) != len(self.origins):
-            raise ValueError(
-                "ElementBlock ids and origins must have equal length"
-            )
+            raise ValueError("ElementBlock ids and origins must have equal length")
 
     def bind_mesh(self, mesh) -> None:
-        """Bind this block to its owning MeshState and validate its reference."""
-        definition = mesh.definition_for(self.definition_ref)
+        """Bind compact rows to the owning mesh and canonical definition object."""
+        definition = mesh.definition_for(self.definition)
         if definition is None:
             raise ValueError(
-                "ElementBlock references an element definition that is not "
-                "owned by its MeshState"
+                "ElementBlock definition is not owned by its MeshState"
             )
         self._mesh = mesh
         self.definition = definition
+        # Existing references remain valid. Re-synchronize them lazily through
+        # get() rather than replacing them when a block is rebound.
 
     def __len__(self) -> int:
-        """Return the number of compact elements in this block."""
         return len(self.ids)
 
+    def get(self, element_id: int) -> Element:
+        """Return the one canonical Element object for ``element_id``."""
+        if self._mesh is None or self.definition is None:
+            raise RuntimeError("ElementBlock must be bound before reading elements")
+        index = self.position(element_id)
+        identity = self.ids[index]
+        element_type = element_class_for_definition(self.definition)
+        nodes = tuple(
+            self._mesh.node(node_id) for node_id in self.connectivity[index]
+        )
+        element = self._objects.get(identity)
+        if element is None or not isinstance(element, element_type):
+            element = element_type(identity, nodes, self.origins[index])
+            self._objects[identity] = element
+        else:
+            object.__setattr__(element, "nodes", nodes)
+            object.__setattr__(element, "origin", self.origins[index])
+        return element
+
     def add(self, element: Element) -> None:
-        """Append one element while preserving definition compatibility."""
         if not isinstance(element, Element):
             raise TypeError("ElementBlock.add expects an Element object")
         if self.definition is None:
-            raise RuntimeError(
-                f"Element definition '{self.definition_ref.entity_id}' is not bound"
-            )
+            raise RuntimeError("ElementBlock has no bound ElementDefinition object")
         if not isinstance(self.definition, element.definition_type):
             raise TypeError(
                 f"{type(element).__name__} is incompatible with "
@@ -125,24 +114,24 @@ class ElementBlock(SolverWritable):
         self.ids.append(element.id)
         self.connectivity.append(element.connectivity)
         self.origins.append(element.origin)
+        self._objects[element.id] = element
 
     def position(self, element_id: int) -> int:
-        """Return the compact row for an element or raise a stable lookup error."""
         try:
             return self.ids.index(int(element_id))
         except ValueError as exc:
             raise KeyError(f"Element {element_id} does not exist") from exc
 
     def remove(self, element_id: int) -> tuple[tuple[int, ...], MeshEntityOrigin]:
-        """Remove one row and return the connectivity plus provenance."""
         index = self.position(element_id)
+        identity = self.ids[index]
         connectivity = self.connectivity.pop(index)
         origin = self.origins.pop(index)
         self.ids.pop(index)
+        self._objects.pop(identity, None)
         return connectivity, origin
 
     def replace(self, element: Element) -> None:
-        """Replace one row while retaining its element ID and block definition."""
         if self.definition is None or not isinstance(
             self.definition,
             element.definition_type,
@@ -151,11 +140,15 @@ class ElementBlock(SolverWritable):
         index = self.position(element.id)
         self.connectivity[index] = element.connectivity
         self.origins[index] = element.origin
+        current = self._objects.get(element.id)
+        if current is None:
+            self._objects[element.id] = element
+        elif current is not element:
+            object.__setattr__(current, "nodes", tuple(element.nodes))
+            object.__setattr__(current, "origin", element.origin)
 
     def write_abaqus(self, writer, context) -> None:
-        """Element blocks are emitted by solver-specific mesh exporters."""
         return None
 
     def write_femaster(self, writer, context) -> None:
-        """Element blocks are emitted by solver-specific mesh exporters."""
         return None
