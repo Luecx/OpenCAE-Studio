@@ -66,25 +66,31 @@ class Project(Entity):
     )
 
     def __post_init__(self) -> None:
-        """Build the runtime identity/reference index for the current graph."""
         self.rebuild_index()
 
     @property
     def index(self) -> ProjectIndex:
-        """Return the current ProjectIndex, rebuilding lazily when absent."""
         if self._index is None:
             self.rebuild_index()
         return self._index
 
     def invalidate_index(self) -> None:
-        """Mark runtime identity/reference indexes stale after direct mutation."""
         self._index = None
 
     def rebuild_index(self, strict: bool = False) -> ProjectIndex:
-        """Rebuild entity identity/reverse references and validate the graph."""
-        from ..core.reference_binding import validate_project_references
+        """Bind wire references, rebuild identity/reverse indexes and validate."""
+        from ..core.reference_binding import (
+            bind_project_object_references,
+            validate_project_references,
+        )
 
-        self._index = ProjectIndex(self)
+        index = ProjectIndex(self)
+        if bind_project_object_references(self, index):
+            # The first pass indexes ownership while decoded relationship fields
+            # may still contain EntityRef/mesh-ID wire values. Rebuild once after
+            # binding so reverse references always describe canonical objects.
+            index = ProjectIndex(self)
+        self._index = index
         self.reference_errors = validate_project_references(
             self,
             self._index,
@@ -93,20 +99,16 @@ class Project(Entity):
         return self._index
 
     def ensure_references(self, strict: bool = False) -> list[str]:
-        """Refresh reference diagnostics and optionally reject invalid links."""
         self.rebuild_index(strict)
         return list(self.reference_errors)
 
     def resolve(self, ref, expected_type=None):
-        """Resolve one stable entity reference and optionally enforce its type."""
         return self.index.resolve(ref, expected_type)
 
     def try_resolve(self, ref, expected_type=None):
-        """Resolve one reference or return ``None`` when it is unavailable."""
         return self.index.try_resolve(ref, expected_type)
 
     def references_to(self, entity_or_id):
-        """Return reverse-reference uses from the current lazily maintained index."""
         entity_id = getattr(entity_or_id, "id", entity_or_id)
         return self.index.references_to(str(entity_id))
 
@@ -115,25 +117,21 @@ class Project(Entity):
         solver: SolverName | str,
         analysis: Analysis | None = None,
     ) -> str:
-        """Render this Project through the application-level export service."""
         from opencae.exporting import render_deck
 
         return render_deck(self, solver, analysis)
 
     def write_abaqus(self, writer, context) -> None:
-        """Delegate complete Abaqus Project export to the export service."""
         from opencae.exporting import write_project
 
         write_project(self, SolverName.ABAQUS, writer, context)
 
     def write_femaster(self, writer, context) -> None:
-        """Delegate complete FEMaster Project export to the export service."""
         from opencae.exporting import write_project
 
         write_project(self, SolverName.FEMASTER, writer, context)
 
     def write_generic(self, writer, context) -> None:
-        """Delegate complete generic Project export to the export service."""
         from opencae.exporting import write_project
 
         write_project(self, SolverName.GENERIC, writer, context)
