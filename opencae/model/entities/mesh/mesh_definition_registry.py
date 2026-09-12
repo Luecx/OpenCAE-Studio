@@ -2,27 +2,20 @@
 
 from __future__ import annotations
 
-from ...core import EntityRef
 from ..elements.base import ElementDefinition
 from .element_block import ElementBlock
 
 
-def definition_for(
-    mesh,
-    reference: EntityRef | str | None,
-) -> ElementDefinition | None:
-    """Resolve one block definition reference within a mesh aggregate."""
-    entity_id = (
-        reference.entity_id
-        if isinstance(reference, EntityRef)
-        else str(reference or "")
-    )
+def definition_for(mesh, reference) -> ElementDefinition | None:
+    """Return the canonical definition represented by an object or identity."""
+    if isinstance(reference, ElementDefinition):
+        return next(
+            (item for item in mesh.element_definitions if item is reference or item.id == reference.id),
+            None,
+        )
+    entity_id = str(getattr(reference, "entity_id", reference) or "")
     return next(
-        (
-            definition
-            for definition in mesh.element_definitions
-            if definition.id == entity_id
-        ),
+        (definition for definition in mesh.element_definitions if definition.id == entity_id),
         None,
     )
 
@@ -31,13 +24,9 @@ def replace_element_blocks(mesh, blocks: list[ElementBlock]) -> None:
     """Replace blocks and rebuild one canonical definition collection."""
     source_definitions = []
     for block in blocks:
-        definition = block.definition
-        if definition is None:
-            definition = definition_for(mesh, block.definition_ref)
-        if definition is None:
-            raise ValueError(
-                "Cannot adopt an ElementBlock without a bound definition"
-            )
+        definition = definition_for(mesh, block.definition) or block.definition
+        if not isinstance(definition, ElementDefinition):
+            raise ValueError("Cannot adopt an ElementBlock without a definition object")
         source_definitions.append(definition)
 
     canonical: list[ElementDefinition] = []
@@ -50,50 +39,35 @@ def replace_element_blocks(mesh, blocks: list[ElementBlock]) -> None:
 
     _set_definitions(mesh, canonical)
     _set_blocks(mesh, list(blocks))
-    for block, source in zip(
-        mesh.element_blocks,
-        source_definitions,
-        strict=True,
-    ):
-        definition = by_key[definition_key(source)]
-        _bind_block(mesh, block, definition)
+    for block, source in zip(mesh.element_blocks, source_definitions, strict=True):
+        _bind_block(mesh, block, by_key[definition_key(source)])
     refresh_definition_counts(mesh)
 
 
 def bind_element_blocks(mesh, register_missing: bool = True) -> None:
-    """Bind current blocks and optionally register runtime definitions."""
+    """Bind blocks to canonical direct ElementDefinition objects."""
     blocks = list(getattr(mesh, "element_blocks", ()))
     definitions = list(getattr(mesh, "element_definitions", ()))
     by_id = {definition.id: definition for definition in definitions}
     bindings: list[tuple[ElementBlock, ElementDefinition]] = []
 
     for block in blocks:
-        definition = by_id.get(block.definition_ref.entity_id)
         runtime_definition = block.definition
-        if definition is None and runtime_definition is not None:
+        identity = getattr(runtime_definition, "entity_id", None) or getattr(runtime_definition, "id", None)
+        definition = by_id.get(str(identity or ""))
+        if definition is None and isinstance(runtime_definition, ElementDefinition):
             if not register_missing:
-                raise ValueError(
-                    "ElementBlock definition is not owned by its mesh"
-                )
+                raise ValueError("ElementBlock definition is not owned by its mesh")
             equivalent = next(
-                (
-                    item
-                    for item in definitions
-                    if definition_key(item)
-                    == definition_key(runtime_definition)
-                ),
+                (item for item in definitions if definition_key(item) == definition_key(runtime_definition)),
                 None,
             )
             definition = equivalent or runtime_definition
             if equivalent is None:
                 definitions.append(definition)
                 by_id[definition.id] = definition
-
         if definition is None:
-            raise ValueError(
-                "ElementBlock references unknown definition "
-                f"'{block.definition_ref.entity_id}'"
-            )
+            raise ValueError("ElementBlock references an unknown ElementDefinition")
         bindings.append((block, definition))
 
     _set_definitions(mesh, definitions)
@@ -103,17 +77,16 @@ def bind_element_blocks(mesh, register_missing: bool = True) -> None:
 
 
 def refresh_definition_counts(mesh) -> None:
-    """Synchronize definition summary counts from compact block membership."""
     counts = {definition.id: 0 for definition in mesh.element_definitions}
     for block in mesh.element_blocks:
-        key = block.definition_ref.entity_id
-        counts[key] = counts.get(key, 0) + len(block)
+        if block.definition is None:
+            continue
+        counts[block.definition.id] = counts.get(block.definition.id, 0) + len(block)
     for definition in mesh.element_definitions:
         definition.count = counts.get(definition.id, 0)
 
 
 def definition_key(definition: ElementDefinition) -> tuple:
-    """Return identity-independent solver metadata used to share definitions."""
     return (
         type(definition),
         definition.name,
@@ -141,12 +114,6 @@ def _set_blocks(mesh, values) -> None:
         object.__setattr__(mesh, "element_blocks", list(values))
 
 
-def _bind_block(
-    mesh,
-    block: ElementBlock,
-    definition: ElementDefinition,
-) -> None:
-    """Bind one block to a canonical definition already owned by the mesh."""
-    block.definition_ref = EntityRef.of(definition, "ElementDefinition")
+def _bind_block(mesh, block: ElementBlock, definition: ElementDefinition) -> None:
     block.definition = definition
     block.bind_mesh(mesh)
