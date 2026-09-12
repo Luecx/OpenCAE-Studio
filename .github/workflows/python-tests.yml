@@ -46,8 +46,8 @@ jobs:
       # 400+ tests in one Python process can leave native Qt/GL state that makes
       # a later, otherwise passing QWidget/QPixmap construction segfault. Run
       # the observed native-boundary files independently, then cover every
-      # remaining test in bounded alphabetical processes. This preserves full
-      # coverage without carrying native GUI state across the whole suite.
+      # remaining test in bounded processes. This preserves full coverage
+      # without carrying native GUI state across the whole suite.
       - name: Run section-view regressions in isolation
         run: python -m pytest -vv tests/test_section_view.py
       - name: Run time-manager regressions in isolation
@@ -67,7 +67,9 @@ jobs:
               ! -name 'test_static_architecture.py' \
               | sort
           )
-          python -m pytest -vv "${files[@]}"
+          for file in "${files[@]}"; do
+            python -m pytest -vv "$file"
+          done
       - name: Run full suite chunk T-Z
         run: |
           mapfile -t files < <(
@@ -77,7 +79,9 @@ jobs:
               ! -name 'test_workflow_ui_regressions.py' \
               | sort
           )
-          python -m pytest -vv "${files[@]}"
+          for file in "${files[@]}"; do
+            python -m pytest -vv "$file"
+          done
 
   wayland:
     name: Native Wayland viewport
