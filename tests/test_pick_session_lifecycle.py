@@ -141,7 +141,7 @@ def test_region_widget_defers_resolution_and_dialogs_keep_previews():
     assert "Finish selecting this region" in compact
     assert "RegionResolver" not in compact
     assert "preview_changed" in constraint
-    assert "set_extended_visible(tie)" in constraint
+    assert "set_extended_visible(tie or connector)" in constraint
     assert "constraint-dialog-" in assembly_constraints
     assert "section-assignment-dialog-" in sections
     assert "value_changed.connect(self._filter_sections)" not in section_dialog

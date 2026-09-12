@@ -12,6 +12,7 @@ class WindowStatePersistence(QObject):
     GEOMETRY_KEY = "main_window/geometry"
     STATE_KEY = "main_window/state"
     STATE_SCHEMA_KEY = "main_window/state_schema"
+    RESTORE_KEY = "ui/restore_layout"
 
     def __init__(self, window, settings=None):
         super().__init__(window if isinstance(window, QObject) else None)
@@ -19,7 +20,10 @@ class WindowStatePersistence(QObject):
         self.settings = settings or QSettings()
 
     def restore(self) -> None:
-        """Restore geometry, compatible dock state, and workspace state."""
+        """Restore geometry, dock state and workspace state when enabled."""
+        if not _bool_value(self.settings.value(self.RESTORE_KEY, True), True):
+            return
+
         geometry = self.settings.value(self.GEOMETRY_KEY)
         if isinstance(geometry, QByteArray) and not geometry.isEmpty():
             self.window.restoreGeometry(geometry)
@@ -52,3 +56,12 @@ class WindowStatePersistence(QObject):
         if workspace is not None:
             workspace.save_state(self.settings)
         self.settings.sync()
+
+
+def _bool_value(value, default: bool) -> bool:
+    """Normalize QSettings boolean representations."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return bool(default)
+    return str(value).strip().casefold() not in {"0", "false", "no", "off", ""}

@@ -8,17 +8,9 @@ from .context_rules import available
 from .tree_roles import ENTITY_ROLE, KIND_ROLE
 
 VISIBILITY_KINDS = {
-    "datum_point",
-    "datum_vector",
-    "datum_plane",
-    "coordinate_system",
-    "asm_coordinate_system",
-    "reference_point",
-    "asm_reference_point",
-    "orientation",
-    "support",
-    "load",
-    "constraint",
+    "datum_point", "datum_vector", "datum_plane", "coordinate_system",
+    "asm_coordinate_system", "reference_point", "asm_reference_point",
+    "orientation", "support", "load", "constraint",
 }
 
 MAP = {
@@ -56,12 +48,8 @@ MAP = {
     "asm_coordinate_systems": (A.ASM_CSYS,),
     "asm_reference_points": (A.ASM_RP,),
     "constraints": (
-        A.CONSTRAINT_KINEMATIC,
-        A.CONSTRAINT_DISTRIBUTING,
-        A.CONSTRAINT_TIE,
-        A.CONSTRAINT_RIGID,
-        A.CONSTRAINT_CONNECTOR,
-        A.CONSTRAINT_EQUATION,
+        A.CONSTRAINT_KINEMATIC, A.CONSTRAINT_DISTRIBUTING, A.CONSTRAINT_TIE,
+        A.CONSTRAINT_RIGID, A.CONSTRAINT_CONNECTOR, A.CONSTRAINT_EQUATION,
         A.CONSTRAINT_MPC,
     ),
     "constraint": (A.EDIT_SELECTED, A.DELETE_SELECTED),
@@ -77,41 +65,19 @@ MAP = {
     "analysis_step_reference": (A.EDIT_SELECTED, A.DELETE_SELECTED),
     "analyses": (A.ANALYSIS_NEW,),
     "analysis": (
-        A.ANALYSIS_NEW,
-        A.ANALYSIS_EDIT,
-        A.SOLVER_SETTINGS,
-        A.VALIDATE,
-        A.PREVIEW_DECK,
-        A.WRITE_DECK,
-        A.ANALYSIS_RUN,
-        A.DELETE_SELECTED,
+        A.ANALYSIS_NEW, A.ANALYSIS_EDIT, A.VALIDATE, A.PREVIEW_DECK,
+        A.WRITE_DECK, A.ANALYSIS_RUN, A.DELETE_SELECTED,
     ),
     "studies": (A.STUDY_NEW_TOPOLOGY,),
     "study": (
-        A.STUDY_NEW_TOPOLOGY,
-        A.STUDY_EDIT,
-        A.OPT_RESPONSE,
-        A.OPT_OBJECTIVE,
-        A.OPT_CONSTRAINT,
-        A.OPT_FILTER,
-        A.OPT_SYMMETRY,
-        A.OPT_CONTROLS,
-        A.STUDY_VALIDATE,
-        A.STUDY_RUN,
-        A.DELETE_SELECTED,
+        A.STUDY_NEW_TOPOLOGY, A.STUDY_EDIT, A.OPT_RESPONSE, A.OPT_OBJECTIVE,
+        A.OPT_CONSTRAINT, A.OPT_FILTER, A.OPT_SYMMETRY, A.OPT_CONTROLS,
+        A.STUDY_VALIDATE, A.STUDY_RUN, A.DELETE_SELECTED,
     ),
     "topology_optimization": (
-        A.STUDY_NEW_TOPOLOGY,
-        A.STUDY_EDIT,
-        A.OPT_RESPONSE,
-        A.OPT_OBJECTIVE,
-        A.OPT_CONSTRAINT,
-        A.OPT_FILTER,
-        A.OPT_SYMMETRY,
-        A.OPT_CONTROLS,
-        A.STUDY_VALIDATE,
-        A.STUDY_RUN,
-        A.DELETE_SELECTED,
+        A.STUDY_NEW_TOPOLOGY, A.STUDY_EDIT, A.OPT_RESPONSE, A.OPT_OBJECTIVE,
+        A.OPT_CONSTRAINT, A.OPT_FILTER, A.OPT_SYMMETRY, A.OPT_CONTROLS,
+        A.STUDY_VALIDATE, A.STUDY_RUN, A.DELETE_SELECTED,
     ),
     "study_responses": (A.OPT_RESPONSE,),
     "study_response": (A.EDIT_SELECTED, A.DELETE_SELECTED),
@@ -135,15 +101,11 @@ MAP = {
 
 
 def _menu_action(menu, source, enabled):
-    """Create a menu-local action without changing the shared QAction state."""
-
     action = QAction(source.icon(), source.text(), menu)
     action.setEnabled(bool(enabled and source.isEnabled()))
     action.setToolTip(source.toolTip())
     action.setStatusTip(source.statusTip())
-    action.triggered.connect(
-        lambda _checked=False, shared=source: shared.trigger()
-    )
+    action.triggered.connect(lambda _checked=False, shared=source: shared.trigger())
     return action
 
 
@@ -152,9 +114,7 @@ def show_context_menu(view, pos, index, actions, store, visibility=None):
     entity = index.data(ENTITY_ROLE) if index.isValid() else None
     ids = tuple(MAP.get(kind, ()))
     can_toggle = bool(
-        visibility is not None
-        and entity is not None
-        and kind in VISIBILITY_KINDS
+        visibility is not None and entity is not None and kind in VISIBILITY_KINDS
     )
     if not ids and not can_toggle:
         return
@@ -163,25 +123,15 @@ def show_context_menu(view, pos, index, actions, store, visibility=None):
         currently_visible = visibility.is_entity_visible(entity)
         toggle = menu.addAction("Hide" if currently_visible else "Show")
         toggle.setToolTip(
-            "Hide this object in the viewport"
-            if currently_visible
+            "Hide this object in the viewport" if currently_visible
             else "Show this object in the viewport"
         )
         toggle.triggered.connect(
-            lambda _checked=False, value=entity, visible=currently_visible: visibility.set_entity_visible(
-                value,
-                not visible,
-            )
+            lambda _checked=False, value=entity, visible=currently_visible: visibility.set_entity_visible(value, not visible)
         )
         if ids:
             menu.addSeparator()
     for action_id in ids:
         source = actions.get(action_id)
-        menu.addAction(
-            _menu_action(
-                menu,
-                source,
-                available(action_id, store, kind),
-            )
-        )
+        menu.addAction(_menu_action(menu, source, available(action_id, store, kind)))
     menu.exec(view.viewport().mapToGlobal(pos))
