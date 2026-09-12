@@ -1,19 +1,24 @@
 """Defines one persisted solver or study result collection."""
 
-from dataclasses import dataclass, field
-from typing import Any
+from __future__ import annotations
 
-from ...core import Entity, EntityRef, register_model_type
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
+
+from ...core import Entity, register_model_type
 from .result_field import ResultField
 from .result_status import ResultStatus
+
+if TYPE_CHECKING:
+    from .job import Job
 
 
 @register_model_type("result_set")
 @dataclass
 class ResultSet(Entity):
-    """Persistent result metadata linked to the Job that produced it."""
+    """Persistent result metadata linked directly to the producing Job object."""
 
-    job_ref: EntityRef | None = field(
+    job: Job | None = field(
         default=None,
         metadata={"reference_type": "Job"},
     )
@@ -23,15 +28,12 @@ class ResultSet(Entity):
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __setattr__(self, name, value) -> None:
-        """Normalize finite-domain result availability on assignment."""
         if name == "status":
             value = ResultStatus.coerce(value)
         super().__setattr__(name, value)
 
     def write_abaqus(self, writer, context) -> None:
-        """Result metadata does not contribute solver deck records."""
         return None
 
     def write_femaster(self, writer, context) -> None:
-        """Result metadata does not contribute solver deck records."""
         return None
