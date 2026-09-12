@@ -1,128 +1,269 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import fields, is_dataclass, replace
+from dataclasses import fields, is_dataclass
 
 from .entity import Entity
-from .persistent_model_field import is_persistent_model_field
+from .persistent_model_field import (
+    is_mesh_reference_field,
+    is_owned_model_field,
+    is_project_index_field,
+    is_reference_model_field,
+)
 from .reference import EntityRef
 
 
 def entity_with_replaced_references(entity: Entity, old_id: str, new_entity):
-    """Return a copied entity with references to *old_id* replaced.
-
-    The source entity itself is never mutated. This makes reference replacement
-    suitable for reversible collection commands and safe across undo/redo.
-    """
-    replacement = EntityRef.of(new_entity)
-    clone = deepcopy(entity)
-    changed = False
-    for info in fields(clone):
-        if info.name == "id" or not is_persistent_model_field(info):
-            continue
-        updated, did_change = _replace_value(getattr(clone, info.name), old_id, replacement)
-        if did_change:
-            setattr(clone, info.name, updated)
-            changed = True
+    """Return a detached copy with direct references to ``old_id`` rewired."""
+    clone = deepcopy(entity, _external_reference_memo(entity))
+    changed = _replace_references_in_owned_value(clone, str(old_id), new_entity)
     return clone, changed
 
 
 def replace_references(project, old_id: str, new_entity) -> int:
-    """Replace every persistent reference to *old_id* with *new_entity*.
-
-    Returns the number of entity fields that changed. Contained model entities
-    are processed independently through the project index, which avoids
-    rebuilding whole object graphs and preserves entity identity.
-    """
-    replacement = EntityRef.of(new_entity)
+    """Replace every direct relationship to one Entity in-place."""
     changed = 0
     for entity in tuple(project.index.by_id.values()):
-        for info in fields(entity):
-            if info.name == "id" or not is_persistent_model_field(info):
-                continue
-            value = getattr(entity, info.name)
-            updated, did_change = _replace_value(value, old_id, replacement)
-            if did_change:
-                setattr(entity, info.name, updated)
-                changed += 1
+        if _replace_references_in_owned_value(entity, str(old_id), new_entity):
+            changed += 1
     project.rebuild_index()
     return changed
 
 
 def remap_entity_graph(root: Entity, id_map: dict[str, str]) -> Entity:
-    """Apply a precomputed ID map to a copied entity graph in-place."""
+    """Apply new identities to owned Entities; object relationships follow them."""
     entities = list(_entities_in(root))
     for entity in entities:
         old_id = entity.id
         if old_id in id_map:
             object.__setattr__(entity, "id", id_map[old_id])
+    _remap_wire_references(root, id_map)
     for entity in entities:
-        for info in fields(entity):
-            if info.name == "id" or not is_persistent_model_field(info):
-                continue
-            value = getattr(entity, info.name)
-            updated, changed = _remap_value(value, id_map)
-            if changed:
-                setattr(entity, info.name, updated)
         object.__setattr__(entity, "_project", None)
     return root
 
 
 def clone_entity_graph(root: Entity):
+    """Clone an ownership graph while preserving external object relationships.
+
+    References to entities owned inside ``root`` are cloned and continue to point
+    at their corresponding clones. References outside ``root`` retain the exact
+    canonical target object. This is the object-graph equivalent of remapping
+    internal EntityRefs without ever putting IDs into domain fields.
+    """
     from opencae.core.ids import new_id
 
-    clone = deepcopy(root)
+    clone = deepcopy(root, _external_reference_memo(root))
     ids = [entity.id for entity in _entities_in(clone)]
-    return remap_entity_graph(clone, {entity_id: new_id("entity") for entity_id in ids})
+    return remap_entity_graph(
+        clone,
+        {entity_id: new_id("entity") for entity_id in ids},
+    )
 
 
 def _entities_in(root):
-    """Yield every Entity reachable through persistent model fields."""
+    """Yield every Entity structurally owned through persistent owned fields."""
     seen = set()
 
     def walk(value):
         if isinstance(value, Entity):
-            if id(value) in seen:
+            identity = id(value)
+            if identity in seen:
                 return
-            seen.add(id(value))
+            seen.add(identity)
             yield value
             for info in fields(value):
-                if not is_persistent_model_field(info):
-                    continue
-                yield from walk(getattr(value, info.name))
+                if is_owned_model_field(info):
+                    yield from walk(getattr(value, info.name))
             return
         if is_dataclass(value):
-            if id(value) in seen:
+            identity = id(value)
+            if identity in seen:
                 return
-            seen.add(id(value))
+            seen.add(identity)
             for info in fields(value):
-                if not is_persistent_model_field(info):
-                    continue
-                yield from walk(getattr(value, info.name))
+                if is_owned_model_field(info):
+                    yield from walk(getattr(value, info.name))
         elif isinstance(value, (list, tuple)):
-            if id(value) in seen:
+            identity = id(value)
+            if identity in seen:
                 return
-            seen.add(id(value))
+            seen.add(identity)
             for item in value:
                 yield from walk(item)
         elif isinstance(value, dict):
-            if id(value) in seen:
+            identity = id(value)
+            if identity in seen:
                 return
-            seen.add(id(value))
+            seen.add(identity)
             for item in value.values():
                 yield from walk(item)
 
     yield from walk(root)
 
 
-def remove_entity(project, entity_id: str) -> bool:
-    """Remove an entity from its owning mutable collection.
+def _external_reference_memo(root: Entity) -> dict[int, object]:
+    """Build deepcopy memo entries for references outside one ownership graph."""
+    owned = tuple(_entities_in(root))
+    owned_objects = {id(entity) for entity in owned}
+    memo: dict[int, object] = {}
+    seen: set[int] = set()
 
-    Entity collections can be nested in value dataclasses such as ``MeshState``;
-    traversal therefore follows every persistent dataclass field rather than
-    only direct Entity children. Direct singleton fields (notably
-    ``Project.assembly``) are not deleted implicitly.
-    """
+    def remember_reference(value):
+        if value is None:
+            return
+        if isinstance(value, Entity):
+            if id(value) not in owned_objects:
+                memo[id(value)] = value
+            return
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                remember_reference(item)
+            return
+        if isinstance(value, dict):
+            for item in value.values():
+                remember_reference(item)
+            return
+        # Node/Element are non-Entity dataclass value objects but mesh reference
+        # fields intentionally use their runtime identity as the relationship.
+        if is_dataclass(value):
+            memo[id(value)] = value
+
+    def walk(value):
+        if not is_dataclass(value) and not isinstance(value, (list, tuple, dict)):
+            return
+        identity = id(value)
+        if identity in seen:
+            return
+        seen.add(identity)
+        if is_dataclass(value):
+            for info in fields(value):
+                if not is_project_index_field(info):
+                    continue
+                item = getattr(value, info.name)
+                if is_reference_model_field(info) or is_mesh_reference_field(info):
+                    remember_reference(item)
+                elif is_owned_model_field(info):
+                    walk(item)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                walk(item)
+        else:
+            for item in value.values():
+                walk(item)
+
+    walk(root)
+    return memo
+
+
+def _replace_references_in_owned_value(value, old_id: str, replacement) -> bool:
+    """Rewire only relationship fields while recursively following ownership."""
+    changed = False
+    active: set[int] = set()
+
+    def replace_relation(item):
+        nonlocal changed
+        if item is None:
+            return item
+        if isinstance(item, Entity):
+            if item.id == old_id:
+                changed = True
+                return replacement
+            return item
+        if isinstance(item, EntityRef):
+            if item.entity_id == old_id:
+                changed = True
+                return EntityRef.of(replacement, item.expected_type)
+            return item
+        if isinstance(item, list):
+            return [replace_relation(child) for child in item]
+        if isinstance(item, tuple):
+            return tuple(replace_relation(child) for child in item)
+        if isinstance(item, dict):
+            return {key: replace_relation(child) for key, child in item.items()}
+        return item
+
+    def walk(item):
+        if not is_dataclass(item) and not isinstance(item, (list, tuple, dict)):
+            return
+        identity = id(item)
+        if identity in active:
+            return
+        active.add(identity)
+        try:
+            if is_dataclass(item):
+                for info in fields(item):
+                    if not is_project_index_field(info):
+                        continue
+                    current = getattr(item, info.name)
+                    if is_reference_model_field(info):
+                        updated = replace_relation(current)
+                        if updated is not current:
+                            object.__setattr__(item, info.name, updated)
+                    elif is_owned_model_field(info):
+                        walk(current)
+            elif isinstance(item, (list, tuple)):
+                for child in item:
+                    walk(child)
+            else:
+                for child in item.values():
+                    walk(child)
+        finally:
+            active.remove(identity)
+
+    walk(value)
+    return changed
+
+
+def _remap_wire_references(value, id_map: dict[str, str]) -> None:
+    """Remap only unresolved persistence placeholders if they are encountered."""
+    active: set[int] = set()
+
+    def remap_relation(item):
+        if isinstance(item, EntityRef):
+            mapped = id_map.get(item.entity_id)
+            return EntityRef(mapped, item.expected_type) if mapped else item
+        if isinstance(item, list):
+            return [remap_relation(child) for child in item]
+        if isinstance(item, tuple):
+            return tuple(remap_relation(child) for child in item)
+        if isinstance(item, dict):
+            return {key: remap_relation(child) for key, child in item.items()}
+        return item
+
+    def walk(item):
+        if not is_dataclass(item) and not isinstance(item, (list, tuple, dict)):
+            return
+        identity = id(item)
+        if identity in active:
+            return
+        active.add(identity)
+        try:
+            if is_dataclass(item):
+                for info in fields(item):
+                    if not is_project_index_field(info):
+                        continue
+                    current = getattr(item, info.name)
+                    if is_reference_model_field(info):
+                        updated = remap_relation(current)
+                        if updated is not current:
+                            object.__setattr__(item, info.name, updated)
+                    elif is_owned_model_field(info):
+                        walk(current)
+            elif isinstance(item, (list, tuple)):
+                for child in item:
+                    walk(child)
+            else:
+                for child in item.values():
+                    walk(child)
+        finally:
+            active.remove(identity)
+
+    walk(value)
+
+
+def remove_entity(project, entity_id: str) -> bool:
+    """Remove an Entity only from its structural owner collection."""
     target = project.try_resolve(entity_id)
     if target is None or target is project:
         return False
@@ -131,7 +272,7 @@ def remove_entity(project, entity_id: str) -> bool:
         if not is_dataclass(owner):
             return False
         for info in fields(owner):
-            if not is_persistent_model_field(info):
+            if not is_owned_model_field(info):
                 continue
             value = getattr(owner, info.name)
             if isinstance(value, list):
@@ -159,7 +300,6 @@ def remove_entity(project, entity_id: str) -> bool:
 
 
 def cascade_entity_ids(project, root_id: str) -> set[str]:
-    """Return root plus all externally dependent entities and descendants."""
     result = _descendant_ids(project, root_id)
     queue = list(result)
     while queue:
@@ -175,19 +315,22 @@ def cascade_entity_ids(project, root_id: str) -> set[str]:
 
 def delete_entity_graph(project, root_id: str) -> set[str]:
     ids = cascade_entity_ids(project, root_id)
-    # Removing ancestors removes their descendants automatically. Remove the
-    # shallowest entities first and ignore IDs already gone.
-    ordered = sorted(ids, key=lambda value: project.index.path.get(value, "").count("."))
+    ordered = sorted(
+        ids,
+        key=lambda value: project.index.path.get(value, "").count("."),
+    )
     removed = set()
     for entity_id in ordered:
-        if project.try_resolve(entity_id) is not None and remove_entity(project, entity_id):
+        if (
+            project.try_resolve(entity_id) is not None
+            and remove_entity(project, entity_id)
+        ):
             removed.add(entity_id)
     project.rebuild_index()
     return removed
 
 
 def compatible_replacements(project, entity):
-    """Return replacements compatible with every incoming typed reference."""
     uses = project.references_to(entity.id)
     parent_id = project.index.parent_id.get(entity.id)
     result = []
@@ -209,7 +352,12 @@ def _same_semantic_scope(project, entity, candidate, parent_id):
     from opencae.model.entities.jobs import Job, ResultSet
     from opencae.model.entities.loads import Load
     from opencae.model.entities.profiles import Profile
-    from opencae.model.entities.regions import CoordinateSystem, Orientation, ReferencePoint, Region
+    from opencae.model.entities.regions import (
+        CoordinateSystem,
+        Orientation,
+        ReferencePoint,
+        Region,
+    )
     from opencae.model.entities.sections import Section
     from opencae.model.entities.supports import Support
 
@@ -222,20 +370,17 @@ def _same_semantic_scope(project, entity, candidate, parent_id):
     if isinstance(entity, Section):
         return isinstance(candidate, Section) and candidate.section_type == entity.section_type
 
-    # These are polymorphic resource families. A ForceLoad may be replaced by
-    # a PressureLoad only when every incoming reference accepts ``Load``; the
-    # expected-type check in ``compatible_replacements`` enforces that detail.
     families = (Load, Support, Profile, Analysis, Constraint, Job, ResultSet)
     for family in families:
         if isinstance(entity, family):
             return isinstance(candidate, family)
 
-    # Part/assembly-local entities must never jump ownership scopes. This is
-    # what prevents an RP or coordinate system in Part A from being silently
-    # replaced by a same-named object in Part B.
     local_families = (ReferencePoint, CoordinateSystem, Orientation)
     if isinstance(entity, local_families):
-        return isinstance(candidate, type(entity)) and project.index.parent_id.get(candidate.id) == parent_id
+        return (
+            isinstance(candidate, type(entity))
+            and project.index.parent_id.get(candidate.id) == parent_id
+        )
 
     if parent_id is not None and project.index.parent_id.get(candidate.id) != parent_id:
         root_collections = {project.id, getattr(project.assembly, "id", "")}
@@ -248,25 +393,40 @@ def _matches_expected(entity, expected):
     from opencae.model.entities.regions import ReferencePoint, Region
     from opencae.model.selection import RegionProjection
 
+    options = [item.strip() for item in str(expected).split("|") if item.strip()]
+    if len(options) > 1:
+        return any(_matches_expected(entity, item) for item in options)
     normalized = str(expected).replace(" ", "").casefold()
-    names = {cls.__name__.replace(" ", "").casefold() for cls in type(entity).mro()}
-    if normalized == "referencepoint": return isinstance(entity, ReferencePoint)
+    names = {
+        cls.__name__.replace(" ", "").casefold()
+        for cls in type(entity).mro()
+    }
+    if normalized == "referencepoint":
+        return isinstance(entity, ReferencePoint)
     projections = {
         "nodeset": RegionProjection.NODES,
         "elementset": RegionProjection.ELEMENTS,
         "surface": RegionProjection.FACETS,
     }
     if normalized in projections:
-        return isinstance(entity, Region) and entity.preferred_projection == projections[normalized]
-    if normalized == "region": return isinstance(entity, Region)
+        return (
+            isinstance(entity, Region)
+            and entity.preferred_projection == projections[normalized]
+        )
+    if normalized == "region":
+        return isinstance(entity, Region)
     aliases = {
         "load": {"load"},
         "support": {"support"},
         "section": {"section"},
         "profile": {"profile"},
         "analysis": {"analysis"},
+        "study": {"study"},
+        "entity": {"entity"},
     }
-    return normalized in names or any(name in names for name in aliases.get(normalized, set()))
+    return normalized in names or any(
+        name in names for name in aliases.get(normalized, set())
+    )
 
 
 def _descendant_ids(project, entity_id):
@@ -279,85 +439,3 @@ def _descendant_ids(project, entity_id):
                 result.add(child.id)
                 queue.append(child.id)
     return result
-
-
-def _replace_value(value, old_id, replacement):
-    if isinstance(value, EntityRef):
-        if value.entity_id != old_id:
-            return value, False
-        return EntityRef(replacement.entity_id, value.expected_type or replacement.expected_type), True
-    if isinstance(value, Entity):
-        return value, False
-    if is_dataclass(value):
-        changes = {}
-        for info in fields(value):
-            if not is_persistent_model_field(info):
-                continue
-            updated, changed = _replace_value(getattr(value, info.name), old_id, replacement)
-            if changed:
-                changes[info.name] = updated
-        return (replace(value, **changes), True) if changes else (value, False)
-    if isinstance(value, list):
-        result = []
-        changed = False
-        for item in value:
-            updated, item_changed = _replace_value(item, old_id, replacement)
-            result.append(updated)
-            changed |= item_changed
-        return (result, True) if changed else (value, False)
-    if isinstance(value, tuple):
-        result = []
-        changed = False
-        for item in value:
-            updated, item_changed = _replace_value(item, old_id, replacement)
-            result.append(updated)
-            changed |= item_changed
-        return (tuple(result), True) if changed else (value, False)
-    if isinstance(value, dict):
-        result = {}
-        changed = False
-        for key, item in value.items():
-            updated, item_changed = _replace_value(item, old_id, replacement)
-            result[key] = updated
-            changed |= item_changed
-        return (result, True) if changed else (value, False)
-    return value, False
-
-
-def _remap_value(value, id_map):
-    if isinstance(value, EntityRef):
-        mapped = id_map.get(value.entity_id)
-        return (EntityRef(mapped, value.expected_type), True) if mapped else (value, False)
-    if isinstance(value, Entity):
-        return value, False
-    if is_dataclass(value):
-        changes = {}
-        for info in fields(value):
-            if not is_persistent_model_field(info):
-                continue
-            updated, changed = _remap_value(getattr(value, info.name), id_map)
-            if changed:
-                changes[info.name] = updated
-        return (replace(value, **changes), True) if changes else (value, False)
-    if isinstance(value, list):
-        result, changed = [], False
-        for item in value:
-            updated, item_changed = _remap_value(item, id_map)
-            result.append(updated)
-            changed |= item_changed
-        return (result, True) if changed else (value, False)
-    if isinstance(value, tuple):
-        result, changed = [], False
-        for item in value:
-            updated, item_changed = _remap_value(item, id_map)
-            result.append(updated)
-            changed |= item_changed
-        return (tuple(result), True) if changed else (value, False)
-    if isinstance(value, dict):
-        result, changed = {}, False
-        for key, item in value.items():
-            updated, item_changed = _remap_value(item, id_map)
-            result[key] = updated
-            changed |= item_changed
-        return (result, True) if changed else (value, False)
-    return value, False
