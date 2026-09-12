@@ -21,6 +21,7 @@ from opencae.model.entities import (
     Material,
     Node,
     Part,
+    PartSourceKind,
     PressureLoad,
     Profile,
     Project,
@@ -77,7 +78,12 @@ class Model:
         """Validate an object's type and identity within this model."""
         return require_owned(self, entity, expected)
 
-    def part(self, name: str, *, source_type: str = "Manual") -> Part:
+    def part(
+        self,
+        name: str,
+        *,
+        source_type: PartSourceKind | str = PartSourceKind.MANUAL,
+    ) -> Part:
         """Create and attach a part to the project."""
         return create_part(self, name, source_type=source_type)
 

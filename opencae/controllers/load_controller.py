@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QDialog, QInputDialog
 
 from opencae.model.core import EntityRef
 from opencae.model.entities.amplitudes import Amplitude
+from opencae.model.entities.fields import FieldLocation
 from opencae.model.loads import create_load, create_support
 from opencae.model.entities.loads import load_region_requirement, load_selection_policy
 from opencae.model.entities.supports import SUPPORT_REGION_REQUIREMENT, support_selection_policy
@@ -24,7 +25,7 @@ class LoadController:
         self.store = store; self.parent = parent; self.part_controller = part_controller; self._dialogs: list[QDialog] = []
 
     def _coordinate_systems(self): return list(self.store.project.assembly.coordinate_systems)
-    def _temperature_fields(self): return [field for field in self.store.project.fields if field.location == "Nodal" and field.components == 1]
+    def _temperature_fields(self): return [field for field in self.store.project.fields if field.location is FieldLocation.NODAL and field.components == 1]
     def _amplitudes(self): return list(self.store.project.amplitudes)
 
     def _require_assembly(self):

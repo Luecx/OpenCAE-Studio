@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSignalBlocker, pyqtSignal
-from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QToolButton, QWidget
+from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QWidget
+
+from opencae.ui.templates import ViewportToolButton
 
 
 class SelectionToolbar(QWidget):
@@ -61,7 +63,6 @@ class SelectionToolbar(QWidget):
 
         layout.addStretch(1)
         self.projection_button = self._button("Perspective")
-        self.projection_button.setObjectName("ProjectionToggle")
         self.projection_button.setToolTip("Toggle perspective / parallel projection")
         # The label changes, not the control geometry.  This avoids the stale
         # checked-border footprint that previously looked like a blue shadow.
@@ -139,10 +140,6 @@ class SelectionToolbar(QWidget):
         self.set_projection(requested)
         self.projection_changed.emit(requested)
 
-    @staticmethod
-    def _button(text, checkable=False):
-        button = QToolButton()
-        button.setText(text)
-        button.setCheckable(checkable)
-        button.setProperty("viewportTool", True)
-        return button
+    def _button(self, text, checkable=False):
+        """Create every viewport control through the canonical button primitive."""
+        return ViewportToolButton(text, checkable=checkable, parent=self)

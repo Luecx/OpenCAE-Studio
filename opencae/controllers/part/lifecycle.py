@@ -7,11 +7,12 @@ from pathlib import Path
 from opencae.geometry.cache import CACHE
 from opencae.geometry.mesh_import import read_mesh_with_report
 from opencae.model.core import EntityRef, clone_entity_graph
+from opencae.model.entities.mesh import MeshValidity
+from opencae.model.entities.parts import Part, PartSourceKind
+from opencae.model.entities.regions import create_region
 from opencae.model.geometry import GeometrySettings, ImportedStepFeature
 from opencae.model.mesh import MeshSettings
 from opencae.model.naming import next_name
-from opencae.model.part import Part
-from opencae.model.entities.regions import create_region
 from opencae.model.selection import (
     MeshElementOperand,
     MeshFacetOperand,
@@ -36,43 +37,36 @@ class PartLifecycle:
         self.ctx = context
 
     def _geometry_defaults(self) -> GeometrySettings:
-        """Create detached geometry defaults from workstation Settings."""
         settings = self.ctx.app_settings
         values = settings.geometry_default_values() if settings is not None else {}
         return GeometrySettings(**values)
 
     def _mesh_defaults(self) -> MeshSettings:
-        """Create detached mesh defaults from workstation Settings."""
         settings = self.ctx.app_settings
         values = settings.mesh_default_values() if settings is not None else {}
         return MeshSettings(**values)
 
     def _new_part(self, **kwargs) -> Part:
-        """Create a Part initialized from application defaults, never live project state."""
         part = Part(**kwargs)
         part.geometry_settings = self._geometry_defaults()
         part.mesh.settings = self._mesh_defaults()
         return part
 
     def new_part(self, parent=None):
-        values = get_values(
-            NewPartDialog(
-                [part.name for part in self.ctx.store.project.parts],
-                parent=parent or self.ctx.parent,
-                default_name=next_name("Part", self.ctx.store.project.parts),
-            )
-        )
+        values = get_values(NewPartDialog(
+            [part.name for part in self.ctx.store.project.parts],
+            parent=parent or self.ctx.parent,
+            default_name=next_name("Part", self.ctx.store.project.parts),
+        ))
         if not values:
             return
         part = self._new_part(
             name=values["name"],
+            source_type=PartSourceKind.MANUAL,
             metadata={"part_type": values["part_type"]},
         )
         self.ctx.store.add_entity(
-            f"Created part {part.name}",
-            self.ctx.store.project.id,
-            "parts",
-            part,
+            f"Created part {part.name}", self.ctx.store.project.id, "parts", part
         )
         self.ctx.store.set_active_part(part.id)
 
@@ -83,17 +77,12 @@ class PartLifecycle:
         if source is None:
             self.ctx.store.message.emit("Select or activate a part first")
             return
-        # Duplicating a Part intentionally performs one O(mesh-size) graph clone.
-        # Transfer that already-detached clone directly into Project ownership so
-        # the undo layer does not copy the same 400k-element payload again.
         clone = clone_entity_graph(source)
         clone.name = next_name(source.name, self.ctx.store.project.parts)
         self.ctx.store.execute(
             f"Duplicated part {source.name} as {clone.name}",
             OwnedCollectionInsertCommand(
-                self.ctx.store.project.id,
-                "parts",
-                clone,
+                self.ctx.store.project.id, "parts", clone,
                 len(self.ctx.store.project.parts),
             ),
         )
@@ -102,112 +91,85 @@ class PartLifecycle:
         self.ctx.store.invalidate_scene("Part duplicated")
 
     def edit_part(self, part):
-        """Edit lightweight Part properties without cloning its potentially huge mesh."""
-        values = get_values(
-            NewPartDialog(
-                [item.name for item in self.ctx.store.project.parts],
-                part,
-                self.ctx.parent,
-            )
-        )
+        values = get_values(NewPartDialog(
+            [item.name for item in self.ctx.store.project.parts],
+            part,
+            self.ctx.parent,
+        ))
         if not values:
             return
         metadata = dict(part.metadata)
         metadata["part_type"] = values["part_type"]
         commands = []
         if values["name"] != part.name:
-            commands.append(
-                UpdateFieldCommand(part.id, "name", part.name, values["name"])
-            )
+            commands.append(UpdateFieldCommand(part.id, "name", part.name, values["name"]))
         if metadata != part.metadata:
-            commands.append(
-                UpdateFieldCommand(part.id, "metadata", part.metadata, metadata)
-            )
+            commands.append(UpdateFieldCommand(part.id, "metadata", part.metadata, metadata))
         if commands:
             self.ctx.store.execute(
-                f"Edited part {part.name}",
-                CompositeCommand(tuple(commands)),
+                f"Edited part {part.name}", CompositeCommand(tuple(commands))
             )
 
     def import_geometry(self):
-        """Import CAD geometry without cloning an existing generated mesh."""
         active = self.ctx.active_part()
         editing_existing = bool(active and not active.geometry)
         dialog_part = active if editing_existing else None
-        values = get_values(
-            ImportGeometryDialog(
-                dialog_part,
-                existing_names=[p.name for p in self.ctx.store.project.parts],
-                parent=self.ctx.parent,
-                default_part_name=next_name(
-                    "Part",
-                    self.ctx.store.project.parts,
-                ),
-                default_feature_name=next_name(
-                    "Import Geometry",
-                    active.geometry if active else [],
-                ),
-                default_settings=self._geometry_defaults(),
-            )
-        )
+        values = get_values(ImportGeometryDialog(
+            dialog_part,
+            existing_names=[p.name for p in self.ctx.store.project.parts],
+            parent=self.ctx.parent,
+            default_part_name=next_name("Part", self.ctx.store.project.parts),
+            default_feature_name=next_name(
+                "Import Geometry", active.geometry if active else []
+            ),
+            default_settings=self._geometry_defaults(),
+        ))
         if not values:
             return
-
         candidate = (
             self.ctx.geometry_candidate(active)
             if editing_existing
-            else self._new_part(name=values["part_name"])
+            else self._new_part(
+                name=values["part_name"], source_type=PartSourceKind.CAD
+            )
         )
         candidate.name = values["part_name"]
+        candidate.source_type = PartSourceKind.CAD
         candidate.geometry_settings.heal_on_import = values["heal"]
         candidate.geometry_settings.sew_faces = values["sew_faces"]
         candidate.geometry_settings.make_solids = values["make_solids"]
         candidate.geometry_settings.remove_degenerate = values["remove_degenerate"]
         candidate.geometry_settings.tolerance = values["tolerance"]
-        candidate.geometry = [
-            ImportedStepFeature(
-                name=values["name"],
-                source_file=values["file"],
-            )
-        ]
+        candidate.geometry = [ImportedStepFeature(
+            name=values["name"], source_file=values["file"]
+        )]
         if editing_existing:
-            candidate.mesh.status = "Outdated"
+            candidate.mesh.lifecycle.validity = MeshValidity.OUTDATED
         if not self.ctx.validate_geometry(candidate, "Import failed"):
             return
-
         if editing_existing:
             self.ctx.commit_geometry_candidate(
-                candidate,
-                f"Imported geometry into {candidate.name}",
+                candidate, f"Imported geometry into {candidate.name}"
             )
         else:
             self.ctx.store.add_entity(
-                f"Imported {candidate.name}",
-                self.ctx.store.project.id,
-                "parts",
-                candidate,
+                f"Imported {candidate.name}", self.ctx.store.project.id,
+                "parts", candidate,
             )
             self.ctx.store.set_active_part(candidate.id)
         self._fit_loaded_content()
 
     def import_mesh(self):
         path = open_file(
-            self.ctx.parent,
-            "Import Mesh",
+            self.ctx.parent, "Import Mesh",
             "Mesh files (*.inp *.fem *.vtk *.vtu *.msh);;All files (*)",
         )
         if not path:
             return
         part = self._new_part(
-            name=next_name(
-                Path(path).stem or "Mesh Part",
-                self.ctx.store.project.parts,
-            ),
-            source_type="Orphan Mesh",
-            metadata={
-                "part_type": "3D deformable",
-                "source_file": str(path),
-            },
+            name=next_name(Path(path).stem or "Mesh Part", self.ctx.store.project.parts),
+            source_type=PartSourceKind.ORPHAN_MESH,
+            metadata={"part_type": "3D deformable", "source_file": str(path)},
         )
         try:
             imported = read_mesh_with_report(path, part.id)
@@ -217,15 +179,10 @@ class PartLifecycle:
             self.ctx.error("Mesh import failed", exc)
             return
         CACHE.set_mesh(imported.snapshot)
-        # The parser already built a detached Part containing the complete mesh.
-        # Move that object into Project ownership; making another command copy
-        # would double peak memory for large orphan meshes for no semantic gain.
         self.ctx.store.execute(
             f"Imported mesh {part.name}",
             OwnedCollectionInsertCommand(
-                self.ctx.store.project.id,
-                "parts",
-                part,
+                self.ctx.store.project.id, "parts", part,
                 len(self.ctx.store.project.parts),
             ),
         )
@@ -234,7 +191,6 @@ class PartLifecycle:
         if hasattr(self.ctx.parent, "viewport"):
             self.ctx.parent.viewport.set_display_mode("mesh")
         self._fit_loaded_content()
-
         report = imported.report
         if report.has_unimported_keywords or report.warnings:
             count = len(report.not_imported)
@@ -244,18 +200,14 @@ class PartLifecycle:
             ImportMeshReportDialog(report, Path(path).name, self.ctx.parent).exec()
 
     def edit_import(self, feature):
-        """Edit the source CAD feature through a geometry-only candidate."""
         candidate, target = self.ctx.feature_copy(feature)
         if target is None:
             return
-        values = get_values(
-            ImportGeometryDialog(
-                candidate,
-                target,
-                [p.name for p in self.ctx.store.project.parts],
-                self.ctx.parent,
-            )
-        )
+        values = get_values(ImportGeometryDialog(
+            candidate, target,
+            [p.name for p in self.ctx.store.project.parts],
+            self.ctx.parent,
+        ))
         if not values:
             return
         candidate.name = values["part_name"]
@@ -266,12 +218,11 @@ class PartLifecycle:
         candidate.geometry_settings.tolerance = values["tolerance"]
         target.name = values["name"]
         target.source_file = values["file"]
-        candidate.mesh.status = "Outdated"
+        candidate.mesh.lifecycle.validity = MeshValidity.OUTDATED
         if self.ctx.validate_geometry(candidate, "Geometry source update failed"):
             self.ctx.commit_geometry_candidate(candidate, f"Edited {target.name}")
 
     def _fit_loaded_content(self):
-        """Frame imported CAD/mesh content when the application preference allows it."""
         settings = self.ctx.app_settings
         if settings is not None and not bool(
             settings.preference("viewport/auto_fit_loaded_content", True)
@@ -283,76 +234,41 @@ class PartLifecycle:
 
 
 def _apply_imported_regions(part, imported) -> None:
-    """Create object-backed Region entities for deck NSET/ELSET/SURFACE data."""
     owner_ref = EntityRef.of(part)
     revision = str(part.mesh.revision or "")
     valid_nodes = {int(value) for value in part.mesh.nodes.ids}
     valid_elements = {
-        int(value)
-        for block in part.mesh.element_blocks
-        for value in block.ids
+        int(value) for block in part.mesh.element_blocks for value in block.ids
     }
-
     regions = []
     for name, node_ids in imported.node_sets.items():
         definition = RegionDefinition.from_values(
-            MeshNodeOperand(
-                owner_ref=owner_ref,
-                node_id=node_id,
-                mesh_revision=revision,
-            )
-            for node_id in node_ids
-            if int(node_id) in valid_nodes
+            MeshNodeOperand(owner_ref=owner_ref, node_id=node_id, mesh_revision=revision)
+            for node_id in node_ids if int(node_id) in valid_nodes
         )
         if not definition.empty:
-            regions.append(
-                create_region(
-                    "Node Set",
-                    name=name,
-                    definition=definition,
-                    geometry_backed=False,
-                )
-            )
-
+            regions.append(create_region(
+                "Node Set", name=name, definition=definition, geometry_backed=False
+            ))
     for name, element_ids in imported.element_sets.items():
         definition = RegionDefinition.from_values(
-            MeshElementOperand(
-                owner_ref=owner_ref,
-                element_id=element_id,
-                mesh_revision=revision,
-            )
-            for element_id in element_ids
-            if int(element_id) in valid_elements
+            MeshElementOperand(owner_ref=owner_ref, element_id=element_id, mesh_revision=revision)
+            for element_id in element_ids if int(element_id) in valid_elements
         )
         if not definition.empty:
-            regions.append(
-                create_region(
-                    "Element Set",
-                    name=name,
-                    definition=definition,
-                    geometry_backed=False,
-                )
-            )
-
+            regions.append(create_region(
+                "Element Set", name=name, definition=definition, geometry_backed=False
+            ))
     for name, facets in imported.surfaces.items():
         definition = RegionDefinition.from_values(
             MeshFacetOperand(
-                owner_ref=owner_ref,
-                element_id=element_id,
-                local_face=side,
-                mesh_revision=revision,
+                owner_ref=owner_ref, element_id=element_id,
+                local_face=side, mesh_revision=revision,
             )
-            for element_id, side in facets
-            if int(element_id) in valid_elements
+            for element_id, side in facets if int(element_id) in valid_elements
         )
         if not definition.empty:
-            regions.append(
-                create_region(
-                    "Surface",
-                    name=name,
-                    definition=definition,
-                    geometry_backed=False,
-                )
-            )
-
+            regions.append(create_region(
+                "Surface", name=name, definition=definition, geometry_backed=False
+            ))
     part.regions.extend(regions)

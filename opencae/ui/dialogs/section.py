@@ -18,6 +18,7 @@ from opencae.ui.core.widgets import ChevronComboBox, MatrixEditor, ReferenceSele
 from opencae.ui.templates import (
     NumericUnitInput,
     apply_primary_control_height,
+    dialog_layout,
     dialog_buttons,
     field_block,
     field_row,
@@ -51,9 +52,7 @@ class SectionDialog(ApplyDialog):
         self.setWindowTitle("Edit Section" if section else "Create Section")
         self.setMinimumSize(760, 520)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 18)
-        root.setSpacing(16)
+        root = dialog_layout(self)
 
         self.name = QLineEdit(section.name if section else default_name)
         apply_primary_control_height(self.name)

@@ -13,9 +13,13 @@ class OptimizationRun(Entity):
     """Persistent topology state linked to the generic Job that produced it."""
 
     optimization_ref: EntityRef = field(
-        default_factory=lambda: EntityRef(expected_type="TopologyOptimization")
+        default_factory=lambda: EntityRef(expected_type="TopologyOptimization"),
+        metadata={"reference_type": "TopologyOptimization"},
     )
-    job_ref: EntityRef | None = None
+    job_ref: EntityRef | None = field(
+        default=None,
+        metadata={"reference_type": "Job"},
+    )
     status: JobStatus | str = JobStatus.PREPARED
     directory: str = ""
     mesh_fingerprint: str = ""

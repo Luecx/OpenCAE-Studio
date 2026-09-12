@@ -6,7 +6,10 @@ from ...core import Entity, EntityRef, register_model_type
 @register_model_type("instance")
 @dataclass
 class Instance(Entity):
-    part_ref: EntityRef = field(default_factory=lambda: EntityRef(expected_type="Part"))
+    part_ref: EntityRef = field(
+        default_factory=lambda: EntityRef(expected_type="Part"),
+        metadata={"reference_type": "Part"},
+    )
     translation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     suppressed: bool = False

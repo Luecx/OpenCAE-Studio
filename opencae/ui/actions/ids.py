@@ -12,7 +12,6 @@ class A:
     SHOW_PROJECT = "view.show_project"
     SHOW_JOBS = "view.show_jobs"; SHOW_LOG = "view.show_log"
     SHOW_TIME_MANAGER = "view.show_time_manager"
-    # Compatibility alias for plugins/saved commands using the old Output action.
     SHOW_OUTPUT = SHOW_JOBS
     RESET_LAYOUT = "window.reset_layout"
     MATERIAL = "resource.material"; MATERIAL_BROWSER = "resource.material_browser"
@@ -32,6 +31,10 @@ class A:
     DEFAULT_SEED = "mesh.default_seed"; EDGE_SEED = "mesh.edge_seed"
     ELEMENT_CONTROLS = "mesh.element_controls"; MESH_SETTINGS = "mesh.settings"
     GENERATE_MESH = "mesh.generate"; CLEAR_MESH = "mesh.clear"
+    CREATE_NODE = "mesh.node.create"; EDIT_NODE = "mesh.node.edit"
+    DELETE_NODE = "mesh.node.delete"
+    CREATE_ELEMENT = "mesh.element.create"; EDIT_ELEMENT = "mesh.element.edit"
+    DELETE_ELEMENT = "mesh.element.delete"
     VISIBILITY = "part.visibility"
     NODE_SET = "part.node_set"
     ELEMENT_SET = "part.element_set"; SURFACE = "part.surface"
@@ -65,9 +68,6 @@ class A:
     VALIDATE = "analysis.validate"
     PREVIEW_DECK = "analysis.preview_deck"
     WRITE_DECK = "analysis.write_deck"
-
-    # Compatibility alias: Solver Settings was folded into the one global
-    # application Settings surface. It must not be registered or shown twice.
     SOLVER_SETTINGS = PREFERENCES
 
     STUDY_NEW_TOPOLOGY = "study.new_topology"
@@ -88,7 +88,6 @@ class A:
     JOB_MONITOR = "job.monitor"
     JOB_OPEN_RESULTS = "job.open_results"
 
-    # Compatibility aliases for plugins or saved UI state using the old IDs.
     OPT_NEW = STUDY_NEW_TOPOLOGY
     OPT_VALIDATE = STUDY_VALIDATE
     OPT_RUN = STUDY_RUN

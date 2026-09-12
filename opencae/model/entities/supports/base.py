@@ -9,7 +9,10 @@ from opencae.model.selection import RegionDefinition, as_region_definition
 class Support(Entity):
     support_type: str = "Support"
     target: RegionDefinition = field(default_factory=RegionDefinition)
-    coordinate_system_ref: EntityRef | None = None
+    coordinate_system_ref: EntityRef | None = field(
+        default=None,
+        metadata={"reference_type": "CoordinateSystem"},
+    )
     components: list[float | None] = field(default_factory=lambda: [None] * 6)
 
     def __post_init__(self): self.target = as_region_definition(self.target)

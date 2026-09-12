@@ -3,29 +3,40 @@
 from dataclasses import dataclass, field
 
 from ...core import Entity, EntityRef, register_model_type
+from .step_type import StepType
 
 
 @register_model_type("analysis_step")
 @dataclass
 class AnalysisStep(Entity):
-    step_type: str = "Linear Static"
+    """Store one typed analysis procedure and its referenced active entities."""
+
+    step_type: StepType | str = StepType.LINEAR_STATIC
     load_refs: list[EntityRef] = field(default_factory=list)
     support_refs: list[EntityRef] = field(default_factory=list)
     number_of_modes: int = 10
     time_period: float = 1.0
     settings: dict[str, object] = field(default_factory=dict)
 
+    def __setattr__(self, name, value) -> None:
+        """Keep the procedure canonical across construction and later mutation."""
+        if name == "step_type":
+            value = StepType.coerce(value)
+        super().__setattr__(name, value)
+
     @property
     def uses_loads(self) -> bool:
-        return self.step_type not in {"Eigenfrequency"}
+        """Return whether this procedure can consume applied loads."""
+        return self.step_type is not StepType.EIGENFREQUENCY
 
     @property
     def uses_supports(self) -> bool:
+        """Return whether this procedure can consume supports."""
         return True
 
     def write_abaqus(self, writer, context) -> None:
         """Write Abaqus-compatible procedure controls for the active step type."""
-        if self.step_type != "Nonlinear Static":
+        if self.step_type is not StepType.NONLINEAR_STATIC:
             return
 
         settings = dict(self.settings or {})

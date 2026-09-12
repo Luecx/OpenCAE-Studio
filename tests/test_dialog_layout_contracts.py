@@ -80,6 +80,24 @@ def test_migrated_editor_sources_do_not_reintroduce_legacy_form_layouts():
     assert "_Vector3Editor" not in result_section
 
 
+def test_primary_editor_dialogs_use_the_canonical_root_layout():
+    """Keep outer dialog margins and spacing in the template layer only."""
+    dialogs = (
+        "step.py",
+        "section.py",
+        "material.py",
+        "support.py",
+        "profile.py",
+        "field_definition.py",
+        "constraint.py",
+    )
+    for name in dialogs:
+        source = _source(f"opencae/ui/dialogs/{name}")
+        assert "root = dialog_layout(self)" in source, name
+        assert "root.setContentsMargins(24, 20, 24, 18)" not in source, name
+        assert "root.setSpacing(16)" not in source, name
+
+
 def test_central_field_implementations_do_not_restore_fixed_316px_widths():
     """Let dialog layouts determine width instead of forcing the obsolete field constant."""
     fields = _source("opencae/ui/core/fields.py")

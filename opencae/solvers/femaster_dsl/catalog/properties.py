@@ -35,6 +35,7 @@ COMMANDS = (
         frozenset({"NAME", "TYPE", "COLS"}),
         variants=("NODE", "ELEMENT", "ELEMENT_NODAL", "ELEMENT_IP", "IP", "ELEMENT_MP", "MP"),
     ),
+    CommandSpec("NORMAL", frozenset({"FIELD"}), frozenset({"FIELD"})),
     CommandSpec(
         "ORIENTATION",
         frozenset({"NAME", "TYPE"}),

@@ -16,6 +16,7 @@ from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.templates import (
     SectionHeading,
     apply_primary_control_height,
+    dialog_layout,
     dialog_buttons,
     field_block,
 )
@@ -45,9 +46,7 @@ class MaterialDialog(ApplyDialog):
         self.setMinimumSize(760, 600)
         self.resize(840, 690)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 18)
-        root.setSpacing(16)
+        root = dialog_layout(self)
 
         self.name = QLineEdit(material.name if material else default_name)
         self.name.setObjectName("MaterialNameInput")

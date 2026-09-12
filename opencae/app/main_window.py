@@ -66,12 +66,29 @@ class MainWindow(QMainWindow):
 
     def refresh_action_states(self, *_):
         from opencae.model.entities.resources import Material
+        from opencae.model.selection import SelectableKind, ViewportSelection
         from opencae.ui.actions.ids import A
 
         part = self.context.store.active_part()
         can_mesh = bool(part and part.geometry and part.mesh.seeds)
         has_part = part is not None
         has_cad = bool(part and part.geometry)
+        selection = self.context.store.selection
+        mesh_hits = (
+            selection.hits
+            if isinstance(selection, ViewportSelection)
+            else ()
+        )
+        selected_nodes = {
+            int(hit.mesh_id)
+            for hit in mesh_hits
+            if hit.kind is SelectableKind.MESH_NODE and hit.mesh_id is not None
+        }
+        selected_elements = {
+            int(hit.mesh_id)
+            for hit in mesh_hits
+            if hit.kind is SelectableKind.MESH_ELEMENT and hit.mesh_id is not None
+        }
         self.actions.get(A.GENERATE_MESH).setEnabled(can_mesh)
         for action_id in (
             A.DATUM_POINT,
@@ -98,6 +115,14 @@ class MainWindow(QMainWindow):
         self.actions.get(A.ELEMENT_CONTROLS).setEnabled(
             bool(part and part.mesh.element_blocks)
         )
+        self.actions.get(A.CREATE_NODE).setEnabled(has_part)
+        self.actions.get(A.CREATE_ELEMENT).setEnabled(
+            bool(part and part.mesh.node_count)
+        )
+        self.actions.get(A.EDIT_NODE).setEnabled(len(selected_nodes) == 1)
+        self.actions.get(A.DELETE_NODE).setEnabled(len(selected_nodes) == 1)
+        self.actions.get(A.EDIT_ELEMENT).setEnabled(len(selected_elements) == 1)
+        self.actions.get(A.DELETE_ELEMENT).setEnabled(len(selected_elements) == 1)
 
         project = self.context.store.project
         has_assembly = any(

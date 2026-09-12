@@ -10,7 +10,10 @@ class PartitionPlaneFeature(GeometryFeature):
     feature_type: str = field(init=False, default="Partition by Plane")
     origin: tuple[float, float, float] = (0.0, 0.0, 0.0)
     normal: tuple[float, float, float] = (1.0, 0.0, 0.0)
-    datum_plane_ref: EntityRef | None = None
+    datum_plane_ref: EntityRef | None = field(
+        default=None,
+        metadata={"reference_type": "DatumPlane"},
+    )
 
     def __post_init__(self):
         super().__post_init__()

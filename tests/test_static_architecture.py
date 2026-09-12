@@ -310,13 +310,50 @@ def test_compact_region_selector_owns_one_checkable_pick_button_and_deferred_val
 
 
 def test_constraint_control_point_is_direct_single_pick_without_extended_menu():
-    requirements = (ROOT / "model/entities/constraints/requirements.py").read_text(encoding="utf-8")
-    dialog = (ROOT / "ui/dialogs/constraint.py").read_text(encoding="utf-8")
-    assert "_POINT_KINDS" in requirements
-    assert "not master or kind == ConstraintType.TIE" in requirements
-    assert "kind == ConstraintType.CONNECTOR" in requirements
-    assert "direct_control_point_error" in dialog
-    assert "self.master.set_extended_visible(tie or connector)" in dialog
+    from opencae.model.core import EntityRef
+    from opencae.model.entities.constraints import (
+        ConstraintType,
+        constraint_selection_policy,
+        direct_control_point_error,
+    )
+    from opencae.model.selection import (
+        NamedRegionOperand,
+        RegionDefinition,
+        RegionSelectionItem,
+        SelectionMultiplicity,
+    )
+
+    coupling = constraint_selection_policy(ConstraintType.KINEMATIC, "master")
+    tie = constraint_selection_policy(ConstraintType.TIE, "master")
+    connector = constraint_selection_policy(ConstraintType.CONNECTOR, "master")
+    assert coupling.multiplicity is SelectionMultiplicity.SINGLE
+    assert tie.multiplicity is SelectionMultiplicity.MULTIPLE
+    assert connector.multiplicity is SelectionMultiplicity.MULTIPLE
+
+    named = RegionDefinition(
+        (RegionSelectionItem(NamedRegionOperand(EntityRef("region", "Region"))),)
+    )
+    assert direct_control_point_error(named)
+
+
+def test_object_reference_aliases_require_explicit_type_metadata():
+    """Every generated object relationship has one declared type contract."""
+    from dataclasses import fields, is_dataclass
+
+    import opencae.model.entities
+    from opencae.model.core import Entity
+    from opencae.model.core.model_registry import MODEL_TYPES
+
+    offenders = []
+    for cls in set(MODEL_TYPES.values()):
+        if not is_dataclass(cls) or not issubclass(cls, Entity):
+            continue
+        for field_info in fields(cls):
+            if field_info.name.endswith("_ref") and not field_info.metadata.get(
+                "reference_type"
+            ):
+                offenders.append(f"{cls.__name__}.{field_info.name}")
+    assert offenders == []
 
 
 def test_load_support_and_section_dialogs_keep_persistent_preview_channels():

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QLineEdit, QMessageBox, QVBoxLayout
+from PyQt6.QtWidgets import QLineEdit, QMessageBox
 
 from opencae.model.naming import is_unique
 from opencae.model.selection import RegionDefinition
@@ -11,6 +11,7 @@ from opencae.ui.core.widgets import ComponentsWidget, CompactRegionSelector, Ref
 from opencae.ui.templates import (
     SectionHeading,
     apply_primary_control_height,
+    dialog_layout,
     dialog_buttons,
     field_block,
     field_row,
@@ -46,9 +47,7 @@ class SupportDialog(ApplyDialog):
 
         self.setWindowTitle(f"{'Edit' if support else 'Create'} {support_type}")
         self.setMinimumSize(760, 500)
-        root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 18)
-        root.setSpacing(16)
+        root = dialog_layout(self)
 
         self.name = QLineEdit(
             support.name if support else (default_name or f"{support_type}-1")

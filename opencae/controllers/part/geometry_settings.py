@@ -1,5 +1,6 @@
 """Owns interactive geometry-settings edits for the active Part."""
 
+from opencae.model.entities.mesh import MeshValidity
 from opencae.ui.dialogs.geometry_settings import GeometrySettingsDialog
 
 from ..dialog_runner import get_values
@@ -12,7 +13,6 @@ class PartGeometrySettings:
         self.ctx = context
 
     def geometry_settings(self):
-        """Edit geometry settings using a detached geometry-only candidate."""
         part = self.ctx.active_part()
         if part is None:
             self.ctx.store.message.emit("Create or import a part first")
@@ -26,7 +26,7 @@ class PartGeometrySettings:
         candidate = self.ctx.geometry_candidate(part)
         for key, value in values.items():
             setattr(candidate.geometry_settings, key, value)
-        candidate.mesh.status = "Outdated"
+        candidate.mesh.lifecycle.validity = MeshValidity.OUTDATED
         if candidate.geometry and not self.ctx.validate_geometry(
             candidate,
             "Geometry settings failed",

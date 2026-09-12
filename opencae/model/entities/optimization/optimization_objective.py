@@ -11,7 +11,8 @@ class OptimizationObjective(Entity):
     """A minimize objective referencing one optimization response."""
 
     response_ref: EntityRef = field(
-        default_factory=lambda: EntityRef(expected_type="OptimizationResponse")
+        default_factory=lambda: EntityRef(expected_type="OptimizationResponse"),
+        metadata={"reference_type": "OptimizationResponse"},
     )
     sense: str = "minimize"
 

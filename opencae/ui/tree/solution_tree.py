@@ -33,7 +33,11 @@ class SolutionTree(QTreeView):
         self.setAnimated(True)
         self.setIndentation(18)
         self.setIconSize(QSize(18, 18))
-        self.setStyle(TreeBranchStyle(self.style()))
+        # Keep a Python reference to the proxy style for the full widget
+        # lifetime. setStyle() stores the C++ QStyle pointer, but a temporary
+        # PyQt wrapper can otherwise be collected while the view still uses it.
+        self._branch_style = TreeBranchStyle(self.style())
+        self.setStyle(self._branch_style)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._context_menu)
         self.clicked.connect(self._clicked)

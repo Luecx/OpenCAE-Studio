@@ -26,7 +26,8 @@ class TopologyOptimization(Study):
 
     study_type: str = field(init=False, default="Topology Optimization")
     analysis_ref: EntityRef = field(
-        default_factory=lambda: EntityRef(expected_type="Analysis")
+        default_factory=lambda: EntityRef(expected_type="Analysis"),
+        metadata={"reference_type": "Analysis"},
     )
     design_domain: RegionDefinition = field(default_factory=RegionDefinition)
     frozen_solid: RegionDefinition = field(default_factory=RegionDefinition)

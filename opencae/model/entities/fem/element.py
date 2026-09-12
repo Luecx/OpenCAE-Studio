@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from ..elements.base import ElementDefinition
+from .mesh_entity_origin import MeshEntityOrigin
 from .node import Node
 
 
@@ -15,6 +16,7 @@ class Element:
 
     id: int
     nodes: tuple[Node, ...]
+    origin: MeshEntityOrigin | str = MeshEntityOrigin.AUTHORED
 
     node_count: ClassVar[int | None] = None
     definition_type: ClassVar[type[ElementDefinition]] = ElementDefinition
@@ -41,6 +43,7 @@ class Element:
 
         object.__setattr__(self, "id", element_id)
         object.__setattr__(self, "nodes", nodes)
+        object.__setattr__(self, "origin", MeshEntityOrigin.coerce(self.origin))
 
     @property
     def connectivity(self) -> tuple[int, ...]:

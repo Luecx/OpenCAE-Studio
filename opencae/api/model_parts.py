@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from opencae.model.entities import Part
+from opencae.model.entities import Part, PartSourceKind
 
 if TYPE_CHECKING:
     from .model import Model
@@ -14,7 +14,7 @@ def create_part(
     model: "Model",
     name: str,
     *,
-    source_type: str = "Manual",
+    source_type: PartSourceKind | str = PartSourceKind.MANUAL,
 ) -> Part:
     """Create a Part, attach it to the project, and refresh ownership indexes."""
     part = Part(name=name, source_type=source_type)

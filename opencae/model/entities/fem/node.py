@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import isfinite
 
+from .mesh_entity_origin import MeshEntityOrigin
+
 
 @dataclass(frozen=True, slots=True)
 class Node:
@@ -12,6 +14,7 @@ class Node:
 
     id: int
     coordinates: tuple[float, float, float]
+    origin: MeshEntityOrigin | str = MeshEntityOrigin.AUTHORED
 
     def __post_init__(self) -> None:
         """Normalize the node and reject invalid identity/coordinates."""
@@ -27,6 +30,7 @@ class Node:
 
         object.__setattr__(self, "id", node_id)
         object.__setattr__(self, "coordinates", coordinates)
+        object.__setattr__(self, "origin", MeshEntityOrigin.coerce(self.origin))
 
     @property
     def x(self) -> float:

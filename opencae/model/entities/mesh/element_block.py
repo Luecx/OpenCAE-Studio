@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from ...core import EntityRef, SolverWritable, as_entity_ref, register_model_type
 from ..elements.base import ElementDefinition
-from ..fem import Element
+from ..fem import Element, MeshEntityOrigin
 
 
 @register_model_type("element_block")
@@ -31,6 +31,10 @@ class ElementBlock(SolverWritable):
         metadata={"project_index": False},
     )
     connectivity: list[tuple[int, ...]] = field(
+        default_factory=list,
+        metadata={"project_index": False},
+    )
+    origins: list[MeshEntityOrigin | str] = field(
         default_factory=list,
         metadata={"project_index": False},
     )
@@ -73,9 +77,19 @@ class ElementBlock(SolverWritable):
             tuple(int(node_id) for node_id in row)
             for row in self.connectivity
         ]
+        if not self.origins and self.ids:
+            self.origins = [MeshEntityOrigin.GENERATED] * len(self.ids)
+        else:
+            self.origins = [
+                MeshEntityOrigin.coerce(value) for value in self.origins
+            ]
         if len(self.ids) != len(self.connectivity):
             raise ValueError(
                 "ElementBlock ids and connectivity must have equal length"
+            )
+        if len(self.ids) != len(self.origins):
+            raise ValueError(
+                "ElementBlock ids and origins must have equal length"
             )
 
     def bind_mesh(self, mesh) -> None:
@@ -110,6 +124,33 @@ class ElementBlock(SolverWritable):
             raise ValueError(f"Element id {element.id} already exists in block")
         self.ids.append(element.id)
         self.connectivity.append(element.connectivity)
+        self.origins.append(element.origin)
+
+    def position(self, element_id: int) -> int:
+        """Return the compact row for an element or raise a stable lookup error."""
+        try:
+            return self.ids.index(int(element_id))
+        except ValueError as exc:
+            raise KeyError(f"Element {element_id} does not exist") from exc
+
+    def remove(self, element_id: int) -> tuple[tuple[int, ...], MeshEntityOrigin]:
+        """Remove one row and return the connectivity plus provenance."""
+        index = self.position(element_id)
+        connectivity = self.connectivity.pop(index)
+        origin = self.origins.pop(index)
+        self.ids.pop(index)
+        return connectivity, origin
+
+    def replace(self, element: Element) -> None:
+        """Replace one row while retaining its element ID and block definition."""
+        if self.definition is None or not isinstance(
+            self.definition,
+            element.definition_type,
+        ):
+            raise TypeError("Replacement element is incompatible with this block")
+        index = self.position(element.id)
+        self.connectivity[index] = element.connectivity
+        self.origins[index] = element.origin
 
     def write_abaqus(self, writer, context) -> None:
         """Element blocks are emitted by solver-specific mesh exporters."""

@@ -2,12 +2,17 @@ from __future__ import annotations
 
 from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
 from opencae.ui.core.theme import PALETTE
-from copy import deepcopy
 
+from opencae.model.entities.mesh import MeshValidity
 from opencae.model.mesh import DefaultSeed, EdgeSeed
 from opencae.model.selection import (
-    RegionProjection, RegionRequirement, SelectableKind, SelectionPolicy,
-    definition_from_local_labels, local_geometry_tags, region_definition_error,
+    RegionProjection,
+    RegionRequirement,
+    SelectableKind,
+    SelectionPolicy,
+    definition_from_local_labels,
+    local_geometry_tags,
+    region_definition_error,
 )
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand, make_add_command, make_replace_command
 from opencae.ui.dialogs.default_seed import DefaultSeedDialog
@@ -60,12 +65,10 @@ class PartMeshSeeds:
             viewport = self._viewport()
             if viewport is None:
                 return None
-
             viewport.cancel_context_pick()
             previous_display = viewport.display_mode
             if previous_display != "geometry":
                 viewport.set_display_mode("geometry")
-
             restored = False
 
             def session_finished():
@@ -78,14 +81,7 @@ class PartMeshSeeds:
                 if finished:
                     finished()
 
-            begin_region_pick(
-                self.ctx.store.project,
-                viewport,
-                policy,
-                done,
-                default_owner=part,
-                finished=session_finished,
-            )
+            begin_region_pick(self.ctx.store.project, viewport, policy, done, default_owner=part, finished=session_finished)
 
             def cancel():
                 viewport.cancel_context_pick()
@@ -95,23 +91,17 @@ class PartMeshSeeds:
 
         dialog = EdgeSeedDialog(
             self.ctx.store.project,
-            options=region_options(
-                self.ctx.store.project, owner=part, include_reference_points=False,
-                projections=(RegionProjection.ELEMENTS,),
-            ),
-            definition=initial or getattr(seed, "target", None),
-            pick_callback=pick,
-            seed=seed,
-            parent=self.ctx.parent,
-            units=self.ctx.units,
+            options=region_options(self.ctx.store.project, owner=part, include_reference_points=False, projections=(RegionProjection.ELEMENTS,)),
+            definition=initial or getattr(seed, "target", None), pick_callback=pick, seed=seed,
+            parent=self.ctx.parent, units=self.ctx.units,
         )
         dialog.target.set_requirement(policy.requirement, allow_part_local=True)
         preview_channel = f"edge-seed-dialog-{id(dialog)}"
         dialog._target_preview_channel = preview_channel
         dialog.target.value_changed.connect(
             lambda value: self._viewport().show_region_preview(
-                preview_channel, value, color=PALETTE["selection_3d"],
-                opacity=.62, point_size=16, show_point_labels=False,
+                preview_channel, value, color=PALETTE["selection_3d"], opacity=.62,
+                point_size=16, show_point_labels=False,
             ) if self._viewport() else None
         )
         if self._viewport():
@@ -140,24 +130,27 @@ class PartMeshSeeds:
             viewport.hide_seed_preview()
             slot = getattr(dialog, "_adjust_slot", None)
             if slot is not None:
-                try: viewport.seed_adjust_requested.disconnect(slot)
-                except (TypeError, RuntimeError): pass
+                try:
+                    viewport.seed_adjust_requested.disconnect(slot)
+                except (TypeError, RuntimeError):
+                    pass
 
     def _apply_default(self, part_id, values):
         part = self._part(part_id)
         if part is None:
             return
         current = next((item for item in part.mesh.seeds if item.seed_type == "Default"), None)
-        replacement = DefaultSeed(
-            id=current.id if current else None,
-            name=values["name"], size=values["size"],
-            metadata={"deviation": values["deviation"], "minimum": values["minimum"]},
-        ) if current else DefaultSeed(
-            name=values["name"], size=values["size"],
-            metadata={"deviation": values["deviation"], "minimum": values["minimum"]},
-        )
-        mutation = make_replace_command(self.ctx.store.project, part_id, "mesh.seeds", replacement) if current else make_add_command(self.ctx.store.project, part_id, "mesh.seeds", replacement)
-        command = CompositeCommand((mutation, UpdateFieldCommand(part_id, "mesh.status", part.mesh.status, "Outdated")))
+        kwargs = {
+            "name": values["name"], "size": values["size"],
+            "metadata": {"deviation": values["deviation"], "minimum": values["minimum"]},
+        }
+        replacement = DefaultSeed(id=current.id, **kwargs) if current else DefaultSeed(**kwargs)
+        collection = "mesh.recipe.seeds"
+        mutation = make_replace_command(self.ctx.store.project, part_id, collection, replacement) if current else make_add_command(self.ctx.store.project, part_id, collection, replacement)
+        command = CompositeCommand((
+            mutation,
+            UpdateFieldCommand(part_id, "mesh.lifecycle.validity", part.mesh.lifecycle.validity, MeshValidity.OUTDATED),
+        ))
         self.ctx.store.execute("Updated default seed", command)
         self.ctx.service.invalidate(part_id, mesh_only=True)
         self._preview(self._part(part_id))
@@ -168,9 +161,7 @@ class PartMeshSeeds:
             return
         target = values["target"]
         requirement = RegionRequirement(RegionProjection.ELEMENTS, (1,), 1)
-        error = region_definition_error(
-            self.ctx.store.project, target, requirement, allow_part_local=True
-        )
+        error = region_definition_error(self.ctx.store.project, target, requirement, allow_part_local=True)
         if error:
             self.ctx.store.message.emit(error)
             return
@@ -179,17 +170,16 @@ class PartMeshSeeds:
             return
         current = self.ctx.store.project.try_resolve(seed_id) if seed_id else None
         kwargs = {
-            "name": values["name"],
-            "target": target,
-            "method": values["method"],
-            "size": values["size"],
-            "divisions": values["divisions"],
-            "bias": "None",
-            "bias_factor": 1.0,
+            "name": values["name"], "target": target, "method": values["method"],
+            "size": values["size"], "divisions": values["divisions"], "bias": "None", "bias_factor": 1.0,
         }
         replacement = EdgeSeed(id=current.id, **kwargs) if current else EdgeSeed(**kwargs)
-        mutation = make_replace_command(self.ctx.store.project, part_id, "mesh.seeds", replacement) if current else make_add_command(self.ctx.store.project, part_id, "mesh.seeds", replacement)
-        command = CompositeCommand((mutation, UpdateFieldCommand(part_id, "mesh.status", part.mesh.status, "Outdated")))
+        collection = "mesh.recipe.seeds"
+        mutation = make_replace_command(self.ctx.store.project, part_id, collection, replacement) if current else make_add_command(self.ctx.store.project, part_id, collection, replacement)
+        command = CompositeCommand((
+            mutation,
+            UpdateFieldCommand(part_id, "mesh.lifecycle.validity", part.mesh.lifecycle.validity, MeshValidity.OUTDATED),
+        ))
         self.ctx.store.execute("Updated edge seed", command)
         self.ctx.service.invalidate(part_id, mesh_only=True)
         self._preview(self._part(part_id))
@@ -223,5 +213,8 @@ class PartMeshSeeds:
         if viewport and part:
             viewport.show_seed_preview(part.mesh.seeds)
 
-    def _part(self, part_id): return self.ctx.store.project.try_resolve(part_id)
-    def _viewport(self): return getattr(self.ctx.parent, "viewport", None)
+    def _part(self, part_id):
+        return self.ctx.store.project.try_resolve(part_id)
+
+    def _viewport(self):
+        return getattr(self.ctx.parent, "viewport", None)

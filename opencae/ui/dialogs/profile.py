@@ -24,6 +24,7 @@ from opencae.ui.templates import (
     SectionHeading,
     VerticalSeparator,
     apply_primary_control_height,
+    dialog_layout,
     dialog_buttons,
     field_block,
 )
@@ -71,9 +72,7 @@ class ProfileDialog(ApplyDialog):
         self.setWindowTitle("Edit Profile" if profile else "Create Profile")
         self.setMinimumSize(920, 560)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 18)
-        root.setSpacing(16)
+        root = dialog_layout(self)
 
         self.name = QLineEdit(profile.name if profile else default_name)
         apply_primary_control_height(self.name)

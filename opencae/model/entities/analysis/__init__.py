@@ -5,10 +5,11 @@ from .linear_static import LinearStaticAnalysis
 from .modal import ModalAnalysis
 from .nonlinear_static import NonlinearStaticAnalysis
 from .step import AnalysisStep
+from .step_type import StepType
 from .transient import TransientAnalysis
 
 __all__ = [
-    "Analysis", "AnalysisStep", "BucklingAnalysis", "LinearStaticAnalysis",
+    "Analysis", "AnalysisStep", "StepType", "BucklingAnalysis", "LinearStaticAnalysis",
     "ModalAnalysis", "NonlinearStaticAnalysis", "TransientAnalysis",
     "create_analysis",
 ]
