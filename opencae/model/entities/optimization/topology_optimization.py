@@ -1,6 +1,9 @@
 """Defines the aggregate study containing one topology optimization setup."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from opencae.model.selection import (
     RegionDefinition,
@@ -8,7 +11,7 @@ from opencae.model.selection import (
     WholeModelOperand,
 )
 
-from ...core import EntityRef, register_model_type
+from ...core import register_model_type
 from ..studies import Study
 from .optimization_constraint import OptimizationConstraint
 from .optimization_objective import OptimizationObjective
@@ -18,15 +21,18 @@ from .topology_controls import TopologyControls
 from .topology_filter_settings import TopologyFilterSettings
 from .topology_symmetry import TopologySymmetry
 
+if TYPE_CHECKING:
+    from ..analysis import Analysis
+
 
 @register_model_type("topology_optimization")
 @dataclass
 class TopologyOptimization(Study):
-    """Topology study definition, regularization, controls and run history."""
+    """Topology study definition using direct Analysis and child objects."""
 
     study_type: str = field(init=False, default="Topology Optimization")
-    analysis_ref: EntityRef = field(
-        default_factory=lambda: EntityRef(expected_type="Analysis"),
+    analysis: Analysis | None = field(
+        default=None,
         metadata={"reference_type": "Analysis"},
     )
     design_domain: RegionDefinition = field(default_factory=RegionDefinition)
@@ -55,22 +61,16 @@ class TopologyOptimization(Study):
 
     @property
     def filter_settings(self) -> TopologyFilterSettings:
-        """Return the active filter settings, repairing legacy empty collections."""
-
         if not self.filters:
             self.filters.append(TopologyFilterSettings())
         return self.filters[0]
 
     @property
     def control_settings(self) -> TopologyControls:
-        """Return the active controls, repairing legacy empty collections."""
-
         if not self.controls:
             self.controls.append(TopologyControls())
         return self.controls[0]
 
     @property
     def objective(self) -> OptimizationObjective | None:
-        """Return the currently active single objective."""
-
         return self.objectives[0] if self.objectives else None
