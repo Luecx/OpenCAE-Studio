@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from PyQt6.QtWidgets import QMessageBox
+
 from opencae.geometry.cache import CACHE
 from opencae.model.entities.jobs import ResultSet
 from opencae.model.naming import next_name
@@ -27,14 +29,14 @@ class ProjectController:
         self.settings = settings
 
     def new(self):
-        """Replace the current document with a clean Project."""
+        """Open a clean Project in the multi-document workspace."""
         project = Project()
         project.unit_system = self.settings.selected_unit_system
         CACHE.clear()
-        self.store.replace(project, "New project")
+        self._open_project(project, "New project")
 
     def open(self):
-        """Load a current-format project without disturbing the open one on error."""
+        """Load a current-format project without disturbing open projects on error."""
         path = open_file(
             self.parent,
             "Open Project",
@@ -51,7 +53,8 @@ class ProjectController:
             return
 
         CACHE.clear()
-        self.store.replace(project, f"Opened {path}")
+        if not self._open_project(project, f"Opened {path}"):
+            return
         self._fit_loaded_content()
 
     def open_results(self):
@@ -86,24 +89,61 @@ class ProjectController:
         self.parent.show_solution(result)
 
     def save(self, save_as=False):
-        """Save atomically, leaving the current path unchanged after failures."""
-        path = self.store.project.path
-        if save_as or path is None:
-            value = save_file(
-                self.parent,
-                "Save Project",
-                "OpenCAE project (*.ocae)",
-                str(path or "project.ocae"),
-            )
-            if not value:
-                return
-            path = Path(value)
+        """Save the active project atomically."""
+        return self._save_project_instance(self.store.project, save_as=bool(save_as))
+
+    def close_project(self, index):
+        """Ask whether to save one open Project, then remove it from the workspace."""
+        projects = tuple(getattr(self.store, "projects", (self.store.project,)))
         try:
-            save_project(self.store.project, path)
-        except Exception as exc:
-            self.store.message.emit(f"Could not save project: {exc}")
-            return
-        self.store.message.emit(f"Saved {path}")
+            index = int(index)
+        except (TypeError, ValueError):
+            return False
+        if not 0 <= index < len(projects):
+            return False
+
+        project = projects[index]
+        if self._project_has_active_tasks(project):
+            QMessageBox.warning(
+                self.parent,
+                "Project is busy",
+                "Stop or finish active project tasks before closing this project.",
+            )
+            return False
+
+        name = str(getattr(project, "name", "Project") or "Project")
+        prompt = QMessageBox(self.parent)
+        prompt.setIcon(QMessageBox.Icon.Question)
+        prompt.setWindowTitle("Close Project")
+        prompt.setText(f"Save '{name}' before closing it?")
+        prompt.setInformativeText(
+            "Choose Save to write the project first, Don't Save to close it "
+            "without saving, or Cancel to keep it open."
+        )
+        save_button = prompt.addButton("Save", QMessageBox.ButtonRole.AcceptRole)
+        discard_button = prompt.addButton(
+            "Don't Save",
+            QMessageBox.ButtonRole.DestructiveRole,
+        )
+        cancel_button = prompt.addButton(QMessageBox.StandardButton.Cancel)
+        prompt.setDefaultButton(save_button)
+        prompt.setEscapeButton(cancel_button)
+        prompt.exec()
+
+        clicked = prompt.clickedButton()
+        if clicked is cancel_button or clicked is None:
+            return False
+        if clicked is save_button and not self._save_project_instance(project):
+            return False
+        if clicked is not save_button and clicked is not discard_button:
+            return False
+
+        closer = getattr(self.store, "close_project", None)
+        if not callable(closer) or not closer(index):
+            return False
+        CACHE.clear()
+        self.store.message.emit(f"Closed {name}")
+        return True
 
     def settings_dialog(self):
         """Edit project name and unit system as one reversible command."""
@@ -209,6 +249,38 @@ class ProjectController:
             ),
         )
 
+    def _save_project_instance(self, project, *, save_as=False):
+        """Persist one specific Project without changing the active document."""
+        path = getattr(project, "path", None)
+        if save_as or path is None:
+            value = save_file(
+                self.parent,
+                "Save Project",
+                "OpenCAE project (*.ocae)",
+                str(path or "project.ocae"),
+            )
+            if not value:
+                return False
+            path = Path(value)
+        try:
+            save_project(project, Path(path))
+        except Exception as exc:
+            self.store.message.emit(f"Could not save project: {exc}")
+            return False
+        self.store.message.emit(f"Saved {path}")
+        return True
+
+    def _project_has_active_tasks(self, project):
+        """Keep asynchronous solver/result work from outliving its Project."""
+        controllers = getattr(self.parent, "controllers", None)
+        jobs = getattr(controllers, "jobs", None)
+        if jobs is None:
+            return False
+        project_job_ids = {job.id for job in getattr(project, "jobs", ())}
+        runners = set(getattr(jobs, "_runners", {}))
+        metadata_tasks = set(getattr(jobs, "_result_metadata_tasks", {}))
+        return bool(project_job_ids.intersection(runners | metadata_tasks))
+
     def _ensure_unit_system(self, project):
         """Reject unknown persisted units instead of silently changing semantics."""
         names = {item.name for item in self.settings.unit_systems}
@@ -226,6 +298,19 @@ class ProjectController:
         viewport = getattr(self.parent, "viewport", None)
         if viewport is not None:
             viewport.request_refresh(fit=True)
+
+    def _open_project(self, project, description):
+        """Use multi-document opening when available, retaining legacy store support."""
+        add_project = getattr(self.store, "add_project", None)
+        try:
+            if callable(add_project):
+                add_project(project, description)
+            else:
+                self.store.replace(project, description)
+        except ValueError as exc:
+            self.store.message.emit(f"Could not open project: {exc}")
+            return False
+        return True
 
     @staticmethod
     def _apply_project_settings(project, values):

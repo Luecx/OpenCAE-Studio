@@ -98,6 +98,9 @@ def build_docks(window):
     window.project_dock.solution_tree.solution_requested.connect(window.show_solution)
     window.project_dock.solution_tree.delete_requested.connect(window.delete_result)
     window.project_dock.panel.browser_requested.connect(window.ribbon.set_browser)
+    window.project_dock.panel.project_close_requested.connect(
+        window.controllers.project.close_project
+    )
     window.ribbon.result_requested.connect(window.viewport.show_solution)
     if window.ribbon.results_page is not None:
         window.viewport.section_changed.connect(

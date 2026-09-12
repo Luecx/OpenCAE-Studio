@@ -1,12 +1,15 @@
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
+    QMenu,
+    QSizePolicy,
     QStackedWidget,
     QTabBar,
     QToolButton,
     QVBoxLayout,
     QWidget,
+    QWidgetAction,
 )
 
 from opencae.ui.core.theme import PALETTE
@@ -17,9 +20,11 @@ from .solution_tree import SolutionTree
 
 class ProjectPanel(QWidget):
     browser_requested = pyqtSignal(str)
+    project_close_requested = pyqtSignal(int)
 
     def __init__(self, store, actions, parent=None, visibility=None):
         super().__init__(parent)
+        self.store = store
         self.setObjectName("ProjectPanel")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -35,6 +40,22 @@ class ProjectPanel(QWidget):
         self.tabs.addTab("Solution")
         self.tabs.setExpanding(True)
         self.tabs.currentChanged.connect(self._tab_changed)
+
+        # Keep project switching where the document context is already exposed:
+        # directly on the Project browser tab. The tab still selects the Project
+        # tree; its compact arrow opens the list of already-open projects.
+        self.project_selector = QToolButton(self.tabs)
+        self.project_selector.setObjectName("ProjectSelectorButton")
+        self.project_selector.setText("▾")
+        self.project_selector.setAutoRaise(True)
+        self.project_selector.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.project_selector.setFixedWidth(20)
+        self.project_selector.clicked.connect(self._show_project_menu)
+        self.tabs.setTabButton(
+            0,
+            QTabBar.ButtonPosition.RightSide,
+            self.project_selector,
+        )
         layout.addWidget(self.tabs)
 
         self.toolbar = QWidget()
@@ -62,7 +83,16 @@ class ProjectPanel(QWidget):
         self.filter.textChanged.connect(self._filter)
         self.expand_button.clicked.connect(self._expand)
         self.collapse_button.clicked.connect(self._collapse)
+
+        projects_changed = getattr(store, "projects_changed", None)
+        if projects_changed is not None:
+            projects_changed.connect(self._refresh_project_selector)
+        active_project_changed = getattr(store, "active_project_changed", None)
+        if active_project_changed is not None:
+            active_project_changed.connect(self._active_project_changed)
+
         self.refresh_theme()
+        self._refresh_project_selector()
 
     def refresh_theme(self):
         self.toolbar.setStyleSheet(
@@ -89,6 +119,119 @@ class ProjectPanel(QWidget):
         self.stack.setCurrentIndex(index)
         self._filter(self.filter.text())
         self.browser_requested.emit("solution" if index == 1 else "project")
+
+    def _projects(self):
+        projects = getattr(self.store, "projects", None)
+        if projects is None:
+            return (self.store.project,)
+        return tuple(projects)
+
+    def _active_project_index(self):
+        return int(getattr(self.store, "active_project_index", 0))
+
+    def _is_placeholder_project(self, index):
+        checker = getattr(self.store, "is_placeholder_project", None)
+        return bool(callable(checker) and checker(int(index)))
+
+    def _refresh_project_selector(self, *_args):
+        projects = self._projects()
+        active_index = self._active_project_index()
+        if not projects or not 0 <= active_index < len(projects):
+            self.project_selector.setEnabled(False)
+            self.tabs.setTabToolTip(0, "Project")
+            return
+        project = projects[active_index]
+        name = str(getattr(project, "name", "Project") or "Project")
+        can_open_menu = len(projects) > 1 or not self._is_placeholder_project(active_index)
+        self.project_selector.setEnabled(can_open_menu)
+        self.project_selector.setToolTip(
+            f"Active project: {name}\nChoose or close an open project"
+        )
+        self.tabs.setTabToolTip(0, f"Active project: {name}")
+
+    def _active_project_changed(self, _index):
+        self._refresh_project_selector()
+        # Selecting a different project is a document-context operation. Keep
+        # the browser on Project rather than leaving a stale Solution tree open.
+        self.tabs.setCurrentIndex(0)
+
+    def _show_project_menu(self):
+        projects = self._projects()
+        if not projects:
+            return
+        self.tabs.setCurrentIndex(0)
+        active_index = self._active_project_index()
+        menu = QMenu(self.project_selector)
+        menu.setObjectName("ProjectSelectorMenu")
+        for index, project in enumerate(projects):
+            action = QWidgetAction(menu)
+            action.setDefaultWidget(
+                self._project_menu_row(menu, index, project, index == active_index)
+            )
+            menu.addAction(action)
+        menu.exec(
+            self.project_selector.mapToGlobal(
+                QPoint(0, self.project_selector.height())
+            )
+        )
+
+    def _project_menu_row(self, menu, index, project, active):
+        row_widget = QWidget(menu)
+        row_widget.setObjectName("ProjectMenuRow")
+        row = QHBoxLayout(row_widget)
+        row.setContentsMargins(4, 2, 4, 2)
+        row.setSpacing(2)
+
+        name = str(getattr(project, "name", "Project") or "Project")
+        select_button = QToolButton(row_widget)
+        select_button.setObjectName("ProjectMenuSelectButton")
+        select_button.setText(f"✓  {name}" if active else f"    {name}")
+        select_button.setAutoRaise(True)
+        select_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        select_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        select_button.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        select_button.setMinimumWidth(180)
+        path = getattr(project, "path", None)
+        select_button.setToolTip(str(path or name))
+        select_button.clicked.connect(
+            lambda _checked=False, target=index: self._choose_project(menu, target)
+        )
+        row.addWidget(select_button, 1)
+
+        close_button = QToolButton(row_widget)
+        close_button.setObjectName("ProjectMenuCloseButton")
+        close_button.setText("−")
+        close_button.setAutoRaise(True)
+        close_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_button.setFixedSize(26, 26)
+        close_button.setEnabled(not self._is_placeholder_project(index))
+        close_button.setToolTip(f"Close {name}")
+        close_button.clicked.connect(
+            lambda _checked=False, target=index: self._request_project_close(
+                menu,
+                target,
+            )
+        )
+        row.addWidget(close_button)
+        return row_widget
+
+    def _choose_project(self, menu, index):
+        menu.close()
+        self._select_project(index)
+
+    def _request_project_close(self, menu, index):
+        menu.close()
+        self.project_close_requested.emit(int(index))
+
+    def _select_project(self, index):
+        setter = getattr(self.store, "set_active_project", None)
+        if not callable(setter):
+            return
+        self.tabs.setCurrentIndex(0)
+        setter(int(index))
 
     def _filter(self, text):
         if self.stack.currentWidget() is self.tree:

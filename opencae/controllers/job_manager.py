@@ -25,6 +25,7 @@ from .job_manager_factory import utc_now
 from .job_manager_study import run_study as run_study_workflow
 from .job_manager_validation import analysis_errors, study_errors
 from .job_output_store import JobOutputStore
+from .project_sessions import project_store_for_entity
 
 
 _RUNTIME_JOB_FIELDS = frozenset({
@@ -62,7 +63,7 @@ class JobManager(QObject):
         self._runners: dict[str, object] = {}
         self._monitors: dict[str, object] = {}
         self._analysis_runtime_parsers: dict[str, FEMasterOutputParser] = {}
-        self._output_store = JobOutputStore(lambda: self.store.project)
+        self._output_store = JobOutputStore(self._project_for_job)
         self._result_loader = FrdLoader()
         self._pending_output: dict[str, list[str]] = {}
         self._pending_output_chars: dict[str, int] = {}
@@ -75,6 +76,15 @@ class JobManager(QObject):
             app.aboutToQuit.connect(self._flush_pending_output)
         store.changed.connect(self._repair_selection)
         self._repair_selection()
+
+    def _project_for_job(self, job_id):
+        """Return the open Project owning ``job_id`` without changing the active tab."""
+        resolver = getattr(self.store, "project_for_entity", None)
+        if callable(resolver):
+            project = resolver(str(job_id or ""))
+            if project is not None:
+                return project
+        return self.store.project
 
     def jobs(self) -> tuple[Job, ...]:
         """Return the project Jobs in persistent display order."""
@@ -178,7 +188,8 @@ class JobManager(QObject):
         """Request cancellation of one live Job without relying on UI selection."""
         job_key = str(job_id or "")
         runner = self._runners.get(job_key)
-        job = self.store.project.try_resolve(job_key)
+        project = self._project_for_job(job_key)
+        job = project.try_resolve(job_key)
         if runner is None or not isinstance(job, Job):
             return
 
@@ -205,8 +216,9 @@ class JobManager(QObject):
             existing.activateWindow()
             return
 
+        monitor_store = project_store_for_entity(self.store, job.id)
         if job.source_kind is JobSourceKind.STUDY:
-            monitor = TopologyJobMonitor(self.store, job.id, self.parent)
+            monitor = TopologyJobMonitor(monitor_store, job.id, self.parent)
             self.topology_frame.connect(monitor.show_frame)
         else:
             stop_callback = (
@@ -215,7 +227,7 @@ class JobManager(QObject):
                 else None
             )
             monitor = AnalysisJobMonitor(
-                self.store,
+                monitor_store,
                 job.id,
                 self.parent,
                 stop_callback=stop_callback,
@@ -270,15 +282,16 @@ class JobManager(QObject):
 
     def _prepare_analysis_runtime(self, job_id) -> FEMasterOutputParser | None:
         """Create a fresh FEMaster parser seeded with the Analysis step order."""
-        job = self.store.project.try_resolve(str(job_id or ""))
+        project = self._project_for_job(job_id)
+        job = project.try_resolve(str(job_id or ""))
         if not isinstance(job, Job) or str(job.solver).casefold() != "femaster":
             return None
-        analysis = self.store.project.try_resolve(job.source_ref)
+        analysis = project.try_resolve(job.source_ref)
         resolved_steps = getattr(analysis, "resolved_steps", None)
         steps = ()
         if callable(resolved_steps):
             try:
-                steps = tuple(resolved_steps(self.store.project))
+                steps = tuple(resolved_steps(project))
             except (AttributeError, KeyError, TypeError, ValueError):
                 steps = ()
         parser = FEMasterOutputParser(
@@ -309,7 +322,8 @@ class JobManager(QObject):
 
     def _analysis_runtime_snapshot_path(self, job_id) -> Path | None:
         """Return the sidecar path for one Job without mutating project state."""
-        job = self.store.project.try_resolve(str(job_id or ""))
+        project = self._project_for_job(job_id)
+        job = project.try_resolve(str(job_id or ""))
         directory = str(getattr(job, "directory", "") or "").strip() if job else ""
         if not directory:
             return None
@@ -359,7 +373,8 @@ class JobManager(QObject):
 
     def _start_job(self, job_id, label: str) -> None:
         """Move a prepared Job into the canonical RUNNING state."""
-        job = self.store.project.resolve(job_id)
+        project = self._project_for_job(job_id)
+        job = project.resolve(job_id)
         candidate = deepcopy(job)
         candidate.status = JobStatus.RUNNING
         candidate.exit_code = None
@@ -419,7 +434,8 @@ class JobManager(QObject):
 
     def _update_progress(self, job_id, progress, label) -> None:
         """Persist normalized Job progress and emit the shared progress signal."""
-        job = self.store.project.try_resolve(job_id)
+        project = self._project_for_job(job_id)
+        job = project.try_resolve(job_id)
         if not isinstance(job, Job):
             return
         candidate = deepcopy(job)
@@ -434,7 +450,8 @@ class JobManager(QObject):
 
     def _replace_job(self, candidate: Job, description: str) -> None:
         """Apply only scalar Job runtime fields without a full Project transaction."""
-        current = self.store.project.try_resolve(candidate.id)
+        project = self._project_for_job(candidate.id)
+        current = project.try_resolve(candidate.id)
         if not isinstance(current, Job):
             return
 

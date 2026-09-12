@@ -20,6 +20,7 @@ from opencae.optimization import TopologyOptimizationRunner
 
 from .job_manager_factory import create_job, job_directory, utc_now
 from .job_manager_results import persist_result
+from .project_sessions import project_store_for_entity, run_for_entity
 
 
 def run_study(manager, study_id: str) -> None:
@@ -79,7 +80,7 @@ def run_study(manager, study_id: str) -> None:
     # As with Analysis Jobs, the optimization evaluates a stable project
     # snapshot while iteration entities are persisted through the live store.
     runner = TopologyOptimizationRunner(
-        manager.store,
+        project_store_for_entity(manager.store, job.id),
         deepcopy(manager.store.project),
         study.id,
         run.id,
@@ -91,10 +92,19 @@ def run_study(manager, study_id: str) -> None:
     )
     manager._runners[job.id] = runner
     runner.progress.connect(
-        lambda text, current=job.id: manager._study_output(current, text)
+        lambda text, current=job.id: run_for_entity(
+            manager,
+            current,
+            manager._study_output,
+            current,
+            text,
+        )
     )
     runner.iteration_ready.connect(
-        lambda run_id, iteration_id, mesh_index, density, current=job.id: study_iteration(
+        lambda run_id, iteration_id, mesh_index, density, current=job.id: run_for_entity(
+            manager,
+            current,
+            study_iteration,
             manager,
             current,
             run_id,
@@ -104,7 +114,10 @@ def run_study(manager, study_id: str) -> None:
         )
     )
     runner.finished.connect(
-        lambda status, message, current=job.id, run_id=run.id: finish_study(
+        lambda status, message, current=job.id, run_id=run.id: run_for_entity(
+            manager,
+            current,
+            finish_study,
             manager,
             current,
             run_id,

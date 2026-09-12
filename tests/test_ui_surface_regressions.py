@@ -32,10 +32,34 @@ def test_browser_project_solution_tabs_have_dedicated_flat_style():
     tab_style = (ROOT / "opencae/ui/core/styles/tabs.py").read_text(
         encoding="utf-8"
     )
+    layout_source = (ROOT / "opencae/app/window_layout.py").read_text(
+        encoding="utf-8"
+    )
+    controller_source = (ROOT / "opencae/controllers/project_controller.py").read_text(
+        encoding="utf-8"
+    )
 
     assert 'self.tabs.setObjectName("BrowserTabBar")' in panel_source
     assert "self.tabs.setDrawBase(False)" in panel_source
+    assert 'self.project_selector.setObjectName("ProjectSelectorButton")' in panel_source
+    assert "self.tabs.setTabButton(" in panel_source
+    assert "project_close_requested = pyqtSignal(int)" in panel_source
+    assert 'close_button.setObjectName("ProjectMenuCloseButton")' in panel_source
+    assert "close_button.setEnabled(not self._is_placeholder_project(index))" in panel_source
+    assert "QWidgetAction" in panel_source
+    assert "store.active_project_changed" not in panel_source
+    assert 'getattr(store, "active_project_changed", None)' in panel_source
+    assert "project_close_requested.connect(" in layout_source
+    assert "window.controllers.project.close_project" in layout_source
+    assert "def close_project(self, index):" in controller_source
+    assert 'prompt.addButton("Save"' in controller_source
+    assert '"Don\'t Save"' in controller_source
+    assert "self._save_project_instance(project)" in controller_source
+    assert "self._project_has_active_tasks(project)" in controller_source
     assert "QTabBar#BrowserTabBar" in tab_style
+    assert "QToolButton#ProjectSelectorButton" in tab_style
+    assert "QToolButton#ProjectMenuCloseButton" in tab_style
+    assert "QTabBar#ProjectTabBar" not in tab_style
     browser_style = tab_style.split("QTabBar#BrowserTabBar", 1)[1].split(
         "QTabBar#WorkspaceTabBar", 1
     )[0]

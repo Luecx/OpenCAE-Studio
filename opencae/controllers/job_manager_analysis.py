@@ -32,6 +32,7 @@ from opencae.results import FrdLoader
 
 from .job_manager_factory import create_job, job_directory, utc_now
 from .job_manager_results import persist_result
+from .project_sessions import run_for_entity
 
 
 def run_analysis(manager, analysis_id: str) -> None:
@@ -105,17 +106,29 @@ def run_analysis(manager, analysis_id: str) -> None:
     )
     manager._runners[job.id] = runner
     runner.output.connect(
-        lambda text, current=job.id: manager._append_output(current, text)
+        lambda text, current=job.id: run_for_entity(
+            manager,
+            current,
+            manager._append_output,
+            current,
+            text,
+        )
     )
     runner.progress.connect(
-        lambda value, label, current=job.id: manager._update_progress(
+        lambda value, label, current=job.id: run_for_entity(
+            manager,
+            current,
+            manager._update_progress,
             current,
             value,
             label,
         )
     )
     runner.finished.connect(
-        lambda output_base, code, current=job.id, selected=adapter: finish_analysis(
+        lambda output_base, code, current=job.id, selected=adapter: run_for_entity(
+            manager,
+            current,
+            finish_analysis,
             manager,
             current,
             selected,
@@ -194,13 +207,19 @@ def _attach_solver_result(manager, job_id: str, source: Path) -> None:
     path = Path(source)
     task = BackgroundTask(
         lambda: FrdLoader().fields(path),
-        on_result=lambda fields: _persist_solver_result(
+        on_result=lambda fields: run_for_entity(
+            manager,
+            str(job_id),
+            _persist_solver_result,
             manager,
             str(job_id),
             path,
             fields,
         ),
-        on_error=lambda error: _result_metadata_failed(
+        on_error=lambda error: run_for_entity(
+            manager,
+            str(job_id),
+            _result_metadata_failed,
             manager,
             str(job_id),
             path,
