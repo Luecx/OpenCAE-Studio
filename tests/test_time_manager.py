@@ -248,7 +248,7 @@ def test_lower_workspaces_share_one_movable_dock_and_status_navigation():
     layout_source = (ROOT / "opencae/app/window_layout.py").read_text(encoding="utf-8")
     controller_source = (ROOT / "opencae/ui/docks/workspace_controller.py").read_text(encoding="utf-8")
     status_source = (ROOT / "opencae/ui/docks/workspace_status_tabs.py").read_text(encoding="utf-8")
-    menu_source = (ROOT / "opencae/ui/menus/window_menu.py").read_text(encoding="utf-8")
+    menu_source = (ROOT / "opencae/ui/menus/view_menu.py").read_text(encoding="utf-8")
     dock_style = (ROOT / "opencae/ui/core/styles/docks.py").read_text(encoding="utf-8")
     misc_style = (ROOT / "opencae/ui/core/styles/misc.py").read_text(encoding="utf-8")
     button_style = (ROOT / "opencae/ui/core/styles/buttons.py").read_text(encoding="utf-8")
