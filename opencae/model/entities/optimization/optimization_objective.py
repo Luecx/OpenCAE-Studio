@@ -1,17 +1,23 @@
 """Defines the response selected as the topology optimization objective."""
 
-from dataclasses import dataclass, field
+from __future__ import annotations
 
-from ...core import Entity, EntityRef, register_model_type
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+from ...core import Entity, register_model_type
+
+if TYPE_CHECKING:
+    from .optimization_response import OptimizationResponse
 
 
 @register_model_type("optimization_objective")
 @dataclass
 class OptimizationObjective(Entity):
-    """A minimize objective referencing one optimization response."""
+    """A minimize objective referencing one OptimizationResponse object."""
 
-    response_ref: EntityRef = field(
-        default_factory=lambda: EntityRef(expected_type="OptimizationResponse"),
+    response: OptimizationResponse | None = field(
+        default=None,
         metadata={"reference_type": "OptimizationResponse"},
     )
     sense: str = "minimize"
