@@ -40,48 +40,8 @@ jobs:
           tests/test_analysis_deck_profile_selection.py
           tests/test_workflow_ui_regressions.py
           tests/test_static_architecture.py
-
-      # PyQt 6.11 / Qt 6.11 and VTK 9.7 exercise several native offscreen
-      # render paths in this suite. On Ubuntu 24.04 hosted runners, keeping all
-      # 400+ tests in one Python process can leave native Qt/GL state that makes
-      # a later, otherwise passing QWidget/QPixmap construction segfault. Run
-      # the observed native-boundary files independently, then cover every
-      # remaining test in bounded processes. This preserves full coverage
-      # without carrying native GUI state across the whole suite.
-      - name: Run section-view regressions in isolation
-        run: python -m pytest -vv tests/test_section_view.py
-      - name: Run time-manager regressions in isolation
-        run: python -m pytest -vv tests/test_time_manager.py
-      - name: Run topology-monitor plot regressions in isolation
-        run: python -m pytest -vv tests/test_topology_monitor_plot.py
-
-      - name: Run full suite chunk A-G
-        run: python -m pytest -vv tests/test_[a-g]*.py
-      - name: Run full suite chunk H-P
-        run: python -m pytest -vv tests/test_[h-p]*.py
-      - name: Run full suite chunk Q-S
-        run: |
-          mapfile -t files < <(
-            find tests -maxdepth 1 -type f -name 'test_[q-s]*.py' \
-              ! -name 'test_section_view.py' \
-              ! -name 'test_static_architecture.py' \
-              | sort
-          )
-          for file in "${files[@]}"; do
-            python -m pytest -vv "$file"
-          done
-      - name: Run full suite chunk T-Z
-        run: |
-          mapfile -t files < <(
-            find tests -maxdepth 1 -type f -name 'test_[t-z]*.py' \
-              ! -name 'test_time_manager.py' \
-              ! -name 'test_topology_monitor_plot.py' \
-              ! -name 'test_workflow_ui_regressions.py' \
-              | sort
-          )
-          for file in "${files[@]}"; do
-            python -m pytest -vv "$file"
-          done
+      - name: Diagnose remaining full-suite regressions
+        run: python -m pytest -vv --maxfail=20 tests
 
   wayland:
     name: Native Wayland viewport
