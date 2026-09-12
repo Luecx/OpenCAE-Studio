@@ -34,16 +34,14 @@ class PartSketching:
             if str(part.metadata.get("part_type", "")).casefold().startswith("2d")
             else "Extrusion"
         )
-        feature = SketchFeature(
-            name=next_name("Sketch", candidate.geometry),
+        dialog = SketchFeatureDialog(
+            None,
             mode=default_mode,
-            operation="Add" if candidate.geometry else "New",
+            feature_name=next_name("Sketch", candidate.geometry),
+            parent=self.ctx.parent,
         )
-        dialog = SketchFeatureDialog(feature, parent=self.ctx.parent)
-        dialog.setWindowTitle("Create Sketch Feature")
-        ok = dialog.buttons.button(dialog.buttons.StandardButton.Ok)
-        if ok is not None:
-            ok.setText("Create Feature")
+        if candidate.geometry:
+            dialog.operation_combo.setCurrentText("Add")
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         feature = dialog.feature
@@ -54,9 +52,8 @@ class PartSketching:
         if self.ctx.commit_geometry_candidate(
             candidate, f"Created {feature.name}"
         ):
-            self.ctx.store.select(
-                self.ctx.store.project.try_resolve(feature.id) or self.ctx.active_part()
-            )
+            live = self.ctx.store.project.try_resolve(feature.id)
+            self.ctx.store.select(live or self.ctx.active_part())
 
     def edit_sketch(self, feature: SketchFeature):
         candidate, target = self.ctx.feature_copy(feature)
