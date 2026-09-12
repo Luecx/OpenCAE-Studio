@@ -1,6 +1,11 @@
 from opencae.model.geometry import (
-    GeometryFeature, ImportedStepFeature, PartitionCellFeature, PartitionEdgeFeature,
-    PartitionFaceFeature, PartitionPlaneFeature,
+    GeometryFeature,
+    ImportedStepFeature,
+    PartitionCellFeature,
+    PartitionEdgeFeature,
+    PartitionFaceFeature,
+    PartitionPlaneFeature,
+    SketchFeature,
 )
 
 from .context import PartContext
@@ -14,6 +19,7 @@ from .mesh_settings import PartMeshSettings
 from .mesh_seeds import PartMeshSeeds
 from .partitions import PartPartitions
 from .regions import PartRegions
+from .sketching import PartSketching
 from .visibility import PartVisibility
 
 
@@ -22,6 +28,7 @@ class PartController:
         self.context = PartContext(store, parent, units)
         self.service = self.context.service
         self.lifecycle = PartLifecycle(self.context)
+        self.sketching = PartSketching(self.context)
         self.partitions = PartPartitions(self.context)
         self.settings = PartGeometrySettings(self.context)
         self.seeds = PartMeshSeeds(self.context)
@@ -33,21 +40,41 @@ class PartController:
         self.datums = PartDatums(self.context)
         self.visibility_manager = PartVisibility(self.context)
         self._delegates = (
-            self.lifecycle, self.partitions, self.settings, self.seeds,
-            self.mesh_settings_manager, self.element_control_manager, self.generation,
+            self.lifecycle,
+            self.sketching,
+            self.partitions,
+            self.settings,
+            self.seeds,
+            self.mesh_settings_manager,
+            self.element_control_manager,
+            self.generation,
             self.mesh_editing,
-            self.regions, self.datums, self.visibility_manager,
+            self.regions,
+            self.datums,
+            self.visibility_manager,
         )
 
     def active_part(self):
         return self.context.active_part()
 
     def edit_geometry_feature(self, feature: GeometryFeature):
+        if isinstance(feature, SketchFeature):
+            return self.sketching.edit_sketch(feature)
         if isinstance(feature, ImportedStepFeature):
             return self.lifecycle.edit_import(feature)
-        if isinstance(feature, (PartitionPlaneFeature, PartitionCellFeature, PartitionFaceFeature, PartitionEdgeFeature)):
+        if isinstance(
+            feature,
+            (
+                PartitionPlaneFeature,
+                PartitionCellFeature,
+                PartitionFaceFeature,
+                PartitionEdgeFeature,
+            ),
+        ):
             return self.partitions.edit_partition(feature)
-        self.context.store.message.emit(f"No editor is available for {feature.feature_type}")
+        self.context.store.message.emit(
+            f"No editor is available for {feature.feature_type}"
+        )
 
     def __getattr__(self, name):
         for delegate in self._delegates:
