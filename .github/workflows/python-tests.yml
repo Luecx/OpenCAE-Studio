@@ -40,8 +40,20 @@ jobs:
           tests/test_analysis_deck_profile_selection.py
           tests/test_workflow_ui_regressions.py
           tests/test_static_architecture.py
-      - name: Diagnose remaining full-suite regressions
-        run: python -m pytest -vv --maxfail=20 tests
+      # VTK 9.7 + Qt 6.11 can leave native offscreen OpenGL state attached to
+      # the process after the section-cap renderer tests. On Ubuntu runners the
+      # next QWidget construction can then segfault inside Qt, including on
+      # master. Keep these native-boundary regressions in fresh processes while
+      # still running every test in CI.
+      - name: Run section-view regressions in isolation
+        run: python -m pytest -vv tests/test_section_view.py
+      - name: Run time-manager regressions in isolation
+        run: python -m pytest -vv tests/test_time_manager.py
+      - name: Run remaining full suite
+        run: >-
+          python -m pytest -vv --maxfail=20 tests
+          --ignore=tests/test_section_view.py
+          --ignore=tests/test_time_manager.py
 
   wayland:
     name: Native Wayland viewport
