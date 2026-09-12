@@ -6,6 +6,7 @@ from opencae.ui.core.icon_factory import IconKind as I
 def specs(c):
     return (
         ActionSpec(A.NEW_PART, "New Part", I.PART, c.part.new_part),
+        ActionSpec(A.SKETCH_FEATURE, "Sketch Feature", I.PART, c.part.create_sketch),
         ActionSpec(A.DUPLICATE_PART, "Duplicate Part", I.DUPLICATE, c.part.duplicate_part),
         ActionSpec(A.IMPORT_GEOMETRY, "Import CAD", I.IMPORT, c.part.import_geometry),
         ActionSpec(A.IMPORT_MESH, "Import Mesh", I.MESH_IMPORT, c.part.import_mesh),
