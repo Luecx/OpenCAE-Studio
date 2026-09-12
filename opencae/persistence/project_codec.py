@@ -11,7 +11,7 @@ from opencae.model.project import Project
 from .migrations import migrate_project_data
 
 PROJECT_FORMAT = "opencae-project"
-CURRENT_SCHEMA_VERSION = 24
+CURRENT_SCHEMA_VERSION = 25
 MINIMUM_SCHEMA_VERSION = 23
 _ENVELOPE_FIELDS = {"format", "schema_version", "project"}
 
@@ -47,10 +47,7 @@ def project_from_dict(data: dict[str, Any]) -> Project:
         version = int(data["schema_version"])
     except (TypeError, ValueError) as exc:
         raise ValueError("The project file has no valid schema version") from exc
-    if (
-        version > CURRENT_SCHEMA_VERSION
-        or version < MINIMUM_SCHEMA_VERSION
-    ):
+    if version > CURRENT_SCHEMA_VERSION or version < MINIMUM_SCHEMA_VERSION:
         raise ValueError(
             f"Project schema {version} is not supported; supported schemas are "
             f"{MINIMUM_SCHEMA_VERSION} through {CURRENT_SCHEMA_VERSION}"
