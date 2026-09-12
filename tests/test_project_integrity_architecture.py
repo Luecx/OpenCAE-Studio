@@ -1,4 +1,4 @@
-"""Architecture contracts for current-only persistence and identity ownership."""
+"""Architecture contracts for bounded persistence migration and identity ownership."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1] / "opencae"
 
 
 def test_historical_persistence_implementations_are_removed():
-    """Development builds keep exactly one project persistence implementation."""
+    """Persistence keeps one codec plus the dedicated versioned migration package."""
     forbidden = (
         "persistence/legacy",
         "persistence/migrations.py",
@@ -51,13 +51,19 @@ def test_project_has_no_schema_or_legacy_collection_state():
     assert 'metadata={"serialize": False}' in text
 
 
-def test_current_project_codec_has_no_migration_dispatch():
-    """The active codec rejects non-current schemas instead of migrating them."""
-    text = (ROOT / "persistence/project_codec.py").read_text(encoding="utf-8")
-    assert "CURRENT_SCHEMA_VERSION" in text
-    assert "PROJECT_FORMAT" in text
-    assert "migrate_" not in text
-    assert "schema {CURRENT_SCHEMA_VERSION} is required" in text
+def test_project_codec_uses_dedicated_bounded_migration_dispatch():
+    """Schema migration is explicit, bounded and kept outside the domain model."""
+    codec = (ROOT / "persistence/project_codec.py").read_text(encoding="utf-8")
+    migrations = (ROOT / "persistence/migrations/__init__.py").read_text(
+        encoding="utf-8"
+    )
+    assert "CURRENT_SCHEMA_VERSION" in codec
+    assert "MINIMUM_SCHEMA_VERSION" in codec
+    assert "PROJECT_FORMAT" in codec
+    assert "from .migrations import migrate_project_data" in codec
+    assert "migrate_project_data(data, version, CURRENT_SCHEMA_VERSION)" in codec
+    assert "v23_to_v24" not in codec
+    assert "def migrate_project_data" in migrations
 
 
 def test_reference_validation_has_one_authoritative_walker():

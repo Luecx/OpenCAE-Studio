@@ -21,6 +21,14 @@ from opencae.ui.dialogs.mesh_element import MeshElementDialog
 from opencae.ui.dialogs.mesh_node import MeshNodeDialog
 
 
+def _dispose_widgets(application, *widgets):
+    """Destroy Qt test widgets deterministically before later VTK-bearing tests."""
+    for widget in widgets:
+        widget.close()
+        widget.deleteLater()
+    application.processEvents()
+
+
 def test_schema_23_mesh_migrates_to_split_mesh_and_typed_associations(project_factory):
     project = project_factory(include_constraints=False)["project"]
     encoded = project_to_dict(project); encoded["schema_version"] = 23
@@ -94,20 +102,31 @@ def test_replace_generated_remesh_preserves_authored_ids_and_remaps_collisions(p
 
 def test_element_dialog_preserves_pick_order_and_removal(qapplication):
     dialog = MeshElementDialog(selected_node_ids=(3,1), available_node_ids=(1,2,3,4))
-    dialog.apply_picked_node(4); dialog.apply_picked_node(1, remove=True)
-    assert dialog.node_ids() == (3,4)
-    dialog.set_node_ids((4,3,2,1)); assert dialog.values()["node_ids"] == (4,3,2,1); dialog.close()
+    try:
+        dialog.apply_picked_node(4); dialog.apply_picked_node(1, remove=True)
+        assert dialog.node_ids() == (3,4)
+        dialog.set_node_ids((4,3,2,1)); assert dialog.values()["node_ids"] == (4,3,2,1)
+    finally:
+        _dispose_widgets(qapplication, dialog)
 
 
 def test_node_and_bulk_dialogs_return_editable_values(qapplication):
     node = Node(5, (1.0,2.0,3.0), MeshEntityOrigin.AUTHORED)
-    single = MeshNodeDialog(node); single.set_coordinates((4.0,5.0,6.0))
-    assert single.values()["coordinates"] == (4.0,5.0,6.0)
-    bulk = MeshNodeBulkDialog((node,)); bulk.translation.set_value((1.0,-1.0,2.0))
-    assert bulk.values()[5] == (2.0,1.0,5.0); single.close(); bulk.close()
+    single = MeshNodeDialog(node); bulk = MeshNodeBulkDialog((node,))
+    try:
+        single.set_coordinates((4.0,5.0,6.0))
+        assert single.values()["coordinates"] == (4.0,5.0,6.0)
+        bulk.translation.set_value((1.0,-1.0,2.0))
+        assert bulk.values()[5] == (2.0,1.0,5.0)
+    finally:
+        _dispose_widgets(qapplication, single, bulk)
 
 
 def test_element_bulk_dialog_can_apply_common_compatible_type(qapplication):
     nodes = (Node(1,(0.0,0.0,0.0)), Node(2,(1.0,0.0,0.0)), Node(3,(0.0,1.0,0.0)), Node(4,(0.0,0.0,1.0)))
-    element = Tet4(1, nodes); dialog = MeshElementBulkDialog((element,), available_node_ids=(1,2,3,4)); values = dialog.values()
-    assert values[0]["element_type"] is Tet4; assert values[0]["node_ids"] == (1,2,3,4); dialog.close()
+    element = Tet4(1, nodes); dialog = MeshElementBulkDialog((element,), available_node_ids=(1,2,3,4))
+    try:
+        values = dialog.values()
+        assert values[0]["element_type"] is Tet4; assert values[0]["node_ids"] == (1,2,3,4)
+    finally:
+        _dispose_widgets(qapplication, dialog)

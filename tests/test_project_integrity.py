@@ -15,6 +15,7 @@ from opencae.model.project import Project
 from opencae.model.validation import validate_project
 from opencae.persistence.project_codec import (
     CURRENT_SCHEMA_VERSION,
+    MINIMUM_SCHEMA_VERSION,
     project_from_dict,
     project_to_dict,
 )
@@ -198,12 +199,12 @@ def test_persistence_rejects_unknown_model_fields(project_factory):
         project_from_dict(encoded)
 
 
-def test_persistence_rejects_previous_schema(project_factory):
-    """Development persistence deliberately has no backwards compatibility."""
+def test_persistence_rejects_schema_below_migration_floor(project_factory):
+    """Only explicitly supported predecessor schemas may enter migration."""
     encoded = project_to_dict(
         project_factory(include_constraints=False)["project"]
     )
-    encoded["schema_version"] = CURRENT_SCHEMA_VERSION - 1
+    encoded["schema_version"] = MINIMUM_SCHEMA_VERSION - 1
 
     with pytest.raises(ValueError, match="is not supported"):
         project_from_dict(encoded)

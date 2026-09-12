@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, MutableMapping
+from collections.abc import Iterator, Mapping, MutableMapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -102,6 +102,12 @@ class GeometryAssociationMap(MutableMapping[str, list[Any]]):
 
     def __len__(self) -> int:
         return len(self.entries)
+
+    def __eq__(self, other) -> bool:
+        """Preserve normal mapping equality for the legacy public mapping facade."""
+        if isinstance(other, Mapping):
+            return dict(self.items()) == dict(other.items())
+        return NotImplemented
 
     def get_typed(self, key, default=None):
         try:
