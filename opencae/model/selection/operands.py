@@ -1,19 +1,33 @@
+"""Persistent selection operands built from domain objects rather than IDs."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from opencae.model.core.model_registry import register_model_type
-from opencae.model.core.reference import EntityRef
 from .types import SelectableKind
+
+if TYPE_CHECKING:
+    from opencae.model.core.entity import Entity
+    from opencae.model.entities.assembly import Instance
+    from opencae.model.entities.fem import Element, Node
+    from opencae.model.entities.regions import ReferencePoint, Region
 
 
 @register_model_type("geometry_operand")
 @dataclass(frozen=True, slots=True)
 class GeometryOperand:
-    owner_ref: EntityRef = field(default_factory=EntityRef)
+    owner: Entity | None = field(
+        default=None,
+        metadata={"reference_type": "Entity"},
+    )
     dimension: int = 0
     tag: int = 0
-    instance_ref: EntityRef | None = None
+    instance: Instance | None = field(
+        default=None,
+        metadata={"reference_type": "Instance"},
+    )
     topology_revision: str = ""
     kind: SelectableKind = field(init=False, default=SelectableKind.GEOMETRY_VERTEX)
 
@@ -32,61 +46,100 @@ class GeometryOperand:
 @register_model_type("mesh_node_operand")
 @dataclass(frozen=True, slots=True)
 class MeshNodeOperand:
-    owner_ref: EntityRef = field(default_factory=EntityRef)
-    node_id: int = 0
-    instance_ref: EntityRef | None = None
+    owner: Entity | None = field(
+        default=None,
+        metadata={"reference_type": "Entity"},
+    )
+    node: Node | None = field(
+        default=None,
+        metadata={"mesh_reference": "node"},
+    )
+    instance: Instance | None = field(
+        default=None,
+        metadata={"reference_type": "Instance"},
+    )
     mesh_revision: str = ""
     kind: SelectableKind = field(init=False, default=SelectableKind.MESH_NODE)
-
-    def __post_init__(self): object.__setattr__(self, "node_id", int(self.node_id))
 
 
 @register_model_type("mesh_element_operand")
 @dataclass(frozen=True, slots=True)
 class MeshElementOperand:
-    owner_ref: EntityRef = field(default_factory=EntityRef)
-    element_id: int = 0
-    instance_ref: EntityRef | None = None
+    owner: Entity | None = field(
+        default=None,
+        metadata={"reference_type": "Entity"},
+    )
+    element: Element | None = field(
+        default=None,
+        metadata={"mesh_reference": "element"},
+    )
+    instance: Instance | None = field(
+        default=None,
+        metadata={"reference_type": "Instance"},
+    )
     mesh_revision: str = ""
     kind: SelectableKind = field(init=False, default=SelectableKind.MESH_ELEMENT)
-
-    def __post_init__(self): object.__setattr__(self, "element_id", int(self.element_id))
 
 
 @register_model_type("mesh_facet_operand")
 @dataclass(frozen=True, slots=True)
 class MeshFacetOperand:
-    owner_ref: EntityRef = field(default_factory=EntityRef)
-    element_id: int = 0
+    owner: Entity | None = field(
+        default=None,
+        metadata={"reference_type": "Entity"},
+    )
+    element: Element | None = field(
+        default=None,
+        metadata={"mesh_reference": "element"},
+    )
     local_face: str = ""
-    instance_ref: EntityRef | None = None
+    instance: Instance | None = field(
+        default=None,
+        metadata={"reference_type": "Instance"},
+    )
     mesh_revision: str = ""
     kind: SelectableKind = field(init=False, default=SelectableKind.MESH_FACET)
-
-    def __post_init__(self): object.__setattr__(self, "element_id", int(self.element_id))
 
 
 @register_model_type("reference_point_operand")
 @dataclass(frozen=True, slots=True)
 class ReferencePointOperand:
-    reference_point_ref: EntityRef = field(default_factory=lambda: EntityRef(expected_type="ReferencePoint"))
-    instance_ref: EntityRef | None = None
+    reference_point: ReferencePoint | None = field(
+        default=None,
+        metadata={"reference_type": "ReferencePoint"},
+    )
+    instance: Instance | None = field(
+        default=None,
+        metadata={"reference_type": "Instance"},
+    )
     kind: SelectableKind = field(init=False, default=SelectableKind.REFERENCE_POINT)
 
 
 @register_model_type("named_region_operand")
 @dataclass(frozen=True, slots=True)
 class NamedRegionOperand:
-    region_ref: EntityRef = field(default_factory=lambda: EntityRef(expected_type="Region"))
-    instance_ref: EntityRef | None = None
+    region: Region | None = field(
+        default=None,
+        metadata={"reference_type": "Region"},
+    )
+    instance: Instance | None = field(
+        default=None,
+        metadata={"reference_type": "Instance"},
+    )
     kind: SelectableKind = field(init=False, default=SelectableKind.NAMED_REGION)
 
 
 @register_model_type("whole_model_operand")
 @dataclass(frozen=True, slots=True)
 class WholeModelOperand:
-    owner_ref: EntityRef | None = None
-    instance_ref: EntityRef | None = None
+    owner: Entity | None = field(
+        default=None,
+        metadata={"reference_type": "Entity"},
+    )
+    instance: Instance | None = field(
+        default=None,
+        metadata={"reference_type": "Instance"},
+    )
     kind: SelectableKind = field(init=False, default=SelectableKind.WHOLE_MODEL)
 
 
@@ -106,20 +159,33 @@ RegionOperand = (
 
 def operand_key(value: RegionOperand) -> tuple:
     if isinstance(value, GeometryOperand):
-        return (value.kind, _id(value.instance_ref), value.owner_ref.entity_id, value.dimension, value.tag, value.topology_revision)
+        return (
+            value.kind, _id(value.instance), _id(value.owner), value.dimension,
+            value.tag, value.topology_revision,
+        )
     if isinstance(value, MeshNodeOperand):
-        return (value.kind, _id(value.instance_ref), value.owner_ref.entity_id, value.node_id, value.mesh_revision)
+        return (
+            value.kind, _id(value.instance), _id(value.owner),
+            getattr(value.node, "id", 0), value.mesh_revision,
+        )
     if isinstance(value, MeshElementOperand):
-        return (value.kind, _id(value.instance_ref), value.owner_ref.entity_id, value.element_id, value.mesh_revision)
+        return (
+            value.kind, _id(value.instance), _id(value.owner),
+            getattr(value.element, "id", 0), value.mesh_revision,
+        )
     if isinstance(value, MeshFacetOperand):
-        return (value.kind, _id(value.instance_ref), value.owner_ref.entity_id, value.element_id, value.local_face, value.mesh_revision)
+        return (
+            value.kind, _id(value.instance), _id(value.owner),
+            getattr(value.element, "id", 0), value.local_face, value.mesh_revision,
+        )
     if isinstance(value, ReferencePointOperand):
-        return (value.kind, _id(value.instance_ref), value.reference_point_ref.entity_id)
+        return (value.kind, _id(value.instance), _id(value.reference_point))
     if isinstance(value, NamedRegionOperand):
-        return (value.kind, _id(value.instance_ref), value.region_ref.entity_id)
-    if isinstance(value, UnresolvedOperand): return ("unresolved", value.legacy_label, value.expected_kind)
-    return (value.kind, _id(value.instance_ref), _id(value.owner_ref))
+        return (value.kind, _id(value.instance), _id(value.region))
+    if isinstance(value, UnresolvedOperand):
+        return ("unresolved", value.legacy_label, value.expected_kind)
+    return (value.kind, _id(value.instance), _id(value.owner))
 
 
-def _id(ref) -> str:
-    return ref.entity_id if ref else ""
+def _id(value) -> str:
+    return str(getattr(value, "id", getattr(value, "entity_id", "")) or "")
