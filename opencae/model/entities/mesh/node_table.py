@@ -1,4 +1,4 @@
-"""Stores persisted mesh nodes without exposing numeric arrays to ProjectIndex."""
+"""Stores compact mesh-node payload while exposing canonical Node objects."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from ..fem import MeshEntityOrigin, Node
 @register_model_type("node_table")
 @dataclass
 class NodeTable(SolverWritable):
-    """Compact persisted node storage with an object-oriented public view."""
+    """Compact persisted node storage with identity-stable runtime objects."""
 
     ids: list[int] = field(
         default_factory=list,
@@ -26,9 +26,15 @@ class NodeTable(SolverWritable):
         default_factory=list,
         metadata={"project_index": False},
     )
+    _objects: dict[int, Node] = field(
+        init=False,
+        default_factory=dict,
+        repr=False,
+        compare=False,
+        metadata={"serialize": False, "project_index": False},
+    )
 
     def __post_init__(self) -> None:
-        """Normalize compact rows and infer provenance for legacy mesh data."""
         self.ids = [int(value) for value in self.ids]
         self.coordinates = [
             tuple(float(item) for item in row) for row in self.coordinates
@@ -36,9 +42,8 @@ class NodeTable(SolverWritable):
         if not self.origins and self.ids:
             self.origins = [MeshEntityOrigin.GENERATED] * len(self.ids)
         else:
-            self.origins = [
-                MeshEntityOrigin.coerce(value) for value in self.origins
-            ]
+            self.origins = [MeshEntityOrigin.coerce(value) for value in self.origins]
+        self._objects = {}
         self._validate()
 
     def __len__(self) -> int:
@@ -46,15 +51,7 @@ class NodeTable(SolverWritable):
 
     def __iter__(self) -> Iterator[Node]:
         self._validate()
-        return (
-            Node(node_id, coords, origin)
-            for node_id, coords, origin in zip(
-                self.ids,
-                self.coordinates,
-                self.origins,
-                strict=True,
-            )
-        )
+        return (self.get(node_id) for node_id in self.ids)
 
     def _validate(self) -> None:
         if len(self.ids) != len(self.coordinates):
@@ -68,11 +65,20 @@ class NodeTable(SolverWritable):
         return max(self.ids, default=0) + 1
 
     def get(self, node_id: int) -> Node:
-        try:
-            index = self.ids.index(int(node_id))
-        except ValueError as exc:
-            raise KeyError(f"Node {node_id} does not exist") from exc
-        return Node(self.ids[index], self.coordinates[index], self.origins[index])
+        """Return the one canonical Node object for ``node_id``."""
+        index = self._position(node_id)
+        identity = self.ids[index]
+        node = self._objects.get(identity)
+        if node is None:
+            node = Node(identity, self.coordinates[index], self.origins[index])
+            self._objects[identity] = node
+        else:
+            # Compact arrays remain persistence/solver storage. Keep an already
+            # referenced Node object synchronized in-place when rows are loaded
+            # or restored by undo/redo.
+            object.__setattr__(node, "coordinates", self.coordinates[index])
+            object.__setattr__(node, "origin", self.origins[index])
+        return node
 
     def add(
         self,
@@ -80,7 +86,7 @@ class NodeTable(SolverWritable):
         node_id: int | None = None,
         origin: MeshEntityOrigin | str | None = None,
     ) -> Node:
-        """Append one unique node and return its canonical value object."""
+        """Append one unique node and retain the supplied Node as canonical."""
         node = (
             value
             if isinstance(value, Node)
@@ -94,11 +100,13 @@ class NodeTable(SolverWritable):
             raise ValueError("node_id does not match Node.id")
         if node.id in self.ids:
             raise ValueError(f"Node id {node.id} already exists")
+        final_origin = MeshEntityOrigin.coerce(origin) if origin is not None else node.origin
+        if final_origin is not node.origin:
+            object.__setattr__(node, "origin", final_origin)
         self.ids.append(node.id)
         self.coordinates.append(node.coordinates)
-        self.origins.append(
-            MeshEntityOrigin.coerce(origin) if origin is not None else node.origin
-        )
+        self.origins.append(final_origin)
+        self._objects[node.id] = node
         return node
 
     def update(
@@ -108,43 +116,38 @@ class NodeTable(SolverWritable):
         *,
         origin: MeshEntityOrigin | str = MeshEntityOrigin.AUTHORED,
     ) -> Node:
-        """Replace one node's coordinates without changing its stable ID."""
+        """Mutate one canonical Node while retaining its stable object identity."""
         index = self._position(node_id)
-        node = Node(node_id, coordinates, origin)
-        self.coordinates[index] = node.coordinates
-        self.origins[index] = node.origin
+        validated = Node(node_id, coordinates, origin)
+        self.coordinates[index] = validated.coordinates
+        self.origins[index] = validated.origin
+        node = self.get(node_id)
+        object.__setattr__(node, "coordinates", validated.coordinates)
+        object.__setattr__(node, "origin", validated.origin)
         return node
 
     def remove(self, node_id: int) -> Node:
-        """Remove and return one node after the owning mesh checks connectivity."""
+        """Remove and return the canonical Node object."""
         index = self._position(node_id)
-        node = Node(
-            self.ids[index],
-            self.coordinates[index],
-            self.origins[index],
-        )
+        node = self.get(node_id)
+        identity = self.ids[index]
         del self.ids[index]
         del self.coordinates[index]
         del self.origins[index]
+        self._objects.pop(identity, None)
         return node
 
     def _position(self, node_id: int) -> int:
-        """Return the compact row for a node or raise a stable lookup error."""
         try:
             return self.ids.index(int(node_id))
         except ValueError as exc:
             raise KeyError(f"Node {node_id} does not exist") from exc
 
     def extend(self, values: Iterable[Node]) -> tuple[Node, ...]:
-        added = []
-        for value in values:
-            added.append(self.add(value))
-        return tuple(added)
+        return tuple(self.add(value) for value in values)
 
     def write_abaqus(self, writer, context) -> None:
-        """Defer node output to solver-specific mesh exporters."""
         return None
 
     def write_femaster(self, writer, context) -> None:
-        """Defer node output to solver-specific mesh exporters."""
         return None
