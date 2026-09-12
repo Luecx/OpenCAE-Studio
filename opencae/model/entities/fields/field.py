@@ -1,12 +1,18 @@
 """Defines spatial field data independently of UI and solver adapters."""
 
-from dataclasses import dataclass, field
+from __future__ import annotations
 
-from ...core import Entity, EntityRef, register_model_type
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+from ...core import Entity, register_model_type
 from .field_interpolation import FieldInterpolation
 from .field_location import FieldLocation
 from .field_source_kind import FieldSourceKind
 from .field_value_kind import FieldValueKind
+
+if TYPE_CHECKING:
+    from ..regions import Region
 
 
 @register_model_type("field_definition")
@@ -17,7 +23,7 @@ class FieldDefinition(Entity):
     location: FieldLocation | str = FieldLocation.NODAL
     components: int = 1
     component_names: list[str] = field(default_factory=lambda: ["Value"])
-    region_ref: EntityRef | None = field(
+    region: Region | None = field(
         default=None,
         metadata={"reference_type": "Region"},
     )
@@ -29,7 +35,6 @@ class FieldDefinition(Entity):
     field_type: FieldValueKind | str = FieldValueKind.SCALAR
 
     def __setattr__(self, name, value) -> None:
-        """Canonicalize every finite field attribute at its mutation boundary."""
         coercers = {
             "location": FieldLocation.coerce,
             "source_type": FieldSourceKind.coerce,
@@ -41,9 +46,7 @@ class FieldDefinition(Entity):
         super().__setattr__(name, value)
 
     def write_abaqus(self, writer, context) -> None:
-        """Defer Abaqus field output to a dedicated exporter."""
         return None
 
     def write_femaster(self, writer, context) -> None:
-        """Defer FEMaster field output to its dedicated project emitter."""
         return None
