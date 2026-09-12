@@ -1,4 +1,4 @@
-"""Builds runtime identity, ownership, path, and reverse-reference indexes."""
+"""Build runtime identity, ownership, path, and reverse-reference indexes."""
 
 from __future__ import annotations
 
@@ -6,17 +6,27 @@ from dataclasses import fields, is_dataclass
 from typing import Any, Iterable
 
 from .entity import Entity
-from .persistent_model_field import is_project_index_field
+from .persistent_model_field import (
+    is_owned_model_field,
+    is_project_index_field,
+    is_reference_model_field,
+    reference_type_for_field,
+)
 from .reference import EntityRef
 from .reference_type import matches_reference_type
 from .reference_use import ReferenceUse
 
 
 class ProjectIndex:
-    """Runtime identity and reference index for one Project aggregate."""
+    """Runtime identity and relationship index for one Project aggregate.
+
+    Ownership and relationships are deliberately distinct. An owned field is
+    traversed to discover child Entities; a field carrying ``reference_type``
+    points at an already-owned Entity object and is only entered into the reverse
+    relationship index.
+    """
 
     def __init__(self, project):
-        """Index all reachable entities and references in ``project``."""
         self.project = project
         self.by_id: dict[str, Entity] = {}
         self.parent_id: dict[str, str | None] = {}
@@ -26,7 +36,6 @@ class ProjectIndex:
         self._build()
 
     def _build(self) -> None:
-        """Populate ownership first, then bind entities and scan references."""
         self._visit_entity(self.project, None, "project")
         for entity in self.by_id.values():
             entity._bind_project(self.project)
@@ -39,7 +48,6 @@ class ProjectIndex:
         parent_id: str | None,
         path: str,
     ) -> None:
-        """Register one Entity and recursively traverse its owned values."""
         existing = self.by_id.get(entity.id)
         if existing is entity:
             return
@@ -53,7 +61,7 @@ class ProjectIndex:
         self.parent_id[entity.id] = parent_id
         self.path[entity.id] = path
         for field_info in fields(entity):
-            if not is_project_index_field(field_info):
+            if not is_owned_model_field(field_info):
                 continue
             self._visit_value(
                 getattr(entity, field_info.name),
@@ -62,7 +70,6 @@ class ProjectIndex:
             )
 
     def _visit_value(self, value: Any, parent_id: str, path: str) -> None:
-        """Traverse nested dataclasses/containers to discover owned Entities."""
         if isinstance(value, Entity):
             self._visit_entity(value, parent_id, path)
             return
@@ -79,7 +86,7 @@ class ProjectIndex:
         try:
             if is_dataclass(value):
                 for field_info in fields(value):
-                    if not is_project_index_field(field_info):
+                    if not is_owned_model_field(field_info):
                         continue
                     self._visit_value(
                         getattr(value, field_info.name),
@@ -96,11 +103,12 @@ class ProjectIndex:
             self._active_values.remove(identity)
 
     def _scan_references(self, source: Entity) -> None:
-        """Record every EntityRef nested inside one source Entity."""
+        """Record direct object relationships nested inside one source Entity."""
         active_values: set[int] = set()
 
-        def walk(value: Any, path: str) -> None:
-            """Recursively collect reference leaves without crossing Entities."""
+        def record(value: Any, path: str, expected_type: str) -> None:
+            if value is None:
+                return
             if isinstance(value, EntityRef):
                 if value.entity_id:
                     self.reverse.setdefault(value.entity_id, []).append(
@@ -108,10 +116,24 @@ class ProjectIndex:
                             source.id,
                             source.name,
                             path,
-                            value.expected_type,
+                            value.expected_type or expected_type,
                         )
                     )
                 return
+            if isinstance(value, Entity):
+                self.reverse.setdefault(value.id, []).append(
+                    ReferenceUse(source.id, source.name, path, expected_type)
+                )
+                return
+            if isinstance(value, (list, tuple)):
+                for index, item in enumerate(value):
+                    record(item, f"{path}[{index}]", expected_type)
+                return
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    record(item, f"{path}[{key!r}]", expected_type)
+
+        def walk(value: Any, path: str) -> None:
             if isinstance(value, Entity):
                 return
             if not is_dataclass(value) and not isinstance(
@@ -127,11 +149,18 @@ class ProjectIndex:
             try:
                 if is_dataclass(value):
                     for item in fields(value):
-                        if is_project_index_field(item):
-                            walk(
-                                getattr(value, item.name),
-                                f"{path}.{item.name}",
+                        if not is_project_index_field(item):
+                            continue
+                        child = getattr(value, item.name)
+                        child_path = f"{path}.{item.name}"
+                        if is_reference_model_field(item):
+                            record(
+                                child,
+                                child_path,
+                                reference_type_for_field(item),
                             )
+                        elif is_owned_model_field(item):
+                            walk(child, child_path)
                 elif isinstance(value, (list, tuple)):
                     for index, item in enumerate(value):
                         walk(item, f"{path}[{index}]")
@@ -144,18 +173,33 @@ class ProjectIndex:
         for field_info in fields(source):
             if not is_project_index_field(field_info):
                 continue
-            walk(getattr(source, field_info.name), field_info.name)
+            value = getattr(source, field_info.name)
+            if is_reference_model_field(field_info):
+                record(
+                    value,
+                    field_info.name,
+                    reference_type_for_field(field_info),
+                )
+            elif is_owned_model_field(field_info):
+                walk(value, field_info.name)
 
     def resolve(
         self,
-        ref: EntityRef | str | None,
+        ref: EntityRef | Entity | str | None,
         expected_type: type | tuple[type, ...] | str | None = None,
     ):
-        """Resolve a stable reference/ID and enforce all declared type contracts."""
-        entity_id = ref.entity_id if isinstance(ref, EntityRef) else str(ref or "")
-        entity = self.by_id.get(entity_id)
-        if entity is None:
-            raise KeyError(f"Referenced entity '{entity_id}' does not exist")
+        """Resolve a persistence ref, object, or ID and enforce type contracts."""
+        if isinstance(ref, Entity):
+            entity = self.by_id.get(ref.id)
+            if entity is not ref:
+                raise KeyError(
+                    f"Entity '{ref.id}' is not the canonical object in this Project"
+                )
+        else:
+            entity_id = ref.entity_id if isinstance(ref, EntityRef) else str(ref or "")
+            entity = self.by_id.get(entity_id)
+            if entity is None:
+                raise KeyError(f"Referenced entity '{entity_id}' does not exist")
 
         if isinstance(ref, EntityRef) and ref.expected_type:
             if not matches_reference_type(entity, ref.expected_type):
@@ -184,21 +228,18 @@ class ProjectIndex:
 
     def try_resolve(
         self,
-        ref: EntityRef | str | None,
+        ref: EntityRef | Entity | str | None,
         expected_type: type | tuple[type, ...] | str | None = None,
     ):
-        """Resolve a reference or return ``None`` for missing/wrong-type values."""
         try:
             return self.resolve(ref, expected_type)
         except (KeyError, TypeError):
             return None
 
     def references_to(self, entity_id: str) -> tuple[ReferenceUse, ...]:
-        """Return all recorded reverse references targeting ``entity_id``."""
         return tuple(self.reverse.get(entity_id, ()))
 
     def children_of(self, entity_id: str) -> tuple[Entity, ...]:
-        """Return structurally owned child Entities of ``entity_id``."""
         return tuple(
             entity
             for child_id, entity in self.by_id.items()
@@ -211,7 +252,6 @@ class ProjectIndex:
         accepted: type | tuple[type, ...] | None = None,
         parent_id: str | None = None,
     ) -> list[Entity]:
-        """Find entities by display name with optional type/parent filtering."""
         text = str(name or "").casefold()
         result = []
         for entity in self.by_id.values():
@@ -228,7 +268,6 @@ class ProjectIndex:
         self,
         accepted: type | tuple[type, ...] | None = None,
     ) -> Iterable[Entity]:
-        """Iterate all indexed entities, optionally restricted by type."""
         return (
             self.by_id.values()
             if accepted is None
