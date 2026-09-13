@@ -27,3 +27,11 @@ class IconKind(Enum):
     MESH_LINES = auto(); BOUNDARY_LINES = auto(); DEFORMATION = auto(); SECTION_VIEW = auto(); VISIBILITY = auto()
     PICK = auto()
     UNDEFORMED = auto(); QUERY_NODE = auto(); QUERY_ELEMENT = auto(); RANGE = auto()
+
+    # Parametric Sketcher tools use the same centralized icon pipeline as the
+    # main OpenCAE ribbon instead of dialog-local image resources.
+    SKETCH_SELECT = auto(); SKETCH_POINT = auto(); SKETCH_LINE = auto()
+    SKETCH_POLYLINE = auto(); SKETCH_RECTANGLE = auto(); SKETCH_CIRCLE = auto()
+    SKETCH_ARC = auto(); SKETCH_ELLIPSE = auto(); SKETCH_SPLINE = auto()
+    SKETCH_SLOT = auto(); SKETCH_CONSTRUCTION = auto()
+    SKETCH_CONSTRAINT = auto(); SKETCH_DIMENSION = auto()
