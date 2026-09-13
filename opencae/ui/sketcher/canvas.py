@@ -42,6 +42,36 @@ def _distance(a: QPointF, b: QPointF) -> float:
     return hypot(float(a.x() - b.x()), float(a.y() - b.y()))
 
 
+class _OrderedSelection:
+    """Small insertion-ordered set used for deterministic CAD selections."""
+
+    def __init__(self, values=()):
+        self._values = dict.fromkeys(str(value) for value in values if str(value))
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def __len__(self):
+        return len(self._values)
+
+    def __contains__(self, value):
+        return str(value) in self._values
+
+    def add(self, value) -> None:
+        value = str(value)
+        if value:
+            self._values[value] = None
+
+    def remove(self, value) -> None:
+        del self._values[str(value)]
+
+    def discard(self, value) -> None:
+        self._values.pop(str(value), None)
+
+    def clear(self) -> None:
+        self._values.clear()
+
+
 class SketchCanvas(QGraphicsView):
     """CAD-like 2D sketch canvas backed directly by ``SketchDefinition``."""
 
@@ -90,14 +120,15 @@ class SketchCanvas(QGraphicsView):
         self.show_points = True
         self.show_revolve_axis = False
 
-        self._selected_entities: set[str] = set()
-        self._selected_points: set[str] = set()
+        self._selected_entities = _OrderedSelection()
+        self._selected_points = _OrderedSelection()
         self._history: list[SketchDefinition] = []
         self._future: list[SketchDefinition] = []
         self._tool_points: list[tuple[QPointF, str | None]] = []
         self._spline_points: list[tuple[QPointF, str | None]] = []
         self._rubber_point: QPointF | None = None
         self._drag_point_id: str | None = None
+        self._drag_last_valid: SketchDefinition | None = None
         self._panning = False
         self._pan_start = QPoint()
         self._last_solve = None
@@ -152,11 +183,12 @@ class SketchCanvas(QGraphicsView):
         self.selection_changed.emit(())
 
     def select_all(self) -> None:
-        self._selected_entities = {
+        self._selected_entities = _OrderedSelection(
             str(getattr(entity, "id", "")) for entity in self.sketch.entities
-        }
-        self._selected_entities.discard("")
-        self._selected_points = {point.id for point in self.sketch.points}
+        )
+        self._selected_points = _OrderedSelection(
+            point.id for point in self.sketch.points
+        )
         self._sync_selection_style()
         self.selection_changed.emit(self.selected_refs())
 
@@ -187,6 +219,8 @@ class SketchCanvas(QGraphicsView):
     def _selection_reset_after_history(self) -> None:
         self._selected_entities.clear()
         self._selected_points.clear()
+        self._drag_point_id = None
+        self._drag_last_valid = None
         self.cancel_tool()
         self._rebuild_scene(solve=True)
         self.sketch_changed.emit()
@@ -362,7 +396,17 @@ class SketchCanvas(QGraphicsView):
                 point.x = float(snapped.x())
                 point.y = float(snapped.y())
                 result = solve_sketch(self.sketch)
-                self._last_solve = result
+                if result.success:
+                    self._drag_last_valid = deepcopy(self.sketch)
+                    self._last_solve = result
+                else:
+                    if self._drag_last_valid is not None:
+                        self.sketch = deepcopy(self._drag_last_valid)
+                    self.status_message.emit(
+                        "Constraint prevents moving the point to that position"
+                    )
+                    self._last_solve = solve_sketch(self.sketch)
+                    result = self._last_solve
                 self._rebuild_scene(solve=False)
                 self._selected_points.add(self._drag_point_id)
                 self._sync_selection_style()
@@ -383,6 +427,7 @@ class SketchCanvas(QGraphicsView):
             return
         if event.button() == Qt.MouseButton.LeftButton and self._drag_point_id:
             self._drag_point_id = None
+            self._drag_last_valid = None
             self._changed(solve=True)
             event.accept()
             return
@@ -431,6 +476,7 @@ class SketchCanvas(QGraphicsView):
                 if not point.fixed:
                     self._push_history()
                     self._drag_point_id = point_id
+                    self._drag_last_valid = deepcopy(self.sketch)
             self._sync_selection_style()
             self.selection_changed.emit(self.selected_refs())
             event.accept()
@@ -629,6 +675,12 @@ class SketchCanvas(QGraphicsView):
         ) / major_radius
         if minor_radius <= _EPS:
             self.status_message.emit("Ellipse minor radius must be non-zero")
+            return False
+        if minor_radius > major_radius + _EPS:
+            self.status_message.emit(
+                "Ellipse minor radius cannot exceed the major radius; "
+                "choose a longer major axis first"
+            )
             return False
         center_id = self._materialize_point(center, center_existing)
         major_id = self._materialize_point(major, major_existing)
@@ -864,7 +916,7 @@ class SketchCanvas(QGraphicsView):
             center = points.get(entity.center)
             start = points.get(entity.start)
             end = points.get(entity.end)
-            if None in {center, start, end}:
+            if center is None or start is None or end is None:
                 return None
             radius = hypot(start.x - center.x, start.y - center.y)
             if radius <= _EPS:
