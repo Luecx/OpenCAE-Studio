@@ -9,6 +9,7 @@ separate from the already large UI scaffold while exposing the same
 from __future__ import annotations
 
 from opencae.model.entities.geometry import SketchArc, SketchCircle, SketchLine
+from opencae.ui.core.icon_factory import IconKind, make_icon
 
 from .dialog import SketchFeatureDialog as _BaseSketchFeatureDialog
 
@@ -18,7 +19,36 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._apply_toolbar_icons()
         self._add_extended_constraint_actions()
+
+    def _apply_toolbar_icons(self) -> None:
+        tool_icons = {
+            "Select": IconKind.SKETCH_SELECT,
+            "Point": IconKind.SKETCH_POINT,
+            "Line": IconKind.SKETCH_LINE,
+            "Polyline": IconKind.SKETCH_POLYLINE,
+            "Rectangle": IconKind.SKETCH_RECTANGLE,
+            "Circle": IconKind.SKETCH_CIRCLE,
+            "Center Arc": IconKind.SKETCH_ARC,
+            "3-Point Arc": IconKind.SKETCH_ARC,
+            "Ellipse": IconKind.SKETCH_ELLIPSE,
+            "Spline": IconKind.SKETCH_SPLINE,
+            "Slot": IconKind.SKETCH_SLOT,
+        }
+        for tool, kind in tool_icons.items():
+            action = self._tool_actions.get(tool)
+            if action is not None:
+                action.setIcon(make_icon(kind, 18))
+
+        self.construction_action.setIcon(
+            make_icon(IconKind.SKETCH_CONSTRUCTION, 18)
+        )
+        for action in self.toolbar.actions():
+            if action.property("constraintKind"):
+                action.setIcon(make_icon(IconKind.SKETCH_CONSTRAINT, 18))
+            elif action.property("dimensionKind"):
+                action.setIcon(make_icon(IconKind.SKETCH_DIMENSION, 18))
 
     def _add_extended_constraint_actions(self) -> None:
         self.toolbar.addSeparator()
@@ -27,7 +57,10 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
             ("Point on", "Point on object"),
             ("Symmetry", "Symmetry"),
         ):
-            action = self.toolbar.addAction(label)
+            action = self.toolbar.addAction(
+                make_icon(IconKind.SKETCH_CONSTRAINT, 18),
+                label,
+            )
             action.setProperty("constraintKind", kind)
             action.triggered.connect(
                 lambda _checked=False, value=kind: self._apply_constraint(value)
