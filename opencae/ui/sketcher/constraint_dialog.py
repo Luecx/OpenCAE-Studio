@@ -8,7 +8,12 @@ separate from the already large UI scaffold while exposing the same
 
 from __future__ import annotations
 
-from opencae.model.entities.geometry import SketchArc, SketchCircle, SketchLine
+from opencae.model.entities.geometry import (
+    SketchArc,
+    SketchCircle,
+    SketchConstraintKind,
+    SketchLine,
+)
 from opencae.ui.core.icon_factory import IconKind, make_icon
 
 from .dialog import SketchFeatureDialog as _BaseSketchFeatureDialog
@@ -67,43 +72,40 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
                 lambda _checked=False, value=kind: self._apply_constraint(value)
             )
 
-    def _apply_constraint(self, kind: str):
-        points = tuple(
-            f"point:{value}" for value in self.canvas.selected_point_ids()
-        )
-        entities = tuple(
-            f"entity:{value}" for value in self.canvas.selected_entity_ids()
-        )
+    def _apply_constraint(self, kind: SketchConstraintKind | str):
+        kind = SketchConstraintKind.coerce(kind)
+        points = self.canvas.selected_points()
+        entities = self.canvas.selected_entities()
 
-        if kind == "Collinear":
+        if kind is SketchConstraintKind.COLLINEAR:
             if len(entities) != 2 or not all(
-                isinstance(self._entity(ref), SketchLine) for ref in entities
+                isinstance(entity, SketchLine) for entity in entities
             ):
                 return self._selection_warning("Select exactly two lines")
             if self.canvas.add_constraint(kind, entities):
                 self._sync_constraints()
             return
 
-        if kind == "Point on object":
+        if kind is SketchConstraintKind.POINT_ON_OBJECT:
             if len(points) != 1 or len(entities) != 1:
                 return self._selection_warning(
                     "Select exactly one point and one line, circle or arc"
                 )
-            target = self._entity(entities[0])
+            target = entities[0]
             if not isinstance(target, (SketchLine, SketchCircle, SketchArc)):
                 return self._selection_warning(
                     "Point-on-object supports lines, circles and arcs"
                 )
-            if self.canvas.add_constraint(kind, (points[0], entities[0])):
+            if self.canvas.add_constraint(kind, (points[0], target)):
                 self._sync_constraints()
             return
 
-        if kind == "Symmetry":
+        if kind is SketchConstraintKind.SYMMETRY:
             if len(points) != 2 or len(entities) != 1:
                 return self._selection_warning(
                     "Select two points and exactly one symmetry line"
                 )
-            if not isinstance(self._entity(entities[0]), SketchLine):
+            if not isinstance(entities[0], SketchLine):
                 return self._selection_warning("The symmetry axis must be a line")
             refs = (points[0], points[1], entities[0])
             if self.canvas.add_constraint(kind, refs):
