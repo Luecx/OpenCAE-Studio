@@ -39,6 +39,7 @@ class PartSketching:
             mode=default_mode,
             feature_name=next_name("Sketch", candidate.geometry),
             parent=self.ctx.parent,
+            preview_part=candidate,
         )
         if candidate.geometry:
             dialog.operation_combo.setCurrentText("Add")
@@ -59,7 +60,11 @@ class PartSketching:
         candidate, target = self.ctx.feature_copy(feature)
         if candidate is None or target is None:
             return
-        dialog = SketchFeatureDialog(target, parent=self.ctx.parent)
+        dialog = SketchFeatureDialog(
+            target,
+            parent=self.ctx.parent,
+            preview_part=candidate,
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         edited = dialog.feature
