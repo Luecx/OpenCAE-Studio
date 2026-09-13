@@ -17,14 +17,17 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.model.entities.geometry import (
+    SKETCH_ENTITY_TYPES,
     SketchArc,
     SketchCircle,
     SketchConstraint,
+    SketchConstraintKind,
     SketchDefinition,
     SketchEllipse,
     SketchLine,
     SketchPoint,
     SketchSpline,
+    entity_points,
 )
 from opencae.sketch import constraint_label, solve_sketch
 from opencae.ui.core.theme import PALETTE
@@ -120,12 +123,13 @@ class SketchCanvas(QGraphicsView):
         self.show_points = True
         self.show_revolve_axis = False
 
+        # IDs are view-selection keys only. Persistent topology is object-valued.
         self._selected_entities = _OrderedSelection()
         self._selected_points = _OrderedSelection()
         self._history: list[SketchDefinition] = []
         self._future: list[SketchDefinition] = []
-        self._tool_points: list[tuple[QPointF, str | None]] = []
-        self._spline_points: list[tuple[QPointF, str | None]] = []
+        self._tool_points: list[tuple[QPointF, SketchPoint | None]] = []
+        self._spline_points: list[tuple[QPointF, SketchPoint | None]] = []
         self._rubber_point: QPointF | None = None
         self._drag_point_id: str | None = None
         self._drag_last_valid: SketchDefinition | None = None
@@ -171,10 +175,24 @@ class SketchCanvas(QGraphicsView):
     def selected_point_ids(self) -> tuple[str, ...]:
         return tuple(self._selected_points)
 
-    def selected_refs(self) -> tuple[str, ...]:
-        return tuple(f"point:{value}" for value in self._selected_points) + tuple(
-            f"entity:{value}" for value in self._selected_entities
+    def selected_entities(self) -> tuple[object, ...]:
+        entity_map = self.sketch.entity_map()
+        return tuple(
+            entity_map[value]
+            for value in self._selected_entities
+            if value in entity_map
         )
+
+    def selected_points(self) -> tuple[SketchPoint, ...]:
+        point_map = self.sketch.point_map()
+        return tuple(
+            point_map[value]
+            for value in self._selected_points
+            if value in point_map
+        )
+
+    def selected_refs(self) -> tuple[object, ...]:
+        return self.selected_points() + self.selected_entities()
 
     def clear_selection(self) -> None:
         self._selected_entities.clear()
@@ -184,7 +202,7 @@ class SketchCanvas(QGraphicsView):
 
     def select_all(self) -> None:
         self._selected_entities = _OrderedSelection(
-            str(getattr(entity, "id", "")) for entity in self.sketch.entities
+            entity.id for entity in self.sketch.entities
         )
         self._selected_points = _OrderedSelection(
             point.id for point in self.sketch.points
@@ -231,31 +249,35 @@ class SketchCanvas(QGraphicsView):
         point_ids = set(self._selected_points)
         if not entity_ids and not point_ids:
             return
+
         self._push_history()
         kept = []
         for entity in self.sketch.entities:
-            refs = set(_entity_point_ids(entity))
-            entity_id = str(getattr(entity, "id", ""))
-            if entity_id in entity_ids or refs.intersection(point_ids):
-                entity_ids.add(entity_id)
+            refs = {point.id for point in entity_points(entity)}
+            if entity.id in entity_ids or refs.intersection(point_ids):
+                entity_ids.add(entity.id)
                 point_ids.update(refs)
             else:
                 kept.append(entity)
+
         self.sketch.entities = kept
-        used = {point_id for entity in kept for point_id in _entity_point_ids(entity)}
+        used = {
+            point.id
+            for entity in kept
+            for point in entity_points(entity)
+        }
         self.sketch.points = [
             point
             for point in self.sketch.points
             if point.id in used or (point.fixed and point.id not in point_ids)
         ]
-        deleted_refs = {
-            *(f"entity:{value}" for value in entity_ids),
-            *(f"point:{value}" for value in point_ids),
-        }
         self.sketch.constraints = [
             constraint
             for constraint in self.sketch.constraints
-            if not deleted_refs.intersection(constraint.refs)
+            if not any(
+                ref.id in entity_ids or ref.id in point_ids
+                for ref in constraint.refs
+            )
         ]
         self._selected_entities.clear()
         self._selected_points.clear()
@@ -263,8 +285,8 @@ class SketchCanvas(QGraphicsView):
 
     def add_constraint(
         self,
-        kind: str,
-        refs: tuple[str, ...] | None = None,
+        kind: SketchConstraintKind | str,
+        refs: tuple[object, ...] | None = None,
         value: float | None = None,
         *,
         name: str = "",
@@ -273,10 +295,20 @@ class SketchCanvas(QGraphicsView):
         if not refs:
             self.status_message.emit("Select sketch geometry first")
             return False
+        try:
+            refs = tuple(self._resolve_constraint_ref(ref) for ref in refs)
+            constraint = SketchConstraint(
+                kind=kind,
+                refs=refs,
+                value=value,
+                name=name,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            self.status_message.emit(str(exc))
+            return False
+
         before = deepcopy(self.sketch)
-        self.sketch.constraints.append(
-            SketchConstraint(kind=str(kind), refs=refs, value=value, name=name)
-        )
+        self.sketch.constraints.append(constraint)
         result = solve_sketch(self.sketch)
         if not result.success:
             self.sketch = before
@@ -292,16 +324,33 @@ class SketchCanvas(QGraphicsView):
         self.sketch_changed.emit()
         return True
 
+    def _resolve_constraint_ref(self, ref):
+        """Resolve legacy/UI handles at the view boundary, never in the model."""
+        if isinstance(ref, (SketchPoint, *SKETCH_ENTITY_TYPES)):
+            return ref
+        raw = str(ref or "")
+        if raw.startswith("point:"):
+            return self.sketch.point(raw.split(":", 1)[1])
+        if raw.startswith("entity:"):
+            return self.sketch.entity(raw.split(":", 1)[1].split(":", 1)[0])
+        point = self.sketch.point_map().get(raw)
+        if point is not None:
+            return point
+        entity = self.sketch.entity_map().get(raw)
+        if entity is not None:
+            return entity
+        raise KeyError(f"Unknown sketch selection reference: {raw}")
+
     def finish_current_tool(self) -> bool:
         if self.tool == "Spline" and len(self._spline_points) >= 2:
             self._push_history()
-            point_ids = tuple(
+            points = tuple(
                 self._materialize_point(point, existing)
                 for point, existing in self._spline_points
             )
             self.sketch.entities.append(
                 SketchSpline(
-                    points=point_ids,
+                    points=points,
                     construction=self.construction,
                 )
             )
@@ -496,7 +545,7 @@ class SketchCanvas(QGraphicsView):
         event.accept()
 
     # --------------------------------------------------------------- tool input
-    def _draw_click(self, point: QPointF, existing: str | None) -> None:
+    def _draw_click(self, point: QPointF, existing: SketchPoint | None) -> None:
         if self.tool == "Point":
             self._push_history()
             self._materialize_point(point, existing)
@@ -528,7 +577,7 @@ class SketchCanvas(QGraphicsView):
             self._rubber_point = point
             self.viewport().update()
 
-    def _line_click(self, point: QPointF, existing: str | None) -> None:
+    def _line_click(self, point: QPointF, existing: SketchPoint | None) -> None:
         if not self._tool_points:
             self._tool_points = [(point, existing)]
             return
@@ -536,18 +585,18 @@ class SketchCanvas(QGraphicsView):
         if _distance(start, point) <= _EPS:
             return
         self._push_history()
-        start_id = self._materialize_point(start, start_existing)
-        end_id = self._materialize_point(point, existing)
+        start_point = self._materialize_point(start, start_existing)
+        end_point = self._materialize_point(point, existing)
         line = SketchLine(
-            start=start_id,
-            end=end_id,
+            start=start_point,
+            end=end_point,
             construction=self.construction,
         )
         self.sketch.entities.append(line)
         self._auto_line_constraint(line)
         self._changed()
         if self.tool == "Polyline":
-            self._tool_points = [(point, end_id)]
+            self._tool_points = [(point, end_point)]
         else:
             self.cancel_tool()
 
@@ -577,38 +626,43 @@ class SketchCanvas(QGraphicsView):
         (a, a_existing), (c, c_existing) = first, second
         b = QPointF(c.x(), a.y())
         d = QPointF(a.x(), c.y())
-        ids = (
+        points = (
             self._materialize_point(a, a_existing),
             self._materialize_point(b, None),
             self._materialize_point(c, c_existing),
             self._materialize_point(d, None),
         )
         lines = [
-            SketchLine(start=ids[0], end=ids[1], construction=self.construction),
-            SketchLine(start=ids[1], end=ids[2], construction=self.construction),
-            SketchLine(start=ids[2], end=ids[3], construction=self.construction),
-            SketchLine(start=ids[3], end=ids[0], construction=self.construction),
+            SketchLine(start=points[0], end=points[1], construction=self.construction),
+            SketchLine(start=points[1], end=points[2], construction=self.construction),
+            SketchLine(start=points[2], end=points[3], construction=self.construction),
+            SketchLine(start=points[3], end=points[0], construction=self.construction),
         ]
         self.sketch.entities.extend(lines)
         if self.auto_constraints:
-            kinds = ("Horizontal", "Vertical", "Horizontal", "Vertical")
+            kinds = (
+                SketchConstraintKind.HORIZONTAL,
+                SketchConstraintKind.VERTICAL,
+                SketchConstraintKind.HORIZONTAL,
+                SketchConstraintKind.VERTICAL,
+            )
             self.sketch.constraints.extend(
-                SketchConstraint(kind=kind, refs=(f"entity:{line.id}",))
+                SketchConstraint(kind=kind, refs=(line,))
                 for line, kind in zip(lines, kinds)
             )
 
     def _create_circle(self, first, second) -> None:
         (center, center_existing), (edge, _) = first, second
-        center_id = self._materialize_point(center, center_existing)
+        center_point = self._materialize_point(center, center_existing)
         self.sketch.entities.append(
             SketchCircle(
-                center=center_id,
+                center=center_point,
                 radius=max(_distance(center, edge), _EPS),
                 construction=self.construction,
             )
         )
 
-    def _create_center_arc(self, first, second, third) -> None:
+    def _create_center_arc(self, first, second, third) -> bool:
         (center, center_existing), (start, start_existing), (end, end_existing) = (
             first,
             second,
@@ -617,17 +671,17 @@ class SketchCanvas(QGraphicsView):
         if _distance(center, start) <= _EPS:
             self.status_message.emit("Arc radius must be non-zero")
             return False
-        center_id = self._materialize_point(center, center_existing)
-        start_id = self._materialize_point(start, start_existing)
-        end_id = self._materialize_point(end, end_existing)
+        center_point = self._materialize_point(center, center_existing)
+        start_point = self._materialize_point(start, start_existing)
+        end_point = self._materialize_point(end, end_existing)
         cross = (start.x() - center.x()) * (end.y() - center.y()) - (
             start.y() - center.y()
         ) * (end.x() - center.x())
         self.sketch.entities.append(
             SketchArc(
-                center=center_id,
-                start=start_id,
-                end=end_id,
+                center=center_point,
+                start=start_point,
+                end=end_point,
                 clockwise=cross < 0.0,
                 construction=self.construction,
             )
@@ -640,17 +694,17 @@ class SketchCanvas(QGraphicsView):
         if center is None:
             self.status_message.emit("Three arc points must not be collinear")
             return False
-        center_id = self._materialize_point(center, None)
-        start_id = self._materialize_point(start, start_existing)
-        end_id = self._materialize_point(end, end_existing)
+        center_point = self._materialize_point(center, None)
+        start_point = self._materialize_point(start, start_existing)
+        end_point = self._materialize_point(end, end_existing)
         cross = (middle.x() - start.x()) * (end.y() - middle.y()) - (
             middle.y() - start.y()
         ) * (end.x() - middle.x())
         self.sketch.entities.append(
             SketchArc(
-                center=center_id,
-                start=start_id,
-                end=end_id,
+                center=center_point,
+                start=start_point,
+                end=end_point,
                 clockwise=cross < 0.0,
                 construction=self.construction,
             )
@@ -682,12 +736,12 @@ class SketchCanvas(QGraphicsView):
                 "choose a longer major axis first"
             )
             return False
-        center_id = self._materialize_point(center, center_existing)
-        major_id = self._materialize_point(major, major_existing)
+        center_point = self._materialize_point(center, center_existing)
+        major_point = self._materialize_point(major, major_existing)
         self.sketch.entities.append(
             SketchEllipse(
-                center=center_id,
-                major=major_id,
+                center=center_point,
+                major=major_point,
                 minor_radius=minor_radius,
                 construction=self.construction,
             )
@@ -714,22 +768,25 @@ class SketchCanvas(QGraphicsView):
         a2 = QPointF(a.x() - nx * half, a.y() - ny * half)
         b1 = QPointF(b.x() + nx * half, b.y() + ny * half)
         b2 = QPointF(b.x() - nx * half, b.y() - ny * half)
-        ids = [self._materialize_point(value, None) for value in (a1, b1, b2, a2)]
+        points = [
+            self._materialize_point(value, None)
+            for value in (a1, b1, b2, a2)
+        ]
         center_a = self._materialize_point(a, a_existing, construction=True)
         center_b = self._materialize_point(b, b_existing, construction=True)
-        line1 = SketchLine(start=ids[0], end=ids[1], construction=self.construction)
-        line2 = SketchLine(start=ids[2], end=ids[3], construction=self.construction)
+        line1 = SketchLine(start=points[0], end=points[1], construction=self.construction)
+        line2 = SketchLine(start=points[2], end=points[3], construction=self.construction)
         arc_b = SketchArc(
             center=center_b,
-            start=ids[1],
-            end=ids[2],
+            start=points[1],
+            end=points[2],
             clockwise=True,
             construction=self.construction,
         )
         arc_a = SketchArc(
             center=center_a,
-            start=ids[3],
-            end=ids[0],
+            start=points[3],
+            end=points[0],
             clockwise=True,
             construction=self.construction,
         )
@@ -737,8 +794,8 @@ class SketchCanvas(QGraphicsView):
         if self.auto_constraints:
             self.sketch.constraints.append(
                 SketchConstraint(
-                    kind="Parallel",
-                    refs=(f"entity:{line1.id}", f"entity:{line2.id}"),
+                    kind=SketchConstraintKind.PARALLEL,
+                    refs=(line1, line2),
                 )
             )
         return True
@@ -746,19 +803,18 @@ class SketchCanvas(QGraphicsView):
     def _auto_line_constraint(self, line: SketchLine) -> None:
         if not self.auto_constraints:
             return
-        point_map = self.sketch.point_map()
-        a = point_map[line.start]
-        b = point_map[line.end]
+        a = line.start
+        b = line.end
         angle = abs(atan2(b.y - a.y, b.x - a.x))
         threshold = 3.0 * pi / 180.0
         if min(angle, abs(pi - angle)) < threshold:
-            kind = "Horizontal"
+            kind = SketchConstraintKind.HORIZONTAL
         elif abs(angle - pi / 2.0) < threshold:
-            kind = "Vertical"
+            kind = SketchConstraintKind.VERTICAL
         else:
             return
         self.sketch.constraints.append(
-            SketchConstraint(kind=kind, refs=(f"entity:{line.id}",))
+            SketchConstraint(kind=kind, refs=(line,))
         )
 
     # --------------------------------------------------------------- rendering
@@ -860,11 +916,11 @@ class SketchCanvas(QGraphicsView):
             if path is None:
                 continue
             item = QGraphicsPathItem(path)
-            item.setData(_ENTITY_ROLE, str(getattr(entity, "id", "")))
+            item.setData(_ENTITY_ROLE, entity.id)
             item.setData(_KIND_ROLE, "entity")
             item.setPen(
                 self._construction_pen()
-                if getattr(entity, "construction", False)
+                if entity.construction
                 else self._normal_pen()
             )
             item.setZValue(2.0)
@@ -895,27 +951,19 @@ class SketchCanvas(QGraphicsView):
         self.viewport().update()
 
     def _entity_path(self, entity):
-        points = self.sketch.point_map()
         path = QPainterPath()
         if isinstance(entity, SketchLine):
-            a = points.get(entity.start)
-            b = points.get(entity.end)
-            if a is None or b is None:
-                return None
+            a, b = entity.start, entity.end
             path.moveTo(a.x, -a.y)
             path.lineTo(b.x, -b.y)
             return path
         if isinstance(entity, SketchCircle):
-            center = points.get(entity.center)
-            if center is None:
-                return None
+            center = entity.center
             radius = abs(float(entity.radius))
             path.addEllipse(QPointF(center.x, -center.y), radius, radius)
             return path
         if isinstance(entity, SketchArc):
-            center = points.get(entity.center)
-            start = points.get(entity.start)
-            end = points.get(entity.end)
+            center, start, end = entity.center, entity.start, entity.end
             if center is None or start is None or end is None:
                 return None
             radius = hypot(start.x - center.x, start.y - center.y)
@@ -941,10 +989,7 @@ class SketchCanvas(QGraphicsView):
                 path.lineTo(self._to_scene(sample))
             return path
         if isinstance(entity, SketchEllipse):
-            center = points.get(entity.center)
-            major = points.get(entity.major)
-            if center is None or major is None:
-                return None
+            center, major = entity.center, entity.major
             major_radius = hypot(major.x - center.x, major.y - center.y)
             minor_radius = abs(float(entity.minor_radius))
             angle = atan2(major.y - center.y, major.x - center.x)
@@ -965,8 +1010,7 @@ class SketchCanvas(QGraphicsView):
                 path.lineTo(self._to_scene(sample))
             return path
         if isinstance(entity, SketchSpline):
-            controls = [points.get(point_id) for point_id in entity.points]
-            controls = [point for point in controls if point is not None]
+            controls = list(entity.points)
             if len(controls) < 2:
                 return None
             samples = _catmull_rom(
@@ -979,9 +1023,9 @@ class SketchCanvas(QGraphicsView):
             return path
         return None
 
-    def _draw_constraint_labels(self, entity_map) -> None:
+    def _draw_constraint_labels(self, _entity_map) -> None:
         for constraint in self.sketch.constraints:
-            anchor = self._constraint_anchor(constraint, entity_map)
+            anchor = self._constraint_anchor(constraint)
             if anchor is None:
                 continue
             item = QGraphicsSimpleTextItem(constraint_label(constraint))
@@ -1000,18 +1044,15 @@ class SketchCanvas(QGraphicsView):
             item.setZValue(10.0)
             self._scene.addItem(item)
 
-    def _constraint_anchor(self, constraint, entity_map):
+    def _constraint_anchor(self, constraint):
         if not constraint.refs:
             return None
-        raw = str(constraint.refs[0])
-        if raw.startswith("point:"):
-            point = self.sketch.point_map().get(raw.split(":", 1)[1])
-            return self._to_scene(QPointF(point.x, point.y)) if point else None
-        entity_id = raw.removeprefix("entity:").split(":", 1)[0]
-        entity = entity_map.get(entity_id)
-        point_map = self.sketch.point_map()
-        values = [point_map.get(point_id) for point_id in _entity_point_ids(entity)]
-        values = [point for point in values if point is not None]
+        ref = constraint.refs[0]
+        if isinstance(ref, SketchPoint):
+            return self._to_scene(QPointF(ref.x, ref.y))
+        if not isinstance(ref, SKETCH_ENTITY_TYPES):
+            return None
+        values = list(entity_points(ref))
         if not values:
             return None
         return self._to_scene(
@@ -1023,7 +1064,11 @@ class SketchCanvas(QGraphicsView):
 
     def _normal_pen(self) -> QPen:
         fully = bool(self._last_solve and self._last_solve.fully_constrained)
-        color = _theme("success", "#49b675") if fully else _theme("text", "#e5e9ef")
+        color = (
+            _theme("success", "#49b675")
+            if fully
+            else _theme("text", "#e5e9ef")
+        )
         pen = QPen(color)
         pen.setCosmetic(True)
         pen.setWidthF(1.4)
@@ -1054,7 +1099,7 @@ class SketchCanvas(QGraphicsView):
                     entity = entity_map.get(object_id)
                     item.setPen(
                         self._construction_pen()
-                        if entity is not None and getattr(entity, "construction", False)
+                        if entity is not None and entity.construction
                         else self._normal_pen()
                     )
             elif kind == "point" and isinstance(item, QGraphicsEllipseItem):
@@ -1076,12 +1121,12 @@ class SketchCanvas(QGraphicsView):
     def _materialize_point(
         self,
         point: QPointF,
-        existing: str | None,
+        existing: SketchPoint | None,
         *,
         construction: bool | None = None,
-    ) -> str:
-        if existing and existing in self.sketch.point_map():
-            return existing
+    ) -> SketchPoint:
+        if isinstance(existing, SketchPoint) and existing.id in self.sketch.point_map():
+            return self.sketch.point(existing.id)
         model = SketchPoint(
             x=float(point.x()),
             y=float(point.y()),
@@ -1090,7 +1135,7 @@ class SketchCanvas(QGraphicsView):
             ),
         )
         self.sketch.points.append(model)
-        return model.id
+        return model
 
     def _snap(self, point: QPointF, exclude_point: str | None = None):
         tolerance = 9.0 / max(abs(float(self.transform().m11())), _EPS)
@@ -1105,7 +1150,7 @@ class SketchCanvas(QGraphicsView):
                     nearest = candidate
                     nearest_distance = distance
             if nearest is not None:
-                return QPointF(nearest.x, nearest.y), nearest.id
+                return QPointF(nearest.x, nearest.y), nearest
         if self.sketch.snap_grid:
             spacing, _ = self._grid_spacing()
             snapped = QPointF(
@@ -1180,20 +1225,6 @@ class SketchCanvas(QGraphicsView):
             "Spline": "Click interpolation points; Enter/right-click finishes",
             "Slot": "Click centerline start/end and then a width point",
         }.get(tool, tool)
-
-
-def _entity_point_ids(entity) -> tuple[str, ...]:
-    if isinstance(entity, SketchLine):
-        return entity.start, entity.end
-    if isinstance(entity, SketchCircle):
-        return (entity.center,)
-    if isinstance(entity, SketchArc):
-        return entity.center, entity.start, entity.end
-    if isinstance(entity, SketchEllipse):
-        return entity.center, entity.major
-    if isinstance(entity, SketchSpline):
-        return tuple(entity.points)
-    return ()
 
 
 def _circumcenter(a: QPointF, b: QPointF, c: QPointF) -> QPointF | None:
