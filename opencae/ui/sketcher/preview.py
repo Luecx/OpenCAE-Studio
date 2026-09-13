@@ -15,6 +15,37 @@ from opencae.ui.core.theme import PALETTE
 from opencae.ui.viewport.safe_qt_interactor import SafeQtInteractor
 
 
+def build_preview_part(base_part, feature) -> Part:
+    """Return a fresh-identity Part representing the edited feature history.
+
+    The live/detached source Part is never mutated and generated mesh payloads are
+    intentionally not copied. Geometry settings and history are the only Part
+    state the OCC rebuild needs for an exact feature preview.
+    """
+    if base_part is None:
+        return Part(
+            name="Sketch Preview",
+            source_type=PartSourceKind.MANUAL,
+            geometry=[deepcopy(feature)],
+        )
+
+    candidate = Part(
+        name=f"{getattr(base_part, 'name', 'Part')} Preview",
+        source_type=getattr(base_part, "source_type", PartSourceKind.MANUAL),
+        metadata=deepcopy(getattr(base_part, "metadata", {})),
+        geometry_settings=deepcopy(base_part.geometry_settings),
+        geometry=deepcopy(base_part.geometry),
+    )
+    replacement = deepcopy(feature)
+    for index, existing in enumerate(candidate.geometry):
+        if existing.id == replacement.id:
+            candidate.geometry[index] = replacement
+            break
+    else:
+        candidate.geometry.append(replacement)
+    return candidate
+
+
 class SketchFeaturePreview(QWidget):
     """Build a detached Part and render the resulting authored OCC history."""
 
@@ -37,45 +68,13 @@ class SketchFeaturePreview(QWidget):
         self.plotter.set_background(PALETTE["viewport"])
 
     def set_part_context(self, part) -> None:
-        """Set the detached/live Part whose feature history should be previewed.
-
-        The context is never mutated. ``refresh_feature`` constructs a fresh Part
-        with a fresh identity, copies only geometry-relevant state and replaces
-        an existing feature with the same ID (edit) or appends it (create).
-        This makes Add/Cut/Intersect preview the actual resulting body instead of
-        rendering the tool profile as an isolated positive extrusion.
-        """
+        """Set the Part whose complete feature history should be previewed."""
         self._base_part = part
-
-    def _candidate(self, feature) -> Part:
-        base = self._base_part
-        if base is None:
-            return Part(
-                name="Sketch Preview",
-                source_type=PartSourceKind.MANUAL,
-                geometry=[deepcopy(feature)],
-            )
-
-        candidate = Part(
-            name=f"{getattr(base, 'name', 'Part')} Preview",
-            source_type=getattr(base, "source_type", PartSourceKind.MANUAL),
-            metadata=deepcopy(getattr(base, "metadata", {})),
-            geometry_settings=deepcopy(base.geometry_settings),
-            geometry=deepcopy(base.geometry),
-        )
-        replacement = deepcopy(feature)
-        for index, existing in enumerate(candidate.geometry):
-            if existing.id == replacement.id:
-                candidate.geometry[index] = replacement
-                break
-        else:
-            candidate.geometry.append(replacement)
-        return candidate
 
     def refresh_feature(self, feature) -> bool:
         self.notice.hide()
         self.plotter.clear()
-        candidate = self._candidate(feature)
+        candidate = build_preview_part(self._base_part, feature)
         try:
             snapshot = GeometryService().build_geometry(candidate, force=True)
             for patch in snapshot.surfaces:
@@ -146,3 +145,6 @@ class SketchFeaturePreview(QWidget):
     def refresh_theme(self):
         self.plotter.set_background(PALETTE["viewport"])
         self.plotter.render()
+
+
+__all__ = ["SketchFeaturePreview", "build_preview_part"]
