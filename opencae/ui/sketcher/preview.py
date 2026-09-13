@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from opencae.geometry import GeometryService
 from opencae.geometry.cache import CACHE
+from opencae.model.entities.geometry import SketchFeatureMode
 from opencae.model.entities.parts import Part, PartSourceKind
 from opencae.ui.core.theme import PALETTE
 from opencae.ui.viewport.safe_qt_interactor import SafeQtInteractor
@@ -103,7 +104,7 @@ class SketchFeaturePreview(QWidget):
                     )
                 except (TypeError, ValueError):
                     continue
-            if str(getattr(feature, "mode", "")).casefold() == "revolve":
+            if feature.mode is SketchFeatureMode.REVOLVE:
                 bounds = snapshot.bounds
                 if bounds:
                     extent = max(
