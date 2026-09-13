@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-import numpy as np
 import pyvista as pv
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
@@ -17,13 +16,14 @@ from opencae.ui.viewport.safe_qt_interactor import SafeQtInteractor
 
 
 class SketchFeaturePreview(QWidget):
-    """Build a detached Part and render its authored OCC result."""
+    """Build a detached Part and render the resulting authored OCC history."""
 
     error = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("SketchFeaturePreview")
+        self._base_part = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -36,14 +36,46 @@ class SketchFeaturePreview(QWidget):
         layout.addWidget(self.plotter, 1)
         self.plotter.set_background(PALETTE["viewport"])
 
+    def set_part_context(self, part) -> None:
+        """Set the detached/live Part whose feature history should be previewed.
+
+        The context is never mutated. ``refresh_feature`` constructs a fresh Part
+        with a fresh identity, copies only geometry-relevant state and replaces
+        an existing feature with the same ID (edit) or appends it (create).
+        This makes Add/Cut/Intersect preview the actual resulting body instead of
+        rendering the tool profile as an isolated positive extrusion.
+        """
+        self._base_part = part
+
+    def _candidate(self, feature) -> Part:
+        base = self._base_part
+        if base is None:
+            return Part(
+                name="Sketch Preview",
+                source_type=PartSourceKind.MANUAL,
+                geometry=[deepcopy(feature)],
+            )
+
+        candidate = Part(
+            name=f"{getattr(base, 'name', 'Part')} Preview",
+            source_type=getattr(base, "source_type", PartSourceKind.MANUAL),
+            metadata=deepcopy(getattr(base, "metadata", {})),
+            geometry_settings=deepcopy(base.geometry_settings),
+            geometry=deepcopy(base.geometry),
+        )
+        replacement = deepcopy(feature)
+        for index, existing in enumerate(candidate.geometry):
+            if existing.id == replacement.id:
+                candidate.geometry[index] = replacement
+                break
+        else:
+            candidate.geometry.append(replacement)
+        return candidate
+
     def refresh_feature(self, feature) -> bool:
         self.notice.hide()
         self.plotter.clear()
-        candidate = Part(
-            name="Sketch Preview",
-            source_type=PartSourceKind.MANUAL,
-            geometry=[deepcopy(feature)],
-        )
+        candidate = self._candidate(feature)
         try:
             snapshot = GeometryService().build_geometry(candidate, force=True)
             for patch in snapshot.surfaces:
@@ -76,13 +108,20 @@ class SketchFeaturePreview(QWidget):
                 bounds = snapshot.bounds
                 if bounds:
                     extent = max(
-                        abs(float(bounds[0])), abs(float(bounds[1])),
-                        abs(float(bounds[2])), abs(float(bounds[3])),
-                        abs(float(bounds[4])), abs(float(bounds[5])), 1.0,
+                        abs(float(bounds[0])),
+                        abs(float(bounds[1])),
+                        abs(float(bounds[2])),
+                        abs(float(bounds[3])),
+                        abs(float(bounds[4])),
+                        abs(float(bounds[5])),
+                        1.0,
                     )
                 else:
                     extent = 10.0
-                line = pv.Line((-1.25 * extent, 0.0, 0.0), (1.25 * extent, 0.0, 0.0))
+                line = pv.Line(
+                    (-1.25 * extent, 0.0, 0.0),
+                    (1.25 * extent, 0.0, 0.0),
+                )
                 self.plotter.add_mesh(
                     line,
                     color=PALETTE["axis_x"],
@@ -100,6 +139,8 @@ class SketchFeaturePreview(QWidget):
             self.error.emit(message)
             return False
         finally:
+            # Preview candidates always have a fresh identity, so this cannot
+            # invalidate the live Part's cached geometry.
             CACHE.invalidate(candidate.id)
 
     def refresh_theme(self):
