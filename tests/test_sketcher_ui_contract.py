@@ -148,7 +148,8 @@ def test_sketcher_styling_is_part_of_central_theme_pipeline():
     dialog = (ROOT / "opencae/ui/sketcher/dialog.py").read_text(encoding="utf-8")
     assert "sketcher," in modules
     assert "QDialog#SketchFeatureDialog" in sketch_style
-    assert "PALETTE" in sketch_style
+    assert "def css(p):" in sketch_style
+    assert "{p['window']}" in sketch_style
     assert "_apply_local_style" not in dialog
     assert "setStyleSheet(" not in dialog
 
