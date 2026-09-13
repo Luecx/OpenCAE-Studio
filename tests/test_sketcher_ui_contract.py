@@ -114,6 +114,45 @@ def test_sketch_curve_creation_rejects_invalid_ellipse_and_arc_render_is_null_sa
     assert "None in {center, start, end}" not in canvas
 
 
+def test_persistent_sketch_graph_uses_objects_and_finite_domains_not_string_refs():
+    model = (ROOT / "opencae/model/entities/geometry/sketch.py").read_text(
+        encoding="utf-8"
+    )
+    solver = (ROOT / "opencae/sketch/solver.py").read_text(encoding="utf-8")
+    codec = (ROOT / "opencae/model/core/model_codec.py").read_text(encoding="utf-8")
+
+    assert "start: SketchPoint" in model
+    assert "end: SketchPoint" in model
+    assert "center: SketchPoint" in model
+    assert "points: tuple[SketchPoint, ...]" in model
+    assert "refs: tuple[SketchReference, ...]" in model
+    assert "class SketchConstraintKind" in model
+    assert "class SketchFeatureMode" in model
+    assert "class SketchBooleanOperation" in model
+    assert "__model_identity__ = True" in model
+    assert "__model_ref__" in codec
+    assert "_parse_entity_ref" not in solver
+    assert 'startswith("point:")' not in solver
+    assert 'startswith("entity:")' not in solver
+    assert "start: str" not in model
+    assert "refs: tuple[str" not in model
+
+
+def test_sketcher_styling_is_part_of_central_theme_pipeline():
+    modules = (ROOT / "opencae/ui/core/styles/__init__.py").read_text(
+        encoding="utf-8"
+    )
+    sketch_style = (ROOT / "opencae/ui/core/styles/sketcher.py").read_text(
+        encoding="utf-8"
+    )
+    dialog = (ROOT / "opencae/ui/sketcher/dialog.py").read_text(encoding="utf-8")
+    assert "sketcher," in modules
+    assert "QDialog#SketchFeatureDialog" in sketch_style
+    assert "PALETTE" in sketch_style
+    assert "_apply_local_style" not in dialog
+    assert "setStyleSheet(" not in dialog
+
+
 def test_schema_25_is_reserved_for_registered_sketch_types():
     codec = (ROOT / "opencae/persistence/project_codec.py").read_text(encoding="utf-8")
     migrations = (ROOT / "opencae/persistence/migrations/__init__.py").read_text(encoding="utf-8")
