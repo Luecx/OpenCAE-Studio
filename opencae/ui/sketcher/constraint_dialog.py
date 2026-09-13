@@ -15,10 +15,11 @@ from .dialog import SketchFeatureDialog as _BaseSketchFeatureDialog
 
 
 class SketchFeatureDialog(_BaseSketchFeatureDialog):
-    """Feature editor with the complete solver constraint surface exposed."""
+    """Feature editor with complete constraints and full-history 3D preview."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, preview_part=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.preview.set_part_context(preview_part)
         self._apply_toolbar_icons()
         self._add_extended_constraint_actions()
 
