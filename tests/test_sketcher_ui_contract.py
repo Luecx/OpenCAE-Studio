@@ -66,6 +66,23 @@ def test_sketcher_has_themed_grid_revolve_axis_and_complete_constraint_toolbar()
         assert f'"{dimension}"' in dialog
 
 
+def test_sketch_interaction_preserves_pick_order_and_last_valid_drag_state():
+    canvas = (ROOT / "opencae/ui/sketcher/canvas.py").read_text(encoding="utf-8")
+    assert "class _OrderedSelection" in canvas
+    assert "self._selected_points = _OrderedSelection()" in canvas
+    assert "self._selected_entities = _OrderedSelection()" in canvas
+    assert "self._drag_last_valid = deepcopy(self.sketch)" in canvas
+    assert "self.sketch = deepcopy(self._drag_last_valid)" in canvas
+    assert "Constraint prevents moving the point" in canvas
+
+
+def test_sketch_curve_creation_rejects_invalid_ellipse_and_arc_render_is_null_safe():
+    canvas = (ROOT / "opencae/ui/sketcher/canvas.py").read_text(encoding="utf-8")
+    assert "minor radius cannot exceed the major radius" in canvas
+    assert "if center is None or start is None or end is None:" in canvas
+    assert "None in {center, start, end}" not in canvas
+
+
 def test_schema_25_is_reserved_for_registered_sketch_types():
     codec = (ROOT / "opencae/persistence/project_codec.py").read_text(encoding="utf-8")
     migrations = (ROOT / "opencae/persistence/migrations/__init__.py").read_text(encoding="utf-8")
