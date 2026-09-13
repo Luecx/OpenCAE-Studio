@@ -26,6 +26,11 @@ from .sketch import (
     entity_points,
 )
 
+# Direct object identities are local to one owned sketch graph. This lets a
+# duplicated Part retain local sketch IDs without creating project-wide identity
+# collisions while preserving exact shared-point identity inside each sketch.
+SketchDefinition.__model_identity_scope__ = True
+
 __all__ = [
     "GeometryFeature", "GeometrySettings", "ImportedStepFeature",
     "PartitionCellFeature", "PartitionEdgeFeature", "PartitionFaceFeature",
