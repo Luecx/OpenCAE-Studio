@@ -7,10 +7,13 @@ from opencae.geometry.cache import CACHE
 from opencae.geometry.errors import GeometryError
 from opencae.model.core import decode_model, encode_model
 from opencae.model.entities.geometry import (
+    SketchBooleanOperation,
     SketchCircle,
     SketchConstraint,
+    SketchConstraintKind,
     SketchDefinition,
     SketchFeature,
+    SketchFeatureMode,
     SketchLine,
     SketchPoint,
 )
@@ -28,10 +31,10 @@ def _rectangle(width=20.0, height=10.0, y0=2.0, x0=0.0):
     ]
     sketch.points.extend(points)
     lines = [
-        SketchLine(start=points[0].id, end=points[1].id),
-        SketchLine(start=points[1].id, end=points[2].id),
-        SketchLine(start=points[2].id, end=points[3].id),
-        SketchLine(start=points[3].id, end=points[0].id),
+        SketchLine(start=points[0], end=points[1]),
+        SketchLine(start=points[1], end=points[2]),
+        SketchLine(start=points[2], end=points[3]),
+        SketchLine(start=points[3], end=points[0]),
     ]
     sketch.entities.extend(lines)
     return sketch, points, lines
@@ -41,43 +44,97 @@ def _circle_sketch(x: float, y: float, radius: float):
     sketch = SketchDefinition(grid_spacing=5.0)
     center = SketchPoint(x=x, y=y)
     sketch.points.append(center)
-    sketch.entities.append(SketchCircle(center=center.id, radius=radius))
+    sketch.entities.append(SketchCircle(center=center, radius=radius))
     return sketch
 
 
-def test_sketch_model_round_trips_registered_entities_and_constraints():
+def test_sketch_model_round_trips_object_identity_and_typed_domains():
     sketch, points, lines = _rectangle()
-    sketch.entities.append(
-        SketchCircle(center=points[0].id, radius=3.0, construction=True)
-    )
+    circle = SketchCircle(center=points[0], radius=3.0, construction=True)
+    sketch.entities.append(circle)
     sketch.constraints.extend(
         (
             SketchConstraint(
-                kind="Horizontal",
-                refs=(f"entity:{lines[0].id}",),
+                kind=SketchConstraintKind.HORIZONTAL,
+                refs=(lines[0],),
             ),
             SketchConstraint(
-                kind="Distance",
-                refs=(f"entity:{lines[0].id}",),
+                kind=SketchConstraintKind.DISTANCE,
+                refs=(lines[0],),
                 value=20.0,
             ),
         )
     )
     feature = SketchFeature(
         name="Base",
-        mode="Extrusion",
+        mode=SketchFeatureMode.EXTRUSION,
+        operation=SketchBooleanOperation.NEW,
         sketch=sketch,
         depth=8.0,
         symmetric=True,
     )
 
-    decoded = decode_model(encode_model(feature))
+    encoded = encode_model(feature)
+    decoded = decode_model(encoded)
 
     assert isinstance(decoded, SketchFeature)
+    assert decoded.mode is SketchFeatureMode.EXTRUSION
+    assert decoded.operation is SketchBooleanOperation.NEW
     assert isinstance(decoded.sketch.entities[0], SketchLine)
     assert isinstance(decoded.sketch.entities[-1], SketchCircle)
+    assert decoded.sketch.constraints[0].kind is SketchConstraintKind.HORIZONTAL
     assert decoded.sketch.constraints[1].value == pytest.approx(20.0)
     assert decoded.symmetric is True
+
+    # Topology identity is restored, not reconstructed from strings later.
+    assert decoded.sketch.entities[0].start is decoded.sketch.points[0]
+    assert decoded.sketch.entities[0].end is decoded.sketch.points[1]
+    assert decoded.sketch.entities[-1].center is decoded.sketch.points[0]
+    assert decoded.sketch.constraints[0].refs[0] is decoded.sketch.entities[0]
+    assert decoded.sketch.constraints[1].refs[0] is decoded.sketch.entities[0]
+
+    # IDs only appear as serialization references at the codec boundary.
+    first_line = encoded["sketch"]["entities"][0]
+    assert first_line["start"] == {"__model_ref__": points[0].id}
+    assert first_line["end"] == {"__model_ref__": points[1].id}
+    first_constraint = encoded["sketch"]["constraints"][0]
+    assert first_constraint["refs"]["__tuple__"][0] == {
+        "__model_ref__": lines[0].id
+    }
+
+
+def test_sketch_topology_rejects_string_relationships_and_foreign_object_copies():
+    a = SketchPoint(x=0.0, y=0.0)
+    b = SketchPoint(x=1.0, y=0.0)
+    with pytest.raises(TypeError, match="SketchPoint"):
+        SketchLine(start=a.id, end=b.id)
+
+    copied = deepcopy(a)
+    line = SketchLine(start=copied, end=b)
+    with pytest.raises(ValueError, match="not owned"):
+        SketchDefinition(points=[a, b], entities=[line])
+
+    valid = SketchLine(start=a, end=b)
+    with pytest.raises(TypeError, match="SketchPoint or sketch entity"):
+        SketchConstraint(kind="Horizontal", refs=(valid.id,))
+
+
+def test_string_ui_inputs_are_coerced_at_model_boundary_to_finite_enums():
+    sketch, _, lines = _rectangle()
+    constraint = SketchConstraint(kind="horizontal distance", refs=(lines[0],))
+    feature = SketchFeature(
+        name="Coerced",
+        mode="Extrusion",
+        operation="Add",
+        sketch=sketch,
+        revolve_axis="X",
+    )
+
+    assert constraint.kind is SketchConstraintKind.DISTANCE_X
+    assert feature.mode is SketchFeatureMode.EXTRUSION
+    assert feature.operation is SketchBooleanOperation.ADD
+    assert not isinstance(constraint.refs[0], str)
+    assert not isinstance(lines[0].start, str)
 
 
 def test_solver_drives_rectangle_dimensions_and_reports_remaining_dof():
@@ -85,26 +142,18 @@ def test_solver_drives_rectangle_dimensions_and_reports_remaining_dof():
     points[0].fixed = True
     sketch.constraints.extend(
         (
-            SketchConstraint(
-                kind="Horizontal", refs=(f"entity:{lines[0].id}",)
-            ),
-            SketchConstraint(
-                kind="Vertical", refs=(f"entity:{lines[1].id}",)
-            ),
-            SketchConstraint(
-                kind="Horizontal", refs=(f"entity:{lines[2].id}",)
-            ),
-            SketchConstraint(
-                kind="Vertical", refs=(f"entity:{lines[3].id}",)
-            ),
+            SketchConstraint(kind="Horizontal", refs=(lines[0],)),
+            SketchConstraint(kind="Vertical", refs=(lines[1],)),
+            SketchConstraint(kind="Horizontal", refs=(lines[2],)),
+            SketchConstraint(kind="Vertical", refs=(lines[3],)),
             SketchConstraint(
                 kind="Distance",
-                refs=(f"entity:{lines[0].id}",),
+                refs=(lines[0],),
                 value=25.0,
             ),
             SketchConstraint(
                 kind="Distance",
-                refs=(f"entity:{lines[1].id}",),
+                refs=(lines[1],),
                 value=12.0,
             ),
         )
@@ -125,14 +174,11 @@ def test_collinear_constraint_moves_second_line_onto_fixed_reference_line():
     c = SketchPoint(x=2.0, y=3.0)
     d = SketchPoint(x=8.0, y=4.0)
     sketch.points.extend((a, b, c, d))
-    reference = SketchLine(start=a.id, end=b.id)
-    moving = SketchLine(start=c.id, end=d.id)
+    reference = SketchLine(start=a, end=b)
+    moving = SketchLine(start=c, end=d)
     sketch.entities.extend((reference, moving))
     sketch.constraints.append(
-        SketchConstraint(
-            kind="Collinear",
-            refs=(f"entity:{reference.id}", f"entity:{moving.id}"),
-        )
+        SketchConstraint(kind="Collinear", refs=(reference, moving))
     )
 
     result = solve_sketch(sketch)
@@ -148,13 +194,10 @@ def test_point_on_object_constraint_projects_point_onto_fixed_line():
     b = SketchPoint(x=10.0, y=0.0, fixed=True)
     point = SketchPoint(x=4.0, y=5.0)
     sketch.points.extend((a, b, point))
-    line = SketchLine(start=a.id, end=b.id)
+    line = SketchLine(start=a, end=b)
     sketch.entities.append(line)
     sketch.constraints.append(
-        SketchConstraint(
-            kind="Point on object",
-            refs=(f"point:{point.id}", f"entity:{line.id}"),
-        )
+        SketchConstraint(kind="Point on object", refs=(point, line))
     )
 
     result = solve_sketch(sketch)
@@ -170,17 +213,10 @@ def test_symmetry_constraint_uses_selected_line_as_symmetry_axis():
     first = SketchPoint(x=3.0, y=5.0)
     second = SketchPoint(x=5.0, y=-2.0)
     sketch.points.extend((axis_a, axis_b, first, second))
-    axis = SketchLine(start=axis_a.id, end=axis_b.id, construction=True)
+    axis = SketchLine(start=axis_a, end=axis_b, construction=True)
     sketch.entities.append(axis)
     sketch.constraints.append(
-        SketchConstraint(
-            kind="Symmetry",
-            refs=(
-                f"point:{first.id}",
-                f"point:{second.id}",
-                f"entity:{axis.id}",
-            ),
-        )
+        SketchConstraint(kind="Symmetry", refs=(first, second, axis))
     )
 
     result = solve_sketch(sketch)
@@ -196,12 +232,12 @@ def test_conflicting_driving_dimensions_are_rejected_without_corrupting_geometry
         (
             SketchConstraint(
                 kind="Distance",
-                refs=(f"entity:{lines[0].id}",),
+                refs=(lines[0],),
                 value=20.0,
             ),
             SketchConstraint(
                 kind="Distance",
-                refs=(f"entity:{lines[0].id}",),
+                refs=(lines[0],),
                 value=40.0,
             ),
         )
@@ -218,7 +254,9 @@ def test_conflicting_driving_dimensions_are_rejected_without_corrupting_geometry
 
 def test_planar_sketch_builds_a_surface_without_a_volume():
     sketch, _, _ = _rectangle()
-    feature = SketchFeature(name="Sheet", mode="Planar", sketch=sketch)
+    feature = SketchFeature(
+        name="Sheet", mode=SketchFeatureMode.PLANAR, sketch=sketch
+    )
     part = Part(name="Planar", geometry=[feature])
     try:
         snapshot = GeometryService().build_geometry(part, force=True)
@@ -236,7 +274,7 @@ def test_extrusion_builds_a_real_occ_volume_from_closed_sketch():
     sketch, _, _ = _rectangle()
     feature = SketchFeature(
         name="Pad",
-        mode="Extrusion",
+        mode=SketchFeatureMode.EXTRUSION,
         sketch=sketch,
         depth=6.0,
     )
@@ -246,7 +284,6 @@ def test_extrusion_builds_a_real_occ_volume_from_closed_sketch():
         assert snapshot.entities[3]
         assert snapshot.surfaces
         assert snapshot.bounds is not None
-        # GeometrySnapshot bounds are xmin/ymin/zmin/xmax/ymax/zmax.
         assert snapshot.bounds[5] - snapshot.bounds[2] == pytest.approx(
             6.0, rel=1.0e-3
         )
@@ -258,7 +295,7 @@ def test_symmetric_extrusion_is_centered_on_the_sketch_plane():
     sketch, _, _ = _rectangle()
     feature = SketchFeature(
         name="Symmetric Pad",
-        mode="Extrusion",
+        mode=SketchFeatureMode.EXTRUSION,
         sketch=sketch,
         depth=8.0,
         symmetric=True,
@@ -277,10 +314,10 @@ def test_extrusion_supports_a_nested_closed_hole_profile():
     sketch, _, _ = _rectangle(width=30.0, height=20.0, y0=-10.0)
     center = SketchPoint(x=15.0, y=0.0)
     sketch.points.append(center)
-    sketch.entities.append(SketchCircle(center=center.id, radius=4.0))
+    sketch.entities.append(SketchCircle(center=center, radius=4.0))
     feature = SketchFeature(
         name="Plate with hole",
-        mode="Extrusion",
+        mode=SketchFeatureMode.EXTRUSION,
         sketch=sketch,
         depth=3.0,
     )
@@ -289,7 +326,6 @@ def test_extrusion_supports_a_nested_closed_hole_profile():
         snapshot = GeometryService().build_geometry(part, force=True)
         assert snapshot.entities[3]
         assert snapshot.surfaces
-        # A through-hole gives the solid more than the six faces of a box.
         assert len(snapshot.entities[2]) > 6
     finally:
         CACHE.invalidate(part.id)
@@ -308,15 +344,15 @@ def test_add_feature_fuses_overlapping_extrusions():
         geometry=[
             SketchFeature(
                 name="Base",
-                mode="Extrusion",
-                operation="New",
+                mode=SketchFeatureMode.EXTRUSION,
+                operation=SketchBooleanOperation.NEW,
                 sketch=base_sketch,
                 depth=4.0,
             ),
             SketchFeature(
                 name="Add",
-                mode="Extrusion",
-                operation="Add",
+                mode=SketchFeatureMode.EXTRUSION,
+                operation=SketchBooleanOperation.ADD,
                 sketch=add_sketch,
                 depth=4.0,
             ),
@@ -340,15 +376,15 @@ def test_cut_feature_removes_an_extruded_profile_from_existing_solid():
         geometry=[
             SketchFeature(
                 name="Base",
-                mode="Extrusion",
-                operation="New",
+                mode=SketchFeatureMode.EXTRUSION,
+                operation=SketchBooleanOperation.NEW,
                 sketch=base_sketch,
                 depth=6.0,
             ),
             SketchFeature(
                 name="Hole",
-                mode="Extrusion",
-                operation="Cut",
+                mode=SketchFeatureMode.EXTRUSION,
+                operation=SketchBooleanOperation.CUT,
                 sketch=cutter,
                 depth=6.0,
             ),
@@ -375,15 +411,15 @@ def test_intersect_feature_keeps_only_the_common_extruded_volume():
         geometry=[
             SketchFeature(
                 name="Base",
-                mode="Extrusion",
-                operation="New",
+                mode=SketchFeatureMode.EXTRUSION,
+                operation=SketchBooleanOperation.NEW,
                 sketch=base_sketch,
                 depth=4.0,
             ),
             SketchFeature(
                 name="Common",
-                mode="Extrusion",
-                operation="Intersect",
+                mode=SketchFeatureMode.EXTRUSION,
+                operation=SketchBooleanOperation.INTERSECT,
                 sketch=intersect_sketch,
                 depth=4.0,
             ),
@@ -400,11 +436,10 @@ def test_intersect_feature_keeps_only_the_common_extruded_volume():
 
 
 def test_revolve_builds_volume_about_sketch_x_axis():
-    # Rectangle deliberately stays above y=0; revolving it about X creates a tube.
     sketch, _, _ = _rectangle(width=15.0, height=4.0, y0=3.0)
     feature = SketchFeature(
         name="Revolve",
-        mode="Revolve",
+        mode=SketchFeatureMode.REVOLVE,
         sketch=sketch,
         angle_degrees=360.0,
     )
@@ -421,7 +456,7 @@ def test_revolve_rejects_a_profile_that_crosses_the_x_axis():
     sketch, _, _ = _rectangle(width=10.0, height=4.0, y0=-2.0)
     feature = SketchFeature(
         name="Invalid Revolve",
-        mode="Revolve",
+        mode=SketchFeatureMode.REVOLVE,
         sketch=sketch,
         angle_degrees=180.0,
     )
