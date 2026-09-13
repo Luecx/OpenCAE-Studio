@@ -9,10 +9,14 @@ import numpy as np
 
 from opencae.model.entities.geometry import (
     SketchArc,
+    SketchAxis,
+    SketchBooleanOperation,
     SketchCircle,
     SketchEllipse,
     SketchFeature,
+    SketchFeatureMode,
     SketchLine,
+    SketchPoint,
     SketchSpline,
 )
 from opencae.sketch import solve_sketch
@@ -60,21 +64,17 @@ def apply_sketch_feature(gmsh, feature: SketchFeature) -> None:
             "Sketch does not contain a closed non-construction profile"
         )
 
-    mode = str(feature.mode or "Extrusion").strip().casefold()
-    if mode == "planar":
+    if feature.mode is SketchFeatureMode.PLANAR:
         created = [(2, tag) for tag in surfaces]
         _apply_operation(gmsh, feature, existing_surfaces, created, 2)
         gmsh.model.occ.synchronize()
         return
-
-    if mode == "extrusion":
+    if feature.mode is SketchFeatureMode.EXTRUSION:
         _extrude(gmsh, feature, surfaces, existing_volumes)
         return
-
-    if mode == "revolve":
+    if feature.mode is SketchFeatureMode.REVOLVE:
         _revolve(gmsh, feature, surfaces, loops, existing_volumes)
         return
-
     raise GeometryError(f"Unsupported sketch feature mode: {feature.mode}")
 
 
@@ -101,7 +101,7 @@ def _revolve(
     loops: list[_LoopRecord],
     existing,
 ) -> None:
-    if str(feature.revolve_axis or "X").upper() != "X":
+    if feature.revolve_axis is not SketchAxis.X:
         raise GeometryError(
             "Only the sketch X axis is currently supported for revolve"
         )
@@ -146,25 +146,25 @@ def _revolve(
 
 def _apply_operation(gmsh, feature, existing, created, dimension: int) -> None:
     """Apply the feature's boolean policy to already-existing geometry."""
-    operation = str(feature.operation or "New").strip().casefold()
-    if operation == "new" or not existing:
+    operation = feature.operation
+    if operation is SketchBooleanOperation.NEW or not existing:
         return
 
-    if operation == "add":
+    if operation is SketchBooleanOperation.ADD:
         result, _ = gmsh.model.occ.fuse(
             list(existing),
             list(created),
             removeObject=True,
             removeTool=True,
         )
-    elif operation == "cut":
+    elif operation is SketchBooleanOperation.CUT:
         result, _ = gmsh.model.occ.cut(
             list(existing),
             list(created),
             removeObject=True,
             removeTool=True,
         )
-    elif operation == "intersect":
+    elif operation is SketchBooleanOperation.INTERSECT:
         result, _ = gmsh.model.occ.intersect(
             list(existing),
             list(created),
@@ -184,35 +184,24 @@ def _apply_operation(gmsh, feature, existing, created, dimension: int) -> None:
 
 def _create_profile_surfaces(gmsh, feature: SketchFeature):
     sketch = feature.sketch
-    points = sketch.point_map()
+    sketch.validate_references()
     point_tags: dict[str, int] = {}
 
-    def point_tag(point_id: str) -> int:
-        try:
-            point = points[point_id]
-        except KeyError as exc:
-            raise GeometryError(
-                f"Sketch references missing point {point_id}"
-            ) from exc
-        if point_id not in point_tags:
-            point_tags[point_id] = gmsh.model.occ.addPoint(
+    def point_tag(point: SketchPoint) -> int:
+        if point.id not in point_tags:
+            point_tags[point.id] = gmsh.model.occ.addPoint(
                 float(point.x),
                 float(point.y),
                 0.0,
             )
-        return point_tags[point_id]
+        return point_tags[point.id]
 
     curves: list[_CurveRecord] = []
     for entity in sketch.entities:
         if bool(getattr(entity, "construction", False)):
             continue
         try:
-            record = _create_occ_curve(
-                gmsh,
-                entity,
-                points,
-                point_tag,
-            )
+            record = _create_occ_curve(gmsh, entity, point_tag)
             if record is not None:
                 curves.append(record)
         except GeometryError:
@@ -245,10 +234,10 @@ def _create_profile_surfaces(gmsh, feature: SketchFeature):
     return surfaces, loops
 
 
-def _create_occ_curve(gmsh, entity, points, point_tag):
+def _create_occ_curve(gmsh, entity, point_tag):
     if isinstance(entity, SketchLine):
-        a = points[entity.start].xy()
-        b = points[entity.end].xy()
+        a = entity.start.xy()
+        b = entity.end.xy()
         if _distance(a, b) <= _EPS:
             raise GeometryError("Sketch contains a zero-length line")
         tag = gmsh.model.occ.addLine(
@@ -258,7 +247,7 @@ def _create_occ_curve(gmsh, entity, points, point_tag):
         return _CurveRecord(tag, a, b, [a, b])
 
     if isinstance(entity, SketchCircle):
-        center = points[entity.center].xy()
+        center = entity.center.xy()
         radius = max(abs(float(entity.radius)), _EPS)
         tag = gmsh.model.occ.addCircle(
             center[0],
@@ -277,9 +266,9 @@ def _create_occ_curve(gmsh, entity, points, point_tag):
         return _CurveRecord(tag, None, None, samples, True)
 
     if isinstance(entity, SketchArc):
-        center = points[entity.center].xy()
-        start = points[entity.start].xy()
-        end = points[entity.end].xy()
+        center = entity.center.xy()
+        start = entity.start.xy()
+        end = entity.end.xy()
         r0 = _distance(center, start)
         r1 = _distance(center, end)
         if min(r0, r1) <= _EPS:
@@ -289,8 +278,6 @@ def _create_occ_curve(gmsh, entity, points, point_tag):
                 "Sketch arc endpoints are not on the same circle"
             )
 
-        # OpenCASCADE resolves wire orientation from connectivity. The curve
-        # itself is therefore always stored under its positive OCC tag.
         if entity.clockwise:
             tag = gmsh.model.occ.addCircleArc(
                 point_tag(entity.end),
@@ -307,8 +294,8 @@ def _create_occ_curve(gmsh, entity, points, point_tag):
         return _CurveRecord(tag, start, end, samples)
 
     if isinstance(entity, SketchEllipse):
-        center = points[entity.center].xy()
-        major = points[entity.major].xy()
+        center = entity.center.xy()
+        major = entity.major.xy()
         dx = major[0] - center[0]
         dy = major[1] - center[1]
         major_radius = hypot(dx, dy)
@@ -343,8 +330,8 @@ def _create_occ_curve(gmsh, entity, points, point_tag):
     if isinstance(entity, SketchSpline):
         if len(entity.points) < 2:
             raise GeometryError("Sketch spline requires at least two points")
-        tags = [point_tag(point_id) for point_id in entity.points]
-        coordinates = [points[point_id].xy() for point_id in entity.points]
+        tags = [point_tag(point) for point in entity.points]
+        coordinates = [point.xy() for point in entity.points]
         if entity.closed:
             tags.append(tags[0])
             coordinates.append(coordinates[0])
@@ -517,7 +504,6 @@ def _arc_samples(
     else:
         while a1 <= a0:
             a1 += 2.0 * pi
-
     return [
         (
             center[0] + radius * cos(a0 + (a1 - a0) * i / count),
