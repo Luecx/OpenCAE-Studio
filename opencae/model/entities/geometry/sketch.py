@@ -92,13 +92,19 @@ class SketchObject:
     """Identity-bearing object owned by one SketchDefinition.
 
     The marker is consumed by the model codec so shared topology is serialized
-    once and restored with Python object identity intact.  IDs are therefore
-    persistence/UI identity only; relationships are normal object references.
+    once and restored with Python object identity intact. IDs are persistence/UI
+    identity only; relationships are normal object references. Like project
+    Entities, that identity is immutable after construction.
     """
 
     __model_identity__ = True
 
     id: str = field(default_factory=lambda: _uid("so"))
+
+    def __setattr__(self, name, value) -> None:
+        if name == "id" and "id" in self.__dict__ and self.__dict__["id"] != value:
+            raise AttributeError("SketchObject.id is immutable")
+        object.__setattr__(self, name, value)
 
 
 @register_model_type("sketch_point")
@@ -230,7 +236,7 @@ class SketchConstraint(SketchObject):
             value = SketchConstraintKind.coerce(value)
         elif name == "refs":
             value = tuple(value or ())
-        object.__setattr__(self, name, value)
+        super().__setattr__(name, value)
 
 
 @register_model_type("sketch_definition")
@@ -239,9 +245,13 @@ class SketchDefinition:
     """Editable sketch graph in its local XY plane.
 
     Ownership is explicit: ``points`` and ``entities`` own the objects;
-    topology and constraints point at those exact objects.  No point/entity ID
+    topology and constraints point at those exact objects. No point/entity ID
     is used as an in-memory cross-object relationship.
     """
+
+    # Direct-object identities are local to one sketch. Duplicating a Part may
+    # retain local point/entity IDs without creating project-wide collisions.
+    __model_identity_scope__ = True
 
     points: list[SketchPoint] = field(default_factory=list)
     entities: list[SketchEntity] = field(default_factory=list)
