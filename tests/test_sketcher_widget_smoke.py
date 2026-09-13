@@ -13,6 +13,9 @@ _QT_APPLICATION = None
 class _PreviewStub(QWidget):
     """Avoid creating a VTK render window for this pure Qt editor smoke test."""
 
+    def set_part_context(self, _part):
+        return None
+
     def refresh_feature(self, _feature):
         return True
 
