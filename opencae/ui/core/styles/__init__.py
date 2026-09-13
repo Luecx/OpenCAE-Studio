@@ -10,6 +10,7 @@ from . import (
     menus,
     misc,
     scrollbars,
+    sketcher,
     tabs,
     views,
 )
@@ -24,6 +25,7 @@ STYLE_MODULES = (
     tabs,
     buttons,
     materials,
+    sketcher,
     misc,
     scrollbars,
 )
