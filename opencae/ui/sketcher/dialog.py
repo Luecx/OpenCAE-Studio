@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from math import hypot
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QActionGroup
 from PyQt6.QtWidgets import (
     QButtonGroup,
@@ -23,8 +23,6 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
-    QScrollArea,
-    QSizePolicy,
     QSplitter,
     QStackedWidget,
     QToolBar,
@@ -35,15 +33,16 @@ from PyQt6.QtWidgets import (
 
 from opencae.model.entities.geometry import (
     SketchArc,
+    SketchAxis,
     SketchCircle,
-    SketchConstraint,
-    SketchEllipse,
+    SketchConstraintKind,
     SketchFeature,
+    SketchFeatureMode,
     SketchLine,
+    SketchPoint,
 )
 from opencae.sketch import constraint_label, solve_sketch
 from opencae.ui.core.icon_factory import IconKind, make_icon
-from opencae.ui.core.theme import PALETTE
 
 from .canvas import SketchCanvas
 from .preview import SketchFeaturePreview
@@ -56,20 +55,23 @@ class SketchFeatureDialog(QDialog):
         self,
         feature: SketchFeature | None = None,
         *,
-        mode: str = "Extrusion",
+        mode: SketchFeatureMode | str = SketchFeatureMode.EXTRUSION,
         feature_name: str = "Sketch-1",
         parent=None,
     ):
         super().__init__(parent)
         self.setObjectName("SketchFeatureDialog")
-        self.setWindowTitle("Edit Sketch Feature" if feature else "Create Sketch Feature")
+        self.setWindowTitle(
+            "Edit Sketch Feature" if feature else "Create Sketch Feature"
+        )
         self.setWindowFlag(Qt.WindowType.WindowMinMaxButtonsHint, True)
         self.resize(1280, 820)
         self.setMinimumSize(920, 620)
 
-        self._feature = deepcopy(feature) if feature is not None else SketchFeature(
-            name=feature_name,
-            mode=str(mode or "Extrusion"),
+        self._feature = (
+            deepcopy(feature)
+            if feature is not None
+            else SketchFeature(name=feature_name, mode=mode)
         )
         self._updating_controls = False
         self._tool_actions: dict[str, QAction] = {}
@@ -92,14 +94,15 @@ class SketchFeatureDialog(QDialog):
         splitter.setStretchFactor(1, 0)
         splitter.setSizes([1000, 280])
         root.addWidget(splitter, 1)
-
         root.addWidget(self._build_footer())
+
         self._wire()
         self._sync_feature_controls()
         self._sync_constraints()
         self._update_solver_status(solve_sketch(self.canvas.sketch))
-        self.canvas.set_revolve_axis_visible(self._feature.mode.casefold() == "revolve")
-        self._apply_local_style()
+        self.canvas.set_revolve_axis_visible(
+            self._feature.mode is SketchFeatureMode.REVOLVE
+        )
 
     @property
     def feature(self) -> SketchFeature:
@@ -125,8 +128,9 @@ class SketchFeatureDialog(QDialog):
         self.toolbar.setObjectName("SketchToolbar")
         self.toolbar.setMovable(False)
         self.toolbar.setFloatable(False)
-        self.toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-        self.toolbar.setIconSize(self.toolbar.iconSize())
+        self.toolbar.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextUnderIcon
+        )
         top.addWidget(self.toolbar, 1)
 
         self.view_sketch = QToolButton(host)
@@ -150,8 +154,8 @@ class SketchFeatureDialog(QDialog):
         self.toolbar.addSeparator()
         undo = self.toolbar.addAction(make_icon(IconKind.UNDO, 18), "Undo")
         redo = self.toolbar.addAction(make_icon(IconKind.REDO, 18), "Redo")
-        undo.triggered.connect(lambda: self.canvas.undo())
-        redo.triggered.connect(lambda: self.canvas.redo())
+        undo.triggered.connect(self.canvas.undo)
+        redo.triggered.connect(self.canvas.redo)
         self.toolbar.addSeparator()
         for tool, label in (
             ("Point", "Point"),
@@ -166,6 +170,7 @@ class SketchFeatureDialog(QDialog):
             ("Slot", "Slot"),
         ):
             self._add_tool_action(tool, label, IconKind.PART)
+
         self.toolbar.addSeparator()
         self.construction_action = self.toolbar.addAction("Construction")
         self.construction_action.setCheckable(True)
@@ -175,12 +180,11 @@ class SketchFeatureDialog(QDialog):
         self.snap_action = self.toolbar.addAction("Snap")
         self.snap_action.setCheckable(True)
         self.snap_action.setChecked(True)
-        self.fit_action = self.toolbar.addAction(make_icon(IconKind.FIT_VIEW, 18), "Fit")
+        self.fit_action = self.toolbar.addAction(
+            make_icon(IconKind.FIT_VIEW, 18), "Fit"
+        )
         self.toolbar.addSeparator()
 
-        # Geometric constraints are intentionally actions rather than modal
-        # tools: select geometry, press one constraint, and the shared solver
-        # immediately updates the sketch.
         for label, kind in (
             ("Coincident", "Coincident"),
             ("Horizontal", "Horizontal"),
@@ -198,6 +202,7 @@ class SketchFeatureDialog(QDialog):
             action.triggered.connect(
                 lambda _checked=False, value=kind: self._apply_constraint(value)
             )
+
         self.toolbar.addSeparator()
         for label, kind in (
             ("Distance", "Distance"),
@@ -225,7 +230,9 @@ class SketchFeatureDialog(QDialog):
         action.setCheckable(True)
         action.setData(tool)
         action.triggered.connect(
-            lambda checked=False, value=tool: self.canvas.set_tool(value) if checked else None
+            lambda checked=False, value=tool: (
+                self.canvas.set_tool(value) if checked else None
+            )
         )
         self.toolbar.addAction(action)
         self._tool_actions[tool] = action
@@ -247,7 +254,7 @@ class SketchFeatureDialog(QDialog):
         layout.addWidget(self.name_edit)
         layout.addWidget(QLabel("Type", panel))
         self.mode_combo = QComboBox(panel)
-        self.mode_combo.addItems(("Planar", "Extrusion", "Revolve"))
+        self.mode_combo.addItems(tuple(mode.value for mode in SketchFeatureMode))
         layout.addWidget(self.mode_combo)
         layout.addWidget(QLabel("Operation", panel))
         self.operation_combo = QComboBox(panel)
@@ -300,7 +307,9 @@ class SketchFeatureDialog(QDialog):
         options_title = QLabel("SKETCH OPTIONS", panel)
         options_title.setObjectName("SketchInspectorHeading")
         layout.addWidget(options_title)
-        self.auto_constraints_check = QCheckBox("Automatic H/V constraints", panel)
+        self.auto_constraints_check = QCheckBox(
+            "Automatic H/V constraints", panel
+        )
         self.auto_constraints_check.setChecked(True)
         self.snap_grid_check = QCheckBox("Snap to grid", panel)
         self.snap_grid_check.setChecked(self.canvas.sketch.snap_grid)
@@ -332,7 +341,11 @@ class SketchFeatureDialog(QDialog):
             parent=footer,
         )
         ok = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
-        ok.setText("Create Feature" if self.windowTitle().startswith("Create") else "Apply")
+        ok.setText(
+            "Create Feature"
+            if self.windowTitle().startswith("Create")
+            else "Apply"
+        )
         row.addWidget(self.buttons)
         return footer
 
@@ -340,7 +353,9 @@ class SketchFeatureDialog(QDialog):
     def _wire(self):
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
-        self.view_sketch.clicked.connect(lambda: self.workspace.setCurrentWidget(self.canvas))
+        self.view_sketch.clicked.connect(
+            lambda: self.workspace.setCurrentWidget(self.canvas)
+        )
         self.view_preview.clicked.connect(self._show_preview)
         self.construction_action.toggled.connect(self.canvas.set_construction)
         self.grid_action.toggled.connect(self.canvas.set_grid_visible)
@@ -363,76 +378,113 @@ class SketchFeatureDialog(QDialog):
         )
         self.snap_grid_check.toggled.connect(self._snap_options_changed)
         self.snap_geometry_check.toggled.connect(self._snap_options_changed)
-        self.show_dimensions_check.toggled.connect(self.canvas.set_dimensions_visible)
+        self.show_dimensions_check.toggled.connect(
+            self.canvas.set_dimensions_visible
+        )
 
     # ------------------------------------------------------------- constraints
-    def _apply_constraint(self, kind: str):
-        points = tuple(f"point:{value}" for value in self.canvas.selected_point_ids())
-        entities = tuple(f"entity:{value}" for value in self.canvas.selected_entity_ids())
-        refs: tuple[str, ...]
-        if kind == "Coincident":
+    def _apply_constraint(self, kind: SketchConstraintKind | str):
+        kind = SketchConstraintKind.coerce(kind)
+        points = self.canvas.selected_points()
+        entities = self.canvas.selected_entities()
+
+        if kind is SketchConstraintKind.COINCIDENT:
             refs = points[:2]
             if len(refs) != 2:
                 return self._selection_warning("Select exactly two sketch points")
-        elif kind in {"Parallel", "Perpendicular", "Tangent", "Equal", "Concentric"}:
+        elif kind in {
+            SketchConstraintKind.PARALLEL,
+            SketchConstraintKind.PERPENDICULAR,
+            SketchConstraintKind.TANGENT,
+            SketchConstraintKind.EQUAL,
+            SketchConstraintKind.CONCENTRIC,
+        }:
             refs = entities[:2]
             if len(refs) != 2:
-                return self._selection_warning("Select exactly two compatible sketch entities")
-        elif kind == "Midpoint":
+                return self._selection_warning(
+                    "Select exactly two compatible sketch entities"
+                )
+        elif kind is SketchConstraintKind.MIDPOINT:
             if len(points) < 1 or len(entities) < 1:
                 return self._selection_warning("Select one point and one line")
             refs = (points[0], entities[0])
-        elif kind in {"Horizontal", "Vertical"}:
+        elif kind in {
+            SketchConstraintKind.HORIZONTAL,
+            SketchConstraintKind.VERTICAL,
+        }:
             refs = entities[:1] if entities else points[:2]
             if len(refs) not in {1, 2}:
                 return self._selection_warning("Select one line or two points")
-        elif kind == "Fixed":
+        elif kind is SketchConstraintKind.FIXED:
             refs = points + entities
             if not refs:
                 return self._selection_warning("Select geometry to fix")
         else:
             refs = self.canvas.selected_refs()
+
         if self.canvas.add_constraint(kind, refs):
             self._sync_constraints()
 
-    def _apply_dimension(self, kind: str):
-        points = tuple(f"point:{value}" for value in self.canvas.selected_point_ids())
-        entities = tuple(f"entity:{value}" for value in self.canvas.selected_entity_ids())
-        if kind == "Distance":
+    def _apply_dimension(self, kind: SketchConstraintKind | str):
+        kind = SketchConstraintKind.coerce(kind)
+        points = self.canvas.selected_points()
+        entities = self.canvas.selected_entities()
+
+        if kind is SketchConstraintKind.DISTANCE:
             if len(points) >= 2:
                 refs = points[:2]
                 default = self._point_distance(points[0], points[1])
-            elif len(entities) == 1 and isinstance(self._entity(entities[0]), SketchLine):
+            elif len(entities) == 1 and isinstance(entities[0], SketchLine):
                 refs = entities
                 default = self._line_length(entities[0])
             else:
                 return self._selection_warning("Select two points or one line")
             value = self._ask_value("Distance", default)
-        elif kind in {"DistanceX", "DistanceY"}:
+        elif kind in {
+            SketchConstraintKind.DISTANCE_X,
+            SketchConstraintKind.DISTANCE_Y,
+        }:
             if len(points) < 2:
                 return self._selection_warning("Select exactly two points")
             refs = points[:2]
-            first, second = self._point(points[0]), self._point(points[1])
-            default = (second.x - first.x) if kind == "DistanceX" else (second.y - first.y)
+            first, second = points[:2]
+            if kind is SketchConstraintKind.DISTANCE_X:
+                default = second.x - first.x
+                title = "Horizontal distance"
+            else:
+                default = second.y - first.y
+                title = "Vertical distance"
             value = self._ask_value(
-                "Horizontal distance" if kind == "DistanceX" else "Vertical distance",
-                default,
-                allow_negative=True,
+                title, default, allow_negative=True
             )
-        elif kind == "Angle":
-            if len(entities) < 2:
+        elif kind is SketchConstraintKind.ANGLE:
+            if len(entities) < 2 or not all(
+                isinstance(entity, SketchLine) for entity in entities[:2]
+            ):
                 return self._selection_warning("Select two lines")
             refs = entities[:2]
             value = self._ask_value("Angle", 90.0, maximum=360.0)
-        elif kind in {"Radius", "Diameter"}:
-            if len(entities) != 1 or not isinstance(self._entity(entities[0]), (SketchCircle, SketchArc)):
-                return self._selection_warning("Select one circle or circular arc")
+        elif kind in {
+            SketchConstraintKind.RADIUS,
+            SketchConstraintKind.DIAMETER,
+        }:
+            if len(entities) != 1 or not isinstance(
+                entities[0], (SketchCircle, SketchArc)
+            ):
+                return self._selection_warning(
+                    "Select one circle or circular arc"
+                )
             refs = entities
             radius = self._radius(entities[0])
-            default = radius if kind == "Radius" else 2.0 * radius
-            value = self._ask_value(kind, default)
+            default = (
+                radius
+                if kind is SketchConstraintKind.RADIUS
+                else 2.0 * radius
+            )
+            value = self._ask_value(kind.value, default)
         else:
             return
+
         if value is None:
             return
         if self.canvas.add_constraint(kind, tuple(refs), value):
@@ -456,7 +508,11 @@ class SketchFeatureDialog(QDialog):
 
     def _sync_constraints(self):
         current_id = None
-        current = self.constraint_list.currentItem() if hasattr(self, "constraint_list") else None
+        current = (
+            self.constraint_list.currentItem()
+            if hasattr(self, "constraint_list")
+            else None
+        )
         if current is not None:
             current_id = current.data(Qt.ItemDataRole.UserRole)
         self.constraint_list.clear()
@@ -466,18 +522,26 @@ class SketchFeatureDialog(QDialog):
             if not constraint.driving:
                 item.setToolTip("Reference / driven dimension")
             else:
-                item.setToolTip(", ".join(constraint.refs))
+                item.setToolTip(
+                    ", ".join(self._reference_label(ref) for ref in constraint.refs)
+                )
             self.constraint_list.addItem(item)
             if constraint.id == current_id:
                 self.constraint_list.setCurrentItem(item)
+
+    @staticmethod
+    def _reference_label(ref) -> str:
+        if isinstance(ref, SketchPoint):
+            return f"Point {ref.id}"
+        return f"{type(ref).__name__.removeprefix('Sketch')} {ref.id}"
 
     # --------------------------------------------------------------- feature
     def _sync_feature_controls(self):
         self._updating_controls = True
         try:
             self.name_edit.setText(self._feature.name)
-            self.mode_combo.setCurrentText(self._feature.mode)
-            self.operation_combo.setCurrentText(self._feature.operation)
+            self.mode_combo.setCurrentText(self._feature.mode.value)
+            self.operation_combo.setCurrentText(self._feature.operation.value)
             self.depth_spin.setValue(float(self._feature.depth))
             self.angle_spin.setValue(float(self._feature.angle_degrees))
             self.symmetric_check.setChecked(bool(self._feature.symmetric))
@@ -491,15 +555,19 @@ class SketchFeatureDialog(QDialog):
         self._feature.mode = self.mode_combo.currentText()
         self._feature.operation = self.operation_combo.currentText()
         self._feature.depth = max(float(self.depth_spin.value()), 1.0e-9)
-        self._feature.angle_degrees = max(float(self.angle_spin.value()), 1.0e-6)
+        self._feature.angle_degrees = max(
+            float(self.angle_spin.value()), 1.0e-6
+        )
         self._feature.symmetric = bool(self.symmetric_check.isChecked())
         self._feature.reverse = bool(self.reverse_check.isChecked())
-        self._feature.revolve_axis = "X"
+        self._feature.revolve_axis = SketchAxis.X
         self._feature.sketch = self.canvas.snapshot()
 
     def _feature_mode_changed(self, value):
         self._refresh_feature_visibility()
-        self.canvas.set_revolve_axis_visible(str(value).casefold() == "revolve")
+        self.canvas.set_revolve_axis_visible(
+            SketchFeatureMode.coerce(value) is SketchFeatureMode.REVOLVE
+        )
         self._feature_value_changed()
 
     def _feature_value_changed(self, *_args):
@@ -508,9 +576,9 @@ class SketchFeatureDialog(QDialog):
         self._collect_feature()
 
     def _refresh_feature_visibility(self):
-        mode = self.mode_combo.currentText().casefold()
-        extrusion = mode == "extrusion"
-        revolve = mode == "revolve"
+        mode = SketchFeatureMode.coerce(self.mode_combo.currentText())
+        extrusion = mode is SketchFeatureMode.EXTRUSION
+        revolve = mode is SketchFeatureMode.REVOLVE
         self.depth_label.setVisible(extrusion)
         self.depth_spin.setVisible(extrusion)
         self.angle_label.setVisible(revolve)
@@ -534,12 +602,11 @@ class SketchFeatureDialog(QDialog):
             QMessageBox.warning(self, "Invalid sketch", result.message)
             return
         if not self.canvas.sketch.entities:
-            QMessageBox.warning(self, "Empty sketch", "Create at least one sketch curve.")
+            QMessageBox.warning(
+                self, "Empty sketch", "Create at least one sketch curve."
+            )
             return
         self._collect_feature()
-        # Building the detached OCC result is the final profile-closure and
-        # operation validation; this catches open loops before anything reaches
-        # the persistent Project Store.
         if not self.preview.refresh_feature(self._feature):
             QMessageBox.warning(
                 self,
@@ -575,7 +642,9 @@ class SketchFeatureDialog(QDialog):
             self.status_label.setProperty("state", "ok")
             self.status_label.setToolTip("0 remaining degrees of freedom")
         else:
-            self.status_label.setText(f"Under-constrained · {result.degrees_of_freedom} DOF")
+            self.status_label.setText(
+                f"Under-constrained · {result.degrees_of_freedom} DOF"
+            )
             self.status_label.setProperty("state", "open")
             self.status_label.setToolTip(result.message)
         self.status_label.style().unpolish(self.status_label)
@@ -597,37 +666,43 @@ class SketchFeatureDialog(QDialog):
         self.canvas.sketch.snap_geometry = self.snap_geometry_check.isChecked()
 
     # ------------------------------------------------------------- measurements
-    def _entity(self, ref):
-        entity_id = str(ref).removeprefix("entity:").split(":", 1)[0]
-        return self.canvas.sketch.entity_map().get(entity_id)
+    @staticmethod
+    def _entity(ref):
+        return ref
 
-    def _point(self, ref):
-        point_id = str(ref).removeprefix("point:")
-        return self.canvas.sketch.point(point_id)
+    @staticmethod
+    def _point(ref):
+        if not isinstance(ref, SketchPoint):
+            raise TypeError("Expected SketchPoint")
+        return ref
 
     def _point_distance(self, first, second):
         a, b = self._point(first), self._point(second)
         return hypot(b.x - a.x, b.y - a.y)
 
-    def _line_length(self, ref):
-        entity = self._entity(ref)
+    @staticmethod
+    def _line_length(entity):
         if not isinstance(entity, SketchLine):
             return 1.0
-        a = self.canvas.sketch.point(entity.start)
-        b = self.canvas.sketch.point(entity.end)
-        return hypot(b.x - a.x, b.y - a.y)
+        return hypot(
+            entity.end.x - entity.start.x,
+            entity.end.y - entity.start.y,
+        )
 
-    def _radius(self, ref):
-        entity = self._entity(ref)
+    @staticmethod
+    def _radius(entity):
         if isinstance(entity, SketchCircle):
             return abs(float(entity.radius))
         if isinstance(entity, SketchArc):
-            center = self.canvas.sketch.point(entity.center)
-            start = self.canvas.sketch.point(entity.start)
-            return hypot(start.x - center.x, start.y - center.y)
+            return hypot(
+                entity.start.x - entity.center.x,
+                entity.start.y - entity.center.y,
+            )
         return 1.0
 
-    def _ask_value(self, title, default, *, allow_negative=False, maximum=1.0e12):
+    def _ask_value(
+        self, title, default, *, allow_negative=False, maximum=1.0e12
+    ):
         minimum = -maximum if allow_negative else 1.0e-9
         value, accepted = QInputDialog.getDouble(
             self,
@@ -651,45 +726,3 @@ class SketchFeatureDialog(QDialog):
     def _selection_warning(self, text):
         self.hint_label.setText(str(text))
         return False
-
-    # --------------------------------------------------------------- styling
-    def _apply_local_style(self):
-        self.setStyleSheet(
-            f"""
-            QDialog#SketchFeatureDialog {{ background: {PALETTE['window']}; }}
-            QWidget#SketchRibbonHost {{
-                background: {PALETTE['panel']};
-                border-bottom: 1px solid {PALETTE['border']};
-            }}
-            QToolBar#SketchToolbar {{ background: transparent; border: none; spacing: 2px; }}
-            QToolBar#SketchToolbar QToolButton {{
-                min-width: 54px; padding: 5px 7px; border-radius: 3px;
-            }}
-            QToolBar#SketchToolbar QToolButton:checked {{
-                background: {PALETTE['accent_dim']}; color: {PALETTE['text']};
-                border-bottom: 2px solid {PALETTE['accent']};
-            }}
-            QToolButton:checked {{ background: {PALETTE['accent_dim']}; }}
-            QFrame#SketchInspector {{
-                background: {PALETTE['panel']}; border-left: 1px solid {PALETTE['border']};
-            }}
-            QLabel#SketchInspectorHeading {{
-                color: {PALETTE['muted']}; font-weight: 600; padding-top: 3px;
-            }}
-            QLabel#SketchAxisNote {{
-                color: {PALETTE['muted']}; background: {PALETTE['panel_alt']};
-                border: 1px solid {PALETTE['border']}; border-radius: 3px; padding: 7px;
-            }}
-            QWidget#SketchFooter {{
-                background: {PALETTE['panel']}; border-top: 1px solid {PALETTE['border']};
-            }}
-            QLabel#SketchStatus {{ color: {PALETTE['muted']}; font-weight: 600; }}
-            QLabel#SketchStatus[state="ok"] {{ color: {PALETTE['success']}; }}
-            QLabel#SketchStatus[state="error"] {{ color: {PALETTE['danger']}; }}
-            QLabel#SketchHint {{ color: {PALETTE['muted']}; }}
-            QLabel#SketchPreviewNotice {{
-                color: {PALETTE['warning']}; background: {PALETTE['warning_dim']};
-                border-bottom: 1px solid {PALETTE['border']}; padding: 8px;
-            }}
-            """
-        )
