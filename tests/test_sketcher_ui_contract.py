@@ -66,6 +66,37 @@ def test_sketcher_has_themed_grid_revolve_axis_and_complete_constraint_toolbar()
         assert f'"{dimension}"' in dialog
 
 
+def test_sketch_toolbar_uses_central_semantic_vector_icons():
+    kinds = (ROOT / "opencae/ui/core/icons/kinds.py").read_text(encoding="utf-8")
+    factory = (ROOT / "opencae/ui/core/icons/factory.py").read_text(encoding="utf-8")
+    renderer = (ROOT / "opencae/ui/core/icons/sketch_renderer.py").read_text(
+        encoding="utf-8"
+    )
+    dialog = (ROOT / "opencae/ui/sketcher/constraint_dialog.py").read_text(
+        encoding="utf-8"
+    )
+    for kind in (
+        "SKETCH_SELECT",
+        "SKETCH_POINT",
+        "SKETCH_LINE",
+        "SKETCH_POLYLINE",
+        "SKETCH_RECTANGLE",
+        "SKETCH_CIRCLE",
+        "SKETCH_ARC",
+        "SKETCH_ELLIPSE",
+        "SKETCH_SPLINE",
+        "SKETCH_SLOT",
+        "SKETCH_CONSTRUCTION",
+        "SKETCH_CONSTRAINT",
+        "SKETCH_DIMENSION",
+    ):
+        assert kind in kinds
+        assert kind in renderer or kind in dialog
+    assert "make_sketch_icon" in factory
+    assert '"Rectangle": IconKind.SKETCH_RECTANGLE' in dialog
+    assert '"Spline": IconKind.SKETCH_SPLINE' in dialog
+
+
 def test_sketch_interaction_preserves_pick_order_and_last_valid_drag_state():
     canvas = (ROOT / "opencae/ui/sketcher/canvas.py").read_text(encoding="utf-8")
     assert "class _OrderedSelection" in canvas
