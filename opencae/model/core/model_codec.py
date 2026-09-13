@@ -16,13 +16,11 @@ _MODEL_REF_KEY = "__model_ref__"
 def encode_model(value: Any) -> Any:
     """Convert one model value into JSON-compatible registered type data.
 
-    Most OpenCAE relationships use explicit ``EntityRef`` value objects.  A few
-    tightly-owned model graphs (currently the parametric Sketcher) intentionally
-    expose direct Python object relationships instead.  Classes participating in
-    such a graph opt in with ``__model_identity__ = True``.  The first occurrence
-    is encoded normally; subsequent occurrences become a small identity reference.
-    IDs therefore remain a serialization detail while the in-memory model keeps
-    real object relationships.
+    Most OpenCAE relationships use explicit ``EntityRef`` value objects. A few
+    tightly-owned model graphs intentionally expose direct Python object
+    relationships. Objects in such a graph opt in with ``__model_identity__``;
+    their graph root opts in with ``__model_identity_scope__`` so local IDs stay
+    local (for example two duplicated sketches may legitimately reuse point IDs).
     """
 
     return _encode_model(value, {})
@@ -30,9 +28,12 @@ def encode_model(value: Any) -> Any:
 
 def _encode_model(value: Any, identities: dict[str, Any]) -> Any:
     if is_dataclass(value):
+        local_identities = (
+            {} if _starts_identity_scope(value) else identities
+        )
         identity = _identity_of(value)
         if identity:
-            existing = identities.get(identity)
+            existing = local_identities.get(identity)
             if existing is value:
                 return {_MODEL_REF_KEY: identity}
             if existing is not None:
@@ -40,12 +41,12 @@ def _encode_model(value: Any, identities: dict[str, Any]) -> Any:
                     f"Duplicate persistent model identity '{identity}' for "
                     f"{type(value).__name__}"
                 )
-            identities[identity] = value
+            local_identities[identity] = value
 
         type_name = getattr(type(value), "model_type", None)
         data = {
             field_info.name: _encode_model(
-                getattr(value, field_info.name), identities
+                getattr(value, field_info.name), local_identities
             )
             for field_info in fields(value)
             if is_persistent_model_field(field_info)
@@ -117,6 +118,9 @@ def _decode_model(value: Any, identities: dict[str, Any]) -> Any:
     if "__type__" in value:
         type_name = value["__type__"]
         cls = model_class(type_name)
+        local_identities = (
+            {} if bool(getattr(cls, "__model_identity_scope__", False)) else identities
+        )
         if is_dataclass(cls):
             accepted = {
                 field_info.name
@@ -133,19 +137,19 @@ def _decode_model(value: Any, identities: dict[str, Any]) -> Any:
             accepted = None
 
         kwargs = {
-            key: _decode_model(item, identities)
+            key: _decode_model(item, local_identities)
             for key, item in value.items()
             if key != "__type__" and (accepted is None or key in accepted)
         }
         result = cls(**kwargs)
         identity = _identity_of(result)
         if identity:
-            existing = identities.get(identity)
+            existing = local_identities.get(identity)
             if existing is not None and existing is not result:
                 raise ValueError(
                     f"Duplicate decoded model identity '{identity}'"
                 )
-            identities[identity] = result
+            local_identities[identity] = result
         return result
 
     return {
@@ -160,3 +164,7 @@ def _identity_of(value: Any) -> str:
     if not bool(getattr(type(value), "__model_identity__", False)):
         return ""
     return str(getattr(value, "id", "") or "")
+
+
+def _starts_identity_scope(value: Any) -> bool:
+    return bool(getattr(type(value), "__model_identity_scope__", False))
