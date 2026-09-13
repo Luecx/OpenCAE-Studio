@@ -7,6 +7,7 @@ from opencae.model.entities.geometry import (
     SketchDefinition,
     SketchEllipse,
     SketchFeature,
+    SketchFeatureMode,
     SketchLine,
     SketchPoint,
     SketchSpline,
@@ -20,7 +21,7 @@ def _assert_extrudes_to_volume(sketch: SketchDefinition, name: str) -> None:
         geometry=[
             SketchFeature(
                 name=f"{name} feature",
-                mode="Extrusion",
+                mode=SketchFeatureMode.EXTRUSION,
                 sketch=sketch,
                 depth=3.0,
             )
@@ -40,7 +41,7 @@ def test_ellipse_profile_extrudes_to_occ_volume():
     major = SketchPoint(x=6.0, y=0.0)
     sketch.points.extend((center, major))
     sketch.entities.append(
-        SketchEllipse(center=center.id, major=major.id, minor_radius=3.0)
+        SketchEllipse(center=center, major=major, minor_radius=3.0)
     )
 
     _assert_extrudes_to_volume(sketch, "Ellipse")
@@ -55,12 +56,12 @@ def test_arc_and_line_profile_extrudes_to_occ_volume():
     sketch.entities.extend(
         (
             SketchArc(
-                center=center.id,
-                start=start.id,
-                end=end.id,
+                center=center,
+                start=start,
+                end=end,
                 clockwise=False,
             ),
-            SketchLine(start=end.id, end=start.id),
+            SketchLine(start=end, end=start),
         )
     )
 
@@ -75,8 +76,8 @@ def test_open_spline_closed_by_line_extrudes_to_occ_volume():
     sketch.points.extend((first, middle, last))
     sketch.entities.extend(
         (
-            SketchSpline(points=(first.id, middle.id, last.id)),
-            SketchLine(start=last.id, end=first.id),
+            SketchSpline(points=(first, middle, last)),
+            SketchLine(start=last, end=first),
         )
     )
 
@@ -96,18 +97,18 @@ def test_slot_curve_mix_extrudes_to_occ_volume():
     )
     sketch.entities.extend(
         (
-            SketchLine(start=top_a.id, end=top_b.id),
+            SketchLine(start=top_a, end=top_b),
             SketchArc(
-                center=center_b.id,
-                start=top_b.id,
-                end=bottom_b.id,
+                center=center_b,
+                start=top_b,
+                end=bottom_b,
                 clockwise=True,
             ),
-            SketchLine(start=bottom_b.id, end=bottom_a.id),
+            SketchLine(start=bottom_b, end=bottom_a),
             SketchArc(
-                center=center_a.id,
-                start=bottom_a.id,
-                end=top_a.id,
+                center=center_a,
+                start=bottom_a,
+                end=top_a,
                 clockwise=True,
             ),
         )
