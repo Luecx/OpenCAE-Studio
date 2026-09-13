@@ -25,20 +25,43 @@ def test_sketch_feature_is_exposed_in_part_workflows_and_feature_editor():
     assert "edit_sketch(feature)" in controller
 
 
-def test_sketcher_has_themed_grid_revolve_axis_and_constraint_toolbar():
+def test_sketcher_has_themed_grid_revolve_axis_and_complete_constraint_toolbar():
     canvas = (ROOT / "opencae/ui/sketcher/canvas.py").read_text(encoding="utf-8")
     dialog = (ROOT / "opencae/ui/sketcher/dialog.py").read_text(encoding="utf-8")
+    extended = (ROOT / "opencae/ui/sketcher/constraint_dialog.py").read_text(
+        encoding="utf-8"
+    )
     assert '_theme("axis_x"' in canvas
     assert '_theme("axis_y"' in canvas
     assert "Qt.PenStyle.DashDotLine" in canvas
     assert "REVOLVE AXIS  X" in canvas
-    for tool in ("Line", "Rectangle", "Circle", "Center Arc", "Ellipse", "Spline", "Slot"):
-        assert f'"{tool}"' in canvas
-    for constraint in (
-        "Coincident", "Horizontal", "Vertical", "Parallel", "Perpendicular",
-        "Tangent", "Equal", "Concentric", "Midpoint", "Fixed",
+    for tool in (
+        "Line",
+        "Rectangle",
+        "Circle",
+        "Center Arc",
+        "Ellipse",
+        "Spline",
+        "Slot",
     ):
-        assert f'"{constraint}"' in dialog
+        assert f'"{tool}"' in canvas
+    constraint_source = dialog + extended
+    for constraint in (
+        "Coincident",
+        "Horizontal",
+        "Vertical",
+        "Parallel",
+        "Perpendicular",
+        "Tangent",
+        "Equal",
+        "Concentric",
+        "Midpoint",
+        "Collinear",
+        "Point on object",
+        "Symmetry",
+        "Fixed",
+    ):
+        assert f'"{constraint}"' in constraint_source
     for dimension in ("DistanceX", "DistanceY", "Angle", "Radius", "Diameter"):
         assert f'"{dimension}"' in dialog
 
