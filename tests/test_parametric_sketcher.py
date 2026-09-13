@@ -118,6 +118,78 @@ def test_solver_drives_rectangle_dimensions_and_reports_remaining_dof():
     assert points[2].y - points[1].y == pytest.approx(12.0, abs=1.0e-5)
 
 
+def test_collinear_constraint_moves_second_line_onto_fixed_reference_line():
+    sketch = SketchDefinition()
+    a = SketchPoint(x=0.0, y=0.0, fixed=True)
+    b = SketchPoint(x=10.0, y=0.0, fixed=True)
+    c = SketchPoint(x=2.0, y=3.0)
+    d = SketchPoint(x=8.0, y=4.0)
+    sketch.points.extend((a, b, c, d))
+    reference = SketchLine(start=a.id, end=b.id)
+    moving = SketchLine(start=c.id, end=d.id)
+    sketch.entities.extend((reference, moving))
+    sketch.constraints.append(
+        SketchConstraint(
+            kind="Collinear",
+            refs=(f"entity:{reference.id}", f"entity:{moving.id}"),
+        )
+    )
+
+    result = solve_sketch(sketch)
+
+    assert result.success
+    assert c.y == pytest.approx(0.0, abs=1.0e-6)
+    assert d.y == pytest.approx(0.0, abs=1.0e-6)
+
+
+def test_point_on_object_constraint_projects_point_onto_fixed_line():
+    sketch = SketchDefinition()
+    a = SketchPoint(x=0.0, y=0.0, fixed=True)
+    b = SketchPoint(x=10.0, y=0.0, fixed=True)
+    point = SketchPoint(x=4.0, y=5.0)
+    sketch.points.extend((a, b, point))
+    line = SketchLine(start=a.id, end=b.id)
+    sketch.entities.append(line)
+    sketch.constraints.append(
+        SketchConstraint(
+            kind="Point on object",
+            refs=(f"point:{point.id}", f"entity:{line.id}"),
+        )
+    )
+
+    result = solve_sketch(sketch)
+
+    assert result.success
+    assert point.y == pytest.approx(0.0, abs=1.0e-6)
+
+
+def test_symmetry_constraint_uses_selected_line_as_symmetry_axis():
+    sketch = SketchDefinition()
+    axis_a = SketchPoint(x=-10.0, y=0.0, fixed=True)
+    axis_b = SketchPoint(x=10.0, y=0.0, fixed=True)
+    first = SketchPoint(x=3.0, y=5.0)
+    second = SketchPoint(x=5.0, y=-2.0)
+    sketch.points.extend((axis_a, axis_b, first, second))
+    axis = SketchLine(start=axis_a.id, end=axis_b.id, construction=True)
+    sketch.entities.append(axis)
+    sketch.constraints.append(
+        SketchConstraint(
+            kind="Symmetry",
+            refs=(
+                f"point:{first.id}",
+                f"point:{second.id}",
+                f"entity:{axis.id}",
+            ),
+        )
+    )
+
+    result = solve_sketch(sketch)
+
+    assert result.success
+    assert first.x == pytest.approx(second.x, abs=1.0e-6)
+    assert first.y == pytest.approx(-second.y, abs=1.0e-6)
+
+
 def test_conflicting_driving_dimensions_are_rejected_without_corrupting_geometry():
     sketch, _, lines = _rectangle()
     sketch.constraints.extend(
