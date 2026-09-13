@@ -18,13 +18,13 @@ from opencae.model.entities.parts import Part
 from opencae.sketch import solve_sketch
 
 
-def _rectangle(width=20.0, height=10.0, y0=2.0):
+def _rectangle(width=20.0, height=10.0, y0=2.0, x0=0.0):
     sketch = SketchDefinition(grid_spacing=5.0)
     points = [
-        SketchPoint(x=0.0, y=y0),
-        SketchPoint(x=width, y=y0),
-        SketchPoint(x=width, y=y0 + height),
-        SketchPoint(x=0.0, y=y0 + height),
+        SketchPoint(x=x0, y=y0),
+        SketchPoint(x=x0 + width, y=y0),
+        SketchPoint(x=x0 + width, y=y0 + height),
+        SketchPoint(x=x0, y=y0 + height),
     ]
     sketch.points.extend(points)
     lines = [
@@ -35,6 +35,14 @@ def _rectangle(width=20.0, height=10.0, y0=2.0):
     ]
     sketch.entities.extend(lines)
     return sketch, points, lines
+
+
+def _circle_sketch(x: float, y: float, radius: float):
+    sketch = SketchDefinition(grid_spacing=5.0)
+    center = SketchPoint(x=x, y=y)
+    sketch.points.append(center)
+    sketch.entities.append(SketchCircle(center=center.id, radius=radius))
+    return sketch
 
 
 def test_sketch_model_round_trips_registered_entities_and_constraints():
@@ -136,6 +144,22 @@ def test_conflicting_driving_dimensions_are_rejected_without_corrupting_geometry
     ]
 
 
+def test_planar_sketch_builds_a_surface_without_a_volume():
+    sketch, _, _ = _rectangle()
+    feature = SketchFeature(name="Sheet", mode="Planar", sketch=sketch)
+    part = Part(name="Planar", geometry=[feature])
+    try:
+        snapshot = GeometryService().build_geometry(part, force=True)
+        assert snapshot.entities[2]
+        assert not snapshot.entities[3]
+        assert snapshot.bounds is not None
+        assert snapshot.bounds[5] - snapshot.bounds[2] == pytest.approx(
+            0.0, abs=1.0e-5
+        )
+    finally:
+        CACHE.invalidate(part.id)
+
+
 def test_extrusion_builds_a_real_occ_volume_from_closed_sketch():
     sketch, _, _ = _rectangle()
     feature = SketchFeature(
@@ -195,6 +219,110 @@ def test_extrusion_supports_a_nested_closed_hole_profile():
         assert snapshot.surfaces
         # A through-hole gives the solid more than the six faces of a box.
         assert len(snapshot.entities[2]) > 6
+    finally:
+        CACHE.invalidate(part.id)
+
+
+def test_add_feature_fuses_overlapping_extrusions():
+    base_sketch, _, _ = _rectangle(width=20.0, height=10.0, y0=0.0)
+    add_sketch, _, _ = _rectangle(
+        width=10.0,
+        height=10.0,
+        y0=0.0,
+        x0=15.0,
+    )
+    part = Part(
+        name="Added",
+        geometry=[
+            SketchFeature(
+                name="Base",
+                mode="Extrusion",
+                operation="New",
+                sketch=base_sketch,
+                depth=4.0,
+            ),
+            SketchFeature(
+                name="Add",
+                mode="Extrusion",
+                operation="Add",
+                sketch=add_sketch,
+                depth=4.0,
+            ),
+        ],
+    )
+    try:
+        snapshot = GeometryService().build_geometry(part, force=True)
+        assert len(snapshot.entities[3]) == 1
+        assert snapshot.bounds is not None
+        assert snapshot.bounds[0] == pytest.approx(0.0, abs=1.0e-4)
+        assert snapshot.bounds[3] == pytest.approx(25.0, abs=1.0e-4)
+    finally:
+        CACHE.invalidate(part.id)
+
+
+def test_cut_feature_removes_an_extruded_profile_from_existing_solid():
+    base_sketch, _, _ = _rectangle(width=20.0, height=10.0, y0=0.0)
+    cutter = _circle_sketch(10.0, 5.0, 2.0)
+    part = Part(
+        name="Cut",
+        geometry=[
+            SketchFeature(
+                name="Base",
+                mode="Extrusion",
+                operation="New",
+                sketch=base_sketch,
+                depth=6.0,
+            ),
+            SketchFeature(
+                name="Hole",
+                mode="Extrusion",
+                operation="Cut",
+                sketch=cutter,
+                depth=6.0,
+            ),
+        ],
+    )
+    try:
+        snapshot = GeometryService().build_geometry(part, force=True)
+        assert len(snapshot.entities[3]) == 1
+        assert len(snapshot.entities[2]) > 6
+    finally:
+        CACHE.invalidate(part.id)
+
+
+def test_intersect_feature_keeps_only_the_common_extruded_volume():
+    base_sketch, _, _ = _rectangle(width=20.0, height=10.0, y0=0.0)
+    intersect_sketch, _, _ = _rectangle(
+        width=20.0,
+        height=10.0,
+        y0=0.0,
+        x0=10.0,
+    )
+    part = Part(
+        name="Intersected",
+        geometry=[
+            SketchFeature(
+                name="Base",
+                mode="Extrusion",
+                operation="New",
+                sketch=base_sketch,
+                depth=4.0,
+            ),
+            SketchFeature(
+                name="Common",
+                mode="Extrusion",
+                operation="Intersect",
+                sketch=intersect_sketch,
+                depth=4.0,
+            ),
+        ],
+    )
+    try:
+        snapshot = GeometryService().build_geometry(part, force=True)
+        assert len(snapshot.entities[3]) == 1
+        assert snapshot.bounds is not None
+        assert snapshot.bounds[0] == pytest.approx(10.0, abs=1.0e-4)
+        assert snapshot.bounds[3] == pytest.approx(20.0, abs=1.0e-4)
     finally:
         CACHE.invalidate(part.id)
 
