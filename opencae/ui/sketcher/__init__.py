@@ -1,7 +1,7 @@
 """Parametric sketch editing workspace."""
 
 from .canvas import SketchCanvas
+from .dialog import SketchFeatureDialog
 from .preview import SketchFeaturePreview
-from .structural_dialog import SketchFeatureDialog
 
 __all__ = ["SketchCanvas", "SketchFeatureDialog", "SketchFeaturePreview"]
