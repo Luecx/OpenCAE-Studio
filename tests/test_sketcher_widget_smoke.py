@@ -98,10 +98,32 @@ try:
     assert not dialog.grid_action.icon().isNull()
     assert not dialog.construction_action.icon().isNull()
 
-    # The narrow state must become exactly the three semantic group buttons.
-    assert dialog.ribbon._target_collapsed_groups(700) == frozenset(
-        {"PRIMITIVES", "CONSTRAINTS", "CONSTRUCTION/GRID"}
+    # The Sketcher uses the same progressive collapse policy as the main
+    # ribbon: widest group first, and only as many groups as are needed.
+    assert dialog.ribbon._target_collapsed_groups(2000) == frozenset()
+    assert dialog.ribbon._target_collapsed_groups(1600) == frozenset(
+        {"CONSTRAINTS"}
     )
+    assert dialog.ribbon._target_collapsed_groups(1000) == frozenset(
+        {"CONSTRAINTS", "PRIMITIVES"}
+    )
+    assert dialog.ribbon._target_collapsed_groups(700) == frozenset(
+        {"CONSTRAINTS", "PRIMITIVES", "SELECTION"}
+    )
+    assert dialog.ribbon._target_collapsed_groups(500) == frozenset(
+        {"CONSTRAINTS", "PRIMITIVES", "SELECTION", "CONSTRUCTION/GRID"}
+    )
+
+    # Rebuilding the responsive ribbon must synchronously detach old groups;
+    # otherwise deleteLater() can leave the previous buttons painted on top of
+    # the collapsed state during resize.
+    old_groups = tuple(dialog.ribbon._group_widgets)
+    dialog.ribbon._refresh_responsive_layout(500)
+    assert dialog.ribbon._collapsed_titles == frozenset(
+        {"CONSTRAINTS", "PRIMITIVES", "SELECTION", "CONSTRUCTION/GRID"}
+    )
+    assert all(group.parent() is None for group in old_groups)
+    assert len(dialog.ribbon._group_widgets) == 4
 
     dialog.mode_combo.setCurrentText("Revolve")
     assert dialog.canvas.show_revolve_axis
