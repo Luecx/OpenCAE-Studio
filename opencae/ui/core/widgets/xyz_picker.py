@@ -8,17 +8,13 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QSizePolicy,
-    QToolButton,
     QWidget,
 )
 
 from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.theme import PALETTE
-from opencae.ui.templates import (
-    CONTROL_GROUP_SPACING,
-    apply_inline_action_size,
-    apply_primary_control_height,
-)
+from opencae.ui.primitives.buttons import InlineButton
+from opencae.ui.templates import CONTROL_GROUP_SPACING, apply_primary_control_height
 
 
 class XYZPicker(QWidget):
@@ -79,14 +75,15 @@ class XYZPicker(QWidget):
             apply_primary_control_height(self.unit_label)
             layout.addWidget(self.unit_label)
 
-        self.pick_button = QToolButton()
-        self.pick_button.setIcon(make_icon(IconKind.PICK, 18, PALETTE["text"]))
+        self.pick_button = InlineButton(
+            icon=make_icon(IconKind.PICK, 18, PALETTE["text"]),
+            tooltip="Pick this value in the viewport",
+            checkable=True,
+            object_name="InlinePickButton",
+            parent=self,
+        )
         self.pick_button.setIconSize(QSize(18, 18))
-        self.pick_button.setCheckable(True)
-        self.pick_button.setObjectName("InlinePickButton")
         self.pick_button.setAccessibleName("Pick in viewport")
-        self.pick_button.setToolTip("Pick this value in the viewport")
-        apply_inline_action_size(self.pick_button)
         self.pick_button.toggled.connect(self._toggle_pick)
         self.pick_button.setEnabled(bool(self.allowed))
         layout.addSpacing(CONTROL_GROUP_SPACING)
