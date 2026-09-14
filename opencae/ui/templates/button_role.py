@@ -1,5 +1,15 @@
-"""Compatibility import for the canonical semantic button role."""
+"""Compatibility semantic roles for the legacy template button factory."""
 
-from opencae.ui.primitives.buttons.role import ButtonRole
+from enum import StrEnum
+
+
+class ButtonRole(StrEnum):
+    """Template-level role mapped to a concrete flat button primitive."""
+
+    DEFAULT = "default"
+    PRIMARY = "primary"
+    DANGER = "danger"
+    TOOL = "tool"
+
 
 __all__ = ["ButtonRole"]
