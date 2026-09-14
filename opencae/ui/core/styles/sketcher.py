@@ -6,10 +6,6 @@ def css(p):
     QDialog#SketchFeatureDialog {{
         background: {p['window']};
     }}
-    QWidget#SketchRibbonHost {{
-        background: {p['panel']};
-        border-bottom: 1px solid {p['border']};
-    }}
     QWidget#SketchViewportHost {{
         background: {p['viewport']};
     }}
