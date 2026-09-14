@@ -1,17 +1,12 @@
-"""Builds equal-width horizontal rows from canonical field blocks."""
+"""Compatibility factory for equal-width horizontal field rows."""
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QHBoxLayout, QWidget
+from PyQt6.QtWidgets import QWidget
+
+from opencae.ui.composites import FieldRow
 
 
-def field_row(*fields: QWidget, spacing: int = 16, parent=None) -> QWidget:
+def field_row(*fields: QWidget, spacing: int = 16, parent=None) -> FieldRow:
     """Return a horizontal row where each labelled field receives equal width."""
-    host = QWidget(parent)
-    host.setObjectName("PrimaryFieldRow")
-    layout = QHBoxLayout(host)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(spacing)
-    for field in fields:
-        layout.addWidget(field, 1)
-    return host
+    return FieldRow(*fields, spacing=spacing, parent=parent)
