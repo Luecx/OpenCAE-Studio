@@ -75,6 +75,7 @@ class CompactRegionSelector(QWidget):
         )
         self.pick_button.setIconSize(QSize(18, 18))
         self.pick_button.setAccessibleName("Select in View")
+        self.pick_button.setCheckable(True)
         self.pick_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.pick_button.toggled.connect(self._toggle_pick)
         root.addWidget(self.pick_button, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -95,15 +96,12 @@ class CompactRegionSelector(QWidget):
         self._refresh_summary()
 
     def definition(self) -> RegionDefinition:
-        """Return the currently selected unresolved region definition."""
         return self._definition
 
     def currentValue(self):
-        """Compatibility alias returning the current region definition."""
         return self.definition()
 
     def set_definition(self, value) -> None:
-        """Replace the region definition and synchronize all visible editors."""
         definition = RegionDefinition.from_values(value)
         if definition == self._definition:
             return
@@ -113,7 +111,6 @@ class CompactRegionSelector(QWidget):
         self.value_changed.emit(self._definition)
 
     def set_requirement(self, requirement, *, allow_part_local=None) -> None:
-        """Replace the semantic selection requirement for future viewport picks."""
         self.requirement = requirement
         if allow_part_local is not None:
             self.allow_part_local = bool(allow_part_local)
@@ -124,29 +121,22 @@ class CompactRegionSelector(QWidget):
             )
 
     def set_extended_visible(self, visible: bool) -> None:
-        """Show or hide the detailed region-editor action."""
         self.extended_button.setVisible(bool(visible))
         if not visible and self._extended_dialog is not None:
             self._extended_dialog.close()
 
     def set_named_region_controls_visible(self, visible: bool) -> None:
-        """Compatibility alias for controlling the detailed region editor."""
         self.set_extended_visible(visible)
 
     def add_definition(self, value) -> None:
-        """Append incoming operands to the existing region definition."""
         incoming = RegionDefinition.from_values(value)
-        self.set_definition(
-            RegionDefinition((*self._definition.items, *incoming.items))
-        )
+        self.set_definition(RegionDefinition((*self._definition.items, *incoming.items)))
 
     def add_item(self, value) -> None:
-        """Append one selection operand to the current definition."""
         item = value if isinstance(value, RegionSelectionItem) else RegionSelectionItem(value)
         self.add_definition(RegionDefinition((item,)))
 
     def apply_pick(self, value, operation=SelectionOperation.ADD) -> None:
-        """Apply a typed viewport selection operation to the persistent definition."""
         incoming = RegionDefinition.from_values(value)
         operation = SelectionOperation(operation)
         if operation == SelectionOperation.REPLACE:
