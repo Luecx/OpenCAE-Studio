@@ -7,6 +7,7 @@ from .input_form_number import InputFormNumber
 from .input_form_text import InputFormText
 from .input_matrix_number import InputMatrixNumber
 from .input_search import InputSearch
+from .input_time_manager_speed import InputTimeManagerSpeed
 
 # Transitional names retained while callers are migrated --------------------
 from .boolean_input import BooleanInput
@@ -22,6 +23,7 @@ __all__ = [
     "InputFormText",
     "InputMatrixNumber",
     "InputSearch",
+    "InputTimeManagerSpeed",
     "BooleanInput",
     "ChoiceInput",
     "IntegerInput",
