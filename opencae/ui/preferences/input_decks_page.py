@@ -5,9 +5,9 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from opencae.deck_formats.selection import default_profile_id, profile_choices
-from opencae.ui.core.widgets import ChevronComboBox
-from opencae.ui.primitives.buttons import FormButton
-from opencae.ui.templates import FieldLabel, SectionHeading, apply_primary_control_height, field_block
+from opencae.ui.primitives.buttons import ButtonFormAction
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.templates import FieldLabel, SectionHeading, field_block
 
 
 class InputDecksPage(QWidget):
@@ -18,7 +18,7 @@ class InputDecksPage(QWidget):
         self.settings = settings
         self.solvers = dict(solvers or {})
         self.manager_callback = manager_callback
-        self.selectors: dict[str, ChevronComboBox] = {}
+        self.selectors: dict[str, SelectForm] = {}
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 24, 28, 24)
@@ -49,14 +49,13 @@ class InputDecksPage(QWidget):
         )
         hint.setWordWrap(True)
         layout.addWidget(hint)
-        button = FormButton("Manage Input Deck Formats…", parent=self)
+        button = ButtonFormAction("Manage Input Deck Formats…", parent=self)
         button.setEnabled(callable(manager_callback))
         button.clicked.connect(self._open_manager)
         layout.addWidget(button)
         layout.addStretch(1)
 
     def _rebuild_selectors(self) -> None:
-        """Rebuild solver-compatible profile choices after the manager changes."""
         while self.profile_layout.count():
             item = self.profile_layout.takeAt(0)
             widget = item.widget()
@@ -65,7 +64,7 @@ class InputDecksPage(QWidget):
         self.selectors.clear()
 
         for solver_name, adapter in self.solvers.items():
-            selector = ChevronComboBox()
+            selector = SelectForm()
             for profile_id, name in profile_choices(self.settings, adapter):
                 selector.addItem(name, profile_id)
             selected = self.settings.default_deck_profile_id(solver_name, adapter)
@@ -73,23 +72,18 @@ class InputDecksPage(QWidget):
             if index < 0:
                 index = selector.findData(default_profile_id(adapter))
             selector.setCurrentIndex(max(0, index))
-            apply_primary_control_height(selector)
             self.selectors[solver_name] = selector
             self.profile_layout.addWidget(
                 field_block(f"{solver_name} default profile", selector)
             )
 
     def _open_manager(self) -> None:
-        """Open the detailed manager and refresh profile choices after it closes."""
         if callable(self.manager_callback):
             self.manager_callback()
             self._rebuild_selectors()
 
     def values(self) -> dict[str, str]:
-        """Return exact preference keys mapped to stable deck-profile identities."""
         return {
-            f"solver/default_deck_profile/{solver_name}": str(
-                selector.currentData() or ""
-            )
+            f"solver/default_deck_profile/{solver_name}": str(selector.currentData() or "")
             for solver_name, selector in self.selectors.items()
         }
