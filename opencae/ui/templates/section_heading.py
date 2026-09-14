@@ -1,17 +1,7 @@
-"""Provides the canonical heading for grouped editor sections."""
+"""Compatibility export for the canonical section-heading primitive."""
 
-from __future__ import annotations
+from opencae.ui.primitives.labels import LabelSection
 
-from opencae.ui.primitives.semantic_label import SemanticLabel
+SectionHeading = LabelSection
 
-
-class SectionHeading(SemanticLabel):
-    """Render a reusable section title with the shared OpenCAE accent marker."""
-
-    def __init__(self, text: str, parent=None):
-        """Create one semantic editor-section heading."""
-        super().__init__(
-            str(text),
-            object_name="EditorSectionHeading",
-            parent=parent,
-        )
+__all__ = ["SectionHeading"]
