@@ -116,16 +116,24 @@ def test_sketch_workspace_mode_switch_uses_one_canonical_viewport_command_bar():
     main_toolbar = (ROOT / "opencae/ui/viewport/selection_toolbar.py").read_text(
         encoding="utf-8"
     )
-    assert 'bar.setObjectName("ViewportToolbar")' in dialog
+    # Structure matters here, not local variable spelling.  The runtime smoke
+    # test verifies actual post-show geometry; this source contract protects the
+    # canonical main-window toolbar primitive and non-compressible layout.
+    assert 'self.viewport_toolbar.setObjectName("ViewportToolbar")' in dialog
     assert "ViewportToolButton(" in dialog
-    assert 'ViewportToolButton("Sketch"' in dialog
-    assert '"3D Preview", checkable=True' in dialog
-    assert 'ViewportToolButton("Fit"' in dialog
-    assert 'self.status_label = QLabel("Ready", bar)' in dialog
+    assert '"Sketch", checkable=True, parent=self.viewport_toolbar' in dialog
+    assert '"3D Preview", checkable=True, parent=self.viewport_toolbar' in dialog
+    assert 'ViewportToolButton("Fit", parent=self.viewport_toolbar)' in dialog
+    assert 'self.status_label = QLabel("Ready", self.viewport_toolbar)' in dialog
+    assert "setFixedHeight(_VIEWPORT_BAR_HEIGHT)" in dialog
+    assert "QSizePolicy.Policy.Fixed" in dialog
+    assert "layout.setStretch(0, 0)" in dialog
+    assert "layout.setStretch(1, 1)" in dialog
     assert 'QDialogButtonBox.StandardButton.Cancel' in dialog
     assert 'QDialogButtonBox.StandardButton.Ok' in dialog
     assert '"Create Feature"' in dialog
-    assert "footer.setFixedHeight(0)" in dialog
+    assert 'footer.setObjectName("SketchLegacyFooter")' in dialog
+    assert "footer.setFixedSize(0, 0)" in dialog
     assert "footer.hide()" in dialog
     assert 'self.setObjectName("ViewportToolbar")' in main_toolbar
 
