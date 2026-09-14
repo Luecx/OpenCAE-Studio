@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QHBoxLayout, QMenu, QWidget, QWidgetAction
+from PyQt6.QtWidgets import QHBoxLayout, QMenu, QToolButton, QWidget, QWidgetAction
 
-from opencae.ui.primitives.buttons import (
-    ButtonPresentation,
-    MenuButton,
-    button_for_action,
-)
+from opencae.ui.primitives.buttons._configure import configure_ribbon
+from opencae.ui.primitives.buttons.ribbon_action_factory import ribbon_button_for_action
+from opencae.ui.primitives.ribbon_text import wrapped_ribbon_text
 
 
 def _leaf_actions(action: QAction) -> tuple[QAction, ...]:
@@ -25,7 +23,7 @@ def _leaf_actions(action: QAction) -> tuple[QAction, ...]:
     return tuple(leaves)
 
 
-class CollapsedActionGroupButton(MenuButton):
+class CollapsedActionGroupButton(QToolButton):
     """One ribbon button whose popup exposes the group's full-size actions."""
 
     def __init__(
@@ -36,12 +34,12 @@ class CollapsedActionGroupButton(MenuButton):
         *,
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(
-            text,
-            icon=icon_action.icon(),
-            presentation=ButtonPresentation.RIBBON,
-            parent=parent,
-        )
+        super().__init__(parent)
+        self.setText(wrapped_ribbon_text(str(text)))
+        self.setIcon(icon_action.icon())
+        configure_ribbon(self)
+        self.setCheckable(False)
+        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
 
         menu = QMenu(self)
         panel = QWidget(menu)
@@ -50,11 +48,7 @@ class CollapsedActionGroupButton(MenuButton):
         row.setSpacing(2)
         for action in actions:
             for leaf in _leaf_actions(action):
-                action_widget = button_for_action(
-                    leaf,
-                    presentation=ButtonPresentation.RIBBON,
-                    parent=panel,
-                )
+                action_widget = ribbon_button_for_action(leaf, parent=panel)
                 action_widget.clicked.connect(menu.close)
                 row.addWidget(action_widget)
 
