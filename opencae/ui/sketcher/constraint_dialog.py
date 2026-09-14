@@ -1,11 +1,21 @@
 """Constraint-complete Sketcher dialog surface.
 
 The base feature dialog owns the sketch actions and common editor behavior. This
-specialization applies the complete selection policy and the public ribbon
-layout used by the actual OpenCAE Sketcher.
+specialization applies the complete selection policy and the public ribbon and
+viewport chrome used by the actual OpenCAE Sketcher.
 """
 
 from __future__ import annotations
+
+from PyQt6.QtWidgets import (
+    QButtonGroup,
+    QDialogButtonBox,
+    QHBoxLayout,
+    QLabel,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from opencae.model.entities.geometry import (
     SketchArc,
@@ -17,6 +27,7 @@ from opencae.ui.core.icon_factory import IconKind
 from opencae.ui.core.metrics import RIBBON_PAGE_HEIGHT
 from opencae.ui.ribbon.ribbon_page import ResponsiveRibbonPage
 from opencae.ui.ribbon.specs import RibbonGroupSpec
+from opencae.ui.templates import ViewportToolButton
 
 from .dialog import SketchFeatureDialog as _BaseSketchFeatureDialog
 
@@ -36,8 +47,6 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
             self._icon(IconKind.SKETCH_ARC)
         )
         # The old curved undo/redo glyphs are visually busy at ribbon size.
-        # Simple back/forward arrows are clearer and cannot place the arrowhead
-        # ambiguously on the curve.
         self._ribbon_actions["primitive.undo"].setIcon(
             self._icon(IconKind.PREVIOUS_FRAME)
         )
@@ -54,8 +63,8 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
 
         # The base class wires Construction directly to the canvas. Replace
         # that connection with a guarded slot so selection-driven checked-state
-        # synchronization can still emit QAction.changed (and therefore repaint
-        # the QToolButton) without converting selected geometry as a side effect.
+        # synchronization can still repaint the QAction without converting the
+        # selected geometry as a side effect.
         self._syncing_construction = False
         try:
             self.construction_action.toggled.disconnect()
@@ -63,15 +72,25 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
             pass
         self.construction_action.toggled.connect(self._construction_toggled)
 
-    def _build_ribbon(self):
-        """Build the Sketcher ribbon with the same responsive rules as main UI.
+    def _build_ribbon_actions(self) -> None:
+        """Expose dimensional commands as first-class ribbon actions."""
+        super()._build_ribbon_actions()
+        # Keep the generic Dimension QAction as a reusable menu entry for other
+        # consumers, but the Sketcher ribbon itself owns a dedicated Dimensions
+        # group with direct commands and no extra nesting layer.
+        self._ribbon_actions.pop("constraint.dimension", None)
+        for key, kind in (
+            ("dimension.distance", "Distance"),
+            ("dimension.horizontal", "DistanceX"),
+            ("dimension.vertical", "DistanceY"),
+            ("dimension.angle", "Angle"),
+            ("dimension.radius", "Radius"),
+            ("dimension.diameter", "Diameter"),
+        ):
+            self._register(key, self._dimension_actions[kind])
 
-        The ordinary :class:`ResponsiveRibbonPage` deliberately collapses the
-        widest group first and continues only until the available width is
-        satisfied. Keeping the Sketcher on that exact implementation avoids a
-        separate all-or-nothing narrow mode and makes resize behavior identical
-        to the main OpenCAE ribbon.
-        """
+    def _build_ribbon(self):
+        """Build the Sketcher ribbon with the same responsive rules as main UI."""
 
         groups = (
             RibbonGroupSpec(
@@ -99,9 +118,6 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
             RibbonGroupSpec(
                 "CONSTRAINTS",
                 (
-                    # Keep the driving-dimension entry first so it remains
-                    # immediately discoverable when the group is collapsed.
-                    "constraint.dimension",
                     "constraint.coincident",
                     "constraint.horizontal",
                     "constraint.vertical",
@@ -112,7 +128,19 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
                     "constraint.fixed",
                     "constraint.more",
                 ),
-                icon_action_id="constraint.dimension",
+                icon_action_id="constraint.coincident",
+            ),
+            RibbonGroupSpec(
+                "DIMENSIONS",
+                (
+                    "dimension.distance",
+                    "dimension.horizontal",
+                    "dimension.vertical",
+                    "dimension.angle",
+                    "dimension.radius",
+                    "dimension.diameter",
+                ),
+                icon_action_id="dimension.distance",
             ),
             RibbonGroupSpec(
                 "CONSTRUCTION/GRID",
@@ -132,6 +160,73 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         self.ribbon.setObjectName("SketchRibbonHost")
         self.ribbon.setFixedHeight(RIBBON_PAGE_HEIGHT)
         return self.ribbon
+
+    def _build_workspace(self, parent):
+        """Build one main-window-style slim bar directly above the viewport."""
+        host = QWidget(parent)
+        host.setObjectName("SketchViewportHost")
+        layout = QVBoxLayout(host)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        bar = QWidget(host)
+        bar.setObjectName("ViewportToolbar")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(8, 5, 8, 5)
+        row.setSpacing(4)
+
+        self.view_sketch = ViewportToolButton("Sketch", checkable=True, parent=bar)
+        self.view_preview = ViewportToolButton(
+            "3D Preview", checkable=True, parent=bar
+        )
+        self.view_sketch.setChecked(True)
+        self.view_group = QButtonGroup(bar)
+        self.view_group.setExclusive(True)
+        self.view_group.addButton(self.view_sketch)
+        self.view_group.addButton(self.view_preview)
+        row.addWidget(self.view_sketch)
+        row.addWidget(self.view_preview)
+
+        self.fit_button = ViewportToolButton("Fit", parent=bar)
+        self.fit_button.setToolTip("Center and fit the sketch")
+        row.addWidget(self.fit_button)
+        row.addSpacing(8)
+
+        self.status_label = QLabel("Ready", bar)
+        self.status_label.setObjectName("SketchStatus")
+        self.hint_label = QLabel("", bar)
+        self.hint_label.setObjectName("SketchHint")
+        row.addWidget(self.status_label)
+        row.addWidget(self.hint_label)
+        row.addStretch(1)
+
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Cancel
+            | QDialogButtonBox.StandardButton.Ok,
+            parent=bar,
+        )
+        self.buttons.setObjectName("SketchCommitButtons")
+        ok = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
+        ok.setText(
+            "Create Feature"
+            if self.windowTitle().startswith("Create")
+            else "Apply"
+        )
+        row.addWidget(self.buttons)
+        layout.addWidget(bar)
+
+        self.workspace = QStackedWidget(host)
+        self.workspace.addWidget(self.canvas)
+        self.workspace.addWidget(self.preview)
+        layout.addWidget(self.workspace, 1)
+        return host
+
+    def _build_footer(self):
+        """The Sketcher has no bottom command/status strip anymore."""
+        footer = QWidget(self)
+        footer.setFixedHeight(0)
+        footer.hide()
+        return footer
 
     def _construction_toggled(self, enabled: bool) -> None:
         if self._syncing_construction:
