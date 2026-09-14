@@ -52,6 +52,17 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         self.canvas.set_dimension_layout(layout)
         self.canvas.dimension_edit_requested.connect(self._edit_dimension)
 
+        # The base class wires Construction directly to the canvas. Replace
+        # that connection with a guarded slot so selection-driven checked-state
+        # synchronization can still emit QAction.changed (and therefore repaint
+        # the QToolButton) without converting selected geometry as a side effect.
+        self._syncing_construction = False
+        try:
+            self.construction_action.toggled.disconnect()
+        except TypeError:
+            pass
+        self.construction_action.toggled.connect(self._construction_toggled)
+
     def _build_ribbon(self):
         """Build the Sketcher ribbon with the same responsive rules as main UI.
 
@@ -121,6 +132,23 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         self.ribbon.setObjectName("SketchRibbonHost")
         self.ribbon.setFixedHeight(RIBBON_PAGE_HEIGHT)
         return self.ribbon
+
+    def _construction_toggled(self, enabled: bool) -> None:
+        if self._syncing_construction:
+            return
+        self.canvas.set_construction(bool(enabled))
+
+    def _sync_construction_from_selection(self, _refs=None):
+        entities = tuple(self.canvas.selected_entities())
+        if not entities:
+            return
+        enabled = all(bool(getattr(entity, "construction", False)) for entity in entities)
+        self._syncing_construction = True
+        try:
+            self.construction_action.setChecked(enabled)
+        finally:
+            self._syncing_construction = False
+        self.canvas.construction = enabled
 
     def _edit_dimension(self, constraint) -> None:
         """Edit a selected driving dimension using the existing numeric editor."""
