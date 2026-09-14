@@ -108,4 +108,12 @@ def action_button(action: QAction, *, large: bool = True) -> QToolButton:
         widget.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         widget.setIconSize(QSize(20, 20))
         widget.setFixedSize(30, 30)
+
+    # QAction menus are uncommon in the ribbon, but when an action deliberately
+    # owns one (for example Sketcher Arc/Dimension), expose it as an ordinary
+    # instant-popup ribbon control instead of requiring a press-and-hold.
+    menu = action.menu()
+    if menu is not None:
+        widget.setMenu(menu)
+        widget.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
     return widget
