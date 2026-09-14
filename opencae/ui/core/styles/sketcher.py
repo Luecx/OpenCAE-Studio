@@ -10,23 +10,8 @@ def css(p):
         background: {p['panel']};
         border-bottom: 1px solid {p['border']};
     }}
-    QToolBar#SketchToolbar {{
-        background: transparent;
-        border: none;
-        spacing: 2px;
-    }}
-    QToolBar#SketchToolbar QToolButton {{
-        min-width: 54px;
-        padding: 5px 7px;
-        border-radius: 3px;
-    }}
-    QToolBar#SketchToolbar QToolButton:checked {{
-        background: {p['accent_dim']};
-        color: {p['text']};
-        border-bottom: 2px solid {p['accent']};
-    }}
-    QDialog#SketchFeatureDialog QToolButton:checked {{
-        background: {p['accent_dim']};
+    QWidget#SketchViewportHost {{
+        background: {p['viewport']};
     }}
     QFrame#SketchInspector {{
         background: {p['panel']};
