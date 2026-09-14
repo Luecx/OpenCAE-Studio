@@ -1,8 +1,8 @@
 """Constraint-complete Sketcher dialog surface.
 
-The base feature dialog owns the responsive ribbon and all constraint actions.
-This specialization keeps the selection policy for the less common geometric
-constraints separate while exposing the same ``SketchFeatureDialog`` public API.
+The base feature dialog owns the sketch actions and common editor behavior. This
+specialization applies the complete selection policy and the public ribbon
+layout used by the actual OpenCAE Sketcher.
 """
 
 from __future__ import annotations
@@ -13,12 +13,83 @@ from opencae.model.entities.geometry import (
     SketchConstraintKind,
     SketchLine,
 )
+from opencae.ui.core.metrics import RIBBON_PAGE_HEIGHT
+from opencae.ui.ribbon.ribbon_page import ResponsiveRibbonPage
+from opencae.ui.ribbon.specs import RibbonGroupSpec
 
 from .dialog import SketchFeatureDialog as _BaseSketchFeatureDialog
 
 
 class SketchFeatureDialog(_BaseSketchFeatureDialog):
-    """Feature editor with complete constraint-selection policies."""
+    """Feature editor with complete constraint policies and canonical ribbon."""
+
+    def _build_ribbon(self):
+        """Build the Sketcher ribbon with the same responsive rules as main UI.
+
+        The ordinary :class:`ResponsiveRibbonPage` deliberately collapses the
+        widest group first and continues only until the available width is
+        satisfied. Keeping the Sketcher on that exact implementation avoids a
+        separate all-or-nothing narrow mode and makes resize behavior identical
+        to the main OpenCAE ribbon.
+        """
+
+        groups = (
+            RibbonGroupSpec(
+                "SELECTION",
+                (
+                    "primitive.select",
+                    "primitive.undo",
+                    "primitive.redo",
+                ),
+                icon_action_id="primitive.select",
+            ),
+            RibbonGroupSpec(
+                "PRIMITIVES",
+                (
+                    "primitive.point",
+                    "primitive.line",
+                    "primitive.polyline",
+                    "primitive.rectangle",
+                    "primitive.circle",
+                    "primitive.arc",
+                    "primitive.more",
+                ),
+                icon_action_id="primitive.line",
+            ),
+            RibbonGroupSpec(
+                "CONSTRAINTS",
+                (
+                    "constraint.coincident",
+                    "constraint.horizontal",
+                    "constraint.vertical",
+                    "constraint.parallel",
+                    "constraint.perpendicular",
+                    "constraint.tangent",
+                    "constraint.equal",
+                    "constraint.fixed",
+                    "constraint.more",
+                    "constraint.dimension",
+                ),
+                icon_action_id="constraint.coincident",
+            ),
+            RibbonGroupSpec(
+                "CONSTRUCTION/GRID",
+                (
+                    "options.construction",
+                    "options.grid",
+                    "options.snap",
+                ),
+                icon_action_id="options.construction",
+            ),
+        )
+        self.ribbon = ResponsiveRibbonPage(
+            groups,
+            self._ribbon_actions,
+            parent=self,
+        )
+        self.ribbon.setObjectName("SketchRibbonHost")
+        self.ribbon.setFixedHeight(RIBBON_PAGE_HEIGHT)
+        return self.ribbon
 
     def _apply_constraint(self, kind: SketchConstraintKind | str):
         kind = SketchConstraintKind.coerce(kind)
