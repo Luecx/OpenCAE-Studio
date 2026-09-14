@@ -9,16 +9,13 @@ from PyQt6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QHBoxLayout,
-    QMenu,
-    QPushButton,
     QRadioButton,
-    QToolButton,
     QVBoxLayout,
     QWidget,
-    QWidgetAction,
 )
 
-from opencae.ui.core.icon_factory import IconKind
+from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.primitives.buttons import FormButton, OptionsButton
 from opencae.ui.templates import (
     PRIMARY_CONTROL_HEIGHT,
     SectionHeading,
@@ -26,26 +23,22 @@ from opencae.ui.templates import (
     field_block,
 )
 
-from .result_widgets import ribbon_button
 
-
-class ResultSectionButton(QToolButton):
+class ResultSectionButton(OptionsButton):
     """Open clipping-plane state and geometry settings from one ribbon popup."""
 
     settings_changed = pyqtSignal()
 
     def __init__(self, parent=None):
         """Build an instant popup with explicit section-view on/off controls."""
-        super().__init__(parent)
-        template = ribbon_button("Section View", IconKind.SECTION_VIEW, False, 92)
-        self.setText(template.text())
-        self.setIcon(template.icon())
-        self.setIconSize(template.iconSize())
-        self.setToolButtonStyle(template.toolButtonStyle())
-        self.setProperty("ribbonButton", True)
-        self.setFixedSize(92, 70)
-        self.setCheckable(False)
-        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        super().__init__(
+            "Section View",
+            icon=make_icon(IconKind.SECTION_VIEW, 28),
+            icon_size=28,
+            width=92,
+            height=70,
+            parent=parent,
+        )
 
         self._origin_is_automatic = True
         panel = QWidget()
@@ -83,17 +76,12 @@ class ResultSectionButton(QToolButton):
         layout.addWidget(self.invert)
         layout.addWidget(self.show_plane)
 
-        center = QPushButton("Center on current result")
+        center = FormButton("Center on current result", parent=panel)
         center.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
         center.clicked.connect(self._request_center)
         layout.addWidget(center)
 
-        menu = QMenu(self)
-        action = QWidgetAction(menu)
-        action.setDefaultWidget(panel)
-        menu.addAction(action)
-        self.setMenu(menu)
-
+        self.set_options_panel(panel)
         self.section_on.toggled.connect(self.settings_changed.emit)
         self.origin.changed.connect(self._origin_edited)
         self.normal.changed.connect(self.settings_changed.emit)
@@ -124,14 +112,10 @@ class ResultSectionButton(QToolButton):
             (self.section_on if state["enabled"] else self.section_off).setChecked(True)
         origin = state.get("origin")
         if origin is not None:
-            # Show the resolved current center numerically, but do not turn an
-            # automatically centered plane into a manual plane just because the
-            # viewport reported the resolved coordinates back to the ribbon.
             self.origin.set_value(origin)
         if "origin_auto" in state:
             self._origin_is_automatic = bool(state["origin_auto"])
         elif origin is not None:
-            # Backward compatibility for state producers predating origin_auto.
             self._origin_is_automatic = False
         normal = state.get("normal")
         if normal is not None:
