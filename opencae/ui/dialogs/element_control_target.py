@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QCheckBox, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from opencae.model.selection import RegionDefinition
 from opencae.ui.core.widgets import CompactRegionSelector
+from opencae.ui.primitives.checks import CheckForm
 
 
 class ElementControlTarget(QWidget):
@@ -23,8 +24,7 @@ class ElementControlTarget(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(7)
 
-        self.entire_part = QCheckBox("Entire part")
-        self.entire_part.setChecked(value.empty)
+        self.entire_part = CheckForm("Entire part", checked=value.empty)
         root.addWidget(self.entire_part)
 
         self.region = CompactRegionSelector(
