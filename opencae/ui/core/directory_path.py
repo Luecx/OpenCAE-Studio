@@ -5,9 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QLineEdit, QToolButton, QWidget
+from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QLineEdit, QWidget
 
-from opencae.ui.templates import apply_inline_action_size, apply_primary_control_height
+from opencae.ui.primitives.buttons import InlineButton
+from opencae.ui.templates import apply_primary_control_height
 
 
 class DirectoryPathEditor(QWidget):
@@ -27,13 +28,13 @@ class DirectoryPathEditor(QWidget):
         apply_primary_control_height(self.edit)
         self.edit.textChanged.connect(self.textChanged)
 
-        self.button = QToolButton()
-        self.button.setObjectName("InlineBrowseButton")
-        self.button.setProperty("inlineAction", True)
+        self.button = InlineButton(
+            "…",
+            tooltip="Browse for directory",
+            object_name="InlineBrowseButton",
+            parent=self,
+        )
         self.button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.button.setText("…")
-        self.button.setToolTip("Browse for directory")
-        apply_inline_action_size(self.button)
         self.button.clicked.connect(self._browse)
 
         layout.addWidget(self.edit, 1)
