@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QLabel, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
+
+from opencae.ui.primitives.inputs import NumberInput
 
 from .control_metrics import apply_primary_control_height
 
@@ -33,12 +35,13 @@ class NumericUnitInput(QWidget):
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
 
-        self.editor = QDoubleSpinBox()
-        self.editor.setMinimumWidth(0)
-        self.editor.setRange(minimum, maximum)
-        self.editor.setDecimals(decimals)
-        self.editor.setValue(float(value))
-        apply_primary_control_height(self.editor)
+        self.editor = NumberInput(
+            value,
+            minimum=minimum,
+            maximum=maximum,
+            decimals=decimals,
+            parent=self,
+        )
         self.editor.valueChanged.connect(self.valueChanged.emit)
         self._layout.addWidget(self.editor, 1)
 
@@ -80,8 +83,6 @@ class NumericUnitInput(QWidget):
         self.editor.setObjectName(
             "PrimaryNumericWithUnit" if self.unit_label is not None else "PrimaryNumeric"
         )
-        # Object-name selectors determine the joined border geometry. Repolish
-        # immediately when a method switches between dimensionless and unitful.
         style = self.editor.style()
         style.unpolish(self.editor)
         style.polish(self.editor)
