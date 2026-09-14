@@ -1,45 +1,49 @@
-from PyQt6.QtCore import QSize, QSignalBlocker, Qt, pyqtSignal
-from PyQt6.QtWidgets import QFormLayout, QMenu, QToolButton, QWidget, QWidgetAction
+from PyQt6.QtCore import QSignalBlocker, pyqtSignal
+from PyQt6.QtWidgets import QFormLayout, QWidget
 
 from opencae.results.navigation import display_field, fields_for, frame_keys, frame_label, step_ids, step_label
 from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.widgets import ChevronComboBox
+from opencae.ui.primitives.buttons import OptionsButton
 
 
-class ResultFieldButton(QToolButton):
+class ResultFieldButton(OptionsButton):
     selection_changed = pyqtSignal()
     navigation_changed = pyqtSignal(bool, bool)
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(
+            "Field",
+            icon=make_icon(IconKind.RESULT_FIELD, 28),
+            icon_size=28,
+            width=92,
+            height=70,
+            parent=parent,
+        )
         self.result = None
         self.fields = []
-        self.setText("Field")
-        self.setIcon(make_icon(IconKind.RESULT_FIELD, 28))
-        self.setIconSize(QSize(28, 28))
-        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.setProperty("ribbonButton", True)
-        self.setFixedSize(92, 70)
         panel = QWidget()
         form = QFormLayout(panel)
         form.setContentsMargins(12, 10, 12, 10)
-        self.step, self.frame, self.field, self.component = (ChevronComboBox() for _ in range(4))
-        for label, combo in (("Step", self.step), ("Frame", self.frame), ("Field", self.field), ("Component", self.component)):
+        self.step, self.frame, self.field, self.component = (
+            ChevronComboBox() for _ in range(4)
+        )
+        for label, combo in (
+            ("Step", self.step),
+            ("Frame", self.frame),
+            ("Field", self.field),
+            ("Component", self.component),
+        ):
             combo.setMinimumWidth(190)
             form.addRow(label, combo)
             combo.currentIndexChanged.connect(self._changed)
-        menu = QMenu(self)
-        action = QWidgetAction(menu)
-        action.setDefaultWidget(panel)
-        menu.addAction(action)
-        self.setMenu(menu)
+        self.set_options_panel(panel)
 
     def set_solution(self, result, fields, preferred=None):
         """Load one ResultSet and select its first available field by default.
 
         Without an explicit preferred field the selectors intentionally resolve
-        to the first step, first frame and first field.  This avoids PyVista
+        to the first step, first frame and first field. This avoids PyVista
         falling back to an arbitrary active FRD array and gives newly opened
         result files one deterministic contour immediately.
         """
@@ -92,7 +96,11 @@ class ResultFieldButton(QToolButton):
     def _steps(self, preferred=None):
         self.step.clear()
         for index, step_id in enumerate(step_ids(self.fields)):
-            self.step.addItem(make_icon(IconKind.RESULT_STEP, 16), step_label(self.result, step_id, index), step_id)
+            self.step.addItem(
+                make_icon(IconKind.RESULT_STEP, 16),
+                step_label(self.result, step_id, index),
+                step_id,
+            )
         if preferred:
             step_index = self.step.findData(preferred.metadata.get("step_id", 1))
             if step_index >= 0:
@@ -102,10 +110,21 @@ class ResultFieldButton(QToolButton):
     def _frames(self, preferred=None, field_name=None, component_name=None):
         self.frame.clear()
         for frame_id, value in frame_keys(self.fields, self.step.currentData()):
-            self.frame.addItem(make_icon(IconKind.RESULT_FRAME, 16), frame_label(frame_id, value), (frame_id, value))
+            self.frame.addItem(
+                make_icon(IconKind.RESULT_FRAME, 16),
+                frame_label(frame_id, value),
+                (frame_id, value),
+            )
         if preferred:
             target = int(preferred.metadata.get("frame_id", 1))
-            frame_index = next((index for index in range(self.frame.count()) if self.frame.itemData(index)[0] == target), -1)
+            frame_index = next(
+                (
+                    index
+                    for index in range(self.frame.count())
+                    if self.frame.itemData(index)[0] == target
+                ),
+                -1,
+            )
             if frame_index >= 0:
                 self.frame.setCurrentIndex(frame_index)
         self._fields(preferred, field_name, component_name)
@@ -118,7 +137,10 @@ class ResultFieldButton(QToolButton):
             self.field.addItem(make_icon(IconKind.RESULT_FIELD, 16), value.name, value)
         target_name = preferred.name if preferred else field_name
         if target_name:
-            field_index = next((index for index, value in enumerate(values) if value.name == target_name), -1)
+            field_index = next(
+                (index for index, value in enumerate(values) if value.name == target_name),
+                -1,
+            )
             if field_index >= 0:
                 self.field.setCurrentIndex(field_index)
         self._components(preferred, component_name)
@@ -128,10 +150,22 @@ class ResultFieldButton(QToolButton):
         source = self.field.currentData()
         if not source:
             return
-        names = tuple(dict.fromkeys(("Magnitude", *source.metadata.get("components", ()), *source.metadata.get("derived", ()))))
+        names = tuple(
+            dict.fromkeys(
+                (
+                    "Magnitude",
+                    *source.metadata.get("components", ()),
+                    *source.metadata.get("derived", ()),
+                )
+            )
+        )
         for name in names:
             self.component.addItem(make_icon(IconKind.CONTOUR, 16), name, name)
-        target = preferred.metadata.get("component", "Magnitude") if preferred else component_name
+        target = (
+            preferred.metadata.get("component", "Magnitude")
+            if preferred
+            else component_name
+        )
         if target:
             index = self.component.findText(str(target))
             if index >= 0:
@@ -153,7 +187,9 @@ class ResultFieldButton(QToolButton):
         self._emit_navigation()
 
     def _emit_navigation(self):
-        self.navigation_changed.emit(self.can_select_previous_frame(), self.can_select_next_frame())
+        self.navigation_changed.emit(
+            self.can_select_previous_frame(), self.can_select_next_frame()
+        )
 
     def _combos(self):
         return self.step, self.frame, self.field, self.component
