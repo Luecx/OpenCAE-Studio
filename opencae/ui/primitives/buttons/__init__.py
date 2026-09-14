@@ -1,6 +1,5 @@
-"""Concrete button primitives plus transitional compatibility exports."""
+"""Flat concrete button primitives used throughout OpenCAE."""
 
-# Canonical structurally named primitives -----------------------------------
 from .button_browser_tree_action import ButtonBrowserTreeAction
 from .button_color_swatch import ButtonColorSwatch
 from .button_field_action import ButtonFieldAction
@@ -27,22 +26,7 @@ from .button_stage_choice import ButtonStageChoice
 from .button_time_manager_media import ButtonTimeManagerMedia
 from .button_viewport_action import ButtonViewportAction
 from .button_viewport_toggle import ButtonViewportToggle
-
-# Transitional names retained for callers not yet migrated ------------------
-from .action_button import ActionButton
-from .choice_button import ChoiceButton
-from .factory import button_for_action
-from .form_button import FormButton
-from .inline_button import InlineButton
-from .menu_button import MenuButton
-from .options_button import OptionsButton
-from .presentation import ButtonPresentation
-from .role import ButtonRole
-from .selection_button import SelectionButton
-from .spec import ButtonSpec
-from .split_button import SplitButton
-from .toggle_button import ToggleButton
-from .viewport_button import ViewportButton
+from .ribbon_action_factory import ribbon_button_for_action
 
 __all__ = [
     "ButtonBrowserTreeAction",
@@ -71,18 +55,5 @@ __all__ = [
     "ButtonTimeManagerMedia",
     "ButtonViewportAction",
     "ButtonViewportToggle",
-    "ActionButton",
-    "ButtonPresentation",
-    "ButtonRole",
-    "ButtonSpec",
-    "ChoiceButton",
-    "FormButton",
-    "InlineButton",
-    "MenuButton",
-    "OptionsButton",
-    "SelectionButton",
-    "SplitButton",
-    "ToggleButton",
-    "ViewportButton",
-    "button_for_action",
+    "ribbon_button_for_action",
 ]
