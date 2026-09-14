@@ -41,12 +41,42 @@ dialog = SketchFeatureDialog(
     SketchFeature(name="Runtime Sketch", mode="Extrusion", depth=5.0)
 )
 try:
+    # Layout regressions only show up after Qt has actually polished and shown
+    # the widgets.  Construction-time parent checks are not enough: a toolbar
+    # can exist while being compressed to zero pixels by a splitter/layout.
+    dialog.show()
+    app.processEvents()
+
     assert dialog.canvas.tool == "Select"
     assert dialog.mode_combo.currentText() == "Extrusion"
     assert not dialog.canvas.show_revolve_axis
     assert dialog.canvas.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     assert dialog.canvas.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     assert dialog.canvas.frameShape().name == "NoFrame"
+
+    # The slim command bar is a real visible strip between the ribbon and the
+    # drafting stack.  It must never be collapsed or covered by the canvas.
+    bar = dialog.viewport_toolbar
+    host = bar.parentWidget()
+    assert bar.objectName() == "ViewportToolbar"
+    assert bar.isVisibleTo(dialog)
+    assert bar.height() >= 38
+    assert bar.width() > 200
+    assert bar.geometry().top() == 0
+    assert dialog.workspace.geometry().top() >= bar.geometry().bottom() + 1
+    assert dialog.workspace.height() > 100
+    assert dialog.view_sketch.isVisibleTo(dialog)
+    assert dialog.view_preview.isVisibleTo(dialog)
+    assert dialog.fit_button.isVisibleTo(dialog)
+    assert dialog.status_label.isVisibleTo(dialog)
+    assert dialog.buttons.isVisibleTo(dialog)
+    assert host.height() >= bar.height() + dialog.workspace.minimumSizeHint().height()
+
+    footer = dialog.findChild(QWidget, "SketchLegacyFooter")
+    assert footer is not None
+    assert footer.isHidden()
+    assert footer.width() == 0
+    assert footer.height() == 0
 
     for tool in (
         "Select",
@@ -127,11 +157,11 @@ try:
 
     # Commit/cancel, solver status, view mode and Fit all live in the one slim
     # viewport bar; the legacy footer is intentionally absent.
-    assert dialog.status_label.parent().objectName() == "ViewportToolbar"
-    assert dialog.buttons.parent().objectName() == "ViewportToolbar"
-    assert dialog.view_sketch.parent().objectName() == "ViewportToolbar"
-    assert dialog.view_preview.parent().objectName() == "ViewportToolbar"
-    assert dialog.fit_button.parent().objectName() == "ViewportToolbar"
+    assert dialog.status_label.parent() is bar
+    assert dialog.buttons.parent() is bar
+    assert dialog.view_sketch.parent() is bar
+    assert dialog.view_preview.parent() is bar
+    assert dialog.fit_button.parent() is bar
 
     dialog.mode_combo.setCurrentText("Revolve")
     assert dialog.canvas.show_revolve_axis
