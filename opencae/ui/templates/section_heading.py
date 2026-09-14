@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QLabel
+from opencae.ui.primitives.semantic_label import SemanticLabel
 
 
-class SectionHeading(QLabel):
+class SectionHeading(SemanticLabel):
     """Render a reusable section title with the shared OpenCAE accent marker."""
 
     def __init__(self, text: str, parent=None):
         """Create one semantic editor-section heading."""
-        super().__init__(str(text), parent)
-        self.setObjectName("EditorSectionHeading")
+        super().__init__(
+            str(text),
+            object_name="EditorSectionHeading",
+            parent=parent,
+        )
