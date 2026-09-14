@@ -1,12 +1,5 @@
-"""Defines semantic presentation roles for reusable button templates."""
+"""Compatibility import for the canonical semantic button role."""
 
-from enum import StrEnum
+from opencae.ui.primitives.buttons.role import ButtonRole
 
-
-class ButtonRole(StrEnum):
-    """Semantic style role applied by the shared button factory."""
-
-    DEFAULT = "default"
-    PRIMARY = "primary"
-    DANGER = "danger"
-    TOOL = "tool"
+__all__ = ["ButtonRole"]
