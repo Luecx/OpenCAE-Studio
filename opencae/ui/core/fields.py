@@ -9,16 +9,15 @@ from typing import Any
 
 from PyQt6.QtWidgets import QCheckBox, QDoubleSpinBox, QLineEdit, QSpinBox, QWidget
 
-from opencae.ui.primitives.inputs import (
-    BooleanInput,
-    ChoiceInput,
-    IntegerInput,
-    TextInput,
+from opencae.ui.composites.controls import (
+    ControlFilePath,
+    ControlNumericUnit,
+    ControlReferenceSelector,
 )
-from opencae.ui.templates import NumericUnitInput
-
-from .file_path import FilePathEditor
-from .widgets import ReferenceSelector
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.inputs.input_form_integer import InputFormInteger
+from opencae.ui.primitives.inputs.input_form_text import InputFormText
+from opencae.ui.primitives.selects import SelectForm
 
 
 class FieldKind(StrEnum):
@@ -56,11 +55,11 @@ def create_editor(spec: FieldSpec) -> QWidget:
     """Create the canonical editor for one declarative field specification."""
     kind = FieldKind(spec.kind)
     if kind is FieldKind.CHOICE:
-        widget = ChoiceInput()
+        widget = SelectForm()
         widget.addItems(str(value) for value in spec.choices)
         widget.setCurrentText(str(spec.default))
     elif kind is FieldKind.REFERENCE:
-        widget = ReferenceSelector(
+        widget = ControlReferenceSelector(
             spec.choices,
             spec.default,
             spec.create_callback,
@@ -70,13 +69,11 @@ def create_editor(spec: FieldSpec) -> QWidget:
         lower = max(-2_147_483_648, int(spec.minimum))
         upper = min(2_147_483_647, int(spec.maximum))
         value = max(lower, min(upper, int(spec.default)))
-        widget = IntegerInput(value, minimum=lower, maximum=upper)
+        widget = InputFormInteger(value, minimum=lower, maximum=upper)
         if spec.suffix:
             widget.setSuffix(spec.suffix)
     elif kind is FieldKind.FLOAT:
-        # Units are display metadata, so keep them in the same fixed right-hand
-        # segment used by Material/Profile/Section numeric controls.
-        widget = NumericUnitInput(
+        widget = ControlNumericUnit(
             float(spec.default),
             str(spec.suffix or "").strip(),
             minimum=spec.minimum,
@@ -84,11 +81,11 @@ def create_editor(spec: FieldSpec) -> QWidget:
             decimals=spec.decimals,
         )
     elif kind is FieldKind.BOOLEAN:
-        widget = BooleanInput(checked=bool(spec.default))
+        widget = CheckForm(checked=bool(spec.default))
     elif kind is FieldKind.FILE:
-        widget = FilePathEditor(str(spec.default), spec.file_filter)
+        widget = ControlFilePath(str(spec.default), spec.file_filter)
     else:
-        widget = TextInput(str(spec.default), read_only=spec.read_only)
+        widget = InputFormText(str(spec.default), read_only=spec.read_only)
 
     widget.setMinimumWidth(0)
     return widget
@@ -96,11 +93,11 @@ def create_editor(spec: FieldSpec) -> QWidget:
 
 def editor_value(widget: QWidget):
     """Extract the normalized Python value from a generic field editor."""
-    if isinstance(widget, ChoiceInput):
+    if isinstance(widget, SelectForm):
         return widget.currentText()
-    if isinstance(widget, ReferenceSelector):
+    if isinstance(widget, ControlReferenceSelector):
         return widget.currentValue()
-    if isinstance(widget, NumericUnitInput):
+    if isinstance(widget, ControlNumericUnit):
         return widget.value()
     if isinstance(widget, QSpinBox):
         return widget.value()
@@ -108,7 +105,7 @@ def editor_value(widget: QWidget):
         return widget.value()
     if isinstance(widget, QCheckBox):
         return widget.isChecked()
-    if isinstance(widget, FilePathEditor):
+    if isinstance(widget, ControlFilePath):
         return widget.text()
     if isinstance(widget, QLineEdit):
         return widget.text().strip()
