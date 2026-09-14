@@ -2,15 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import (
-    QLineEdit,
-    QMessageBox,
-    QPlainTextEdit,
-    QSpinBox,
-    QTabWidget,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QMessageBox, QTabWidget, QVBoxLayout, QWidget
 
 from opencae.model.core import EntityRef
 from opencae.model.entities.fields import (
@@ -20,17 +12,11 @@ from opencae.model.entities.fields import (
     FieldSourceKind,
     FieldValueKind,
 )
+from opencae.ui.composites.controls import ControlFilePath, ControlReferenceSelector
 from opencae.ui.core.apply_dialog import ApplyDialog
-from opencae.ui.core.file_path import FilePathEditor
-from opencae.ui.core.widgets import ChevronComboBox, ReferenceSelector
-from opencae.ui.templates import (
-    SectionHeading,
-    apply_primary_control_height,
-    dialog_layout,
-    dialog_buttons,
-    field_block,
-    field_row,
-)
+from opencae.ui.primitives.inputs import InputFormInteger, InputFormMultiline, InputFormText
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.templates import SectionHeading, dialog_layout, dialog_buttons, field_block, field_row
 
 from .field_table import FieldTable
 
@@ -46,7 +32,6 @@ class FieldDefinitionDialog(ApplyDialog):
         parent=None,
         default_name="Field-1",
     ):
-        """Build the field definition while preserving all existing source semantics."""
         super().__init__(parent)
         self.original = field
         self.field = field or FieldDefinition(name=default_name)
@@ -56,21 +41,19 @@ class FieldDefinitionDialog(ApplyDialog):
 
         root = dialog_layout(self)
 
-        self.name = QLineEdit(self.field.name)
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(self.field.name)
         root.addWidget(field_block("Name", self.name))
         root.addWidget(SectionHeading("Field Definition"))
 
-        self.location = ChevronComboBox()
-        self.location.setMinimumWidth(0)
+        self.location = SelectForm()
         self.location.addItems([location.value for location in FieldLocation])
         self.location.setCurrentText(self.field.location)
-        apply_primary_control_height(self.location)
 
-        self.components = QSpinBox()
-        self.components.setRange(1, 64)
-        self.components.setValue(self.field.components)
-        apply_primary_control_height(self.components)
+        self.components = InputFormInteger(
+            self.field.components,
+            minimum=1,
+            maximum=64,
+        )
 
         root.addWidget(
             field_row(
@@ -80,7 +63,7 @@ class FieldDefinitionDialog(ApplyDialog):
         )
 
         region_id = self.field.region_ref.entity_id if self.field.region_ref else None
-        self.region = ReferenceSelector((("All", None), *regions), region_id)
+        self.region = ControlReferenceSelector((("All", None), *regions), region_id)
         root.addWidget(field_block("Region", self.region))
         root.addWidget(SectionHeading("Field Source"))
 
@@ -95,8 +78,10 @@ class FieldDefinitionDialog(ApplyDialog):
         formula_page = QWidget()
         formula_layout = QVBoxLayout(formula_page)
         formula_layout.setContentsMargins(12, 14, 12, 12)
-        self.formula = QPlainTextEdit(self.field.expression)
-        self.formula.setPlaceholderText("Examples: x + y; 2*z; sqrt(x*x+y*y)")
+        self.formula = InputFormMultiline(
+            self.field.expression,
+            placeholder="Examples: x + y; 2*z; sqrt(x*x+y*y)",
+        )
         formula_layout.addWidget(field_block("Expression", self.formula))
         self.tabs.addTab(formula_page, "Formula")
 
@@ -104,17 +89,15 @@ class FieldDefinitionDialog(ApplyDialog):
         file_layout = QVBoxLayout(file_page)
         file_layout.setContentsMargins(12, 14, 12, 12)
         file_layout.setSpacing(12)
-        self.file = FilePathEditor(
+        self.file = ControlFilePath(
             self.field.file_path,
             "Data files (*.csv *.txt *.dat);;All files (*.*)",
         )
-        self.interpolation = ChevronComboBox()
-        self.interpolation.setMinimumWidth(0)
+        self.interpolation = SelectForm()
         self.interpolation.addItems(
             [interpolation.value for interpolation in FieldInterpolation]
         )
         self.interpolation.setCurrentText(self.field.interpolation)
-        apply_primary_control_height(self.interpolation)
         file_layout.addWidget(field_block("File", self.file))
         file_layout.addWidget(field_block("Interpolation", self.interpolation))
         file_layout.addStretch(1)
@@ -123,9 +106,7 @@ class FieldDefinitionDialog(ApplyDialog):
         root.addWidget(self.tabs, 1)
         self.components.valueChanged.connect(self.table.set_components)
         self.location.currentTextChanged.connect(self._location_changed)
-        self.tabs.setCurrentIndex(
-            list(FieldSourceKind).index(self.field.source_type)
-        )
+        self.tabs.setCurrentIndex(list(FieldSourceKind).index(self.field.source_type))
         self._location_changed(self.location.currentText())
 
         buttons = dialog_buttons(include_apply=True)
@@ -133,7 +114,6 @@ class FieldDefinitionDialog(ApplyDialog):
         root.addWidget(buttons)
 
     def _location_changed(self, location: str) -> None:
-        """Apply domain-specific address columns and shell-normal vector semantics."""
         shell_normal = FieldLocation.coerce(location) is FieldLocation.SHELL_NORMAL
         if shell_normal and self.components.value() != 3:
             self.components.setValue(3)
@@ -141,7 +121,6 @@ class FieldDefinitionDialog(ApplyDialog):
         self.table.set_domain(location, self.components.value())
 
     def validate(self) -> bool:
-        """Reject empty or duplicate field names before committing values."""
         name = self.name.text().strip()
         duplicates = {value.casefold() for value in self.existing}
         original = self.original.name.casefold() if self.original else ""
@@ -158,7 +137,6 @@ class FieldDefinitionDialog(ApplyDialog):
         return True
 
     def values(self) -> dict:
-        """Return constructor values for the field represented by the active source tab."""
         count = self.components.value()
         region_id = self.region.currentValue()
         location = FieldLocation.coerce(self.location.currentText())
@@ -166,17 +144,15 @@ class FieldDefinitionDialog(ApplyDialog):
             "name": self.name.text().strip(),
             "location": location,
             "components": count,
-            "component_names": [
-                "NX", "NY", "NZ"
-            ] if location is FieldLocation.SHELL_NORMAL else [f"C{i + 1}" for i in range(count)],
+            "component_names": ["NX", "NY", "NZ"]
+            if location is FieldLocation.SHELL_NORMAL
+            else [f"C{i + 1}" for i in range(count)],
             "region_ref": EntityRef(str(region_id), "Region") if region_id else None,
             "source_type": tuple(FieldSourceKind)[self.tabs.currentIndex()],
             "expression": self.formula.toPlainText().strip(),
             "table": self.table.values(),
             "file_path": self.file.text(),
-            "interpolation": FieldInterpolation.coerce(
-                self.interpolation.currentText()
-            ),
+            "interpolation": FieldInterpolation.coerce(self.interpolation.currentText()),
             "field_type": (
                 FieldValueKind.VECTOR
                 if location is FieldLocation.SHELL_NORMAL
@@ -187,7 +163,6 @@ class FieldDefinitionDialog(ApplyDialog):
         }
 
     def prepare_new(self, default_name, existing_names) -> None:
-        """Reset naming state after Apply creates a field and keeps the dialog open."""
         self.original = None
         self.existing = set(existing_names)
         self.name.setText(default_name)
