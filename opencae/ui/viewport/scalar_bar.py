@@ -126,8 +126,8 @@ def _disable_native_range_swatches(scalar_actor):
 def _new_cap_state(renderer):
     below_actor, below_poly = _rectangle_actor()
     above_actor, above_poly = _rectangle_actor()
-    renderer.AddActor2D(below_actor)
-    renderer.AddActor2D(above_actor)
+    _add_actor2d(renderer, below_actor)
+    _add_actor2d(renderer, above_actor)
     return {
         "below_actor": below_actor,
         "below_poly": below_poly,
@@ -189,15 +189,47 @@ def _render_window(plotter):
         return None
 
 
-def _ensure_actor(renderer, actor):
+def _renderer_has_actor(renderer, actor) -> bool:
+    """Check actor membership across PyVista Renderer and raw vtkRenderer APIs."""
     try:
-        if not renderer.HasViewProp(actor):
-            renderer.AddActor2D(actor)
+        return actor in renderer.actors.values()
     except (AttributeError, RuntimeError, TypeError):
-        try:
-            renderer.AddActor2D(actor)
-        except (AttributeError, RuntimeError, TypeError):
-            pass
+        pass
+    try:
+        return bool(renderer.HasViewProp(actor))
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+
+
+def _add_actor2d(renderer, actor) -> bool:
+    """Add a 2D VTK actor through the renderer's supported public surface.
+
+    Modern PyVista wraps ``vtkRenderer`` and deliberately exposes ``add_actor``
+    instead of forwarding every VTK CamelCase method such as ``AddActor2D``.
+    Raw VTK renderers are still accepted for compatibility with lightweight
+    tests and lower-level callers.
+    """
+    try:
+        renderer.add_actor(
+            actor,
+            reset_camera=False,
+            pickable=False,
+            render=False,
+        )
+        return True
+    except (AttributeError, RuntimeError, TypeError):
+        pass
+    try:
+        renderer.AddActor2D(actor)
+        return True
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+
+
+def _ensure_actor(renderer, actor):
+    if _renderer_has_actor(renderer, actor):
+        return
+    _add_actor2d(renderer, actor)
 
 
 def _set_actor_color(actor, value):
