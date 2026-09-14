@@ -13,6 +13,7 @@ from opencae.model.entities.geometry import (
     SketchConstraintKind,
     SketchLine,
 )
+from opencae.ui.core.icon_factory import IconKind
 from opencae.ui.core.metrics import RIBBON_PAGE_HEIGHT
 from opencae.ui.ribbon.ribbon_page import ResponsiveRibbonPage
 from opencae.ui.ribbon.specs import RibbonGroupSpec
@@ -22,6 +23,15 @@ from .dialog import SketchFeatureDialog as _BaseSketchFeatureDialog
 
 class SketchFeatureDialog(_BaseSketchFeatureDialog):
     """Feature editor with complete constraint policies and canonical ribbon."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # The Arc popup is itself a visible ribbon button. Give it a generic
+        # arc glyph instead of reusing the Center Arc glyph that appears inside
+        # its menu, so every visible sketch command has a distinct icon.
+        self._ribbon_actions["primitive.arc"].setIcon(
+            self._icon(IconKind.SKETCH_ARC)
+        )
 
     def _build_ribbon(self):
         """Build the Sketcher ribbon with the same responsive rules as main UI.
@@ -59,6 +69,9 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
             RibbonGroupSpec(
                 "CONSTRAINTS",
                 (
+                    # Keep the driving-dimension entry first so it remains
+                    # immediately discoverable when the group is collapsed.
+                    "constraint.dimension",
                     "constraint.coincident",
                     "constraint.horizontal",
                     "constraint.vertical",
@@ -68,9 +81,8 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
                     "constraint.equal",
                     "constraint.fixed",
                     "constraint.more",
-                    "constraint.dimension",
                 ),
-                icon_action_id="constraint.coincident",
+                icon_action_id="constraint.dimension",
             ),
             RibbonGroupSpec(
                 "CONSTRUCTION/GRID",
