@@ -3,32 +3,17 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSignalBlocker, Qt, pyqtSignal
-from PyQt6.QtWidgets import (
-    QDialog,
-    QHBoxLayout,
-    QListWidget,
-    QListWidgetItem,
-    QMessageBox,
-    QSpinBox,
-    QWidget,
-)
+from PyQt6.QtWidgets import QDialog, QHBoxLayout, QListWidgetItem, QMessageBox, QWidget
 
 from opencae.model.entities.fem import ELEMENT_TYPES
-from opencae.ui.core.widgets import ChevronComboBox
-from opencae.ui.primitives.buttons import (
-    ActionButton,
-    ButtonPresentation,
-    SelectionButton,
-)
-from opencae.ui.templates import (
-    ReadOnlyValue,
-    SectionHeading,
-    apply_primary_control_height,
-    dialog_buttons,
-    dialog_layout,
-    field_block,
-    field_row,
-)
+from opencae.ui.composites.controls import ControlReadOnlyValue
+from opencae.ui.primitives.buttons.button_field_action import ButtonFieldAction
+from opencae.ui.primitives.buttons.button_field_toggle import ButtonFieldToggle
+from opencae.ui.primitives.inputs.input_form_integer import InputFormInteger
+from opencae.ui.primitives.labels import LabelSection
+from opencae.ui.primitives.lists.list_form import ListForm
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.templates import dialog_buttons, dialog_layout, field_block, field_row
 
 
 class MeshElementDialog(QDialog):
@@ -57,26 +42,24 @@ class MeshElementDialog(QDialog):
             if suggested_connectivity
             else None
         )
-        self.setWindowTitle(
-            "Edit Element" if element is not None else "Create Element"
-        )
+        self.setWindowTitle("Edit Element" if element is not None else "Create Element")
         self.setMinimumWidth(680)
 
         root = dialog_layout(self)
-        root.addWidget(SectionHeading("Element Definition"))
-        self.element_id = QSpinBox()
-        self.element_id.setRange(1, 2_147_483_647)
-        self.element_id.setValue(element.id if element is not None else int(next_id))
+        root.addWidget(LabelSection("Element Definition"))
+        self.element_id = InputFormInteger(
+            element.id if element is not None else int(next_id),
+            minimum=1,
+            maximum=2_147_483_647,
+        )
         self.element_id.setEnabled(element is None)
-        apply_primary_control_height(self.element_id)
 
-        self.element_type = ChevronComboBox()
+        self.element_type = SelectForm()
         for value in ELEMENT_TYPES:
             self.element_type.addItem(value.__name__, value)
         current_type = type(element) if element is not None else None
         if current_type in ELEMENT_TYPES:
             self.element_type.setCurrentIndex(ELEMENT_TYPES.index(current_type))
-        apply_primary_control_height(self.element_type)
         root.addWidget(
             field_row(
                 field_block("Element ID", self.element_id),
@@ -84,25 +67,23 @@ class MeshElementDialog(QDialog):
             )
         )
 
-        root.addWidget(SectionHeading("Ordered Connectivity"))
-        self.connectivity = QListWidget()
-        self.connectivity.setMinimumHeight(180)
-        self.connectivity.setAlternatingRowColors(True)
+        root.addWidget(LabelSection("Ordered Connectivity"))
+        self.connectivity = ListForm(minimum_height=180, alternating_rows=True)
         root.addWidget(self.connectivity)
 
         controls = QWidget()
         controls_layout = QHBoxLayout(controls)
         controls_layout.setContentsMargins(0, 0, 0, 0)
         controls_layout.setSpacing(6)
-        self.pick_button = SelectionButton(
+        self.pick_button = ButtonFieldToggle(
             "Pick Nodes",
-            active_text="Finish Picking",
+            object_name="InlinePickButton",
             parent=controls,
         )
-        self.up_button = self._action_button("Move Up", controls)
-        self.down_button = self._action_button("Move Down", controls)
-        self.remove_button = self._action_button("Remove", controls)
-        self.clear_button = self._action_button("Clear", controls)
+        self.up_button = ButtonFieldAction("Move Up", parent=controls)
+        self.down_button = ButtonFieldAction("Move Down", parent=controls)
+        self.remove_button = ButtonFieldAction("Remove", parent=controls)
+        self.clear_button = ButtonFieldAction("Clear", parent=controls)
         for button in (
             self.pick_button,
             self.up_button,
@@ -121,11 +102,11 @@ class MeshElementDialog(QDialog):
         )
         self.set_node_ids(values, emit=False)
 
-        self.requirement = ReadOnlyValue("")
+        self.requirement = ControlReadOnlyValue("")
         root.addWidget(field_block("Requirement", self.requirement))
 
         if self.details:
-            root.addWidget(SectionHeading("Selection Details"))
+            root.addWidget(LabelSection("Selection Details"))
             for label, key in (
                 ("Regions", "regions"),
                 ("Section / Material", "sections"),
@@ -137,10 +118,10 @@ class MeshElementDialog(QDialog):
                 value = self.details.get(key)
                 if isinstance(value, (tuple, list, set)):
                     value = ", ".join(str(item) for item in value) or "—"
-                root.addWidget(field_block(label, ReadOnlyValue(str(value or "—"))))
+                root.addWidget(field_block(label, ControlReadOnlyValue(str(value or "—"))))
 
         if self.suggested_connectivity:
-            self.repair_button = self._action_button("Repair Orientation", self)
+            self.repair_button = ButtonFieldAction("Repair Orientation", parent=self)
             self.repair_button.setToolTip(
                 "Apply the conservative node-order flip suggested by validation"
             )
@@ -152,6 +133,7 @@ class MeshElementDialog(QDialog):
         root.addStretch(1)
         self.element_type.currentIndexChanged.connect(self._refresh_summary)
         self.pick_button.toggled.connect(self._pick_toggled)
+        self.pick_button.toggled.connect(self._sync_pick_caption)
         self.up_button.clicked.connect(lambda: self._move_selected(-1))
         self.down_button.clicked.connect(lambda: self._move_selected(1))
         self.remove_button.clicked.connect(self._remove_selected)
@@ -162,14 +144,6 @@ class MeshElementDialog(QDialog):
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
-
-    @staticmethod
-    def _action_button(text: str, parent=None) -> ActionButton:
-        return ActionButton(
-            text=text,
-            presentation=ButtonPresentation.FIELD_ACTION,
-            parent=parent,
-        )
 
     def values(self) -> dict:
         return {
@@ -219,6 +193,7 @@ class MeshElementDialog(QDialog):
             blocker = QSignalBlocker(self.pick_button)
             self.pick_button.setChecked(active)
             del blocker
+        self._sync_pick_caption(active)
 
     def _append_item(self, node_id: int, position: int) -> None:
         item = QListWidgetItem(f"{position}.  Node {node_id}")
@@ -255,6 +230,9 @@ class MeshElementDialog(QDialog):
     def _pick_toggled(self, active: bool) -> None:
         self.picking_changed.emit(bool(active))
 
+    def _sync_pick_caption(self, active: bool) -> None:
+        self.pick_button.setText("Finish Picking" if active else "Pick Nodes")
+
     def _refresh_summary(self, *_):
         element_type = self.element_type.currentData()
         count = getattr(element_type, "node_count", None)
@@ -268,9 +246,7 @@ class MeshElementDialog(QDialog):
 
     def _emit_connectivity(self) -> None:
         self._renumber_items()
-        self.connectivity_changed.emit(
-            (self.node_ids(), self.element_type.currentData())
-        )
+        self.connectivity_changed.emit((self.node_ids(), self.element_type.currentData()))
         if hasattr(self, "requirement"):
             element_type = self.element_type.currentData()
             expected = getattr(element_type, "node_count", None)
