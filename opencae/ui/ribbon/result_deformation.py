@@ -6,21 +6,17 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QHBoxLayout,
-    QMenu,
     QRadioButton,
-    QToolButton,
     QVBoxLayout,
     QWidget,
-    QWidgetAction,
 )
 
-from opencae.ui.core.icon_factory import IconKind
+from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.primitives.buttons import OptionsButton
 from opencae.ui.templates import NumericUnitInput, button, field_block
 
-from .result_widgets import ribbon_button
 
-
-class ResultDeformationButton(QToolButton):
+class ResultDeformationButton(OptionsButton):
     """Open deformation state and scale settings from one ribbon popup."""
 
     settings_changed = pyqtSignal()
@@ -29,16 +25,14 @@ class ResultDeformationButton(QToolButton):
 
     def __init__(self, parent=None):
         """Build an instant popup with explicit on/off radio buttons."""
-        super().__init__(parent)
-        template = ribbon_button("Deformed", IconKind.DEFORMATION, False)
-        self.setText(template.text())
-        self.setIcon(template.icon())
-        self.setIconSize(template.iconSize())
-        self.setToolButtonStyle(template.toolButtonStyle())
-        self.setProperty("ribbonButton", True)
-        self.setFixedSize(82, 70)
-        self.setCheckable(False)
-        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        super().__init__(
+            "Deformed",
+            icon=make_icon(IconKind.DEFORMATION, 28),
+            icon_size=28,
+            width=82,
+            height=70,
+            parent=parent,
+        )
 
         panel = QWidget()
         panel.setMinimumWidth(320)
@@ -61,9 +55,6 @@ class ResultDeformationButton(QToolButton):
         state_layout.addStretch(1)
         layout.addWidget(field_block("Deformation", state_row))
 
-        # Automatic scaling can legitimately be far below 1e-6 when a result
-        # contains very large physical displacements. Fifteen decimals preserve
-        # those factors instead of silently rounding the display scale to zero.
         self.scale = NumericUnitInput(
             1.0,
             "",
@@ -99,12 +90,7 @@ class ResultDeformationButton(QToolButton):
         reset_row.addWidget(reset)
         layout.addLayout(reset_row)
 
-        menu = QMenu(self)
-        action = QWidgetAction(menu)
-        action.setDefaultWidget(panel)
-        menu.addAction(action)
-        self.setMenu(menu)
-
+        self.set_options_panel(panel)
         self.enabled.toggled.connect(self.settings_changed.emit)
         self.scale.valueChanged.connect(self.settings_changed.emit)
 
