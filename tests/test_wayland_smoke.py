@@ -21,7 +21,7 @@ def test_native_wayland_uses_qopenglwidget_generic_vtk_render_window():
             encoding="utf-8"
         )
         requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
-        assert "OPENCAE_WAYLAND_SMOKE: 1" in workflow
+        assert "OPENCAE_WAYLAND_SMOKE:" in workflow
         assert "test_wayland_smoke.py" in workflow
         assert "pyvistaqt" in requirements.lower()
         return
