@@ -5,7 +5,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from opencae.ui.core.metrics import FIELD_LABEL_SPACING
-from opencae.ui.primitives.semantic_label import SemanticLabel
+from opencae.ui.primitives.labels import LabelForm
 
 
 class FormField(QWidget):
@@ -14,11 +14,7 @@ class FormField(QWidget):
     def __init__(self, label_text: str, control: QWidget, parent=None):
         super().__init__(parent)
         self.setObjectName("PrimaryFieldBlock")
-        self.label = SemanticLabel(
-            str(label_text),
-            object_name="PrimaryFieldLabel",
-            parent=self,
-        )
+        self.label = LabelForm(str(label_text), self)
         self.control = control
 
         layout = QVBoxLayout(self)
