@@ -11,3 +11,4 @@ class ButtonPresentation(StrEnum):
     COMPACT = "compact"
     VIEWPORT = "viewport"
     INLINE = "inline"
+    FIELD_ACTION = "field_action"
