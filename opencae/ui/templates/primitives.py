@@ -7,16 +7,13 @@ from collections.abc import Callable
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QLabel, QPushButton, QToolButton
 
-from opencae.ui.primitives.buttons import ActionButton, ButtonPresentation
 from opencae.ui.primitives.buttons.button_form_action import ButtonFormAction
 from opencae.ui.primitives.buttons.button_form_danger import ButtonFormDanger
 from opencae.ui.primitives.buttons.button_form_primary import ButtonFormPrimary
 from opencae.ui.primitives.buttons.button_form_toggle import ButtonFormToggle
-from opencae.ui.primitives.buttons.button_ribbon_action import ButtonRibbonAction
-from opencae.ui.primitives.buttons.button_ribbon_menu import ButtonRibbonMenu
-from opencae.ui.primitives.buttons.button_ribbon_toggle import ButtonRibbonToggle
+from opencae.ui.primitives.buttons.ribbon_action_factory import ribbon_button_for_action
+from opencae.ui.primitives.labels import LabelBody, LabelGroup, LabelMuted, LabelTitle
 from opencae.ui.primitives.ribbon_text import ribbon_label, wrapped_ribbon_text
-from opencae.ui.primitives.semantic_label import SemanticLabel
 
 from .button_role import ButtonRole
 from .button_spec import ButtonSpec
@@ -25,7 +22,18 @@ from .label_spec import LabelSpec
 
 
 def label(spec: LabelSpec | str, *, role: LabelRole = LabelRole.BODY) -> QLabel:
-    return SemanticLabel(spec, role=role)
+    resolved = spec if isinstance(spec, LabelSpec) else LabelSpec(str(spec), role)
+    if resolved.role is LabelRole.TITLE:
+        widget = LabelTitle(resolved.text)
+    elif resolved.role is LabelRole.MUTED:
+        widget = LabelMuted(resolved.text)
+    elif resolved.role is LabelRole.GROUP:
+        widget = LabelGroup(resolved.text)
+    else:
+        widget = LabelBody(resolved.text)
+    if resolved.tooltip:
+        widget.setToolTip(resolved.tooltip)
+    return widget
 
 
 def button(
@@ -57,16 +65,9 @@ def button(
 
 
 def action_button(action: QAction, *, large: bool = True) -> QToolButton:
-    if large:
-        if action.menu() is not None:
-            return ButtonRibbonMenu(action)
-        if action.isCheckable():
-            return ButtonRibbonToggle(action)
-        return ButtonRibbonAction(action)
-
-    # Compact is a retained compatibility-only surface.  New code should use a
-    # structurally named concrete primitive for its actual host surface.
-    return ActionButton(action, presentation=ButtonPresentation.COMPACT)
+    """Compatibility route to the concrete QAction-driven ribbon primitive."""
+    del large
+    return ribbon_button_for_action(action)
 
 
 __all__ = [
