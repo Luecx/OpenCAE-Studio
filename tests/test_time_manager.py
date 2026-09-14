@@ -5,11 +5,8 @@ from types import SimpleNamespace
 
 import numpy as np
 import pyvista as pv
-from PyQt6.QtWidgets import QApplication, QHBoxLayout, QRadioButton, QToolButton
 
 from opencae.ui.panels.time_manager import (
-    TimeManagerPanel,
-    _playback_icon,
     current_frame_amplitude,
     frame_axis,
     frame_bracket,
@@ -190,42 +187,72 @@ def test_animation_path_updates_existing_result_actor_without_scene_clear():
 
 
 def test_time_manager_uses_full_width_controls_and_compact_plot():
-    app = QApplication.instance() or QApplication([])
-    panel = TimeManagerPanel()
-    try:
-        assert isinstance(panel.current_frame, QRadioButton)
-        assert isinstance(panel.across_frames, QRadioButton)
-        assert panel.across_frames.isChecked()
-        assert isinstance(panel.play_button, QToolButton)
-        assert isinstance(panel.stop_button, QToolButton)
-        assert panel.sidebar.width() == 290
-        assert panel.step.parent() is panel.sidebar
-        assert panel.step.sizePolicy().horizontalPolicy().name == "Expanding"
-        assert panel.layout().count() == 2
-        assert isinstance(panel.controls_row.layout(), QHBoxLayout)
-        assert panel.controls_row.layout().count() == 9  # two stretches + seven buttons
-        buttons = (
-            panel.first_button,
-            panel.previous_button,
-            panel.play_button,
-            panel.stop_button,
-            panel.next_button,
-            panel.last_button,
-            panel.loop_button,
-        )
-        assert all(button.parent() is panel.controls_row for button in buttons)
-        assert panel.plot.minimumHeight() >= 130
-        assert panel.speed.minimum() == 0.25
-        assert panel.speed.maximum() == 4.0
-        assert panel.FRAME_INTERVAL_MS <= 16
-        assert panel.ACROSS_BASE_FPS >= 4.0
-        assert panel.total_frames.isHidden()
-        assert panel.current_frame_label.isHidden()
-        for kind in ("first", "previous", "play", "stop", "next", "last", "loop"):
-            assert not _playback_icon(kind).isNull()
-    finally:
-        panel.deleteLater()
-        app.processEvents()
+    # This is a real Qt widget smoke test, but it intentionally runs in a fresh
+    # process. The full suite exercises several VTK/QOpenGLWidget contexts before
+    # reaching this test; reusing that native process state made Qt occasionally
+    # terminate inside widget construction even though TimeManagerPanel passes in
+    # isolation and in the application. A subprocess keeps the test active while
+    # making its native lifetime deterministic.
+    import os
+    import subprocess
+    import sys
+
+    script = r'''
+from PyQt6.QtWidgets import QApplication, QHBoxLayout, QRadioButton, QToolButton
+from opencae.ui.panels.time_manager import TimeManagerPanel, _playback_icon
+
+app = QApplication.instance() or QApplication([])
+panel = TimeManagerPanel()
+try:
+    assert isinstance(panel.current_frame, QRadioButton)
+    assert isinstance(panel.across_frames, QRadioButton)
+    assert panel.across_frames.isChecked()
+    assert isinstance(panel.play_button, QToolButton)
+    assert isinstance(panel.stop_button, QToolButton)
+    assert panel.sidebar.width() == 290
+    assert panel.step.parent() is panel.sidebar
+    assert panel.step.sizePolicy().horizontalPolicy().name == "Expanding"
+    assert panel.layout().count() == 2
+    assert isinstance(panel.controls_row.layout(), QHBoxLayout)
+    assert panel.controls_row.layout().count() == 9
+    buttons = (
+        panel.first_button,
+        panel.previous_button,
+        panel.play_button,
+        panel.stop_button,
+        panel.next_button,
+        panel.last_button,
+        panel.loop_button,
+    )
+    assert all(button.parent() is panel.controls_row for button in buttons)
+    assert panel.plot.minimumHeight() >= 130
+    assert panel.speed.minimum() == 0.25
+    assert panel.speed.maximum() == 4.0
+    assert panel.FRAME_INTERVAL_MS <= 16
+    assert panel.ACROSS_BASE_FPS >= 4.0
+    assert panel.total_frames.isHidden()
+    assert panel.current_frame_label.isHidden()
+    for kind in ("first", "previous", "play", "stop", "next", "last", "loop"):
+        assert not _playback_icon(kind).isNull()
+finally:
+    panel.close()
+    panel.deleteLater()
+    app.processEvents()
+'''
+    env = dict(os.environ)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["PYVISTA_OFF_SCREEN"] = "true"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout
 
     source = (ROOT / "opencae/ui/panels/time_manager.py").read_text(encoding="utf-8")
     plot_source = (ROOT / "opencae/ui/panels/time_manager_plot.py").read_text(encoding="utf-8")
