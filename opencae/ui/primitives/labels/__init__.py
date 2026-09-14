@@ -7,6 +7,7 @@ from .label_matrix_header import LabelMatrixHeader
 from .label_muted import LabelMuted
 from .label_section import LabelSection
 from .label_status import LabelStatus
+from .label_time_manager_heading import LabelTimeManagerHeading
 from .label_title import LabelTitle
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     "LabelMuted",
     "LabelSection",
     "LabelStatus",
+    "LabelTimeManagerHeading",
     "LabelTitle",
 ]
