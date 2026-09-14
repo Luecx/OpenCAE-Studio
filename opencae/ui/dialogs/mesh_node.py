@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSignalBlocker, pyqtSignal
-from PyQt6.QtWidgets import QDialog, QSpinBox, QToolButton
+from PyQt6.QtWidgets import QDialog, QSpinBox
 
+from opencae.ui.primitives.buttons import SelectionButton
 from opencae.ui.templates import (
     ReadOnlyValue,
     SectionHeading,
@@ -58,15 +59,14 @@ class MeshNodeDialog(QDialog):
         )
         root.addWidget(field_block("Global coordinates", self.coordinates))
 
-        self.pick_button = QToolButton()
-        self.pick_button.setText("Pick Position in View")
-        self.pick_button.setCheckable(True)
-        self.pick_button.setObjectName("InlinePickButton")
-        self.pick_button.setProperty("inlineAction", True)
-        self.pick_button.setToolTip(
-            "Pick a mesh node, geometry vertex, datum point, or reference point"
+        self.pick_button = SelectionButton(
+            "Pick Position in View",
+            active_text="Finish Picking",
+            tooltip=(
+                "Pick a mesh node, geometry vertex, datum point, or reference point"
+            ),
+            parent=self,
         )
-        apply_primary_control_height(self.pick_button)
         self.pick_button.toggled.connect(self._pick_toggled)
         root.addWidget(self.pick_button)
 
@@ -106,13 +106,6 @@ class MeshNodeDialog(QDialog):
         blocker = QSignalBlocker(self.pick_button)
         self.pick_button.setChecked(active)
         del blocker
-        self._refresh_pick_text(active)
 
     def _pick_toggled(self, active: bool) -> None:
-        self._refresh_pick_text(active)
         self.picking_changed.emit(bool(active))
-
-    def _refresh_pick_text(self, active: bool) -> None:
-        self.pick_button.setText(
-            "Finish Picking" if active else "Pick Position in View"
-        )
