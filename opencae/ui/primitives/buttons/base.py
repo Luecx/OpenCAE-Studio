@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QToolButton, QWidget
 
 from opencae.ui.core.metrics import (
     INLINE_ACTION_SIZE,
+    PRIMARY_CONTROL_HEIGHT,
     RIBBON_BUTTON_HEIGHT,
     RIBBON_BUTTON_WIDTH,
     RIBBON_ICON_SIZE,
@@ -20,7 +21,7 @@ from .presentation import ButtonPresentation
 class SemanticToolButton(QToolButton):
     """Base QToolButton with centralized presentation geometry.
 
-    Interaction subclasses decide *what* clicking means.  This class only owns
+    Interaction subclasses decide *what* clicking means. This class only owns
     the visual surface contract so ribbon, viewport, inline and compact buttons
     do not duplicate sizes, dynamic properties or Qt tool-button styles.
     """
@@ -86,3 +87,8 @@ class SemanticToolButton(QToolButton):
         if presentation is ButtonPresentation.INLINE:
             self.setProperty("inlineAction", True)
             self.setFixedSize(INLINE_ACTION_SIZE, INLINE_ACTION_SIZE)
+            return
+
+        if presentation is ButtonPresentation.FIELD_ACTION:
+            self.setProperty("inlineAction", True)
+            self.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
