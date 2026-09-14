@@ -5,15 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QToolButton, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QWidget
 
 from opencae.ui.core.dialog_lifecycle import activate_dialog
 from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.theme import PALETTE
-from opencae.ui.templates import (
-    apply_inline_action_size,
-    apply_primary_control_height,
-)
+from opencae.ui.primitives.buttons import InlineButton
+from opencae.ui.templates import apply_primary_control_height
 
 from .chevron_combo import ChevronComboBox
 
@@ -46,25 +44,27 @@ class ReferenceSelector(QWidget):
             lambda _index: self.value_changed.emit(self.currentValue())
         )
 
-        self.add_button = QToolButton()
-        self.add_button.setText("+")
-        self.add_button.setObjectName("InlineAddButton")
+        self.add_button = InlineButton(
+            "+",
+            tooltip="Create a new referenced object",
+            object_name="InlineAddButton",
+            parent=self,
+        )
         self.add_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.add_button.setToolTip("Create a new referenced object")
-        apply_inline_action_size(self.add_button)
         self._create_callback = create_callback
         self.add_button.setVisible(create_callback is not None)
         self.add_button.clicked.connect(self._create)
 
-        self.pick_button = QToolButton()
-        self.pick_button.setIcon(make_icon(IconKind.PICK, 16, PALETTE["text"]))
+        self.pick_button = InlineButton(
+            icon=make_icon(IconKind.PICK, 16, PALETTE["text"]),
+            tooltip="Pick the referenced object in the viewport",
+            checkable=True,
+            object_name="InlinePickButton",
+            parent=self,
+        )
         self.pick_button.setIconSize(QSize(16, 16))
-        self.pick_button.setObjectName("InlinePickButton")
         self.pick_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.pick_button.setCheckable(True)
         self.pick_button.setAccessibleName("Pick in viewport")
-        self.pick_button.setToolTip("Pick the referenced object in the viewport")
-        apply_inline_action_size(self.pick_button)
         self._pick_callback = pick_callback
         self.pick_button.setVisible(pick_callback is not None)
         self.pick_button.clicked.connect(self._pick)
