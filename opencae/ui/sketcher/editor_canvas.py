@@ -5,9 +5,14 @@ from __future__ import annotations
 from copy import deepcopy
 from math import hypot
 
-from PyQt6.QtCore import QPointF, Qt, pyqtSignal
+from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QPainter, QPainterPath, QPen
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPathItem, QGraphicsSimpleTextItem
+from PyQt6.QtWidgets import (
+    QFrame,
+    QGraphicsItem,
+    QGraphicsPathItem,
+    QGraphicsSimpleTextItem,
+)
 
 from opencae.model.entities.geometry import (
     SKETCH_ENTITY_TYPES,
@@ -47,10 +52,53 @@ class SketchEditorCanvas(SketchCanvas):
         self._drag_dimension_id: str | None = None
         self._drag_dimension_moved = False
         super().__init__(*args, **kwargs)
-        # QGraphicsView keeps hidden scroll ranges for panning, so disabling the
-        # chrome does not remove middle-mouse navigation.
+        # Keep the drafting surface visually continuous and reserve no chrome
+        # for hidden scroll bars. The scene itself remains scrollable/pannable.
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setViewportMargins(0, 0, 0, 0)
+        self._ensure_navigation_space()
+
+    def fit_sketch(self) -> None:
+        """Fit authored geometry, then restore a practically unbounded workplane."""
+        super().fit_sketch()
+        self._ensure_navigation_space()
+
+    def wheelEvent(self, event):
+        """Zoom freely instead of stopping at the base canvas lower zoom clamp."""
+        delta = int(event.angleDelta().y())
+        if not delta and not event.pixelDelta().isNull():
+            delta = int(event.pixelDelta().y() * 8)
+        if not delta:
+            event.accept()
+            return
+        factor = 1.15 ** (float(delta) / 120.0)
+        current = abs(float(self.transform().m11()))
+        target = current * factor
+        # Only retain numerical guards. In practical use this behaves like the
+        # infinite zoom range expected from a CAD sketcher.
+        if 1.0e-9 <= target <= 5000.0:
+            self.scale(factor, factor)
+            self._ensure_navigation_space()
+        event.accept()
+
+    def _ensure_navigation_space(self) -> None:
+        """Expand scene bounds around the visible sheet so no edge is reachable."""
+        visible = self.mapToScene(self.viewport().rect()).boundingRect()
+        current = self.sceneRect()
+        span = max(
+            abs(float(visible.width())),
+            abs(float(visible.height())),
+            abs(float(current.width())),
+            abs(float(current.height())),
+            1.0,
+        )
+        margin = max(span * 8.0, 1.0e4)
+        expanded = visible.adjusted(-margin, -margin, margin, margin)
+        if current.isValid() and not current.isNull():
+            expanded = expanded.united(current)
+        self.setSceneRect(QRectF(expanded))
 
     # ------------------------------------------------------- sketch presentation
     def set_dimension_layout(self, layout: dict | None) -> None:
