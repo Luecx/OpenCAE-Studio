@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QLineEdit, QWidget
+from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QWidget
 
 from opencae.ui.primitives.buttons import InlineButton
-from opencae.ui.templates import apply_primary_control_height
+from opencae.ui.primitives.inputs import TextInput
 
 
 class DirectoryPathEditor(QWidget):
@@ -22,10 +22,11 @@ class DirectoryPathEditor(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        self.edit = QLineEdit(str(value or ""))
-        self.edit.setObjectName("CompositeFieldEdit")
-        self.edit.setMinimumWidth(0)
-        apply_primary_control_height(self.edit)
+        self.edit = TextInput(
+            str(value or ""),
+            object_name="CompositeFieldEdit",
+            parent=self,
+        )
         self.edit.textChanged.connect(self.textChanged)
 
         self.button = InlineButton(
