@@ -70,18 +70,29 @@ def test_sketcher_has_themed_grid_revolve_axis_and_complete_constraint_toolbar()
         assert f'"{dimension}"' in dialog
 
 
-def test_sketcher_reuses_main_ribbon_metrics_and_collapses_to_three_semantic_groups():
+def test_sketcher_reuses_main_ribbon_metrics_and_progressive_collapse_policy():
     dialog = (ROOT / "opencae/ui/sketcher/dialog.py").read_text(encoding="utf-8")
+    public_dialog = (ROOT / "opencae/ui/sketcher/constraint_dialog.py").read_text(
+        encoding="utf-8"
+    )
     ribbon = (ROOT / "opencae/ui/ribbon/ribbon_page.py").read_text(encoding="utf-8")
     group = (ROOT / "opencae/ui/ribbon/ribbon_group.py").read_text(encoding="utf-8")
 
-    assert "ResponsiveRibbonPage" in dialog
-    assert "RIBBON_PAGE_HEIGHT" in dialog
-    assert 'RibbonGroupSpec(\n                "PRIMITIVES"' in dialog
-    assert 'RibbonGroupSpec(\n                "CONSTRAINTS"' in dialog
-    assert 'RibbonGroupSpec(\n                "CONSTRUCTION/GRID"' in dialog
-    assert "if len(target) >= 2:" in dialog
-    assert "return frozenset(spec.title for spec in self._specs)" in dialog
+    assert "ResponsiveRibbonPage" in public_dialog
+    assert "RIBBON_PAGE_HEIGHT" in public_dialog
+    assert 'RibbonGroupSpec(\n                "SELECTION"' in public_dialog
+    assert 'RibbonGroupSpec(\n                "PRIMITIVES"' in public_dialog
+    assert 'RibbonGroupSpec(\n                "CONSTRAINTS"' in public_dialog
+    assert 'RibbonGroupSpec(\n                "CONSTRUCTION/GRID"' in public_dialog
+    assert '"primitive.select"' in public_dialog
+    assert '"primitive.undo"' in public_dialog
+    assert '"primitive.redo"' in public_dialog
+    assert "_SketchResponsiveRibbonPage(" not in public_dialog
+    assert "candidates.sort(" in ribbon
+    assert "-self._group_width(item[1], False)" in ribbon
+    assert "if self._required_width(collapsed) <= available_width:" in ribbon
+    assert "widget.hide()" in ribbon
+    assert "widget.setParent(None)" in ribbon
     assert "RIBBON_BUTTON_WIDTH" in ribbon
     assert "RIBBON_BUTTON_HEIGHT" in (ROOT / "opencae/ui/templates/primitives.py").read_text(encoding="utf-8")
     assert "PALETTE['ribbon_separator']" in group
