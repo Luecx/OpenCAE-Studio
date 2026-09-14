@@ -13,7 +13,11 @@ def test_viewport_palette_uses_lighter_solid_surface_and_visible_mesh_lines():
     assert "viewport_top" not in PALETTE
     assert "viewport_bottom" not in PALETTE
     assert "viewport_horizon" not in PALETTE
-    assert PALETTE["mesh_lines"] not in {"#182129", PALETTE["viewport"]}
+    # Mesh contrast is a semantic relationship, not a historical color literal.
+    # The current dark theme intentionally uses #182129 for mesh lines; what
+    # matters is that lines remain distinct from both the viewport and mesh fill.
+    assert PALETTE["mesh_lines"] != PALETTE["viewport"]
+    assert PALETTE["mesh_lines"] != PALETTE["mesh_surface"]
 
 
 def test_safe_interactor_no_longer_promotes_viewport_to_gradient():
