@@ -12,6 +12,19 @@ from opencae.ui.primitives.buttons import (
 )
 
 
+def _leaf_actions(action: QAction) -> tuple[QAction, ...]:
+    """Return executable descendants without introducing nested popup layers."""
+    menu = action.menu()
+    if menu is None:
+        return (action,)
+    leaves: list[QAction] = []
+    for child in menu.actions():
+        if child.isSeparator():
+            continue
+        leaves.extend(_leaf_actions(child))
+    return tuple(leaves)
+
+
 class CollapsedActionGroupButton(MenuButton):
     """One ribbon button whose popup exposes the group's full-size actions."""
 
@@ -36,13 +49,14 @@ class CollapsedActionGroupButton(MenuButton):
         row.setContentsMargins(6, 6, 6, 6)
         row.setSpacing(2)
         for action in actions:
-            action_widget = button_for_action(
-                action,
-                presentation=ButtonPresentation.RIBBON,
-                parent=panel,
-            )
-            action_widget.clicked.connect(menu.close)
-            row.addWidget(action_widget)
+            for leaf in _leaf_actions(action):
+                action_widget = button_for_action(
+                    leaf,
+                    presentation=ButtonPresentation.RIBBON,
+                    parent=panel,
+                )
+                action_widget.clicked.connect(menu.close)
+                row.addWidget(action_widget)
 
         widget_action = QWidgetAction(menu)
         widget_action.setDefaultWidget(panel)
