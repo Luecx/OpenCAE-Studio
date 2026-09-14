@@ -24,12 +24,9 @@ from .button_ribbon_menu import ButtonRibbonMenu
 from .button_ribbon_options import ButtonRibbonOptions
 from .button_ribbon_toggle import ButtonRibbonToggle
 from .button_stage_choice import ButtonStageChoice
+from .button_time_manager_media import ButtonTimeManagerMedia
 from .button_viewport_action import ButtonViewportAction
 from .button_viewport_toggle import ButtonViewportToggle
-
-# Sketch-specific compatibility surface.  This remains temporary until the
-# sketcher is moved onto the shared form/viewport primitives in a later pass.
-from .button_sketch_action import ButtonSketchAction
 
 # Transitional names retained for callers not yet migrated ------------------
 from .action_button import ActionButton
@@ -71,9 +68,9 @@ __all__ = [
     "ButtonRibbonOptions",
     "ButtonRibbonToggle",
     "ButtonStageChoice",
+    "ButtonTimeManagerMedia",
     "ButtonViewportAction",
     "ButtonViewportToggle",
-    "ButtonSketchAction",
     "ActionButton",
     "ButtonPresentation",
     "ButtonRole",
