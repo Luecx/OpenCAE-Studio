@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -28,11 +29,13 @@ from opencae.ui.core.metrics import RIBBON_PAGE_HEIGHT
 from opencae.ui.ribbon.ribbon_page import ResponsiveRibbonPage
 from opencae.ui.ribbon.specs import RibbonGroupSpec
 from opencae.ui.templates import ViewportToolButton
+from opencae.ui.templates.viewport_tool_button import VIEWPORT_TOOL_HEIGHT
 
 from .dialog import SketchFeatureDialog as _BaseSketchFeatureDialog
 
 
 _DIMENSION_LAYOUT_KEY = "sketch_dimension_positions"
+_VIEWPORT_BAR_HEIGHT = VIEWPORT_TOOL_HEIGHT + 10
 
 
 class SketchFeatureDialog(_BaseSketchFeatureDialog):
@@ -162,39 +165,53 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         return self.ribbon
 
     def _build_workspace(self, parent):
-        """Build one main-window-style slim bar directly above the viewport."""
+        """Build one fixed-height main-window-style bar above the viewport."""
         host = QWidget(parent)
         host.setObjectName("SketchViewportHost")
+        host.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
         layout = QVBoxLayout(host)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        bar = QWidget(host)
-        bar.setObjectName("ViewportToolbar")
-        row = QHBoxLayout(bar)
+        # Keep a strong, dialog-owned reference just like PyVistaViewport does
+        # for SelectionToolbar.  More importantly, make the toolbar vertically
+        # non-compressible so the splitter/stack can never squeeze it to zero.
+        self.viewport_toolbar = QWidget(host)
+        self.viewport_toolbar.setObjectName("ViewportToolbar")
+        self.viewport_toolbar.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
+        self.viewport_toolbar.setFixedHeight(_VIEWPORT_BAR_HEIGHT)
+        row = QHBoxLayout(self.viewport_toolbar)
         row.setContentsMargins(8, 5, 8, 5)
         row.setSpacing(4)
 
-        self.view_sketch = ViewportToolButton("Sketch", checkable=True, parent=bar)
+        self.view_sketch = ViewportToolButton(
+            "Sketch", checkable=True, parent=self.viewport_toolbar
+        )
         self.view_preview = ViewportToolButton(
-            "3D Preview", checkable=True, parent=bar
+            "3D Preview", checkable=True, parent=self.viewport_toolbar
         )
         self.view_sketch.setChecked(True)
-        self.view_group = QButtonGroup(bar)
+        self.view_group = QButtonGroup(self.viewport_toolbar)
         self.view_group.setExclusive(True)
         self.view_group.addButton(self.view_sketch)
         self.view_group.addButton(self.view_preview)
         row.addWidget(self.view_sketch)
         row.addWidget(self.view_preview)
 
-        self.fit_button = ViewportToolButton("Fit", parent=bar)
+        self.fit_button = ViewportToolButton("Fit", parent=self.viewport_toolbar)
         self.fit_button.setToolTip("Center and fit the sketch")
         row.addWidget(self.fit_button)
         row.addSpacing(8)
 
-        self.status_label = QLabel("Ready", bar)
+        self.status_label = QLabel("Ready", self.viewport_toolbar)
         self.status_label.setObjectName("SketchStatus")
-        self.hint_label = QLabel("", bar)
+        self.hint_label = QLabel("", self.viewport_toolbar)
         self.hint_label.setObjectName("SketchHint")
         row.addWidget(self.status_label)
         row.addWidget(self.hint_label)
@@ -203,7 +220,7 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Cancel
             | QDialogButtonBox.StandardButton.Ok,
-            parent=bar,
+            parent=self.viewport_toolbar,
         )
         self.buttons.setObjectName("SketchCommitButtons")
         ok = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
@@ -213,18 +230,26 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
             else "Apply"
         )
         row.addWidget(self.buttons)
-        layout.addWidget(bar)
+        layout.addWidget(self.viewport_toolbar, 0)
 
         self.workspace = QStackedWidget(host)
+        self.workspace.setObjectName("SketchViewportStack")
+        self.workspace.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
         self.workspace.addWidget(self.canvas)
         self.workspace.addWidget(self.preview)
         layout.addWidget(self.workspace, 1)
+        layout.setStretch(0, 0)
+        layout.setStretch(1, 1)
         return host
 
     def _build_footer(self):
         """The Sketcher has no bottom command/status strip anymore."""
         footer = QWidget(self)
-        footer.setFixedHeight(0)
+        footer.setObjectName("SketchLegacyFooter")
+        footer.setFixedSize(0, 0)
         footer.hide()
         return footer
 
