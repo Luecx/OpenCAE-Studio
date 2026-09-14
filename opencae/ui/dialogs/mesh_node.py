@@ -3,19 +3,13 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSignalBlocker, pyqtSignal
-from PyQt6.QtWidgets import QDialog, QSpinBox
+from PyQt6.QtWidgets import QDialog
 
-from opencae.ui.primitives.buttons import SelectionButton
-from opencae.ui.templates import (
-    ReadOnlyValue,
-    SectionHeading,
-    Vector3Input,
-    apply_primary_control_height,
-    dialog_buttons,
-    dialog_layout,
-    field_block,
-    field_row,
-)
+from opencae.ui.composites.controls import ControlReadOnlyValue, ControlVector3
+from opencae.ui.primitives.buttons.button_field_toggle import ButtonFieldToggle
+from opencae.ui.primitives.inputs.input_form_integer import InputFormInteger
+from opencae.ui.primitives.labels import LabelSection
+from opencae.ui.templates import dialog_buttons, dialog_layout, field_block, field_row
 
 
 class MeshNodeDialog(QDialog):
@@ -38,13 +32,14 @@ class MeshNodeDialog(QDialog):
         self.setMinimumWidth(620)
 
         root = dialog_layout(self)
-        root.addWidget(SectionHeading("Node Definition"))
-        self.node_id = QSpinBox()
-        self.node_id.setRange(1, 2_147_483_647)
-        self.node_id.setValue(node.id if node is not None else int(next_id))
+        root.addWidget(LabelSection("Node Definition"))
+        self.node_id = InputFormInteger(
+            node.id if node is not None else int(next_id),
+            minimum=1,
+            maximum=2_147_483_647,
+        )
         self.node_id.setEnabled(node is None)
-        apply_primary_control_height(self.node_id)
-        origin = ReadOnlyValue(
+        origin = ControlReadOnlyValue(
             node.origin.value.title() if node is not None else "Authored"
         )
         root.addWidget(
@@ -54,24 +49,23 @@ class MeshNodeDialog(QDialog):
             )
         )
 
-        self.coordinates = Vector3Input(
+        self.coordinates = ControlVector3(
             node.coordinates if node is not None else (0.0, 0.0, 0.0)
         )
         root.addWidget(field_block("Global coordinates", self.coordinates))
 
-        self.pick_button = SelectionButton(
+        self.pick_button = ButtonFieldToggle(
             "Pick Position in View",
-            active_text="Finish Picking",
-            tooltip=(
-                "Pick a mesh node, geometry vertex, datum point, or reference point"
-            ),
+            tooltip="Pick a mesh node, geometry vertex, datum point, or reference point",
+            object_name="InlinePickButton",
             parent=self,
         )
         self.pick_button.toggled.connect(self._pick_toggled)
+        self.pick_button.toggled.connect(self._sync_pick_caption)
         root.addWidget(self.pick_button)
 
         if self.details:
-            root.addWidget(SectionHeading("Selection Details"))
+            root.addWidget(LabelSection("Selection Details"))
             for label, key in (
                 ("Incident elements", "incident_elements"),
                 ("Regions", "regions"),
@@ -82,7 +76,7 @@ class MeshNodeDialog(QDialog):
                     value = self.details.get(key)
                     if isinstance(value, (tuple, list, set)):
                         value = ", ".join(str(item) for item in value) or "—"
-                    root.addWidget(field_block(label, ReadOnlyValue(str(value or "—"))))
+                    root.addWidget(field_block(label, ControlReadOnlyValue(str(value or "—"))))
 
         root.addStretch(1)
         buttons = dialog_buttons()
@@ -101,11 +95,14 @@ class MeshNodeDialog(QDialog):
 
     def set_picking(self, active: bool) -> None:
         active = bool(active)
-        if self.pick_button.isChecked() == active:
-            return
-        blocker = QSignalBlocker(self.pick_button)
-        self.pick_button.setChecked(active)
-        del blocker
+        if self.pick_button.isChecked() != active:
+            blocker = QSignalBlocker(self.pick_button)
+            self.pick_button.setChecked(active)
+            del blocker
+        self._sync_pick_caption(active)
 
     def _pick_toggled(self, active: bool) -> None:
         self.picking_changed.emit(bool(active))
+
+    def _sync_pick_caption(self, active: bool) -> None:
+        self.pick_button.setText("Finish Picking" if active else "Pick Position in View")
