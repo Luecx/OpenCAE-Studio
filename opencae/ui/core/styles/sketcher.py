@@ -13,11 +13,6 @@ def css(p):
     QWidget#SketchViewportHost {{
         background: {p['viewport']};
     }}
-    QWidget#SketchViewportHost QWidget#ViewportToolbar {{
-        background: {p['panel']};
-        border: none;
-        border-bottom: 1px solid {p['border']};
-    }}
     QFrame#SketchInspector {{
         background: {p['panel']};
         border-left: 1px solid {p['border']};
