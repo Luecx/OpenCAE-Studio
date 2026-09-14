@@ -1,14 +1,5 @@
-"""Defines immutable construction data for reusable label templates."""
+"""Compatibility import for the canonical semantic label spec."""
 
-from dataclasses import dataclass
+from opencae.ui.primitives.label_spec import LabelSpec
 
-from .label_role import LabelRole
-
-
-@dataclass(frozen=True, slots=True)
-class LabelSpec:
-    """Text, semantic role, and tooltip used to construct one QLabel."""
-
-    text: str
-    role: LabelRole = LabelRole.BODY
-    tooltip: str = ""
+__all__ = ["LabelSpec"]
