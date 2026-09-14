@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QWidget
 
-from opencae.ui.core.metrics import PRIMARY_CONTROL_HEIGHT
-
 from .presentation import ButtonPresentation
 from .toggle_button import ToggleButton
 
@@ -32,12 +30,10 @@ class SelectionButton(ToggleButton):
         super().__init__(
             text=self._inactive_text,
             tooltip=tooltip,
-            presentation=ButtonPresentation.DEFAULT,
+            presentation=ButtonPresentation.FIELD_ACTION,
             object_name=object_name,
             parent=parent,
         )
-        self.setProperty("inlineAction", True)
-        self.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
         if self._active_text is not None:
             self.toggled.connect(self._sync_caption)
 
