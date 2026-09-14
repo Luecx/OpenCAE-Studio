@@ -98,6 +98,17 @@ def css(p):
         background: {p['panel_hover']};
         border: 1px solid {p['border_light']};
     }}
+    /* Checkable ribbon commands are persistent state, not momentary presses.
+       Keep the active state deliberately subtle: one lift from the ribbon
+       surface, without painting every toggle in the accent color. */
+    QToolButton[ribbonButton="true"]:checked {{
+        background: {p['panel_active']};
+        border-color: {p['border_light']};
+    }}
+    QToolButton[ribbonButton="true"]:checked:hover {{
+        background: {p['panel_hover']};
+        border-color: {p['border_light']};
+    }}
     /* Persistent display toggles on Results need a readable but still flat
        active state.  A small lift from the ribbon surface is enough; keep the
        accent outline so Mesh Lines / Boundary remain immediately legible. */
