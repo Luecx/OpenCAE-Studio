@@ -129,8 +129,7 @@ class SketchFeaturePreview(QWidget):
                     pickable=False,
                 )
             self.plotter.camera_position = "iso"
-            self.plotter.reset_camera()
-            self.plotter.render()
+            self.fit_view()
             return True
         except Exception as exc:
             message = str(exc)
@@ -142,6 +141,11 @@ class SketchFeaturePreview(QWidget):
             # Preview candidates always have a fresh identity, so this cannot
             # invalidate the live Part's cached geometry.
             CACHE.invalidate(candidate.id)
+
+    def fit_view(self) -> None:
+        """Fit the current preview using the same compact viewport-bar affordance."""
+        self.plotter.reset_camera()
+        self.plotter.render()
 
     def refresh_theme(self):
         self.plotter.set_background(PALETTE["viewport"])
