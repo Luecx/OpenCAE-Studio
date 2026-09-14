@@ -28,12 +28,14 @@ from opencae.ui.core.metrics import RIBBON_PAGE_HEIGHT
 from opencae.ui.ribbon.ribbon_page import ResponsiveRibbonPage
 from opencae.ui.ribbon.specs import RibbonGroupSpec
 from opencae.ui.templates import ViewportToolButton
+from opencae.ui.templates.viewport_tool_button import VIEWPORT_TOOL_HEIGHT
 from opencae.ui.viewport.selection_toolbar import SelectionToolbar
 
 from .dialog import SketchFeatureDialog as _BaseSketchFeatureDialog
 
 
 _DIMENSION_LAYOUT_KEY = "sketch_dimension_positions"
+_VIEWPORT_BAR_HEIGHT = VIEWPORT_TOOL_HEIGHT + 10
 
 
 class SketchFeatureDialog(_BaseSketchFeatureDialog):
@@ -41,13 +43,9 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # The Arc popup is itself a visible ribbon button. Give it a generic
-        # arc glyph instead of reusing the Center Arc glyph that appears inside
-        # its menu, so every visible sketch command has a distinct icon.
         self._ribbon_actions["primitive.arc"].setIcon(
             self._icon(IconKind.SKETCH_ARC)
         )
-        # The old curved undo/redo glyphs are visually busy at ribbon size.
         self._ribbon_actions["primitive.undo"].setIcon(
             self._icon(IconKind.PREVIOUS_FRAME)
         )
@@ -62,10 +60,6 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         self.canvas.set_dimension_layout(layout)
         self.canvas.dimension_edit_requested.connect(self._edit_dimension)
 
-        # The base class wires Construction directly to the canvas. Replace
-        # that connection with a guarded slot so selection-driven checked-state
-        # synchronization can still repaint the QAction without converting the
-        # selected geometry as a side effect.
         self._syncing_construction = False
         try:
             self.construction_action.toggled.disconnect()
@@ -76,9 +70,6 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
     def _build_ribbon_actions(self) -> None:
         """Expose dimensional commands as first-class ribbon actions."""
         super()._build_ribbon_actions()
-        # Keep the generic Dimension QAction as a reusable menu entry for other
-        # consumers, but the Sketcher ribbon itself owns a dedicated Dimensions
-        # group with direct commands and no extra nesting layer.
         self._ribbon_actions.pop("constraint.dimension", None)
         for key, kind in (
             ("dimension.distance", "Distance"),
@@ -92,7 +83,6 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
 
     def _build_ribbon(self):
         """Build the Sketcher ribbon with the same responsive rules as main UI."""
-
         groups = (
             RibbonGroupSpec(
                 "SELECTION",
@@ -163,7 +153,7 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         return self.ribbon
 
     def _build_workspace(self, parent):
-        """Build the viewport using the exact toolbar widget used by main UI."""
+        """Build the viewport with the exact toolbar widget used by main UI."""
         host = QWidget(parent)
         host.setObjectName("SketchViewportHost")
         host.setSizePolicy(
@@ -174,25 +164,22 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Do not emulate the main-window viewport toolbar here. Reuse the
-        # actual SelectionToolbar widget so Windows, Wayland and X11 all go
-        # through exactly the same QWidget/layout/style path as Auto/Point/
-        # Edge/Face/Cell/Element in the main viewport.
+        # This is deliberately the real main-window toolbar class, not a local
+        # facsimile.  The sketcher therefore shares the exact widget, margins,
+        # sizing, palette selectors and platform behavior used by Auto / Point /
+        # Edge / Face / Cell / Element above the normal 3D viewport.
         self.viewport_toolbar = SelectionToolbar(host)
         self.viewport_toolbar.setObjectName("ViewportToolbar")
         row = self.viewport_toolbar.layout()
 
-        # SelectionToolbar creates the main-window controls. The Sketcher uses
-        # the same toolbar surface/chrome but owns a different command set, so
-        # remove those controls and spacers from the layout synchronously.
-        main_fit_button = self.viewport_toolbar.fit_button
+        # Replace the main viewport's commands while preserving the canonical
+        # toolbar container and layout itself.
         while row.count():
             item = row.takeAt(0)
             widget = item.widget()
-            if widget is None or widget is main_fit_button:
-                continue
-            widget.hide()
-            widget.setParent(None)
+            if widget is not None:
+                widget.hide()
+                widget.setParent(None)
 
         self.view_sketch = ViewportToolButton(
             "Sketch", checkable=True, parent=self.viewport_toolbar
@@ -208,8 +195,7 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         row.addWidget(self.view_sketch)
         row.addWidget(self.view_preview)
 
-        self.fit_button = main_fit_button
-        self.fit_button.setParent(self.viewport_toolbar)
+        self.fit_button = ViewportToolButton("Fit", parent=self.viewport_toolbar)
         self.fit_button.setToolTip("Center and fit the sketch")
         row.addWidget(self.fit_button)
         row.addSpacing(8)
@@ -236,15 +222,11 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         )
         row.addWidget(self.buttons)
 
-        # Main SelectionToolbar naturally sizes to the canonical 28px controls
-        # plus 5px vertical margins. Preserve that exact height and prevent the
-        # splitter from compressing it away on Windows.
         self.viewport_toolbar.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
         )
-        toolbar_height = max(38, self.viewport_toolbar.sizeHint().height())
-        self.viewport_toolbar.setFixedHeight(toolbar_height)
+        self.viewport_toolbar.setFixedHeight(_VIEWPORT_BAR_HEIGHT)
         layout.addWidget(self.viewport_toolbar, 0)
 
         self.workspace = QStackedWidget(host)
@@ -287,7 +269,6 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
 
     def _edit_dimension(self, constraint) -> None:
         """Edit a selected driving dimension using the existing numeric editor."""
-
         if constraint is None or constraint.value is None:
             return
         kind = SketchConstraintKind.coerce(constraint.kind)
