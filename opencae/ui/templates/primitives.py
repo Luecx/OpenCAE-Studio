@@ -1,4 +1,4 @@
-"""Compatibility factories backed by canonical semantic UI primitives."""
+"""Compatibility factories backed by structurally named UI primitives."""
 
 from __future__ import annotations
 
@@ -7,13 +7,14 @@ from collections.abc import Callable
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QLabel, QPushButton, QToolButton
 
-from opencae.ui.primitives.buttons import (
-    ActionButton,
-    ButtonPresentation,
-    FormButton,
-    MenuButton,
-    ToggleButton,
-)
+from opencae.ui.primitives.buttons import ActionButton, ButtonPresentation
+from opencae.ui.primitives.buttons.button_form_action import ButtonFormAction
+from opencae.ui.primitives.buttons.button_form_danger import ButtonFormDanger
+from opencae.ui.primitives.buttons.button_form_primary import ButtonFormPrimary
+from opencae.ui.primitives.buttons.button_form_toggle import ButtonFormToggle
+from opencae.ui.primitives.buttons.button_ribbon_action import ButtonRibbonAction
+from opencae.ui.primitives.buttons.button_ribbon_menu import ButtonRibbonMenu
+from opencae.ui.primitives.buttons.button_ribbon_toggle import ButtonRibbonToggle
 from opencae.ui.primitives.ribbon_text import ribbon_label, wrapped_ribbon_text
 from opencae.ui.primitives.semantic_label import SemanticLabel
 
@@ -24,7 +25,6 @@ from .label_spec import LabelSpec
 
 
 def label(spec: LabelSpec | str, *, role: LabelRole = LabelRole.BODY) -> QLabel:
-    """Create a semantic label through the canonical primitive class."""
     return SemanticLabel(spec, role=role)
 
 
@@ -34,26 +34,39 @@ def button(
     role: ButtonRole = ButtonRole.DEFAULT,
     clicked: Callable | None = None,
 ) -> QPushButton:
-    """Create a semantic form button through the canonical primitive class."""
-    return FormButton(spec, role=role, clicked=clicked)
+    resolved = spec if isinstance(spec, ButtonSpec) else ButtonSpec(str(spec), role)
+    if resolved.checkable:
+        widget = ButtonFormToggle(
+            resolved.text,
+            icon=resolved.icon,
+            tooltip=resolved.tooltip,
+        )
+    elif resolved.role is ButtonRole.PRIMARY:
+        widget = ButtonFormPrimary(resolved.text)
+    elif resolved.role is ButtonRole.DANGER:
+        widget = ButtonFormDanger(resolved.text)
+    else:
+        widget = ButtonFormAction(
+            resolved.text,
+            icon=resolved.icon,
+            tooltip=resolved.tooltip,
+        )
+    if clicked is not None:
+        widget.clicked.connect(clicked)
+    return widget
 
 
 def action_button(action: QAction, *, large: bool = True) -> QToolButton:
-    """Create the canonical QAction button for ribbon or compact presentation.
+    if large:
+        if action.menu() is not None:
+            return ButtonRibbonMenu(action)
+        if action.isCheckable():
+            return ButtonRibbonToggle(action)
+        return ButtonRibbonAction(action)
 
-    The QAction describes behavior.  The primitive class describes the
-    interaction kind, while ``ButtonPresentation`` controls only geometry and
-    surface styling.  This keeps menu/toggle semantics independent from whether
-    a control is shown in a ribbon, compact overflow or another host.
-    """
-    presentation = (
-        ButtonPresentation.RIBBON if large else ButtonPresentation.COMPACT
-    )
-    if action.menu() is not None:
-        return MenuButton(action=action, presentation=presentation)
-    if action.isCheckable():
-        return ToggleButton(action, presentation=presentation)
-    return ActionButton(action, presentation=presentation)
+    # Compact is a retained compatibility-only surface.  New code should use a
+    # structurally named concrete primitive for its actual host surface.
+    return ActionButton(action, presentation=ButtonPresentation.COMPACT)
 
 
 __all__ = [
