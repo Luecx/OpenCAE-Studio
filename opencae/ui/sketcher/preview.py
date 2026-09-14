@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import logging
 
 import pyvista as pv
 from PyQt6.QtCore import pyqtSignal
@@ -14,6 +15,9 @@ from opencae.model.entities.geometry import SketchFeatureMode
 from opencae.model.entities.parts import Part, PartSourceKind
 from opencae.ui.core.theme import PALETTE
 from opencae.ui.viewport.safe_qt_interactor import SafeQtInteractor
+
+
+_LOG = logging.getLogger(__name__)
 
 
 def build_preview_part(base_part, feature) -> Part:
@@ -56,6 +60,7 @@ class SketchFeaturePreview(QWidget):
         super().__init__(parent)
         self.setObjectName("SketchFeaturePreview")
         self._base_part = None
+        self._closed = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -68,11 +73,45 @@ class SketchFeaturePreview(QWidget):
         layout.addWidget(self.plotter, 1)
         self.plotter.set_background(PALETTE["viewport"])
 
+        # QDialog closes its native parent window before Python necessarily
+        # destroys all child wrappers. On Windows that can leave VTK trying to
+        # make a WGL context current on an HWND that is already invalid. Finalize
+        # this child render window while the dialog still owns a valid native
+        # window instead of relying on QObject destruction order.
+        finished = getattr(parent, "finished", None)
+        if finished is not None and hasattr(finished, "connect"):
+            finished.connect(self._parent_dialog_finished)
+
+    def _parent_dialog_finished(self, _result=None) -> None:
+        self.shutdown()
+
+    def shutdown(self) -> None:
+        """Idempotently release the preview render window before Qt teardown."""
+        if self._closed:
+            return
+        self._closed = True
+        plotter = getattr(self, "plotter", None)
+        if plotter is None:
+            return
+        try:
+            plotter.close()
+        except (AttributeError, RuntimeError) as exc:
+            # Teardown must never keep a dialog alive just because the platform
+            # already disposed the native render surface. Log at debug level so
+            # an actual lifecycle regression remains diagnosable.
+            _LOG.debug("Sketch preview render window was already closed: %s", exc)
+
+    def closeEvent(self, event):
+        self.shutdown()
+        super().closeEvent(event)
+
     def set_part_context(self, part) -> None:
         """Set the Part whose complete feature history should be previewed."""
         self._base_part = part
 
     def refresh_feature(self, feature) -> bool:
+        if self._closed:
+            return False
         self.notice.hide()
         self.plotter.clear()
         candidate = build_preview_part(self._base_part, feature)
@@ -144,10 +183,14 @@ class SketchFeaturePreview(QWidget):
 
     def fit_view(self) -> None:
         """Fit the current preview using the same compact viewport-bar affordance."""
+        if self._closed:
+            return
         self.plotter.reset_camera()
         self.plotter.render()
 
     def refresh_theme(self):
+        if self._closed:
+            return
         self.plotter.set_background(PALETTE["viewport"])
         self.plotter.render()
 
