@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QWidget
 
 from opencae.ui.primitives.buttons import InlineButton
-from opencae.ui.templates import apply_primary_control_height
+from opencae.ui.primitives.inputs import TextInput
 from .file_dialogs import open_file
 
 
@@ -24,10 +24,11 @@ class FilePathEditor(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        self.edit = QLineEdit(value)
-        self.edit.setObjectName("CompositeFieldEdit")
-        self.edit.setMinimumWidth(0)
-        apply_primary_control_height(self.edit)
+        self.edit = TextInput(
+            value,
+            object_name="CompositeFieldEdit",
+            parent=self,
+        )
         self.edit.textChanged.connect(self.textChanged)
 
         self.button = InlineButton(
