@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 from collections import Counter
+from pathlib import Path
+import subprocess
+import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QImage
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QWidget
 
@@ -21,22 +23,33 @@ from opencae.ui.viewport.view_cube_polyhedron import (
 )
 from opencae.ui.viewport.viewport_canvas import ViewportCanvas
 
+ROOT = Path(__file__).resolve().parents[1]
 _QT_APPLICATION: QApplication | None = None
 
 
 def _application() -> QApplication:
-    """Return the single Qt application required for offscreen widget tests."""
+    """Return the single Qt application required for non-rendering widget tests."""
     global _QT_APPLICATION
     _QT_APPLICATION = QApplication.instance() or QApplication([])
     return _QT_APPLICATION
 
 
-def _render(widget: ViewCube) -> QImage:
-    """Render the production cube into a transparent-initialized target."""
-    image = QImage(widget.size(), QImage.Format.Format_ARGB32_Premultiplied)
-    image.fill(Qt.GlobalColor.transparent)
-    widget.render(image)
-    return image
+def _run_isolated_qt(script: str) -> None:
+    """Exercise one native Qt paint/event probe in an uncontaminated process."""
+    env = dict(os.environ)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["PYVISTA_OFF_SCREEN"] = "true"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout
 
 
 def test_beveled_cube_has_expected_face_topology() -> None:
@@ -89,9 +102,18 @@ def test_generic_orientation_keeps_all_visible_connector_faces() -> None:
 
 def test_view_cube_paints_opaque_non_uniform_pixels() -> None:
     """Ensure a complete raster is produced instead of a transparent black box."""
-    _application()
-    widget = ViewCube()
-    image = _render(widget)
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QImage
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+
+app = QApplication.instance() or QApplication([])
+widget = ViewCube()
+try:
+    image = QImage(widget.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    widget.render(image)
     colors = {
         image.pixelColor(x, y).name(QColor.NameFormat.HexArgb)
         for x, y in ((0, 0), (87, 42), (57, 87), (116, 87), (87, 116))
@@ -102,18 +124,40 @@ def test_view_cube_paints_opaque_non_uniform_pixels() -> None:
         for x in range(image.width())
         for y in range(image.height())
     )
+finally:
+    widget.close()
+    widget.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_orientation_change_produces_a_different_projection() -> None:
     """Verify that external camera changes alter the displayed cube live."""
-    _application()
-    widget = ViewCube()
-    initial = _render(widget)
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QImage
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+from opencae.ui.viewport.view_cube_polyhedron import view_rotation
+
+app = QApplication.instance() or QApplication([])
+widget = ViewCube()
+try:
+    initial = QImage(widget.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    initial.fill(Qt.GlobalColor.transparent)
+    widget.render(initial)
     matrix = view_rotation(52.0, -31.0, 14.0)
     widget.set_view_matrix(matrix)
-    rotated = _render(widget)
+    rotated = QImage(widget.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    rotated.fill(Qt.GlobalColor.transparent)
+    widget.render(rotated)
     assert initial != rotated
     assert widget.view_matrix == matrix
+finally:
+    widget.close()
+    widget.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_view_cube_uses_stable_opaque_native_surface_composition() -> None:
@@ -128,13 +172,23 @@ def test_view_cube_uses_stable_opaque_native_surface_composition() -> None:
 
 def test_visible_main_face_emits_world_normal() -> None:
     """Keep painted face hits connected to their world-space view normals."""
-    application = _application()
-    widget = ViewCube()
-    emitted = []
-    widget.view_requested.connect(emitted.append)
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QImage
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+
+app = QApplication.instance() or QApplication([])
+widget = ViewCube()
+emitted = []
+widget.view_requested.connect(emitted.append)
+try:
     widget.show()
-    application.processEvents()
-    _render(widget)
+    app.processEvents()
+    image = QImage(widget.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    widget.render(image)
     polygon, expected, _label = next(
         region for region in reversed(widget._hit_regions) if region[2] == "TOP"
     )
@@ -144,6 +198,11 @@ def test_visible_main_face_emits_world_normal() -> None:
         pos=polygon.boundingRect().center().toPoint(),
     )
     assert emitted == [expected]
+finally:
+    widget.close()
+    widget.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_camera_basis_maps_conventional_cae_views() -> None:
