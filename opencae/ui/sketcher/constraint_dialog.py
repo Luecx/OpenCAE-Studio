@@ -21,6 +21,9 @@ from opencae.ui.ribbon.specs import RibbonGroupSpec
 from .dialog import SketchFeatureDialog as _BaseSketchFeatureDialog
 
 
+_DIMENSION_LAYOUT_KEY = "sketch_dimension_positions"
+
+
 class SketchFeatureDialog(_BaseSketchFeatureDialog):
     """Feature editor with complete constraint policies and canonical ribbon."""
 
@@ -32,6 +35,22 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         self._ribbon_actions["primitive.arc"].setIcon(
             self._icon(IconKind.SKETCH_ARC)
         )
+        # The old curved undo/redo glyphs are visually busy at ribbon size.
+        # Simple back/forward arrows are clearer and cannot place the arrowhead
+        # ambiguously on the curve.
+        self._ribbon_actions["primitive.undo"].setIcon(
+            self._icon(IconKind.PREVIOUS_FRAME)
+        )
+        self._ribbon_actions["primitive.redo"].setIcon(
+            self._icon(IconKind.NEXT_FRAME)
+        )
+
+        layout = self._feature.parameters.get(_DIMENSION_LAYOUT_KEY)
+        if not isinstance(layout, dict):
+            layout = {}
+            self._feature.parameters[_DIMENSION_LAYOUT_KEY] = layout
+        self.canvas.set_dimension_layout(layout)
+        self.canvas.dimension_edit_requested.connect(self._edit_dimension)
 
     def _build_ribbon(self):
         """Build the Sketcher ribbon with the same responsive rules as main UI.
@@ -102,6 +121,36 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         self.ribbon.setObjectName("SketchRibbonHost")
         self.ribbon.setFixedHeight(RIBBON_PAGE_HEIGHT)
         return self.ribbon
+
+    def _edit_dimension(self, constraint) -> None:
+        """Edit a selected driving dimension using the existing numeric editor."""
+
+        if constraint is None or constraint.value is None:
+            return
+        kind = SketchConstraintKind.coerce(constraint.kind)
+        title = {
+            SketchConstraintKind.DISTANCE: "Distance",
+            SketchConstraintKind.DISTANCE_X: "Horizontal distance",
+            SketchConstraintKind.DISTANCE_Y: "Vertical distance",
+            SketchConstraintKind.ANGLE: "Angle",
+            SketchConstraintKind.RADIUS: "Radius",
+            SketchConstraintKind.DIAMETER: "Diameter",
+        }.get(kind)
+        if title is None:
+            return
+        value = self._ask_value(
+            f"Edit {title}",
+            float(constraint.value),
+            allow_negative=kind in {
+                SketchConstraintKind.DISTANCE_X,
+                SketchConstraintKind.DISTANCE_Y,
+            },
+            maximum=360.0 if kind is SketchConstraintKind.ANGLE else 1.0e12,
+        )
+        if value is None:
+            return
+        if self.canvas.set_dimension_value(constraint.id, value):
+            self._sync_constraints()
 
     def _apply_constraint(self, kind: SketchConstraintKind | str):
         kind = SketchConstraintKind.coerce(kind)
