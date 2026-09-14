@@ -3,47 +3,60 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+import subprocess
+import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
 import pyvista as pv
-from PyQt6.QtCore import QEvent, QObject, Qt
-from PyQt6.QtGui import QAction, QIcon, QPixmap
-from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QWidget
 from vtkmodules.vtkRenderingAnnotation import vtkScalarBarActor
 
 from opencae.ui.core.metrics import RIBBON_BUTTON_HEIGHT
-from opencae.ui.templates import action_button
-from opencae.ui.viewport.result_query_model import QueryResult
-from opencae.ui.viewport.result_query_panel import ResultQueryPanel
 from opencae.ui.viewport.scalar_bar import (
     _cap_rectangles,
     _disable_native_range_swatches,
     install_scalar_bar_end_caps,
     scalar_bar_args,
 )
-from opencae.ui.viewport.view_cube import ViewCube
 from opencae.ui.viewport.viewport_overlay_metrics import (
     VIEW_CUBE_SIZE,
     VIEWPORT_OVERLAY_GAP,
     VIEWPORT_OVERLAY_MARGIN,
 )
 
-_QT_APPLICATION: QApplication | None = None
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
-def _application() -> QApplication:
-    """Return the shared Qt application used by offscreen geometry tests."""
-    global _QT_APPLICATION
-    _QT_APPLICATION = QApplication.instance() or QApplication([])
-    return _QT_APPLICATION
+def _run_isolated_qt(script: str) -> None:
+    """Run one real Qt interaction probe in a fresh native lifecycle."""
+    env = dict(os.environ)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["PYVISTA_OFF_SCREEN"] = "true"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout
 
 
-class _MouseCounter(QObject):
-    """Count propagated mouse presses/releases received by a parent widget."""
+def test_view_cube_click_does_not_propagate_to_render_parent():
+    """Cube clicks must not leave the underlying VTK interactor rotating."""
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import QEvent, QObject, Qt
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication, QWidget
+from opencae.ui.viewport.view_cube import ViewCube
 
+class MouseCounter(QObject):
     def __init__(self):
         super().__init__()
         self.events = []
@@ -57,28 +70,29 @@ class _MouseCounter(QObject):
             self.events.append(event.type())
         return False
 
-
-def test_view_cube_click_does_not_propagate_to_render_parent():
-    """Cube clicks must not leave the underlying VTK interactor rotating."""
-    app = _application()
-    parent = QWidget()
-    parent.resize(320, 240)
-    cube = ViewCube(parent)
-    counter = _MouseCounter()
-    parent.installEventFilter(counter)
+app = QApplication.instance() or QApplication([])
+parent = QWidget()
+parent.resize(320, 240)
+cube = ViewCube(parent)
+counter = MouseCounter()
+parent.installEventFilter(counter)
+try:
     parent.show()
     cube.show()
     app.processEvents()
-
     QTest.mouseClick(
         cube,
         Qt.MouseButton.LeftButton,
         pos=cube.rect().center(),
     )
     app.processEvents()
-
     assert cube.testAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
     assert counter.events == []
+finally:
+    parent.close()
+    parent.deleteLater()
+    app.processEvents()
+''')
 
 
 class _Plotter:
@@ -181,10 +195,18 @@ def test_scalar_bar_custom_caps_are_thin_and_exactly_touch_main_bar():
 
 def test_result_query_panel_caps_matrix_to_available_viewport_height():
     """Large element-query matrices stay inside the canvas instead of clipping."""
-    app = _application()
-    parent = QWidget()
-    parent.resize(500, 360)
-    panel = ResultQueryPanel(parent)
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QWidget
+from opencae.ui.viewport.result_query_model import QueryResult
+from opencae.ui.viewport.result_query_panel import ResultQueryPanel
+from opencae.ui.viewport.viewport_overlay_metrics import VIEWPORT_OVERLAY_MARGIN
+
+app = QApplication.instance() or QApplication([])
+parent = QWidget()
+parent.resize(500, 360)
+panel = ResultQueryPanel(parent)
+try:
     panel.move(12, 90)
     parent.show()
     panel.show_result(
@@ -201,22 +223,38 @@ def test_result_query_panel_caps_matrix_to_available_viewport_height():
     )
     app.processEvents()
     panel._fit_to_contents()
-
     assert panel.y() + panel.height() <= parent.height() - VIEWPORT_OVERLAY_MARGIN
     assert panel.table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAsNeeded
+finally:
+    parent.close()
+    parent.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_two_line_ribbon_caption_fits_canonical_button_height():
     """Two-line action captions fit inside the shared ribbon-button geometry."""
-    app = _application()
-    action = QAction("Add Instance")
-    pixmap = QPixmap(42, 42)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    action.setIcon(QIcon(pixmap))
-    button = action_button(action)
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction, QIcon, QPixmap
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.core.metrics import RIBBON_BUTTON_HEIGHT
+from opencae.ui.templates import action_button
+
+app = QApplication.instance() or QApplication([])
+action = QAction("Add Instance")
+pixmap = QPixmap(42, 42)
+pixmap.fill(Qt.GlobalColor.transparent)
+action.setIcon(QIcon(pixmap))
+button = action_button(action)
+try:
     button.show()
     app.processEvents()
-
     assert RIBBON_BUTTON_HEIGHT >= 80
     assert "\n" in button.text()
     assert button.height() >= button.sizeHint().height()
+finally:
+    button.close()
+    button.deleteLater()
+    app.processEvents()
+''')
