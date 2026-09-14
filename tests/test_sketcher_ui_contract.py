@@ -39,6 +39,9 @@ def test_sketcher_has_themed_grid_revolve_axis_and_complete_constraint_toolbar()
     assert "font.setPixelSize(10)" in editor_canvas
     assert "painter.resetTransform()" in editor_canvas
     assert "ScrollBarAlwaysOff" in editor_canvas
+    assert "QFrame.Shape.NoFrame" in editor_canvas
+    assert "1.0e-9 <= target" in editor_canvas
+    assert "_ensure_navigation_space" in editor_canvas
     for tool in (
         "Line",
         "Rectangle",
@@ -83,10 +86,17 @@ def test_sketcher_reuses_main_ribbon_metrics_and_progressive_collapse_policy():
     assert 'RibbonGroupSpec(\n                "SELECTION"' in public_dialog
     assert 'RibbonGroupSpec(\n                "PRIMITIVES"' in public_dialog
     assert 'RibbonGroupSpec(\n                "CONSTRAINTS"' in public_dialog
+    assert 'RibbonGroupSpec(\n                "DIMENSIONS"' in public_dialog
     assert 'RibbonGroupSpec(\n                "CONSTRUCTION/GRID"' in public_dialog
     assert '"primitive.select"' in public_dialog
     assert '"primitive.undo"' in public_dialog
     assert '"primitive.redo"' in public_dialog
+    assert '"dimension.distance"' in public_dialog
+    assert '"dimension.horizontal"' in public_dialog
+    assert '"dimension.vertical"' in public_dialog
+    assert '"dimension.angle"' in public_dialog
+    assert '"dimension.radius"' in public_dialog
+    assert '"dimension.diameter"' in public_dialog
     assert "_SketchResponsiveRibbonPage(" not in public_dialog
     assert "candidates.sort(" in ribbon
     assert "-self._group_width(item[1], False)" in ribbon
@@ -99,8 +109,10 @@ def test_sketcher_reuses_main_ribbon_metrics_and_progressive_collapse_policy():
     assert "QToolBar" not in dialog
 
 
-def test_sketch_workspace_mode_switch_uses_the_canonical_viewport_toolbar():
-    dialog = (ROOT / "opencae/ui/sketcher/dialog.py").read_text(encoding="utf-8")
+def test_sketch_workspace_mode_switch_uses_one_canonical_viewport_command_bar():
+    dialog = (ROOT / "opencae/ui/sketcher/constraint_dialog.py").read_text(
+        encoding="utf-8"
+    )
     main_toolbar = (ROOT / "opencae/ui/viewport/selection_toolbar.py").read_text(
         encoding="utf-8"
     )
@@ -109,15 +121,26 @@ def test_sketch_workspace_mode_switch_uses_the_canonical_viewport_toolbar():
     assert 'ViewportToolButton("Sketch"' in dialog
     assert '"3D Preview", checkable=True' in dialog
     assert 'ViewportToolButton("Fit"' in dialog
+    assert 'self.status_label = QLabel("Ready", bar)' in dialog
+    assert 'QDialogButtonBox.StandardButton.Cancel' in dialog
+    assert 'QDialogButtonBox.StandardButton.Ok' in dialog
+    assert '"Create Feature"' in dialog
+    assert "footer.setFixedHeight(0)" in dialog
+    assert "footer.hide()" in dialog
     assert 'self.setObjectName("ViewportToolbar")' in main_toolbar
 
 
 def test_dimension_and_grid_are_normal_ribbon_buttons_and_construction_edits_selection():
     dialog = (ROOT / "opencae/ui/sketcher/dialog.py").read_text(encoding="utf-8")
+    public_dialog = (ROOT / "opencae/ui/sketcher/constraint_dialog.py").read_text(
+        encoding="utf-8"
+    )
     editor_canvas = (ROOT / "opencae/ui/sketcher/editor_canvas.py").read_text(
         encoding="utf-8"
     )
     assert '"constraint.dimension", "Dimension", IconKind.SKETCH_DIMENSION' in dialog
+    assert '"DIMENSIONS"' in public_dialog
+    assert 'self._ribbon_actions.pop("constraint.dimension", None)' in public_dialog
     assert 'QAction(self._icon(IconKind.SKETCH_GRID), "Grid", self)' in dialog
     assert 'QAction(\n            self._icon(IconKind.SKETCH_CONSTRUCTION), "Construction", self' in dialog
     assert "self.canvas.selection_changed.connect(self._sync_construction_from_selection)" in dialog
