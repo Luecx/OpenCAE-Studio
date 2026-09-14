@@ -9,12 +9,12 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QTableWidget,
     QTableWidgetItem,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from opencae.ui.templates import FieldLabel, apply_inline_action_size
+from opencae.ui.primitives.buttons import InlineButton
+from opencae.ui.templates import FieldLabel
 
 
 class GraphProfileEditor(QWidget):
@@ -59,14 +59,8 @@ class GraphProfileEditor(QWidget):
 
         row = QHBoxLayout()
         row.setSpacing(6)
-        plus = QToolButton()
-        plus.setText("+")
-        plus.setObjectName("InlineAddButton")
-        apply_inline_action_size(plus)
-        minus = QToolButton()
-        minus.setText("−")
-        minus.setObjectName("InlineRemoveButton")
-        apply_inline_action_size(minus)
+        plus = InlineButton("+", object_name="InlineAddButton", parent=pane)
+        minus = InlineButton("−", object_name="InlineRemoveButton", parent=pane)
         plus.clicked.connect(add)
         minus.clicked.connect(lambda: self._remove(table))
         row.addWidget(plus)
