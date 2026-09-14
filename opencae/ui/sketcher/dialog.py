@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from math import hypot
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QSignalBlocker, Qt
 from PyQt6.QtGui import QAction, QActionGroup
 from PyQt6.QtWidgets import (
     QButtonGroup,
@@ -21,12 +21,11 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QMessageBox,
     QPushButton,
     QSplitter,
     QStackedWidget,
-    QToolBar,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -43,13 +42,27 @@ from opencae.model.entities.geometry import (
 )
 from opencae.sketch import constraint_label, solve_sketch
 from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.core.metrics import RIBBON_ICON_SIZE, RIBBON_PAGE_HEIGHT
+from opencae.ui.ribbon.ribbon_page import ResponsiveRibbonPage
+from opencae.ui.ribbon.specs import RibbonGroupSpec
+from opencae.ui.templates import ViewportToolButton
 
-from .canvas import SketchCanvas
+from .editor_canvas import SketchEditorCanvas
 from .preview import SketchFeaturePreview
 
 
+class _SketchResponsiveRibbonPage(ResponsiveRibbonPage):
+    """Use the main ribbon collapse model with a clean three-button narrow state."""
+
+    def _target_collapsed_groups(self, available_width):
+        target = super()._target_collapsed_groups(available_width)
+        if len(target) >= 2:
+            return frozenset(spec.title for spec in self._specs)
+        return target
+
+
 class SketchFeatureDialog(QDialog):
-    """Large modal feature editor with a ribbon-like toolbar and 2D/3D workspace."""
+    """Large modal feature editor with the same ribbon metrics as the main window."""
 
     def __init__(
         self,
@@ -75,20 +88,24 @@ class SketchFeatureDialog(QDialog):
         )
         self._updating_controls = False
         self._tool_actions: dict[str, QAction] = {}
+        self._ribbon_actions: dict[str, QAction] = {}
+        self._constraint_actions: dict[str, QAction] = {}
+        self._dimension_actions: dict[str, QAction] = {}
+
+        # Build the actual drafting surfaces before the ribbon so action wiring
+        # never depends on a partially constructed dialog.
+        self.canvas = SketchEditorCanvas(self._feature.sketch, self)
+        self.preview = SketchFeaturePreview(self)
+        self._build_ribbon_actions()
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        root.addWidget(self._build_toolbar())
+        root.addWidget(self._build_ribbon())
 
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.setObjectName("SketchWorkspaceSplitter")
-        self.workspace = QStackedWidget(splitter)
-        self.canvas = SketchCanvas(self._feature.sketch, self.workspace)
-        self.preview = SketchFeaturePreview(self.workspace)
-        self.workspace.addWidget(self.canvas)
-        self.workspace.addWidget(self.preview)
-        splitter.addWidget(self.workspace)
+        splitter.addWidget(self._build_workspace(splitter))
         splitter.addWidget(self._build_inspector(splitter))
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
@@ -114,125 +131,15 @@ class SketchFeatureDialog(QDialog):
         return {"feature": self.feature}
 
     # --------------------------------------------------------------- building
-    def _build_toolbar(self):
-        host = QWidget(self)
-        host.setObjectName("SketchRibbonHost")
-        layout = QVBoxLayout(host)
-        layout.setContentsMargins(8, 6, 8, 5)
-        layout.setSpacing(4)
+    def _icon(self, kind: IconKind):
+        return make_icon(kind, RIBBON_ICON_SIZE)
 
-        top = QHBoxLayout()
-        top.setContentsMargins(0, 0, 0, 0)
-        top.setSpacing(6)
-        self.toolbar = QToolBar(host)
-        self.toolbar.setObjectName("SketchToolbar")
-        self.toolbar.setMovable(False)
-        self.toolbar.setFloatable(False)
-        self.toolbar.setToolButtonStyle(
-            Qt.ToolButtonStyle.ToolButtonTextUnderIcon
-        )
-        top.addWidget(self.toolbar, 1)
+    def _register(self, key: str, action: QAction) -> QAction:
+        self._ribbon_actions[key] = action
+        return action
 
-        self.view_sketch = QToolButton(host)
-        self.view_sketch.setText("Sketch")
-        self.view_sketch.setCheckable(True)
-        self.view_sketch.setChecked(True)
-        self.view_sketch.setAutoRaise(True)
-        self.view_preview = QToolButton(host)
-        self.view_preview.setText("3D Preview")
-        self.view_preview.setCheckable(True)
-        self.view_preview.setAutoRaise(True)
-        view_group = QButtonGroup(host)
-        view_group.setExclusive(True)
-        view_group.addButton(self.view_sketch)
-        view_group.addButton(self.view_preview)
-        top.addWidget(self.view_sketch)
-        top.addWidget(self.view_preview)
-        layout.addLayout(top)
-
-        self._add_tool_action("Select", "Select", IconKind.PART)
-        self.toolbar.addSeparator()
-        undo = self.toolbar.addAction(make_icon(IconKind.UNDO, 18), "Undo")
-        redo = self.toolbar.addAction(make_icon(IconKind.REDO, 18), "Redo")
-        # The toolbar is built before the canvas. Resolve the canvas lazily when
-        # the action is triggered instead of dereferencing it during construction.
-        undo.triggered.connect(
-            lambda _checked=False: self.canvas.undo()
-        )
-        redo.triggered.connect(
-            lambda _checked=False: self.canvas.redo()
-        )
-        self.toolbar.addSeparator()
-        for tool, label in (
-            ("Point", "Point"),
-            ("Line", "Line"),
-            ("Polyline", "Polyline"),
-            ("Rectangle", "Rectangle"),
-            ("Circle", "Circle"),
-            ("Center Arc", "Arc"),
-            ("3-Point Arc", "3P Arc"),
-            ("Ellipse", "Ellipse"),
-            ("Spline", "Spline"),
-            ("Slot", "Slot"),
-        ):
-            self._add_tool_action(tool, label, IconKind.PART)
-
-        self.toolbar.addSeparator()
-        self.construction_action = self.toolbar.addAction("Construction")
-        self.construction_action.setCheckable(True)
-        self.grid_action = self.toolbar.addAction("Grid")
-        self.grid_action.setCheckable(True)
-        self.grid_action.setChecked(True)
-        self.snap_action = self.toolbar.addAction("Snap")
-        self.snap_action.setCheckable(True)
-        self.snap_action.setChecked(True)
-        self.fit_action = self.toolbar.addAction(
-            make_icon(IconKind.FIT_VIEW, 18), "Fit"
-        )
-        self.toolbar.addSeparator()
-
-        for label, kind in (
-            ("Coincident", "Coincident"),
-            ("Horizontal", "Horizontal"),
-            ("Vertical", "Vertical"),
-            ("Parallel", "Parallel"),
-            ("Perp.", "Perpendicular"),
-            ("Tangent", "Tangent"),
-            ("Equal", "Equal"),
-            ("Concentric", "Concentric"),
-            ("Midpoint", "Midpoint"),
-            ("Fixed", "Fixed"),
-        ):
-            action = self.toolbar.addAction(label)
-            action.setProperty("constraintKind", kind)
-            action.triggered.connect(
-                lambda _checked=False, value=kind: self._apply_constraint(value)
-            )
-
-        self.toolbar.addSeparator()
-        for label, kind in (
-            ("Distance", "Distance"),
-            ("Horizontal dim", "DistanceX"),
-            ("Vertical dim", "DistanceY"),
-            ("Angle", "Angle"),
-            ("Radius", "Radius"),
-            ("Diameter", "Diameter"),
-        ):
-            action = self.toolbar.addAction(label)
-            action.setProperty("dimensionKind", kind)
-            action.triggered.connect(
-                lambda _checked=False, value=kind: self._apply_dimension(value)
-            )
-
-        self._tool_group = QActionGroup(host)
-        self._tool_group.setExclusive(True)
-        for action in self._tool_actions.values():
-            self._tool_group.addAction(action)
-        self._tool_actions["Select"].setChecked(True)
-        return host
-
-    def _add_tool_action(self, tool: str, label: str, icon_kind):
-        action = QAction(make_icon(icon_kind, 18), label, self)
+    def _tool_action(self, key: str, tool: str, label: str, icon_kind: IconKind):
+        action = QAction(self._icon(icon_kind), label, self)
         action.setCheckable(True)
         action.setData(tool)
         action.triggered.connect(
@@ -240,8 +147,256 @@ class SketchFeatureDialog(QDialog):
                 self.canvas.set_tool(value) if checked else None
             )
         )
-        self.toolbar.addAction(action)
+        self._tool_group.addAction(action)
         self._tool_actions[tool] = action
+        self._register(key, action)
+        return action
+
+    def _menu_action(self, key: str, label: str, icon_kind: IconKind) -> QAction:
+        action = QAction(self._icon(icon_kind), label, self)
+        action.setMenu(QMenu(self))
+        self._register(key, action)
+        return action
+
+    def _constraint_action(
+        self,
+        key: str,
+        label: str,
+        kind: str,
+        icon_kind: IconKind,
+        *,
+        ribbon: bool = True,
+    ) -> QAction:
+        action = QAction(self._icon(icon_kind), label, self)
+        action.setProperty("constraintKind", kind)
+        action.triggered.connect(
+            lambda _checked=False, value=kind: self._apply_constraint(value)
+        )
+        self._constraint_actions[kind] = action
+        if ribbon:
+            self._register(key, action)
+        return action
+
+    def _dimension_action(
+        self,
+        label: str,
+        kind: str,
+        icon_kind: IconKind,
+    ) -> QAction:
+        action = QAction(self._icon(icon_kind), label, self)
+        action.setProperty("dimensionKind", kind)
+        action.triggered.connect(
+            lambda _checked=False, value=kind: self._apply_dimension(value)
+        )
+        self._dimension_actions[kind] = action
+        return action
+
+    def _build_ribbon_actions(self) -> None:
+        self._tool_group = QActionGroup(self)
+        self._tool_group.setExclusive(True)
+
+        self._tool_action(
+            "primitive.select", "Select", "Select", IconKind.SKETCH_SELECT
+        )
+
+        undo = QAction(self._icon(IconKind.UNDO), "Undo", self)
+        undo.triggered.connect(lambda _checked=False: self.canvas.undo())
+        self._register("primitive.undo", undo)
+        redo = QAction(self._icon(IconKind.REDO), "Redo", self)
+        redo.triggered.connect(lambda _checked=False: self.canvas.redo())
+        self._register("primitive.redo", redo)
+
+        for key, tool, label, icon_kind in (
+            ("primitive.point", "Point", "Point", IconKind.SKETCH_POINT),
+            ("primitive.line", "Line", "Line", IconKind.SKETCH_LINE),
+            ("primitive.polyline", "Polyline", "Polyline", IconKind.SKETCH_POLYLINE),
+            ("primitive.rectangle", "Rectangle", "Rectangle", IconKind.SKETCH_RECTANGLE),
+            ("primitive.circle", "Circle", "Circle", IconKind.SKETCH_CIRCLE),
+        ):
+            self._tool_action(key, tool, label, icon_kind)
+
+        arc = self._menu_action("primitive.arc", "Arc", IconKind.SKETCH_ARC_CENTER)
+        center_arc = self._tool_action(
+            "_menu.center_arc",
+            "Center Arc",
+            "Center Arc",
+            IconKind.SKETCH_ARC_CENTER,
+        )
+        three_point_arc = self._tool_action(
+            "_menu.three_point_arc",
+            "3-Point Arc",
+            "3-Point Arc",
+            IconKind.SKETCH_ARC_3POINT,
+        )
+        # Menu-only tools must remain in the QActionGroup but not consume their
+        # own top-level ribbon slots.
+        self._ribbon_actions.pop("_menu.center_arc", None)
+        self._ribbon_actions.pop("_menu.three_point_arc", None)
+        arc.menu().addAction(center_arc)
+        arc.menu().addAction(three_point_arc)
+
+        more_primitives = self._menu_action(
+            "primitive.more", "More", IconKind.SKETCH_PRIMITIVES_MORE
+        )
+        for tool, label, icon_kind in (
+            ("Ellipse", "Ellipse", IconKind.SKETCH_ELLIPSE),
+            ("Spline", "Spline", IconKind.SKETCH_SPLINE),
+            ("Slot", "Slot", IconKind.SKETCH_SLOT),
+        ):
+            action = self._tool_action(
+                f"_menu.{tool.lower()}", tool, label, icon_kind
+            )
+            self._ribbon_actions.pop(f"_menu.{tool.lower()}", None)
+            more_primitives.menu().addAction(action)
+
+        self._tool_actions["Select"].setChecked(True)
+
+        for key, label, kind, icon_kind in (
+            ("constraint.coincident", "Coincident", "Coincident", IconKind.SKETCH_CONSTRAINT_COINCIDENT),
+            ("constraint.horizontal", "Horizontal", "Horizontal", IconKind.SKETCH_CONSTRAINT_HORIZONTAL),
+            ("constraint.vertical", "Vertical", "Vertical", IconKind.SKETCH_CONSTRAINT_VERTICAL),
+            ("constraint.parallel", "Parallel", "Parallel", IconKind.SKETCH_CONSTRAINT_PARALLEL),
+            ("constraint.perpendicular", "Perp.", "Perpendicular", IconKind.SKETCH_CONSTRAINT_PERPENDICULAR),
+            ("constraint.tangent", "Tangent", "Tangent", IconKind.SKETCH_CONSTRAINT_TANGENT),
+            ("constraint.equal", "Equal", "Equal", IconKind.SKETCH_CONSTRAINT_EQUAL),
+            ("constraint.fixed", "Fixed", "Fixed", IconKind.SKETCH_CONSTRAINT_FIXED),
+        ):
+            self._constraint_action(key, label, kind, icon_kind)
+
+        more_constraints = self._menu_action(
+            "constraint.more", "More", IconKind.SKETCH_CONSTRAINT_MORE
+        )
+        for label, kind, icon_kind in (
+            ("Concentric", "Concentric", IconKind.SKETCH_CONSTRAINT_CONCENTRIC),
+            ("Midpoint", "Midpoint", IconKind.SKETCH_CONSTRAINT_MIDPOINT),
+            ("Collinear", "Collinear", IconKind.SKETCH_CONSTRAINT_COLLINEAR),
+            ("Point on", "Point on object", IconKind.SKETCH_CONSTRAINT_POINT_ON),
+            ("Symmetry", "Symmetry", IconKind.SKETCH_CONSTRAINT_SYMMETRY),
+        ):
+            action = self._constraint_action(
+                f"_menu.constraint.{kind}", label, kind, icon_kind, ribbon=False
+            )
+            more_constraints.menu().addAction(action)
+
+        self.dimension_action = self._menu_action(
+            "constraint.dimension", "Dimension", IconKind.SKETCH_DIMENSION
+        )
+        for label, kind, icon_kind in (
+            ("Distance", "Distance", IconKind.SKETCH_DIMENSION_DISTANCE),
+            ("Horizontal", "DistanceX", IconKind.SKETCH_DIMENSION_HORIZONTAL),
+            ("Vertical", "DistanceY", IconKind.SKETCH_DIMENSION_VERTICAL),
+            ("Angle", "Angle", IconKind.SKETCH_DIMENSION_ANGLE),
+            ("Radius", "Radius", IconKind.SKETCH_DIMENSION_RADIUS),
+            ("Diameter", "Diameter", IconKind.SKETCH_DIMENSION_DIAMETER),
+        ):
+            self.dimension_action.menu().addAction(
+                self._dimension_action(label, kind, icon_kind)
+            )
+
+        self.construction_action = QAction(
+            self._icon(IconKind.SKETCH_CONSTRUCTION), "Construction", self
+        )
+        self.construction_action.setCheckable(True)
+        self._register("options.construction", self.construction_action)
+
+        self.grid_action = QAction(self._icon(IconKind.SKETCH_GRID), "Grid", self)
+        self.grid_action.setCheckable(True)
+        self.grid_action.setChecked(True)
+        self._register("options.grid", self.grid_action)
+
+        self.snap_action = QAction(self._icon(IconKind.SKETCH_SNAP), "Snap", self)
+        self.snap_action.setCheckable(True)
+        self.snap_action.setChecked(True)
+        self._register("options.snap", self.snap_action)
+
+    def _build_ribbon(self):
+        groups = (
+            RibbonGroupSpec(
+                "PRIMITIVES",
+                (
+                    "primitive.select",
+                    "primitive.undo",
+                    "primitive.redo",
+                    "primitive.point",
+                    "primitive.line",
+                    "primitive.polyline",
+                    "primitive.rectangle",
+                    "primitive.circle",
+                    "primitive.arc",
+                    "primitive.more",
+                ),
+                icon_action_id="primitive.line",
+            ),
+            RibbonGroupSpec(
+                "CONSTRAINTS",
+                (
+                    "constraint.coincident",
+                    "constraint.horizontal",
+                    "constraint.vertical",
+                    "constraint.parallel",
+                    "constraint.perpendicular",
+                    "constraint.tangent",
+                    "constraint.equal",
+                    "constraint.fixed",
+                    "constraint.more",
+                    "constraint.dimension",
+                ),
+                icon_action_id="constraint.coincident",
+            ),
+            RibbonGroupSpec(
+                "CONSTRUCTION/GRID",
+                (
+                    "options.construction",
+                    "options.grid",
+                    "options.snap",
+                ),
+                icon_action_id="options.construction",
+            ),
+        )
+        self.ribbon = _SketchResponsiveRibbonPage(
+            groups,
+            self._ribbon_actions,
+            parent=self,
+        )
+        self.ribbon.setObjectName("SketchRibbonHost")
+        self.ribbon.setFixedHeight(RIBBON_PAGE_HEIGHT)
+        return self.ribbon
+
+    def _build_workspace(self, parent):
+        host = QWidget(parent)
+        host.setObjectName("SketchViewportHost")
+        layout = QVBoxLayout(host)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        bar = QWidget(host)
+        bar.setObjectName("ViewportToolbar")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(8, 5, 8, 5)
+        row.setSpacing(4)
+
+        self.view_sketch = ViewportToolButton("Sketch", checkable=True, parent=bar)
+        self.view_preview = ViewportToolButton(
+            "3D Preview", checkable=True, parent=bar
+        )
+        self.view_sketch.setChecked(True)
+        self.view_group = QButtonGroup(bar)
+        self.view_group.setExclusive(True)
+        self.view_group.addButton(self.view_sketch)
+        self.view_group.addButton(self.view_preview)
+        row.addWidget(self.view_sketch)
+        row.addWidget(self.view_preview)
+        row.addStretch(1)
+        self.fit_button = ViewportToolButton("Fit", parent=bar)
+        self.fit_button.setToolTip("Center and fit the sketch")
+        row.addWidget(self.fit_button)
+        layout.addWidget(bar)
+
+        self.workspace = QStackedWidget(host)
+        self.workspace.addWidget(self.canvas)
+        self.workspace.addWidget(self.preview)
+        layout.addWidget(self.workspace, 1)
+        return host
 
     def _build_inspector(self, parent):
         panel = QFrame(parent)
@@ -363,11 +518,12 @@ class SketchFeatureDialog(QDialog):
             lambda: self.workspace.setCurrentWidget(self.canvas)
         )
         self.view_preview.clicked.connect(self._show_preview)
+        self.fit_button.clicked.connect(self._fit_current_view)
         self.construction_action.toggled.connect(self.canvas.set_construction)
         self.grid_action.toggled.connect(self.canvas.set_grid_visible)
         self.snap_action.toggled.connect(self._set_snap_enabled)
-        self.fit_action.triggered.connect(self.canvas.fit_sketch)
         self.canvas.sketch_changed.connect(self._on_sketch_changed)
+        self.canvas.selection_changed.connect(self._sync_construction_from_selection)
         self.canvas.solver_changed.connect(self._update_solver_status)
         self.canvas.status_message.connect(self.hint_label.setText)
         self.mode_combo.currentTextChanged.connect(self._feature_mode_changed)
@@ -387,6 +543,24 @@ class SketchFeatureDialog(QDialog):
         self.show_dimensions_check.toggled.connect(
             self.canvas.set_dimensions_visible
         )
+
+    def _fit_current_view(self):
+        if self.workspace.currentWidget() is self.canvas:
+            self.canvas.fit_sketch()
+            return
+        fit = getattr(self.preview, "fit_view", None)
+        if callable(fit):
+            fit()
+
+    def _sync_construction_from_selection(self, _refs=None):
+        entities = tuple(self.canvas.selected_entities())
+        if not entities:
+            return
+        enabled = all(bool(getattr(entity, "construction", False)) for entity in entities)
+        blocker = QSignalBlocker(self.construction_action)
+        self.construction_action.setChecked(enabled)
+        del blocker
+        self.canvas.construction = enabled
 
     # ------------------------------------------------------------- constraints
     def _apply_constraint(self, kind: SketchConstraintKind | str):
@@ -460,9 +634,7 @@ class SketchFeatureDialog(QDialog):
             else:
                 default = second.y - first.y
                 title = "Vertical distance"
-            value = self._ask_value(
-                title, default, allow_negative=True
-            )
+            value = self._ask_value(title, default, allow_negative=True)
         elif kind is SketchConstraintKind.ANGLE:
             if len(entities) < 2 or not all(
                 isinstance(entity, SketchLine) for entity in entities[:2]
