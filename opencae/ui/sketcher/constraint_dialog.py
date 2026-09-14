@@ -7,11 +7,13 @@ viewport chrome used by the actual OpenCAE Sketcher.
 
 from __future__ import annotations
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QDialogButtonBox,
     QLabel,
     QSizePolicy,
+    QSplitter,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -25,6 +27,7 @@ from opencae.model.entities.geometry import (
 )
 from opencae.ui.core.icon_factory import IconKind
 from opencae.ui.core.metrics import RIBBON_PAGE_HEIGHT
+from opencae.ui.core.theme import PALETTE
 from opencae.ui.ribbon.ribbon_page import ResponsiveRibbonPage
 from opencae.ui.ribbon.specs import RibbonGroupSpec
 from opencae.ui.templates import ViewportToolButton
@@ -36,6 +39,7 @@ from .dialog import SketchFeatureDialog as _BaseSketchFeatureDialog
 
 _DIMENSION_LAYOUT_KEY = "sketch_dimension_positions"
 _VIEWPORT_BAR_HEIGHT = VIEWPORT_TOOL_HEIGHT + 10
+_MAIN_SEPARATOR_WIDTH = 3
 
 
 class SketchFeatureDialog(_BaseSketchFeatureDialog):
@@ -43,6 +47,14 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # QSplitter uses platform-native handle metrics by default.  The main
+        # window explicitly uses a 3 px separator, so use that same physical
+        # width here instead of allowing Windows to render a wider grab strip.
+        splitter = self.findChild(QSplitter, "SketchWorkspaceSplitter")
+        if splitter is not None:
+            splitter.setHandleWidth(_MAIN_SEPARATOR_WIDTH)
+
         self._ribbon_actions["primitive.arc"].setIcon(
             self._icon(IconKind.SKETCH_ARC)
         )
@@ -149,6 +161,17 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
             parent=self,
         )
         self.ribbon.setObjectName("SketchRibbonHost")
+        # Plain QWidget stylesheet backgrounds can be treated as transparent by
+        # the Windows style unless Qt is explicitly asked to paint the styled
+        # surface.  The main Ribbon paints this exact panel/border pair itself;
+        # mirror that behavior here so both windows use identical pixels.
+        self.ribbon.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.ribbon.setStyleSheet(
+            "QWidget#SketchRibbonHost { "
+            f"background:{PALETTE['panel']}; "
+            f"border-bottom:1px solid {PALETTE['border']}; "
+            "}"
+        )
         self.ribbon.setFixedHeight(RIBBON_PAGE_HEIGHT)
         return self.ribbon
 
