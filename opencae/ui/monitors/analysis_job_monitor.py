@@ -8,7 +8,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QProgressBar,
-    QPushButton,
     QSplitter,
     QTreeWidget,
     QTreeWidgetItem,
@@ -17,6 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.ui.core.widgets import MonospaceOutputView
+from opencae.ui.primitives.buttons import FormButton
 from opencae.ui.templates import SectionHeading
 
 
@@ -70,7 +70,7 @@ class AnalysisJobMonitor(QDialog):
         actions = QHBoxLayout()
         actions.setContentsMargins(0, 0, 0, 0)
         actions.addStretch(1)
-        self.stop_button = QPushButton("Stop")
+        self.stop_button = FormButton("Stop", parent=self)
         self.stop_button.setToolTip("Terminate this solver job")
         self.stop_button.clicked.connect(self._stop)
         actions.addWidget(self.stop_button)
