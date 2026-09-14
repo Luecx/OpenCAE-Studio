@@ -9,15 +9,11 @@ import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import numpy as np
-import pyvista as pv
 from vtkmodules.vtkRenderingAnnotation import vtkScalarBarActor
 
-from opencae.ui.core.metrics import RIBBON_BUTTON_HEIGHT
 from opencae.ui.viewport.scalar_bar import (
     _cap_rectangles,
     _disable_native_range_swatches,
-    install_scalar_bar_end_caps,
     scalar_bar_args,
 )
 from opencae.ui.viewport.viewport_overlay_metrics import (
@@ -31,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _run_isolated_qt(script: str) -> None:
-    """Run one real Qt interaction probe in a fresh native lifecycle."""
+    """Run one real Qt/VTK interaction probe in a fresh native lifecycle."""
     env = dict(os.environ)
     env["QT_QPA_PLATFORM"] = "offscreen"
     env["PYVISTA_OFF_SCREEN"] = "true"
@@ -141,43 +137,49 @@ def test_scalar_bar_native_range_swatches_are_explicitly_disabled():
 
 def test_scalar_bar_custom_caps_use_configured_outside_colors():
     """The cap actors must use exactly the colors selected in the contour menu."""
-    plotter = pv.Plotter(off_screen=True, window_size=(360, 360))
-    mesh = pv.Sphere(theta_resolution=8, phi_resolution=8)
-    mesh["value"] = np.asarray(mesh.points)[:, 2]
-    try:
-        plotter.add_mesh(
-            mesh,
-            scalars="value",
-            clim=(-0.5, 0.5),
-            below_color="#345678",
-            above_color="#c08040",
-            scalar_bar_args=scalar_bar_args(
-                "value",
-                plotter,
-                outside_colors=True,
-            ),
-            render=False,
-        )
-        state = install_scalar_bar_end_caps(
-            plotter,
+    _run_isolated_qt(r'''
+import numpy as np
+import pyvista as pv
+from opencae.ui.viewport.scalar_bar import install_scalar_bar_end_caps, scalar_bar_args
+
+plotter = pv.Plotter(off_screen=True, window_size=(360, 360))
+mesh = pv.Sphere(theta_resolution=8, phi_resolution=8)
+mesh["value"] = np.asarray(mesh.points)[:, 2]
+try:
+    plotter.add_mesh(
+        mesh,
+        scalars="value",
+        clim=(-0.5, 0.5),
+        below_color="#345678",
+        above_color="#c08040",
+        scalar_bar_args=scalar_bar_args(
             "value",
-            below_color="#345678",
-            above_color="#c08040",
-        )
-        assert state is not None
-        scalar_actor = plotter.scalar_bars["value"]
-        assert not scalar_actor.GetDrawBelowRangeSwatch()
-        assert not scalar_actor.GetDrawAboveRangeSwatch()
-        assert np.allclose(
-            state["below_actor"].GetProperty().GetColor(),
-            (0x34 / 255.0, 0x56 / 255.0, 0x78 / 255.0),
-        )
-        assert np.allclose(
-            state["above_actor"].GetProperty().GetColor(),
-            (0xC0 / 255.0, 0x80 / 255.0, 0x40 / 255.0),
-        )
-    finally:
-        plotter.close()
+            plotter,
+            outside_colors=True,
+        ),
+        render=False,
+    )
+    state = install_scalar_bar_end_caps(
+        plotter,
+        "value",
+        below_color="#345678",
+        above_color="#c08040",
+    )
+    assert state is not None
+    scalar_actor = plotter.scalar_bars["value"]
+    assert not scalar_actor.GetDrawBelowRangeSwatch()
+    assert not scalar_actor.GetDrawAboveRangeSwatch()
+    assert np.allclose(
+        state["below_actor"].GetProperty().GetColor(),
+        (0x34 / 255.0, 0x56 / 255.0, 0x78 / 255.0),
+    )
+    assert np.allclose(
+        state["above_actor"].GetProperty().GetColor(),
+        (0xC0 / 255.0, 0x80 / 255.0, 0x40 / 255.0),
+    )
+finally:
+    plotter.close()
+''')
 
 
 def test_scalar_bar_custom_caps_are_thin_and_exactly_touch_main_bar():
