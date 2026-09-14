@@ -8,17 +8,20 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
-    QMenu,
     QSizePolicy,
     QSlider,
-    QToolButton,
     QVBoxLayout,
     QWidget,
-    QWidgetAction,
 )
 
 from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.theme import PALETTE
+from opencae.ui.primitives.buttons import (
+    ActionButton,
+    ButtonPresentation,
+    OptionsButton,
+    ToggleButton,
+)
 from opencae.ui.templates import (
     PRIMARY_CONTROL_HEIGHT,
     SectionHeading,
@@ -33,7 +36,7 @@ from opencae.ui.viewport.contour_mapping import (
 )
 
 
-class ResultRangeButton(QToolButton):
+class ResultRangeButton(OptionsButton):
     """Open a compact editor for result range and contour color mapping."""
 
     range_changed = pyqtSignal(object)
@@ -41,14 +44,14 @@ class ResultRangeButton(QToolButton):
 
     def __init__(self, parent=None):
         """Build the ribbon button and its contour presentation controls."""
-        super().__init__(parent)
-        self.setText("Contour")
-        self.setIcon(make_icon(IconKind.RANGE, 28))
-        self.setIconSize(QSize(28, 28))
-        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.setProperty("ribbonButton", True)
-        self.setFixedSize(82, 70)
+        super().__init__(
+            "Contour",
+            icon=make_icon(IconKind.RANGE, 28),
+            icon_size=28,
+            width=82,
+            height=70,
+            parent=parent,
+        )
         self._data_range = (0.0, 1.0)
         self._syncing_bounds = False
         self._colors = {
@@ -80,11 +83,15 @@ class ResultRangeButton(QToolButton):
             )
         )
 
-        self.symmetric = QToolButton()
-        self.symmetric.setObjectName("ResultRangeSymmetryButton")
-        self.symmetric.setCheckable(True)
+        self.symmetric = ToggleButton(
+            text="",
+            icon=_chain_icon(18),
+            checked=False,
+            presentation=ButtonPresentation.DEFAULT,
+            object_name="ResultRangeSymmetryButton",
+            parent=panel,
+        )
         self.symmetric.setAutoRaise(False)
-        self.symmetric.setIcon(_chain_icon(18))
         self.symmetric.setIconSize(QSize(18, 18))
         self.symmetric.setFixedSize(30, 26)
         self.symmetric.setToolTip(
@@ -150,12 +157,7 @@ class ResultRangeButton(QToolButton):
         color_layout.addWidget(field_block("Above range", self.above_color), 1)
         layout.addWidget(color_row)
 
-        menu = QMenu(self)
-        action = QWidgetAction(menu)
-        action.setDefaultWidget(panel)
-        menu.addAction(action)
-        self.setMenu(menu)
-
+        self.set_options_panel(panel)
         self.minimum.valueChanged.connect(
             lambda value: self._bound_changed("minimum", value)
         )
@@ -193,14 +195,13 @@ class ResultRangeButton(QToolButton):
     @staticmethod
     def _auto_button(scope):
         """Return a compact one-shot range calculation icon."""
-        button = QToolButton()
-        button.setCheckable(False)
-        button.setObjectName("ResultRangeAutoIcon")
-        button.setIcon(
-            make_icon(
+        button = ActionButton(
+            icon=make_icon(
                 IconKind.RESULT_FRAME if scope == "frame" else IconKind.RANGE,
                 16,
-            )
+            ),
+            presentation=ButtonPresentation.DEFAULT,
+            object_name="ResultRangeAutoIcon",
         )
         button.setIconSize(QSize(16, 16))
         button.setFixedSize(30, PRIMARY_CONTROL_HEIGHT)
@@ -235,11 +236,14 @@ class ResultRangeButton(QToolButton):
 
     def _color_button(self, name):
         """Return an expanding colorbar end swatch for outside-range values."""
-        button = QToolButton()
+        button = ActionButton(
+            presentation=ButtonPresentation.DEFAULT,
+            object_name="ResultContourColorButton",
+            parent=self,
+        )
         button.setMinimumWidth(72)
         button.setFixedHeight(22)
         button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        button.setObjectName("ResultContourColorButton")
         button.setToolTip(
             "Below-range color" if name == "below" else "Above-range color"
         )
