@@ -99,13 +99,19 @@ app = QApplication.instance() or QApplication([])
 preview_module.SafeQtInteractor = FakePlotter
 parent = QDialog()
 preview = preview_module.SketchFeaturePreview(parent)
-assert not preview.plotter.closed_by_preview
+# No native render surface is created while the Sketch page is active. This is
+# important on Windows, where hidden QVTK children can otherwise acquire HWND/
+# WGL resources and interfere with sibling widget stacking.
+assert preview.plotter is None
+plotter = preview._ensure_plotter()
+assert plotter is preview.plotter
+assert not plotter.closed_by_preview
 parent.reject()
 app.processEvents()
-assert preview.plotter.closed_by_preview
+assert plotter.closed_by_preview
 # shutdown is intentionally idempotent because Qt may send close again later.
 preview.shutdown()
-assert preview.plotter.closed_by_preview
+assert plotter.closed_by_preview
 '''
 
 
