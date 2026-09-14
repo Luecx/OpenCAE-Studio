@@ -28,6 +28,9 @@ class PreviewStub(QWidget):
     def refresh_theme(self):
         return None
 
+    def fit_view(self):
+        return None
+
 
 dialog_module.SketchFeaturePreview = PreviewStub
 
@@ -43,6 +46,7 @@ try:
     assert not dialog.canvas.show_revolve_axis
     assert dialog.canvas.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     assert dialog.canvas.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert dialog.canvas.frameShape().name == "NoFrame"
 
     for tool in (
         "Select",
@@ -98,32 +102,36 @@ try:
     assert not dialog.grid_action.icon().isNull()
     assert not dialog.construction_action.icon().isNull()
 
-    # The Sketcher uses the same progressive collapse policy as the main
-    # ribbon: widest group first, and only as many groups as are needed.
-    assert dialog.ribbon._target_collapsed_groups(2000) == frozenset()
-    assert dialog.ribbon._target_collapsed_groups(1600) == frozenset(
-        {"CONSTRAINTS"}
+    titles = tuple(spec.title for spec in dialog.ribbon._specs)
+    assert titles == (
+        "SELECTION",
+        "PRIMITIVES",
+        "CONSTRAINTS",
+        "DIMENSIONS",
+        "CONSTRUCTION/GRID",
     )
-    assert dialog.ribbon._target_collapsed_groups(1000) == frozenset(
-        {"CONSTRAINTS", "PRIMITIVES"}
-    )
-    assert dialog.ribbon._target_collapsed_groups(700) == frozenset(
-        {"CONSTRAINTS", "PRIMITIVES", "SELECTION"}
-    )
-    assert dialog.ribbon._target_collapsed_groups(500) == frozenset(
-        {"CONSTRAINTS", "PRIMITIVES", "SELECTION", "CONSTRUCTION/GRID"}
-    )
+    expanded_width = dialog.ribbon._required_width(frozenset()) + 20
+    assert dialog.ribbon._target_collapsed_groups(expanded_width) == frozenset()
+    first = dialog.ribbon._target_collapsed_groups(expanded_width - 21)
+    assert "CONSTRAINTS" in first
+    assert dialog.ribbon._target_collapsed_groups(1) == frozenset(titles)
 
     # Rebuilding the responsive ribbon must synchronously detach old groups;
     # otherwise deleteLater() can leave the previous buttons painted on top of
     # the collapsed state during resize.
     old_groups = tuple(dialog.ribbon._group_widgets)
-    dialog.ribbon._refresh_responsive_layout(500)
-    assert dialog.ribbon._collapsed_titles == frozenset(
-        {"CONSTRAINTS", "PRIMITIVES", "SELECTION", "CONSTRUCTION/GRID"}
-    )
+    dialog.ribbon._refresh_responsive_layout(1)
+    assert dialog.ribbon._collapsed_titles == frozenset(titles)
     assert all(group.parent() is None for group in old_groups)
-    assert len(dialog.ribbon._group_widgets) == 4
+    assert len(dialog.ribbon._group_widgets) == 5
+
+    # Commit/cancel, solver status, view mode and Fit all live in the one slim
+    # viewport bar; the legacy footer is intentionally absent.
+    assert dialog.status_label.parent().objectName() == "ViewportToolbar"
+    assert dialog.buttons.parent().objectName() == "ViewportToolbar"
+    assert dialog.view_sketch.parent().objectName() == "ViewportToolbar"
+    assert dialog.view_preview.parent().objectName() == "ViewportToolbar"
+    assert dialog.fit_button.parent().objectName() == "ViewportToolbar"
 
     dialog.mode_combo.setCurrentText("Revolve")
     assert dialog.canvas.show_revolve_axis
