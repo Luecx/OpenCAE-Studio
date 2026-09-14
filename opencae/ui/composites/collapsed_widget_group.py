@@ -7,11 +7,15 @@ from collections.abc import Iterable
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QHBoxLayout, QMenu, QWidget, QWidgetAction
 
-from opencae.ui.primitives.buttons import ButtonPresentation, MenuButton
+from opencae.ui.primitives.buttons.button_ribbon_options import ButtonRibbonOptions
 
 
-class CollapsedWidgetGroupButton(MenuButton):
-    """Expose an existing widget group through one canonical popup button."""
+class CollapsedWidgetGroupButton(ButtonRibbonOptions):
+    """Expose an existing widget group through one canonical popup button.
+
+    This is a composite because it owns and reparents a collection of existing
+    controls.  It is intentionally separate from QAction-based ribbon groups.
+    """
 
     def __init__(
         self,
@@ -23,12 +27,7 @@ class CollapsedWidgetGroupButton(MenuButton):
         property_name: str = "",
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(
-            text,
-            icon=icon,
-            presentation=ButtonPresentation.RIBBON,
-            parent=parent,
-        )
+        super().__init__(text, icon=icon, parent=parent)
         if property_name:
             self.setProperty(property_name, True)
 
