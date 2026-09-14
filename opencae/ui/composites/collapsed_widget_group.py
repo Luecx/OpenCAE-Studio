@@ -5,17 +5,14 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QHBoxLayout, QMenu, QWidget, QWidgetAction
+from PyQt6.QtWidgets import QHBoxLayout, QMenu, QToolButton, QWidget, QWidgetAction
 
-from opencae.ui.primitives.buttons.button_ribbon_options import ButtonRibbonOptions
+from opencae.ui.primitives.buttons._configure import configure_ribbon
+from opencae.ui.primitives.ribbon_text import wrapped_ribbon_text
 
 
-class CollapsedWidgetGroupButton(ButtonRibbonOptions):
-    """Expose an existing widget group through one canonical popup button.
-
-    This is a composite because it owns and reparents a collection of existing
-    controls.  It is intentionally separate from QAction-based ribbon groups.
-    """
+class CollapsedWidgetGroupButton(QToolButton):
+    """Expose an existing widget group through one canonical popup button."""
 
     def __init__(
         self,
@@ -27,7 +24,13 @@ class CollapsedWidgetGroupButton(ButtonRibbonOptions):
         property_name: str = "",
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(text, icon=icon, parent=parent)
+        super().__init__(parent)
+        self.setText(wrapped_ribbon_text(str(text)))
+        if icon is not None:
+            self.setIcon(icon)
+        configure_ribbon(self)
+        self.setCheckable(False)
+        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         if property_name:
             self.setProperty(property_name, True)
 
