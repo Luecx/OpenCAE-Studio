@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QStackedWidget,
     QTabBar,
-    QToolButton,
     QVBoxLayout,
     QWidget,
     QWidgetAction,
@@ -14,6 +13,7 @@ from PyQt6.QtWidgets import (
 
 from opencae.ui.core.theme import PALETTE
 from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.primitives.buttons import ActionButton, ButtonPresentation
 from .project_tree import ProjectTree
 from .solution_tree import SolutionTree
 
@@ -30,9 +30,6 @@ class ProjectPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Project/Solution is a standalone QTabBar rather than a QTabWidget.
-        # Give it an explicit semantic name so the application stylesheet does
-        # not fall back to the platform-native tab appearance.
         self.tabs = QTabBar()
         self.tabs.setObjectName("BrowserTabBar")
         self.tabs.setDrawBase(False)
@@ -41,12 +38,12 @@ class ProjectPanel(QWidget):
         self.tabs.setExpanding(True)
         self.tabs.currentChanged.connect(self._tab_changed)
 
-        # Keep project switching where the document context is already exposed:
-        # directly on the Project browser tab. The tab still selects the Project
-        # tree; its compact arrow opens the list of already-open projects.
-        self.project_selector = QToolButton(self.tabs)
-        self.project_selector.setObjectName("ProjectSelectorButton")
-        self.project_selector.setText("▾")
+        self.project_selector = ActionButton(
+            text="▾",
+            presentation=ButtonPresentation.DEFAULT,
+            object_name="ProjectSelectorButton",
+            parent=self.tabs,
+        )
         self.project_selector.setAutoRaise(True)
         self.project_selector.setCursor(Qt.CursorShape.PointingHandCursor)
         self.project_selector.setFixedWidth(20)
@@ -151,8 +148,6 @@ class ProjectPanel(QWidget):
 
     def _active_project_changed(self, _index):
         self._refresh_project_selector()
-        # Selecting a different project is a document-context operation. Keep
-        # the browser on Project rather than leaving a stale Solution tree open.
         self.tabs.setCurrentIndex(0)
 
     def _show_project_menu(self):
@@ -183,9 +178,12 @@ class ProjectPanel(QWidget):
         row.setSpacing(2)
 
         name = str(getattr(project, "name", "Project") or "Project")
-        select_button = QToolButton(row_widget)
-        select_button.setObjectName("ProjectMenuSelectButton")
-        select_button.setText(f"✓  {name}" if active else f"    {name}")
+        select_button = ActionButton(
+            text=f"✓  {name}" if active else f"    {name}",
+            presentation=ButtonPresentation.DEFAULT,
+            object_name="ProjectMenuSelectButton",
+            parent=row_widget,
+        )
         select_button.setAutoRaise(True)
         select_button.setCursor(Qt.CursorShape.PointingHandCursor)
         select_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
@@ -201,9 +199,12 @@ class ProjectPanel(QWidget):
         )
         row.addWidget(select_button, 1)
 
-        close_button = QToolButton(row_widget)
-        close_button.setObjectName("ProjectMenuCloseButton")
-        close_button.setText("−")
+        close_button = ActionButton(
+            text="−",
+            presentation=ButtonPresentation.DEFAULT,
+            object_name="ProjectMenuCloseButton",
+            parent=row_widget,
+        )
         close_button.setAutoRaise(True)
         close_button.setCursor(Qt.CursorShape.PointingHandCursor)
         close_button.setFixedSize(26, 26)
@@ -245,8 +246,7 @@ class ProjectPanel(QWidget):
 
     @staticmethod
     def _small_button(text):
-        button = QToolButton()
-        button.setText(text)
+        button = ActionButton(text=text, presentation=ButtonPresentation.DEFAULT)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setFixedSize(28, 28)
         return button
