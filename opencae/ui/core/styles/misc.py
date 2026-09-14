@@ -3,7 +3,8 @@
 
 def css(p):
     return f"""
-    QToolBar#RibbonHost {{
+    QToolBar#RibbonHost,
+    QWidget#SketchRibbonHost {{
         background: {p['panel']};
         border: none;
         border-bottom: 1px solid {p['border']};
