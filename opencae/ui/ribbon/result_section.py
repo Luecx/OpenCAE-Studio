@@ -5,38 +5,31 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QSignalBlocker, pyqtSignal
-from PyQt6.QtWidgets import (
-    QButtonGroup,
-    QCheckBox,
-    QHBoxLayout,
-    QRadioButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QVBoxLayout, QWidget
 
+from opencae.ui.composites.controls import ControlVector3
 from opencae.ui.core.icon_factory import IconKind, make_icon
-from opencae.ui.primitives.buttons import FormButton, OptionsButton
-from opencae.ui.templates import (
-    PRIMARY_CONTROL_HEIGHT,
-    SectionHeading,
-    Vector3Input,
-    field_block,
+from opencae.ui.core.metrics import PRIMARY_CONTROL_HEIGHT
+from opencae.ui.primitives.buttons.button_form_action import ButtonFormAction
+from opencae.ui.primitives.buttons.button_results_ribbon_options import (
+    ButtonResultsRibbonOptions,
 )
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.labels import LabelSection
+from opencae.ui.primitives.radios import RadioForm
+from opencae.ui.templates import field_block
 
 
-class ResultSectionButton(OptionsButton):
+class ResultSectionButton(ButtonResultsRibbonOptions):
     """Open clipping-plane state and geometry settings from one ribbon popup."""
 
     settings_changed = pyqtSignal()
 
     def __init__(self, parent=None):
-        """Build an instant popup with explicit section-view on/off controls."""
         super().__init__(
             "Section View",
             icon=make_icon(IconKind.SECTION_VIEW, 28),
-            icon_size=28,
             width=92,
-            height=70,
             parent=parent,
         )
 
@@ -47,14 +40,13 @@ class ResultSectionButton(OptionsButton):
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(10)
 
-        layout.addWidget(SectionHeading("Display"))
+        layout.addWidget(LabelSection("Display"))
         state_row = QWidget()
         state_layout = QHBoxLayout(state_row)
         state_layout.setContentsMargins(0, 0, 0, 0)
         state_layout.setSpacing(16)
-        self.section_off = QRadioButton("Off")
-        self.section_on = QRadioButton("On")
-        self.section_off.setChecked(True)
+        self.section_off = RadioForm("Off", checked=True)
+        self.section_on = RadioForm("On")
         self.state_group = QButtonGroup(self)
         self.state_group.addButton(self.section_off)
         self.state_group.addButton(self.section_on)
@@ -63,20 +55,19 @@ class ResultSectionButton(OptionsButton):
         state_layout.addStretch(1)
         layout.addWidget(field_block("Section view", state_row))
 
-        layout.addWidget(SectionHeading("Plane"))
-        self.origin = Vector3Input()
-        self.normal = Vector3Input((1.0, 0.0, 0.0))
+        layout.addWidget(LabelSection("Plane"))
+        self.origin = ControlVector3()
+        self.normal = ControlVector3((1.0, 0.0, 0.0))
         layout.addWidget(field_block("Origin", self.origin))
         layout.addWidget(field_block("Normal", self.normal))
 
-        layout.addWidget(SectionHeading("Options"))
-        self.invert = QCheckBox("Invert clipping direction")
-        self.show_plane = QCheckBox("Show interactive plane")
-        self.show_plane.setChecked(True)
+        layout.addWidget(LabelSection("Options"))
+        self.invert = CheckForm("Invert clipping direction")
+        self.show_plane = CheckForm("Show interactive plane", checked=True)
         layout.addWidget(self.invert)
         layout.addWidget(self.show_plane)
 
-        center = FormButton("Center on current result", parent=panel)
+        center = ButtonFormAction("Center on current result", parent=panel)
         center.setFixedHeight(PRIMARY_CONTROL_HEIGHT)
         center.clicked.connect(self._request_center)
         layout.addWidget(center)
@@ -89,7 +80,6 @@ class ResultSectionButton(OptionsButton):
         self.show_plane.toggled.connect(self.settings_changed.emit)
 
     def values(self) -> dict:
-        """Return the clipping-plane state consumed by the result viewport."""
         return {
             "enabled": self.section_on.isChecked(),
             "origin": None if self._origin_is_automatic else self.origin.value(),
@@ -100,7 +90,6 @@ class ResultSectionButton(OptionsButton):
         }
 
     def set_state(self, state: dict | None) -> None:
-        """Receive plane updates from the viewport without re-rendering the result."""
         state = state or {}
         blockers = [
             QSignalBlocker(self.section_on),
@@ -127,22 +116,18 @@ class ResultSectionButton(OptionsButton):
         del blockers
 
     def reset_for_result(self) -> None:
-        """Return the section origin to automatic centering for a newly opened result."""
         self._origin_is_automatic = True
 
     def _origin_edited(self) -> None:
-        """Mark the origin as manually controlled after direct user editing."""
         self._origin_is_automatic = False
         self.settings_changed.emit()
 
     def _request_center(self) -> None:
-        """Ask the viewport to keep the clipping plane centered on the current result."""
         self._origin_is_automatic = True
         self.settings_changed.emit()
 
     @staticmethod
     def _normalized(value) -> tuple[float, float, float]:
-        """Return a safe unit normal, falling back to global X for zero vectors."""
         vector = tuple(float(component) for component in value)
         length = math.sqrt(sum(component * component for component in vector))
         if length <= 1.0e-14:
