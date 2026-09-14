@@ -87,11 +87,12 @@ class SketchEditorCanvas(SketchCanvas):
         """Expand scene bounds around the visible sheet so no edge is reachable."""
         visible = self.mapToScene(self.viewport().rect()).boundingRect()
         current = self.sceneRect()
+        # Size the safety margin from what the user can currently see, not from
+        # the already-expanded scene. Otherwise repeated wheel events would
+        # grow the scene rect exponentially and eventually lose scroll precision.
         span = max(
             abs(float(visible.width())),
             abs(float(visible.height())),
-            abs(float(current.width())),
-            abs(float(current.height())),
             1.0,
         )
         margin = max(span * 8.0, 1.0e4)
