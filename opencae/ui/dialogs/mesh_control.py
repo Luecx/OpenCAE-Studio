@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QDialog, QLineEdit
+from PyQt6.QtWidgets import QDialog
 
 from opencae.model.selection import RegionDefinition
-from opencae.ui.core.widgets import ChevronComboBox, CompactRegionSelector
+from opencae.ui.core.widgets import CompactRegionSelector
+from opencae.ui.primitives.inputs import InputFormText
+from opencae.ui.primitives.selects import SelectForm
 from opencae.ui.templates import (
     FieldLabel,
     SectionHeading,
-    apply_primary_control_height,
     dialog_buttons,
     dialog_layout,
     field_block,
@@ -30,15 +31,13 @@ class MeshControlDialog(QDialog):
         control=None,
         parent=None,
     ):
-        """Build the mesh-control definition with scope-aware viewport picking."""
         super().__init__(parent)
         self.setWindowTitle("Mesh Control")
         self.setMinimumSize(720, 500)
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
         root = dialog_layout(self)
 
-        self.name = QLineEdit(control.name if control else "Mesh Control-1")
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(control.name if control else "Mesh Control-1")
         self.scope = _combo(("Edge", "Face", "Cell"), control.scope if control else "Cell")
         root.addWidget(
             field_row(
@@ -89,13 +88,11 @@ class MeshControlDialog(QDialog):
         root.addWidget(buttons)
 
     def _pick(self, owner, done, finished):
-        """Delegate picking using the currently selected geometry scope."""
         if self._pick_callback:
             return self._pick_callback(self.scope.currentText(), owner, done, finished)
         return None
 
     def values(self):
-        """Return the current mesh-control constructor values."""
         return {
             "name": self.name.text().strip(),
             "scope": self.scope.currentText(),
@@ -106,10 +103,7 @@ class MeshControlDialog(QDialog):
 
 
 def _combo(values, current):
-    """Build one canonical mesh-control combo."""
-    control = ChevronComboBox()
-    control.setMinimumWidth(0)
+    control = SelectForm()
     control.addItems(values)
     control.setCurrentText(current)
-    apply_primary_control_height(control)
     return control
