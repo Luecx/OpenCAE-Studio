@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QCheckBox, QHBoxLayout, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from opencae.model.element_catalog import formulations, resulting_type
 from opencae.model.entities.mesh import ElementOrder
-from opencae.ui.core.widgets import ChevronComboBox
-from opencae.ui.templates import (
-    FieldLabel,
-    ReadOnlyValue,
-    apply_primary_control_height,
-    field_block,
-    field_row,
-)
+from opencae.ui.composites.controls import ControlReadOnlyValue
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.templates import FieldLabel, field_block, field_row
 
 
 class ElementOrderPanel(QWidget):
@@ -23,7 +19,6 @@ class ElementOrderPanel(QWidget):
     changed = pyqtSignal()
 
     def __init__(self, parent=None):
-        """Build order toggles plus canonical formulation/result fields."""
         super().__init__(parent)
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -32,8 +27,8 @@ class ElementOrderPanel(QWidget):
         order_row = QHBoxLayout()
         order_row.setContentsMargins(0, 0, 0, 0)
         order_row.setSpacing(18)
-        self.first = QCheckBox("First Order")
-        self.second = QCheckBox("Second Order")
+        self.first = CheckForm("First Order")
+        self.second = CheckForm("Second Order")
         for button in (self.first, self.second):
             button.setTristate(True)
             order_row.addWidget(button)
@@ -43,10 +38,8 @@ class ElementOrderPanel(QWidget):
         self.mixed = FieldLabel("")
         root.addWidget(self.mixed)
 
-        self.formulation = ChevronComboBox()
-        self.formulation.setMinimumWidth(0)
-        apply_primary_control_height(self.formulation)
-        self.result = ReadOnlyValue("—")
+        self.formulation = SelectForm()
+        self.result = ControlReadOnlyValue("—")
         root.addWidget(
             field_row(
                 field_block("Formulation", self.formulation),
@@ -60,7 +53,6 @@ class ElementOrderPanel(QWidget):
         self.key = None
 
     def set_summary(self, summary):
-        """Reflect topology statistics and available formulations in the panel."""
         self.key = summary.key if summary else None
         if not summary:
             self.first.setCheckState(Qt.CheckState.Unchecked)
@@ -98,17 +90,14 @@ class ElementOrderPanel(QWidget):
         self._update_result()
 
     def choose(self, order):
-        """Select an interpolation order programmatically."""
         self._choose(ElementOrder(order))
 
     def set_formulation(self, value):
-        """Select a formulation by its visible catalog name when available."""
         index = self.formulation.findText(str(value))
         if index >= 0:
             self.formulation.setCurrentIndex(index)
 
     def _choose(self, order):
-        """Make the two order checkboxes behave as an explicit exclusive choice."""
         self.first.setCheckState(
             Qt.CheckState.Checked if order == ElementOrder.FIRST else Qt.CheckState.Unchecked
         )
@@ -120,7 +109,6 @@ class ElementOrderPanel(QWidget):
         self.changed.emit()
 
     def order(self):
-        """Return the definite selected order, or None while the state is mixed."""
         if self.first.checkState() == Qt.CheckState.Checked:
             return ElementOrder.FIRST
         if self.second.checkState() == Qt.CheckState.Checked:
@@ -128,7 +116,6 @@ class ElementOrderPanel(QWidget):
         return None
 
     def _update_result(self, *_):
-        """Display the element type produced by the current order/formulation pair."""
         formulation = self.formulation.currentText()
         text = (
             "Preserve current formulations"
