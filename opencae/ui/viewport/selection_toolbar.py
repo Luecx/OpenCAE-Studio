@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QSignalBlocker, pyqtSignal
+from PyQt6.QtCore import QSignalBlocker, Qt, pyqtSignal
 from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QWidget
 
 from opencae.ui.templates import ViewportToolButton
@@ -19,6 +19,11 @@ class SelectionToolbar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("ViewportToolbar")
+        # A stylesheet background on a plain QWidget can otherwise remain
+        # effectively transparent on some Windows style/native-child paths.
+        # Force this canonical toolbar surface to be painted by Qt on every
+        # platform. Both the main viewport and Sketcher use this same widget.
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._parallel_projection = False
 
         layout = QHBoxLayout(self)
