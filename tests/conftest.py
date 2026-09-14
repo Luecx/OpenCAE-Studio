@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import gc
 import os
 
 import pytest
@@ -39,17 +38,9 @@ from opencae.model.selection import (
 
 @pytest.fixture(scope="session", autouse=True)
 def qapplication():
-    """Keep one QApplication alive, then drain Qt objects before Python exits.
-
-    VTK/QOpenGL-backed widgets can otherwise survive until module/interpreter
-    teardown, where C++ destruction order is undefined and may segfault even
-    after every pytest assertion has passed.  Deleting all remaining top-level
-    Qt widgets while the QApplication/event dispatcher is still alive gives
-    their native children a deterministic shutdown point.
-    """
+    """Keep one QApplication alive for every UI-bearing test in the full suite."""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     try:
-        from PyQt6.QtCore import QCoreApplication, QEvent
         from PyQt6.QtWidgets import QApplication
     except ImportError:
         yield None
@@ -57,18 +48,42 @@ def qapplication():
     application = QApplication.instance() or QApplication([])
     yield application
 
-    for widget in tuple(QApplication.topLevelWidgets()):
+
+@pytest.fixture(autouse=True)
+def cleanup_qt_widgets(qapplication):
+    """Dispose top-level widgets at the test boundary, not interpreter shutdown.
+
+    The full suite mixes Qt widgets with VTK/QOpenGL-backed surfaces. Letting
+    widgets from many tests accumulate until Python finalization makes native
+    destruction order nondeterministic. Each test therefore owns every new
+    top-level widget it creates; those widgets are closed while QApplication is
+    still alive and before the next native rendering test starts.
+    """
+    if qapplication is None:
+        yield
+        return
+
+    from PyQt6.QtCore import QCoreApplication, QEvent
+    from PyQt6.QtWidgets import QApplication
+
+    existing = {id(widget) for widget in QApplication.topLevelWidgets()}
+    yield
+
+    created = [
+        widget
+        for widget in QApplication.topLevelWidgets()
+        if id(widget) not in existing
+    ]
+    if not created:
+        return
+    for widget in created:
         try:
             widget.close()
             widget.deleteLater()
         except RuntimeError:
-            # A C++ owner may already have disposed the wrapper.
             continue
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    application.processEvents()
-    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    application.processEvents()
-    gc.collect()
+    qapplication.processEvents()
 
 
 def definition(*operands):
