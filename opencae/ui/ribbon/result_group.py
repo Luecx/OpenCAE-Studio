@@ -1,20 +1,8 @@
-from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QMenu,
-    QToolButton,
-    QVBoxLayout,
-    QWidget,
-    QWidgetAction,
-)
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QToolButton, QVBoxLayout
 
-from opencae.ui.core.metrics import (
-    RIBBON_BUTTON_HEIGHT,
-    RIBBON_BUTTON_WIDTH,
-    RIBBON_ICON_SIZE,
-)
+from opencae.ui.composites.collapsed_widget_group import CollapsedWidgetGroupButton
+from opencae.ui.core.metrics import RIBBON_BUTTON_WIDTH
 from opencae.ui.core.theme import PALETTE
 
 
@@ -24,6 +12,8 @@ _GROUP_SPACING = 2
 
 
 class ResultRibbonGroup(QFrame):
+    """Responsive Results group that preserves existing child widget instances."""
+
     def __init__(self, title, widgets=(), parent=None):
         super().__init__(parent)
         self.title = title
@@ -41,8 +31,6 @@ class ResultRibbonGroup(QFrame):
         self.refresh_theme()
 
     def refresh_theme(self):
-        # Results used to keep its own faint card background even after the
-        # regular ribbon groups were flattened. Keep only the shared separator.
         self.setStyleSheet(
             "QFrame#RibbonGroup { background: transparent; "
             f"border-right: 1px solid {PALETTE['ribbon_separator']}; }}"
@@ -55,12 +43,7 @@ class ResultRibbonGroup(QFrame):
 
     @staticmethod
     def _widget_width(widget):
-        return max(
-            0,
-            widget.minimumWidth(),
-            widget.minimumSizeHint().width(),
-            widget.sizeHint().width(),
-        )
+        return max(0, widget.minimumWidth(), widget.minimumSizeHint().width(), widget.sizeHint().width())
 
     def expanded_width_hint(self):
         widths = [self._widget_width(widget) for widget in self.widgets]
@@ -114,34 +97,17 @@ class ResultRibbonGroup(QFrame):
         self._layout.addWidget(label)
 
     def _build_collapsed(self):
-        button = QToolButton(self)
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-        if self.widgets and hasattr(self.widgets[0], "icon"):
-            button.setIcon(self.widgets[0].icon())
-        button.setIconSize(QSize(RIBBON_ICON_SIZE, RIBBON_ICON_SIZE))
-        button.setFixedSize(RIBBON_BUTTON_WIDTH, RIBBON_BUTTON_HEIGHT)
-        button.setText(self.title.title())
-        button.setProperty("ribbonButton", True)
-        button.setProperty("resultsRibbonButton", True)
-
-        menu = QMenu(button)
-        panel = QWidget(menu)
-        row = QHBoxLayout(panel)
-        row.setContentsMargins(6, 6, 6, 6)
-        row.setSpacing(_GROUP_SPACING)
-        for widget in self.widgets:
-            row.addWidget(widget)
-            widget.show()
-
-        widget_action = QWidgetAction(menu)
-        widget_action.setDefaultWidget(panel)
-        menu.addAction(widget_action)
-        button.setMenu(menu)
-        button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-
-        row_layout = QHBoxLayout()
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.addWidget(button)
-        self._layout.addLayout(row_layout)
+        icon = self.widgets[0].icon() if self.widgets and hasattr(self.widgets[0], "icon") else None
+        button = CollapsedWidgetGroupButton(
+            self.title.title(),
+            self.widgets,
+            icon=icon,
+            spacing=_GROUP_SPACING,
+            property_name="resultsRibbonButton",
+            parent=self,
+        )
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(button)
+        self._layout.addLayout(row)
         self._layout.addSpacing(14)
