@@ -137,9 +137,8 @@ class ResponsiveRibbonPage(QWidget):
         if self._required_width(collapsed) <= available_width:
             return frozenset()
 
-        # Deliberately continue in this one call until the page fits. This is
-        # what allows Geometry -> Mesh -> Datum -> Regions to all collapse
-        # during a single continuous window resize when necessary.
+        # Collapse the widest group first and stop as soon as the page fits.
+        # This keeps as much of the ribbon expanded as the current width allows.
         for spec in self._collapse_candidates():
             collapsed.add(spec.title)
             if self._required_width(collapsed) <= available_width:
@@ -159,6 +158,12 @@ class ResponsiveRibbonPage(QWidget):
             item = self._groups_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                # Removing a widget from a layout does not hide it immediately;
+                # deleteLater() alone can leave the previous expanded ribbon
+                # painted underneath the newly collapsed groups for one or more
+                # event-loop turns. Detach it synchronously before rebuilding.
+                widget.hide()
+                widget.setParent(None)
                 widget.deleteLater()
 
         self._group_widgets.clear()
