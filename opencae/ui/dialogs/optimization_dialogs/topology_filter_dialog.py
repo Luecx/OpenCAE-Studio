@@ -2,11 +2,13 @@
 
 from copy import deepcopy
 
-from PyQt6.QtWidgets import QCheckBox, QLabel, QMessageBox, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.entities.optimization import FilterRadius, TopologyFilterSettings
 from opencae.ui.core.named_entity_dialog import NamedEntityDialog
 from opencae.ui.core.widgets import AutomaticManualValueEditor
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.labels import LabelMuted
 from opencae.ui.templates import SectionHeading
 
 
@@ -20,7 +22,6 @@ class TopologyFilterDialog(NamedEntityDialog):
         existing_names=(),
         parent=None,
     ):
-        """Build filter options and the two radius editors using section headings."""
         super().__init__(
             "Topology Filters",
             value,
@@ -29,10 +30,11 @@ class TopologyFilterDialog(NamedEntityDialog):
             width=640,
         )
         self.add_widget(SectionHeading("Filter Settings"))
-        self.enabled = QCheckBox("Enable filtering")
-        self.enabled.setChecked(self.value.enabled)
-        self.weighted = QCheckBox("Density-weighted sensitivity filter")
-        self.weighted.setChecked(self.value.density_weighted_sensitivities)
+        self.enabled = CheckForm("Enable filtering", checked=self.value.enabled)
+        self.weighted = CheckForm(
+            "Density-weighted sensitivity filter",
+            checked=self.value.density_weighted_sensitivities,
+        )
         self.add_widget(self.enabled)
         self.add_widget(self.weighted)
 
@@ -51,11 +53,9 @@ class TopologyFilterDialog(NamedEntityDialog):
         self.finish()
 
     def _radius_section(self, title, description, value):
-        """Append one explanatory radius editor without a legacy group-box frame."""
         self.add_widget(SectionHeading(title))
-        note = QLabel(description)
+        note = LabelMuted(description)
         note.setWordWrap(True)
-        note.setObjectName("MutedLabel")
         self.add_widget(note)
 
         editor = AutomaticManualValueEditor(
@@ -72,7 +72,6 @@ class TopologyFilterDialog(NamedEntityDialog):
         return editor
 
     def result(self):
-        """Return a copied filter entity populated from the current controls."""
         candidate = self.apply_name(deepcopy(self.value))
         candidate.enabled = self.enabled.isChecked()
         candidate.density_weighted_sensitivities = self.weighted.isChecked()
@@ -81,16 +80,13 @@ class TopologyFilterDialog(NamedEntityDialog):
         return candidate
 
     def validate(self) -> bool:
-        """Ensure the broader sensitivity radius does not undercut density coupling."""
         if not super().validate():
             return False
         density = self._radius_value(self.density_radius)
         sensitivity = self._radius_value(self.sensitivity_radius)
         comparable = density.automatic == sensitivity.automatic
         density_value = density.factor if density.automatic else density.value
-        sensitivity_value = (
-            sensitivity.factor if sensitivity.automatic else sensitivity.value
-        )
+        sensitivity_value = sensitivity.factor if sensitivity.automatic else sensitivity.value
         if self.enabled.isChecked() and comparable and sensitivity_value < density_value:
             QMessageBox.warning(
                 self,
@@ -103,6 +99,5 @@ class TopologyFilterDialog(NamedEntityDialog):
 
     @staticmethod
     def _radius_value(editor):
-        """Convert one shared automatic/manual editor into a model FilterRadius."""
         automatic, factor, value = editor.values()
         return FilterRadius(automatic=automatic, factor=factor, value=value)
