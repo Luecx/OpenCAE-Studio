@@ -1,9 +1,7 @@
-from PyQt6.QtCore import QPoint, Qt, pyqtSignal
+from PyQt6.QtCore import QPoint, pyqtSignal
 from PyQt6.QtWidgets import (
     QHBoxLayout,
-    QLineEdit,
     QMenu,
-    QSizePolicy,
     QStackedWidget,
     QTabBar,
     QVBoxLayout,
@@ -13,7 +11,13 @@ from PyQt6.QtWidgets import (
 
 from opencae.ui.core.theme import PALETTE
 from opencae.ui.core.icon_factory import IconKind, make_icon
-from opencae.ui.primitives.buttons import ActionButton, ButtonPresentation
+from opencae.ui.primitives.buttons import (
+    ButtonBrowserTreeAction,
+    ButtonProjectMenuClose,
+    ButtonProjectMenuSelect,
+    ButtonProjectSelector,
+)
+from opencae.ui.primitives.inputs import InputSearch
 from .project_tree import ProjectTree
 from .solution_tree import SolutionTree
 
@@ -38,15 +42,7 @@ class ProjectPanel(QWidget):
         self.tabs.setExpanding(True)
         self.tabs.currentChanged.connect(self._tab_changed)
 
-        self.project_selector = ActionButton(
-            text="▾",
-            presentation=ButtonPresentation.DEFAULT,
-            object_name="ProjectSelectorButton",
-            parent=self.tabs,
-        )
-        self.project_selector.setAutoRaise(True)
-        self.project_selector.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.project_selector.setFixedWidth(20)
+        self.project_selector = ButtonProjectSelector(parent=self.tabs)
         self.project_selector.clicked.connect(self._show_project_menu)
         self.tabs.setTabButton(
             0,
@@ -60,13 +56,11 @@ class ProjectPanel(QWidget):
         row = QHBoxLayout(self.toolbar)
         row.setContentsMargins(7, 6, 5, 6)
         row.setSpacing(4)
-        self.filter = QLineEdit()
+        self.filter = InputSearch("Filter…")
         self.filter.setObjectName("BrowserSearch")
-        self.filter.setPlaceholderText("Filter…")
-        self.filter.setClearButtonEnabled(True)
         row.addWidget(self.filter, 1)
-        self.expand_button = self._small_button("+")
-        self.collapse_button = self._small_button("−")
+        self.expand_button = ButtonBrowserTreeAction("+")
+        self.collapse_button = ButtonBrowserTreeAction("−")
         row.addWidget(self.expand_button)
         row.addWidget(self.collapse_button)
         layout.addWidget(self.toolbar)
@@ -178,38 +172,21 @@ class ProjectPanel(QWidget):
         row.setSpacing(2)
 
         name = str(getattr(project, "name", "Project") or "Project")
-        select_button = ActionButton(
-            text=f"✓  {name}" if active else f"    {name}",
-            presentation=ButtonPresentation.DEFAULT,
-            object_name="ProjectMenuSelectButton",
+        select_button = ButtonProjectMenuSelect(
+            f"✓  {name}" if active else f"    {name}",
+            tooltip=str(getattr(project, "path", None) or name),
             parent=row_widget,
         )
-        select_button.setAutoRaise(True)
-        select_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        select_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-        select_button.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Preferred,
-        )
-        select_button.setMinimumWidth(180)
-        path = getattr(project, "path", None)
-        select_button.setToolTip(str(path or name))
         select_button.clicked.connect(
             lambda _checked=False, target=index: self._choose_project(menu, target)
         )
         row.addWidget(select_button, 1)
 
-        close_button = ActionButton(
-            text="−",
-            presentation=ButtonPresentation.DEFAULT,
-            object_name="ProjectMenuCloseButton",
+        close_button = ButtonProjectMenuClose(
+            tooltip=f"Close {name}",
             parent=row_widget,
         )
-        close_button.setAutoRaise(True)
-        close_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_button.setFixedSize(26, 26)
         close_button.setEnabled(not self._is_placeholder_project(index))
-        close_button.setToolTip(f"Close {name}")
         close_button.clicked.connect(
             lambda _checked=False, target=index: self._request_project_close(
                 menu,
@@ -243,10 +220,3 @@ class ProjectPanel(QWidget):
 
     def _collapse(self):
         self.stack.currentWidget().collapseAll()
-
-    @staticmethod
-    def _small_button(text):
-        button = ActionButton(text=text, presentation=ButtonPresentation.DEFAULT)
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.setFixedSize(28, 28)
-        return button
