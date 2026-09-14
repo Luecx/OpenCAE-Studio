@@ -1,34 +1,42 @@
 """Canonical low-level OpenCAE UI primitives.
 
-This package owns reusable interaction controls. Higher-level templates,
-composites, dialogs, ribbons, and workspaces should compose these primitives
-instead of constructing raw Qt buttons repeatedly.
+Primitives are flat concrete widgets named by visual context and behavior.
+Higher-level composites, dialogs, ribbons, and workspaces compose these classes
+instead of inheriting from a shared widget hierarchy.
 """
 
-from .buttons import (
-    ActionButton,
-    ButtonPresentation,
-    ChoiceButton,
-    FormButton,
-    InlineButton,
-    MenuButton,
-    OptionsButton,
-    SplitButton,
-    ToggleButton,
-    ViewportButton,
+from .buttons import *
+from .checks import CheckForm
+from .inputs import (
+    InputFormInteger,
+    InputFormMultiline,
+    InputFormNumber,
+    InputFormText,
+    InputMatrixNumber,
+    InputSearch,
+    InputTimeManagerSpeed,
 )
-from .semantic_label import SemanticLabel
+from .labels import (
+    LabelBody,
+    LabelForm,
+    LabelGroup,
+    LabelMatrixHeader,
+    LabelMuted,
+    LabelRibbonGroup,
+    LabelSection,
+    LabelStatus,
+    LabelTimeManagerHeading,
+    LabelTitle,
+)
+from .radios import RadioForm
+from .selects import SelectForm
+from .sliders import SliderHorizontal
 
-__all__ = [
-    "ActionButton",
-    "ButtonPresentation",
-    "ChoiceButton",
-    "FormButton",
-    "InlineButton",
-    "MenuButton",
-    "OptionsButton",
-    "SemanticLabel",
-    "SplitButton",
-    "ToggleButton",
-    "ViewportButton",
+__all__ = [name for name in globals() if name.startswith(("Button", "Input", "Label"))]
+__all__ += [
+    "CheckForm",
+    "RadioForm",
+    "SelectForm",
+    "SliderHorizontal",
+    "ribbon_button_for_action",
 ]
