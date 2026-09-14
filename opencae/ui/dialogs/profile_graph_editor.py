@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from opencae.ui.primitives.buttons import InlineButton
+from opencae.ui.primitives.buttons import ButtonInlineAction
 from opencae.ui.templates import FieldLabel
 
 
@@ -21,7 +21,6 @@ class GraphProfileEditor(QWidget):
     """Edit graph nodes and thickness-bearing segments as compact tables."""
 
     def __init__(self, nodes="", segments="", parent=None):
-        """Build and populate the node and segment table panes."""
         super().__init__(parent)
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -35,7 +34,6 @@ class GraphProfileEditor(QWidget):
 
     @staticmethod
     def _table(headers: Iterable[str]) -> QTableWidget:
-        """Create one stretch-column table for a graph data kind."""
         headers = tuple(headers)
         table = QTableWidget(0, len(headers))
         table.setHorizontalHeaderLabels(headers)
@@ -49,7 +47,6 @@ class GraphProfileEditor(QWidget):
         table: QTableWidget,
         add: Callable[[], None],
     ) -> QWidget:
-        """Build a titled table pane with shared-size add and remove actions."""
         pane = QWidget()
         layout = QVBoxLayout(pane)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -59,8 +56,8 @@ class GraphProfileEditor(QWidget):
 
         row = QHBoxLayout()
         row.setSpacing(6)
-        plus = InlineButton("+", object_name="InlineAddButton", parent=pane)
-        minus = InlineButton("−", object_name="InlineRemoveButton", parent=pane)
+        plus = ButtonInlineAction("+", object_name="InlineAddButton", parent=pane)
+        minus = ButtonInlineAction("−", object_name="InlineRemoveButton", parent=pane)
         plus.clicked.connect(add)
         minus.clicked.connect(lambda: self._remove(table))
         row.addWidget(plus)
@@ -70,16 +67,13 @@ class GraphProfileEditor(QWidget):
         return pane
 
     def _add_node(self) -> None:
-        """Append a node row with a new suggested integer identifier."""
         self._append(self.nodes, (self.nodes.rowCount() + 1, 0.0, 0.0))
 
     def _add_segment(self) -> None:
-        """Append a segment row with neutral default references and thickness."""
         self._append(self.segments, (1, 2, 1.0))
 
     @staticmethod
     def _append(table: QTableWidget, values: Iterable) -> None:
-        """Append one complete row to a graph table."""
         row = table.rowCount()
         table.insertRow(row)
         for column, value in enumerate(values):
@@ -87,18 +81,13 @@ class GraphProfileEditor(QWidget):
 
     @staticmethod
     def _remove(table: QTableWidget) -> None:
-        """Remove selected rows or the final row when nothing is selected."""
-        rows = sorted(
-            {index.row() for index in table.selectedIndexes()},
-            reverse=True,
-        )
+        rows = sorted({index.row() for index in table.selectedIndexes()}, reverse=True)
         if not rows and table.rowCount():
             rows = [table.rowCount() - 1]
         for row in rows:
             table.removeRow(row)
 
     def _load(self, table: QTableWidget, text, width: int) -> None:
-        """Load complete comma-separated rows and ensure one editable row."""
         for line in str(text).replace(";", "\n").splitlines():
             values = [item.strip() for item in line.split(",")]
             if len(values) == width:
@@ -109,7 +98,6 @@ class GraphProfileEditor(QWidget):
 
     @staticmethod
     def _text(table: QTableWidget) -> str:
-        """Serialize current rows into the model's comma-separated format."""
         return "\n".join(
             ",".join(
                 table.item(row, column).text().strip()
@@ -121,14 +109,9 @@ class GraphProfileEditor(QWidget):
         )
 
     def values(self) -> dict[str, str]:
-        """Return the current nodes and segments persistence payload."""
-        return {
-            "nodes": self._text(self.nodes),
-            "segments": self._text(self.segments),
-        }
+        return {"nodes": self._text(self.nodes), "segments": self._text(self.segments)}
 
     def connect_changed(self, callback: Callable) -> None:
-        """Notify one refresh callback for cell edits and structural row changes."""
         for table in (self.nodes, self.segments):
             table.itemChanged.connect(callback)
             table.model().rowsInserted.connect(callback)
