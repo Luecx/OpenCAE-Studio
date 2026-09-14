@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QHeaderView,
     QHBoxLayout,
-    QLabel,
     QProgressBar,
     QSplitter,
     QTreeWidget,
@@ -16,7 +15,8 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.ui.core.widgets import MonospaceOutputView
-from opencae.ui.primitives.buttons import FormButton
+from opencae.ui.primitives.buttons import ButtonFormAction
+from opencae.ui.primitives.labels import LabelBody, LabelMuted
 from opencae.ui.templates import SectionHeading
 
 
@@ -35,23 +35,20 @@ class AnalysisJobMonitor(QDialog):
     """Show one Analysis Job's solver transcript and structured runtime state."""
 
     def __init__(self, store, job_id, parent=None, *, stop_callback=None):
-        """Build a persistent monitor for one Job id."""
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.job_id = str(job_id)
         self._stop_callback = stop_callback
         self._structured_runtime_seen = False
         job = store.project.try_resolve(self.job_id)
-        self.setWindowTitle(
-            f"Analysis Monitor - {getattr(job, 'name', 'Job')}"
-        )
+        self.setWindowTitle(f"Analysis Monitor - {getattr(job, 'name', 'Job')}")
         self.resize(1180, 660)
         self.setMinimumSize(860, 480)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(12)
-        self.phase = QLabel(getattr(job, "progress_label", "Prepared"))
+        self.phase = LabelBody(getattr(job, "progress_label", "Prepared"))
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
         layout.addWidget(self.phase)
@@ -70,8 +67,11 @@ class AnalysisJobMonitor(QDialog):
         actions = QHBoxLayout()
         actions.setContentsMargins(0, 0, 0, 0)
         actions.addStretch(1)
-        self.stop_button = FormButton("Stop", parent=self)
-        self.stop_button.setToolTip("Terminate this solver job")
+        self.stop_button = ButtonFormAction(
+            "Stop",
+            tooltip="Terminate this solver job",
+            parent=self,
+        )
         self.stop_button.clicked.connect(self._stop)
         actions.addWidget(self.stop_button)
         layout.addLayout(actions)
@@ -83,7 +83,6 @@ class AnalysisJobMonitor(QDialog):
         )
 
     def _build_output_panel(self) -> QWidget:
-        """Create the large left-hand monospaced solver transcript surface."""
         panel = QWidget(self)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 6, 0)
@@ -94,7 +93,6 @@ class AnalysisJobMonitor(QDialog):
         return panel
 
     def _build_runtime_panel(self, store, job) -> QWidget:
-        """Create the structured right-hand runtime and post-check summary."""
         panel = QWidget(self)
         panel.setMinimumWidth(340)
         layout = QVBoxLayout(panel)
@@ -108,9 +106,9 @@ class AnalysisJobMonitor(QDialog):
         details.setVerticalSpacing(7)
         self.detail_values = {}
         for row, (key, title) in enumerate(_DETAIL_ROWS):
-            name = QLabel(title)
+            name = LabelMuted(title)
             name.setObjectName("AnalysisMonitorDetailName")
-            value = QLabel("—")
+            value = LabelBody("—")
             value.setObjectName("AnalysisMonitorDetailValue")
             value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             value.setWordWrap(True)
@@ -134,7 +132,7 @@ class AnalysisJobMonitor(QDialog):
         layout.addWidget(self.post_checks, 1)
         self._seed_known_steps(store, job)
 
-        note = QLabel(
+        note = LabelMuted(
             "FEMaster runtime details are parsed live from solver output; "
             "OpenCAE step names provide the stable loadcase identity."
         )
@@ -144,7 +142,6 @@ class AnalysisJobMonitor(QDialog):
         return panel
 
     def _seed_known_steps(self, store, job) -> None:
-        """List configured analysis steps without pretending one is already active."""
         project = store.project
         analysis = project.try_resolve(getattr(job, "source_ref", None))
         resolved = getattr(analysis, "resolved_steps", None)
@@ -161,14 +158,12 @@ class AnalysisJobMonitor(QDialog):
             self.post_checks.addTopLevelItem(item)
 
     def set_runtime_state(self, job_id, details, steps):
-        """Apply one complete structured FEMaster parser snapshot."""
         if str(job_id) != self.job_id:
             return
         self.set_runtime_details(job_id, details)
         self.set_post_checks(job_id, steps)
 
     def set_runtime_details(self, job_id, values):
-        """Apply already-parsed FEMaster runtime fields to the right-hand summary."""
         if str(job_id) != self.job_id:
             return
         data = dict(values or {})
@@ -179,7 +174,6 @@ class AnalysisJobMonitor(QDialog):
                 widget.setText(str(data[key] if data[key] not in (None, "") else "—"))
 
     def set_post_checks(self, job_id, steps):
-        """Replace the step/check tree with structured parser output."""
         if str(job_id) != self.job_id:
             return
         self.post_checks.clear()
@@ -209,35 +203,29 @@ class AnalysisJobMonitor(QDialog):
             self.post_checks.addTopLevelItem(root)
 
     def set_progress(self, job_id, value, label):
-        """Apply a progress event only when it belongs to this monitor's Job."""
         if str(job_id) != self.job_id:
             return
         label = str(label)
         self.phase.setText(label)
         if not self._structured_runtime_seen:
             self.detail_values["state"].setText(label or "—")
-        self.progress.setValue(
-            round(min(max(float(value), 0.0), 1.0) * 1000)
-        )
+        self.progress.setValue(round(min(max(float(value), 0.0), 1.0) * 1000))
         self.stop_button.setEnabled(
             callable(self._stop_callback)
             and label.strip().casefold() not in _TERMINAL_LABELS
         )
 
     def set_output(self, job_id, text):
-        """Load the persisted solver transcript when this monitor is opened."""
         if str(job_id) != self.job_id:
             return
         self.output.set_output(text)
 
     def append_output(self, job_id, text):
-        """Append a live solver-output chunk for this monitor's Job."""
         if str(job_id) != self.job_id:
             return
         self.output.append_output(text)
 
     def _stop(self):
-        """Request cancellation for this monitor's Job only once per click."""
         callback = self._stop_callback
         if not callable(callback):
             return
