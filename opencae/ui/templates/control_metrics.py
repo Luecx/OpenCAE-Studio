@@ -1,14 +1,16 @@
-"""Defines shared geometry tokens for visually consistent dialog controls."""
+"""Compatibility helpers for shared dialog-control geometry contracts."""
 
 from __future__ import annotations
 
 from PyQt6.QtWidgets import QSizePolicy, QWidget
 
-PRIMARY_CONTROL_HEIGHT = 40
-INLINE_ACTION_SIZE = PRIMARY_CONTROL_HEIGHT
-COMBO_POPUP_ROW_HEIGHT = 36
-COMBO_POPUP_EXTRA_HEIGHT = 8
-FIELD_LABEL_SPACING = 6
+from opencae.ui.core.metrics import (
+    COMBO_POPUP_EXTRA_HEIGHT,
+    COMBO_POPUP_ROW_HEIGHT,
+    FIELD_LABEL_SPACING,
+    INLINE_ACTION_SIZE,
+    PRIMARY_CONTROL_HEIGHT,
+)
 
 
 def apply_primary_control_height(widget: QWidget) -> QWidget:
@@ -29,12 +31,7 @@ def apply_primary_control_height(widget: QWidget) -> QWidget:
 
 
 def apply_inline_action_size(widget: QWidget) -> QWidget:
-    """Make an inline create/pick action exactly match its neighboring field.
-
-    Inline actions share the 40 px outer box of primary controls.  Their visual
-    weight remains secondary through icon/glyph styling rather than a smaller
-    geometry, which keeps composite rows perfectly aligned without clipping.
-    """
+    """Make an inline action exactly match its neighboring primary field."""
     widget.setProperty("inlineAction", True)
     widget.setFixedSize(INLINE_ACTION_SIZE, INLINE_ACTION_SIZE)
     return widget
