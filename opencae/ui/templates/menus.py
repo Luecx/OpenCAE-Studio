@@ -8,6 +8,26 @@ from opencae.ui.core.metrics import RIBBON_BUTTON_HEIGHT, RIBBON_BUTTON_WIDTH, R
 from .primitives import action_button, wrapped_ribbon_text
 
 
+def _leaf_actions(action: QAction) -> tuple[QAction, ...]:
+    """Flatten one ribbon menu action to the commands the user can execute.
+
+    Collapsed ribbon groups already provide one popup layer of their own. If a
+    command inside that popup also owns a menu (Arc, More, Dimension, ...),
+    showing the parent action would create an unnecessary second popup layer.
+    Present the real leaf commands directly instead.
+    """
+
+    menu = action.menu()
+    if menu is None:
+        return (action,)
+    leaves: list[QAction] = []
+    for child in menu.actions():
+        if child.isSeparator():
+            continue
+        leaves.extend(_leaf_actions(child))
+    return tuple(leaves)
+
+
 def action_group_button(
     text: str,
     icon_action: QAction,
@@ -29,9 +49,10 @@ def action_group_button(
     row.setContentsMargins(6, 6, 6, 6)
     row.setSpacing(2)
     for action in menu_actions:
-        action_widget = action_button(action)
-        action_widget.clicked.connect(menu.close)
-        row.addWidget(action_widget)
+        for leaf in _leaf_actions(action):
+            action_widget = action_button(leaf)
+            action_widget.clicked.connect(menu.close)
+            row.addWidget(action_widget)
 
     widget_action = QWidgetAction(menu)
     widget_action.setDefaultWidget(panel)
