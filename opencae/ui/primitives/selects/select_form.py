@@ -22,6 +22,11 @@ class SelectForm(QComboBox):
         object_name: str = "",
         parent: QWidget | None = None,
     ) -> None:
+        # Preserve normal Qt construction syntax (SelectForm(parent)) while also
+        # allowing an optional iterable of initial display strings.
+        if isinstance(items, QWidget) and parent is None:
+            parent = items
+            items = ()
         super().__init__(parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumWidth(0)
