@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from opencae.deck_formats.selection import default_profile_id, profile_choices
 from opencae.ui.core.widgets import ChevronComboBox
+from opencae.ui.primitives.buttons import FormButton
 from opencae.ui.templates import FieldLabel, SectionHeading, apply_primary_control_height, field_block
 
 
@@ -48,7 +49,7 @@ class InputDecksPage(QWidget):
         )
         hint.setWordWrap(True)
         layout.addWidget(hint)
-        button = QPushButton("Manage Input Deck Formats…")
+        button = FormButton("Manage Input Deck Formats…", parent=self)
         button.setEnabled(callable(manager_callback))
         button.clicked.connect(self._open_manager)
         layout.addWidget(button)
