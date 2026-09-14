@@ -10,25 +10,12 @@ import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication
-
-from opencae.ui.viewport.view_cube import ViewCube
 from opencae.ui.viewport.view_cube_polyhedron import (
     beveled_cube_faces,
     camera_view_matrix,
-    view_rotation,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-_QT_APPLICATION: QApplication | None = None
-
-
-def _application() -> QApplication:
-    """Return the single Qt application required for non-rendering widget tests."""
-    global _QT_APPLICATION
-    _QT_APPLICATION = QApplication.instance() or QApplication([])
-    return _QT_APPLICATION
 
 
 def _run_isolated_qt(script: str) -> None:
@@ -87,14 +74,24 @@ def test_face_shapes_match_square_rectangle_triangle_contract() -> None:
 
 def test_generic_orientation_keeps_all_visible_connector_faces() -> None:
     """Prevent shallow but front-facing edge strips from disappearing during orbit."""
-    _application()
-    widget = ViewCube()
+    _run_isolated_qt(r'''
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+from opencae.ui.viewport.view_cube_polyhedron import view_rotation
+
+app = QApplication.instance() or QApplication([])
+widget = ViewCube()
+try:
     widget.set_view_matrix(view_rotation(52.0, -31.0, 14.0))
     visible = widget._visible_faces()
-
     assert sum(face[1][0] == "main" for face in visible) == 3
     assert sum(face[1][0] == "edge" for face in visible) == 6
     assert sum(face[1][0] == "corner" for face in visible) == 4
+finally:
+    widget.close()
+    widget.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_view_cube_paints_opaque_non_uniform_pixels() -> None:
@@ -159,12 +156,23 @@ finally:
 
 def test_view_cube_uses_stable_opaque_native_surface_composition() -> None:
     """Protect visibility and mouse ownership above the native VTK widget."""
-    _application()
-    widget = ViewCube()
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+
+app = QApplication.instance() or QApplication([])
+widget = ViewCube()
+try:
     assert widget.testAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
     assert not widget.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
     assert widget.testAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
     assert widget.mask().isEmpty()
+finally:
+    widget.close()
+    widget.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_visible_main_face_emits_world_normal() -> None:
