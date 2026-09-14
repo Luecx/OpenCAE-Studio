@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QToolButton, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QWidget
 
 from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.theme import PALETTE
-from opencae.ui.templates import apply_inline_action_size, apply_primary_control_height
+from opencae.ui.primitives.buttons import InlineButton
+from opencae.ui.templates import apply_primary_control_height
 
 
 class PickReference(QWidget):
@@ -36,23 +37,25 @@ class PickReference(QWidget):
         self.text.setMinimumWidth(0)
         apply_primary_control_height(self.text)
 
-        self.pick = QToolButton()
-        self.pick.setIcon(make_icon(IconKind.PICK, 18, PALETTE["text"]))
+        self.pick = InlineButton(
+            icon=make_icon(IconKind.PICK, 18, PALETTE["text"]),
+            tooltip="Pick in viewport",
+            checkable=True,
+            object_name="InlinePickButton",
+            parent=self,
+        )
         self.pick.setIconSize(QSize(18, 18))
-        self.pick.setToolTip("Pick in viewport")
         self.pick.setAccessibleName("Pick in viewport")
-        self.pick.setObjectName("InlinePickButton")
         self.pick.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.pick.setCheckable(True)
-        apply_inline_action_size(self.pick)
 
-        self.clear_button = QToolButton()
-        self.clear_button.setText("×")
-        self.clear_button.setToolTip("Clear reference")
+        self.clear_button = InlineButton(
+            "×",
+            tooltip="Clear reference",
+            object_name="InlineClearButton",
+            parent=self,
+        )
         self.clear_button.setAccessibleName("Clear reference")
-        self.clear_button.setObjectName("InlineClearButton")
         self.clear_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        apply_inline_action_size(self.clear_button)
 
         self.pick.clicked.connect(self._pick)
         self.clear_button.clicked.connect(lambda: self.set_reference(None))
