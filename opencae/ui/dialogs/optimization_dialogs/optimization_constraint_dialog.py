@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from PyQt6.QtWidgets import QCheckBox, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.core import EntityRef
 from opencae.model.entities.optimization import (
@@ -12,9 +12,11 @@ from opencae.model.entities.optimization import (
     OptimizationConstraint,
     ResponseType,
 )
+from opencae.ui.composites.controls import ControlReferenceSelector
 from opencae.ui.core.fields import FieldSpec, create_editor, editor_value
 from opencae.ui.core.named_entity_dialog import NamedEntityDialog
-from opencae.ui.core.widgets import ChevronComboBox, ReferenceSelector
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.selects import SelectForm
 from opencae.ui.templates import FieldLabel
 
 _RESOURCE_TYPES = {
@@ -36,7 +38,6 @@ class OptimizationConstraintDialog(NamedEntityDialog):
         existing_names=(),
         parent=None,
     ):
-        """Build response/operator/limit fields for one resource constraint."""
         entity = value or OptimizationConstraint(name="Constraint-1")
         super().__init__(
             "Optimization Constraint",
@@ -50,8 +51,11 @@ class OptimizationConstraintDialog(NamedEntityDialog):
             for item in optimization.responses
             if item.response_type in _RESOURCE_TYPES
         ]
-        self.response = ReferenceSelector(responses, self.value.response_ref.entity_id)
-        self.operator = ChevronComboBox()
+        self.response = ControlReferenceSelector(
+            responses,
+            self.value.response_ref.entity_id,
+        )
+        self.operator = SelectForm()
         self.operator.addItem(
             ConstraintOperator.LESS_EQUAL.value,
             ConstraintOperator.LESS_EQUAL.value,
@@ -67,8 +71,7 @@ class OptimizationConstraintDialog(NamedEntityDialog):
                 decimals=9,
             )
         )
-        self.active = QCheckBox("Enabled")
-        self.active.setChecked(self.value.active)
+        self.active = CheckForm("Enabled", checked=self.value.active)
 
         self.form.addRow("Response", self.response)
         self.form.addRow("Operator", self.operator)
@@ -83,7 +86,6 @@ class OptimizationConstraintDialog(NamedEntityDialog):
         self.finish()
 
     def result(self):
-        """Return a detached constraint candidate from the current editor state."""
         candidate = self.apply_name(deepcopy(self.value))
         candidate.response_ref = EntityRef(
             str(self.response.currentValue() or ""),
@@ -95,7 +97,6 @@ class OptimizationConstraintDialog(NamedEntityDialog):
         return candidate
 
     def validate(self) -> bool:
-        """Require valid naming and one resource response reference."""
         if not super().validate():
             return False
         if not self.response.currentValue():
