@@ -10,7 +10,6 @@ from __future__ import annotations
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QDialogButtonBox,
-    QHBoxLayout,
     QLabel,
     QSizePolicy,
     QStackedWidget,
@@ -29,13 +28,12 @@ from opencae.ui.core.metrics import RIBBON_PAGE_HEIGHT
 from opencae.ui.ribbon.ribbon_page import ResponsiveRibbonPage
 from opencae.ui.ribbon.specs import RibbonGroupSpec
 from opencae.ui.templates import ViewportToolButton
-from opencae.ui.templates.viewport_tool_button import VIEWPORT_TOOL_HEIGHT
+from opencae.ui.viewport.selection_toolbar import SelectionToolbar
 
 from .dialog import SketchFeatureDialog as _BaseSketchFeatureDialog
 
 
 _DIMENSION_LAYOUT_KEY = "sketch_dimension_positions"
-_VIEWPORT_BAR_HEIGHT = VIEWPORT_TOOL_HEIGHT + 10
 
 
 class SketchFeatureDialog(_BaseSketchFeatureDialog):
@@ -165,7 +163,7 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         return self.ribbon
 
     def _build_workspace(self, parent):
-        """Build one fixed-height main-window-style bar above the viewport."""
+        """Build the viewport using the exact toolbar widget used by main UI."""
         host = QWidget(parent)
         host.setObjectName("SketchViewportHost")
         host.setSizePolicy(
@@ -176,19 +174,25 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Keep a strong, dialog-owned reference just like PyVistaViewport does
-        # for SelectionToolbar.  More importantly, make the toolbar vertically
-        # non-compressible so the splitter/stack can never squeeze it to zero.
-        self.viewport_toolbar = QWidget(host)
+        # Do not emulate the main-window viewport toolbar here. Reuse the
+        # actual SelectionToolbar widget so Windows, Wayland and X11 all go
+        # through exactly the same QWidget/layout/style path as Auto/Point/
+        # Edge/Face/Cell/Element in the main viewport.
+        self.viewport_toolbar = SelectionToolbar(host)
         self.viewport_toolbar.setObjectName("ViewportToolbar")
-        self.viewport_toolbar.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Fixed,
-        )
-        self.viewport_toolbar.setFixedHeight(_VIEWPORT_BAR_HEIGHT)
-        row = QHBoxLayout(self.viewport_toolbar)
-        row.setContentsMargins(8, 5, 8, 5)
-        row.setSpacing(4)
+        row = self.viewport_toolbar.layout()
+
+        # SelectionToolbar creates the main-window controls. The Sketcher uses
+        # the same toolbar surface/chrome but owns a different command set, so
+        # remove those controls and spacers from the layout synchronously.
+        main_fit_button = self.viewport_toolbar.fit_button
+        while row.count():
+            item = row.takeAt(0)
+            widget = item.widget()
+            if widget is None or widget is main_fit_button:
+                continue
+            widget.hide()
+            widget.setParent(None)
 
         self.view_sketch = ViewportToolButton(
             "Sketch", checkable=True, parent=self.viewport_toolbar
@@ -204,7 +208,8 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
         row.addWidget(self.view_sketch)
         row.addWidget(self.view_preview)
 
-        self.fit_button = ViewportToolButton("Fit", parent=self.viewport_toolbar)
+        self.fit_button = main_fit_button
+        self.fit_button.setParent(self.viewport_toolbar)
         self.fit_button.setToolTip("Center and fit the sketch")
         row.addWidget(self.fit_button)
         row.addSpacing(8)
@@ -230,6 +235,16 @@ class SketchFeatureDialog(_BaseSketchFeatureDialog):
             else "Apply"
         )
         row.addWidget(self.buttons)
+
+        # Main SelectionToolbar naturally sizes to the canonical 28px controls
+        # plus 5px vertical margins. Preserve that exact height and prevent the
+        # splitter from compressing it away on Windows.
+        self.viewport_toolbar.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
+        toolbar_height = max(38, self.viewport_toolbar.sizeHint().height())
+        self.viewport_toolbar.setFixedHeight(toolbar_height)
         layout.addWidget(self.viewport_toolbar, 0)
 
         self.workspace = QStackedWidget(host)
