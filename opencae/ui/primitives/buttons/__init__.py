@@ -9,6 +9,7 @@ from .menu_button import MenuButton
 from .options_button import OptionsButton
 from .presentation import ButtonPresentation
 from .role import ButtonRole
+from .selection_button import SelectionButton
 from .spec import ButtonSpec
 from .split_button import SplitButton
 from .toggle_button import ToggleButton
@@ -24,6 +25,7 @@ __all__ = [
     "InlineButton",
     "MenuButton",
     "OptionsButton",
+    "SelectionButton",
     "SplitButton",
     "ToggleButton",
     "ViewportButton",
