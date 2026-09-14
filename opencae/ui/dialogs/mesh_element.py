@@ -10,12 +10,16 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QSpinBox,
-    QToolButton,
     QWidget,
 )
 
 from opencae.model.entities.fem import ELEMENT_TYPES
 from opencae.ui.core.widgets import ChevronComboBox
+from opencae.ui.primitives.buttons import (
+    ActionButton,
+    ButtonPresentation,
+    SelectionButton,
+)
 from opencae.ui.templates import (
     ReadOnlyValue,
     SectionHeading,
@@ -90,11 +94,15 @@ class MeshElementDialog(QDialog):
         controls_layout = QHBoxLayout(controls)
         controls_layout.setContentsMargins(0, 0, 0, 0)
         controls_layout.setSpacing(6)
-        self.pick_button = self._button("Pick Nodes", checkable=True)
-        self.up_button = self._button("Move Up")
-        self.down_button = self._button("Move Down")
-        self.remove_button = self._button("Remove")
-        self.clear_button = self._button("Clear")
+        self.pick_button = SelectionButton(
+            "Pick Nodes",
+            active_text="Finish Picking",
+            parent=controls,
+        )
+        self.up_button = self._action_button("Move Up", controls)
+        self.down_button = self._action_button("Move Down", controls)
+        self.remove_button = self._action_button("Remove", controls)
+        self.clear_button = self._action_button("Clear", controls)
         for button in (
             self.pick_button,
             self.up_button,
@@ -132,7 +140,7 @@ class MeshElementDialog(QDialog):
                 root.addWidget(field_block(label, ReadOnlyValue(str(value or "—"))))
 
         if self.suggested_connectivity:
-            self.repair_button = self._button("Repair Orientation")
+            self.repair_button = self._action_button("Repair Orientation", self)
             self.repair_button.setToolTip(
                 "Apply the conservative node-order flip suggested by validation"
             )
@@ -156,13 +164,12 @@ class MeshElementDialog(QDialog):
         root.addWidget(buttons)
 
     @staticmethod
-    def _button(text: str, *, checkable=False) -> QToolButton:
-        button = QToolButton()
-        button.setText(text)
-        button.setCheckable(bool(checkable))
-        button.setProperty("inlineAction", True)
-        apply_primary_control_height(button)
-        return button
+    def _action_button(text: str, parent=None) -> ActionButton:
+        return ActionButton(
+            text=text,
+            presentation=ButtonPresentation.FIELD_ACTION,
+            parent=parent,
+        )
 
     def values(self) -> dict:
         return {
@@ -212,7 +219,6 @@ class MeshElementDialog(QDialog):
             blocker = QSignalBlocker(self.pick_button)
             self.pick_button.setChecked(active)
             del blocker
-        self._refresh_pick_text(active)
 
     def _append_item(self, node_id: int, position: int) -> None:
         item = QListWidgetItem(f"{position}.  Node {node_id}")
@@ -247,11 +253,7 @@ class MeshElementDialog(QDialog):
             self.repair_button.setEnabled(False)
 
     def _pick_toggled(self, active: bool) -> None:
-        self._refresh_pick_text(active)
         self.picking_changed.emit(bool(active))
-
-    def _refresh_pick_text(self, active: bool) -> None:
-        self.pick_button.setText("Finish Picking" if active else "Pick Nodes")
 
     def _refresh_summary(self, *_):
         element_type = self.element_type.currentData()
