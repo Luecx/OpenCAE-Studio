@@ -16,11 +16,14 @@ class SemanticLabel(QLabel):
         spec: LabelSpec | str,
         *,
         role: LabelRole = LabelRole.BODY,
+        object_name: str = "",
         parent: QWidget | None = None,
     ) -> None:
         resolved = spec if isinstance(spec, LabelSpec) else LabelSpec(str(spec), role)
         super().__init__(resolved.text, parent)
-        if resolved.role is LabelRole.TITLE:
+        if object_name:
+            self.setObjectName(object_name)
+        elif resolved.role is LabelRole.TITLE:
             self.setObjectName("PanelTitle")
         elif resolved.role is LabelRole.MUTED:
             self.setObjectName("MutedLabel")
