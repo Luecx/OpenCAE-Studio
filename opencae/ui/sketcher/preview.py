@@ -61,17 +61,22 @@ class SketchFeaturePreview(QWidget):
         self.setObjectName("SketchFeaturePreview")
         self._base_part = None
         self._closed = False
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(0)
         self.notice = QLabel("")
         self.notice.setObjectName("SketchPreviewNotice")
         self.notice.setWordWrap(True)
         self.notice.hide()
-        layout.addWidget(self.notice)
-        self.plotter = SafeQtInteractor(self)
-        layout.addWidget(self.plotter, 1)
-        self.plotter.set_background(PALETTE["viewport"])
+        self._layout.addWidget(self.notice)
+
+        # Do not create a native VTK/OpenGL child until the user actually opens
+        # 3D Preview. Hidden QVTK children can still acquire native HWND/WGL
+        # resources on Windows and may interfere with sibling QWidget stacking
+        # before the preview page is ever shown. The normal Sketch page is now
+        # pure Qt and follows exactly the same toolbar/layout path as the main
+        # viewport until 3D Preview is requested.
+        self.plotter = None
 
         # QDialog closes its native parent window before Python necessarily
         # destroys all child wrappers. On Windows that can leave VTK trying to
@@ -82,6 +87,16 @@ class SketchFeaturePreview(QWidget):
         if finished is not None and hasattr(finished, "connect"):
             finished.connect(self._parent_dialog_finished)
 
+    def _ensure_plotter(self):
+        """Create the native render surface only when 3D preview is requested."""
+        if self._closed:
+            return None
+        if self.plotter is None:
+            self.plotter = SafeQtInteractor(self)
+            self._layout.addWidget(self.plotter, 1)
+            self.plotter.set_background(PALETTE["viewport"])
+        return self.plotter
+
     def _parent_dialog_finished(self, _result=None) -> None:
         self.shutdown()
 
@@ -90,7 +105,7 @@ class SketchFeaturePreview(QWidget):
         if self._closed:
             return
         self._closed = True
-        plotter = getattr(self, "plotter", None)
+        plotter = self.plotter
         if plotter is None:
             return
         try:
@@ -112,8 +127,11 @@ class SketchFeaturePreview(QWidget):
     def refresh_feature(self, feature) -> bool:
         if self._closed:
             return False
+        plotter = self._ensure_plotter()
+        if plotter is None:
+            return False
         self.notice.hide()
-        self.plotter.clear()
+        plotter.clear()
         candidate = build_preview_part(self._base_part, feature)
         try:
             snapshot = GeometryService().build_geometry(candidate, force=True)
@@ -121,7 +139,7 @@ class SketchFeaturePreview(QWidget):
                 if not len(patch.points) or not len(patch.faces):
                     continue
                 mesh = pv.PolyData(patch.points, patch.faces)
-                self.plotter.add_mesh(
+                plotter.add_mesh(
                     mesh,
                     color=PALETTE["cad_face"],
                     edge_color=PALETTE["cad_edge"],
@@ -135,7 +153,7 @@ class SketchFeaturePreview(QWidget):
                     continue
                 try:
                     mesh = pv.PolyData(patch.points, lines=patch.lines)
-                    self.plotter.add_mesh(
+                    plotter.add_mesh(
                         mesh,
                         color=PALETTE["cad_edge"],
                         line_width=1.4,
@@ -161,13 +179,13 @@ class SketchFeaturePreview(QWidget):
                     (-1.25 * extent, 0.0, 0.0),
                     (1.25 * extent, 0.0, 0.0),
                 )
-                self.plotter.add_mesh(
+                plotter.add_mesh(
                     line,
                     color=PALETTE["axis_x"],
                     line_width=2.0,
                     pickable=False,
                 )
-            self.plotter.camera_position = "iso"
+            plotter.camera_position = "iso"
             self.fit_view()
             return True
         except Exception as exc:
@@ -183,13 +201,13 @@ class SketchFeaturePreview(QWidget):
 
     def fit_view(self) -> None:
         """Fit the current preview using the same compact viewport-bar affordance."""
-        if self._closed:
+        if self._closed or self.plotter is None:
             return
         self.plotter.reset_camera()
         self.plotter.render()
 
     def refresh_theme(self):
-        if self._closed:
+        if self._closed or self.plotter is None:
             return
         self.plotter.set_background(PALETTE["viewport"])
         self.plotter.render()
