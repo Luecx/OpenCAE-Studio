@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSignalBlocker, pyqtSignal
-from PyQt6.QtWidgets import QDoubleSpinBox, QHBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QWidget
+
+from opencae.ui.primitives.inputs import NumberInput
 
 from .control_metrics import apply_primary_control_height
 
@@ -37,7 +39,7 @@ class Vector3Input(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        self.editors: list[QDoubleSpinBox] = []
+        self.editors: list[NumberInput] = []
         object_names = ("XYZFirst", "XYZMiddle", "XYZLast")
         for caption, component, object_name in zip(
             captions,
@@ -45,14 +47,15 @@ class Vector3Input(QWidget):
             object_names,
             strict=True,
         ):
-            editor = QDoubleSpinBox()
-            editor.setObjectName(object_name)
-            editor.setMinimumWidth(0)
-            editor.setRange(float(minimum), float(maximum))
-            editor.setDecimals(int(decimals))
-            editor.setValue(component)
-            editor.setPrefix(f"{caption}: ")
-            apply_primary_control_height(editor)
+            editor = NumberInput(
+                component,
+                minimum=minimum,
+                maximum=maximum,
+                decimals=decimals,
+                prefix=f"{caption}: ",
+                object_name=object_name,
+                parent=self,
+            )
             editor.valueChanged.connect(lambda _value: self.changed.emit())
             self.editors.append(editor)
             layout.addWidget(editor, 1)
