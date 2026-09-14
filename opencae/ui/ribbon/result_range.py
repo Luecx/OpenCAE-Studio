@@ -1,33 +1,27 @@
 """Provides the result contour-range ribbon control and its compact editor flyout."""
 
-from PyQt6.QtCore import QRectF, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
-from PyQt6.QtWidgets import (
-    QCheckBox,
-    QColorDialog,
-    QDoubleSpinBox,
-    QHBoxLayout,
-    QLabel,
-    QSizePolicy,
-    QSlider,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QColorDialog, QHBoxLayout, QVBoxLayout, QWidget
 
 from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.theme import PALETTE
-from opencae.ui.primitives.buttons import (
-    ActionButton,
-    ButtonPresentation,
-    OptionsButton,
-    ToggleButton,
+from opencae.ui.primitives.buttons.button_color_swatch import ButtonColorSwatch
+from opencae.ui.primitives.buttons.button_results_range_auto import ButtonResultsRangeAuto
+from opencae.ui.primitives.buttons.button_results_range_symmetry import (
+    ButtonResultsRangeSymmetry,
 )
-from opencae.ui.templates import (
-    PRIMARY_CONTROL_HEIGHT,
-    SectionHeading,
-    apply_primary_control_height,
-    field_block,
+from opencae.ui.primitives.buttons.button_results_ribbon_options import (
+    ButtonResultsRibbonOptions,
 )
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.inputs.input_form_number import InputFormNumber
+from opencae.ui.primitives.labels import LabelBody, LabelSection
+from opencae.ui.primitives.separators.separator_results_range import (
+    SeparatorResultsRange,
+)
+from opencae.ui.primitives.sliders import SliderHorizontal
+from opencae.ui.templates import field_block
 from opencae.ui.viewport.contour_mapping import (
     DEFAULT_CONTOUR_LEVELS,
     DEFAULT_OUTSIDE_COLOR,
@@ -36,20 +30,17 @@ from opencae.ui.viewport.contour_mapping import (
 )
 
 
-class ResultRangeButton(OptionsButton):
+class ResultRangeButton(ButtonResultsRibbonOptions):
     """Open a compact editor for result range and contour color mapping."""
 
     range_changed = pyqtSignal(object)
     auto_bound_requested = pyqtSignal(str, str)
 
     def __init__(self, parent=None):
-        """Build the ribbon button and its contour presentation controls."""
         super().__init__(
             "Contour",
             icon=make_icon(IconKind.RANGE, 28),
-            icon_size=28,
             width=82,
-            height=70,
             parent=parent,
         )
         self._data_range = (0.0, 1.0)
@@ -65,7 +56,7 @@ class ResultRangeButton(OptionsButton):
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(9)
 
-        layout.addWidget(SectionHeading("Range"))
+        layout.addWidget(LabelSection("Range"))
         self.minimum = self._field()
         self.maximum = self._field()
         self.minimum_frame = self._auto_button("frame")
@@ -83,20 +74,7 @@ class ResultRangeButton(OptionsButton):
             )
         )
 
-        self.symmetric = ToggleButton(
-            text="",
-            icon=_chain_icon(18),
-            checked=False,
-            presentation=ButtonPresentation.DEFAULT,
-            object_name="ResultRangeSymmetryButton",
-            parent=panel,
-        )
-        self.symmetric.setAutoRaise(False)
-        self.symmetric.setIconSize(QSize(18, 18))
-        self.symmetric.setFixedSize(30, 26)
-        self.symmetric.setToolTip(
-            "Couple minimum and maximum symmetrically around zero"
-        )
+        self.symmetric = ButtonResultsRangeSymmetry(_chain_icon(18), panel)
         link_row = QHBoxLayout()
         link_row.setContentsMargins(0, 0, 0, 0)
         link_row.addStretch(1)
@@ -115,23 +93,29 @@ class ResultRangeButton(OptionsButton):
             )
         )
 
-        layout.addWidget(self._separator())
-        layout.addWidget(SectionHeading("Color Mapping"))
-        self.continuous = QCheckBox("Continuous color mapping")
-        self.continuous.setObjectName("ResultContinuousCheckBox")
+        layout.addWidget(SeparatorResultsRange(panel))
+        layout.addWidget(LabelSection("Color Mapping"))
+        self.continuous = CheckForm(
+            "Continuous color mapping",
+            object_name="ResultContinuousCheckBox",
+            parent=panel,
+        )
         layout.addWidget(self.continuous)
 
         levels_row = QWidget()
         levels_layout = QHBoxLayout(levels_row)
         levels_layout.setContentsMargins(0, 0, 0, 0)
         levels_layout.setSpacing(8)
-        self.levels = QSlider(Qt.Orientation.Horizontal)
-        self.levels.setRange(MIN_CONTOUR_LEVELS, MAX_CONTOUR_LEVELS)
-        self.levels.setValue(DEFAULT_CONTOUR_LEVELS)
+        self.levels = SliderHorizontal(
+            minimum=MIN_CONTOUR_LEVELS,
+            maximum=MAX_CONTOUR_LEVELS,
+            value=DEFAULT_CONTOUR_LEVELS,
+            tooltip="Number of discrete contour color levels",
+            parent=levels_row,
+        )
         self.levels.setPageStep(2)
         self.levels.setTickInterval(2)
-        self.levels.setToolTip("Number of discrete contour color levels")
-        self.level_value = QLabel(str(DEFAULT_CONTOUR_LEVELS))
+        self.level_value = LabelBody(str(DEFAULT_CONTOUR_LEVELS), parent=levels_row)
         self.level_value.setMinimumWidth(24)
         self.level_value.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -140,11 +124,14 @@ class ResultRangeButton(OptionsButton):
         levels_layout.addWidget(self.level_value)
         layout.addWidget(field_block("Number of levels", levels_row))
 
-        layout.addWidget(self._separator())
-        layout.addWidget(SectionHeading("Outside Range"))
-        self.outside_colors = QCheckBox("Color values outside range")
-        self.outside_colors.setChecked(True)
-        self.outside_colors.setObjectName("ResultOutsideColorsCheckBox")
+        layout.addWidget(SeparatorResultsRange(panel))
+        layout.addWidget(LabelSection("Outside Range"))
+        self.outside_colors = CheckForm(
+            "Color values outside range",
+            checked=True,
+            object_name="ResultOutsideColorsCheckBox",
+            parent=panel,
+        )
         layout.addWidget(self.outside_colors)
 
         color_row = QWidget()
@@ -184,33 +171,25 @@ class ResultRangeButton(OptionsButton):
 
     @staticmethod
     def _field():
-        """Return one full-width numeric contour limit editor."""
-        spin = QDoubleSpinBox()
-        spin.setRange(-1e300, 1e300)
-        spin.setDecimals(12)
-        spin.setMinimumWidth(0)
-        apply_primary_control_height(spin)
-        return spin
+        return InputFormNumber(
+            minimum=-1e300,
+            maximum=1e300,
+            decimals=12,
+        )
 
     @staticmethod
     def _auto_button(scope):
-        """Return a compact one-shot range calculation icon."""
-        button = ActionButton(
-            icon=make_icon(
+        return ButtonResultsRangeAuto(
+            make_icon(
                 IconKind.RESULT_FRAME if scope == "frame" else IconKind.RANGE,
                 16,
             ),
-            presentation=ButtonPresentation.DEFAULT,
-            object_name="ResultRangeAutoIcon",
+            tooltip=(
+                "Use value from current frame"
+                if scope == "frame"
+                else "Use value across all frames in the current step"
+            ),
         )
-        button.setIconSize(QSize(16, 16))
-        button.setFixedSize(30, PRIMARY_CONTROL_HEIGHT)
-        button.setToolTip(
-            "Use value from current frame"
-            if scope == "frame"
-            else "Use value across all frames in the current step"
-        )
-        return button
 
     @staticmethod
     def _bound_row(field, frame_button, frames_button):
@@ -223,52 +202,23 @@ class ResultRangeButton(OptionsButton):
         row_layout.addWidget(frames_button)
         return row
 
-    @staticmethod
-    def _separator():
-        line = QWidget()
-        line.setObjectName("ResultRangeSeparator")
-        line.setFixedHeight(1)
-        line.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        line.setStyleSheet(
-            f"QWidget#ResultRangeSeparator {{ background: {PALETTE['border_light']}; }}"
-        )
-        return line
-
     def _color_button(self, name):
-        """Return an expanding colorbar end swatch for outside-range values."""
-        button = ActionButton(
-            presentation=ButtonPresentation.DEFAULT,
-            object_name="ResultContourColorButton",
+        return ButtonColorSwatch(
+            self._colors[name],
+            tooltip=(
+                "Below-range color" if name == "below" else "Above-range color"
+            ),
             parent=self,
         )
-        button.setMinimumWidth(72)
-        button.setFixedHeight(22)
-        button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        button.setToolTip(
-            "Below-range color" if name == "below" else "Above-range color"
-        )
-        self._refresh_color_button(button, self._colors[name])
-        return button
 
     @staticmethod
     def _refresh_color_button(button, value):
-        color = QColor(value)
-        button.setText("")
-        button.setStyleSheet(
-            "QToolButton {"
-            f"background-color: {color.name()};"
-            "border: 1px solid rgba(255,255,255,0.28);"
-            "border-radius: 3px; padding: 0;"
-            "}"
-            "QToolButton:hover { border: 1px solid rgba(255,255,255,0.72); }"
-        )
+        button.set_color(value)
 
     def set_data_range(self, minimum, maximum):
-        """Remember the active-frame data range without changing fixed limits."""
         self._data_range = (float(minimum), float(maximum))
 
     def set_range(self, minimum, maximum):
-        """Set both concrete contour limits while respecting symmetry coupling."""
         lower, upper = float(minimum), float(maximum)
         if lower > upper:
             lower, upper = upper, lower
@@ -280,7 +230,6 @@ class ResultRangeButton(OptionsButton):
         self._emit()
 
     def set_bound(self, bound, value):
-        """Set one calculated bound, mirroring it when symmetry is enabled."""
         numeric = float(value)
         if self.symmetric.isChecked():
             extent = abs(numeric)
@@ -294,11 +243,9 @@ class ResultRangeButton(OptionsButton):
         self._emit()
 
     def apply_data_range(self):
-        """Copy the remembered current-frame range into the editable fields."""
         self.set_range(*self._data_range)
 
     def values(self):
-        """Return the complete range and contour-mapping configuration."""
         return {
             "minimum": self.minimum.value(),
             "maximum": self.maximum.value(),
@@ -370,7 +317,6 @@ class ResultRangeButton(OptionsButton):
         self._emit()
 
     def _emit(self, *_):
-        """Publish the complete contour-range configuration."""
         self.range_changed.emit(self.values())
 
 
