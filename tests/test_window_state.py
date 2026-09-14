@@ -10,8 +10,8 @@ class _Settings:
         self.values = {}
         self.sync_count = 0
 
-    def value(self, key):
-        return self.values.get(key)
+    def value(self, key, default=None):
+        return self.values.get(key, default)
 
     def setValue(self, key, value):
         self.values[key] = value

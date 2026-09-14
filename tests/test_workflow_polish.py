@@ -8,17 +8,30 @@ import subprocess
 import sys
 
 import pytest
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QDialogButtonBox
 
-from opencae.app.startup_window import StartupWindow
 from opencae.model.entities.resources.material_library import material_from_preset
-from opencae.ui.dialogs.default_seed import DefaultSeedDialog
 from opencae.ui.viewport.stage_guidance import assembly_guidance
 from opencae.units.system import UnitSystem
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _run_isolated_qt(script: str) -> None:
+    env = dict(os.environ)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["PYVISTA_OFF_SCREEN"] = "true"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout
 
 
 def test_application_module_defers_main_window_import():
@@ -45,20 +58,25 @@ def test_application_module_defers_main_window_import():
 
 def test_startup_surface_does_not_behave_like_focus_stealing_tool_window():
     """Startup feedback must not restack the desktop like an always-on-top tool."""
-    app = QApplication.instance() or QApplication([])
-    startup = StartupWindow()
-    try:
-        flags = startup.windowFlags()
-        assert (
-            flags & Qt.WindowType.WindowType_Mask
-        ) == Qt.WindowType.SplashScreen
-        assert flags & Qt.WindowType.WindowDoesNotAcceptFocus
-        assert not (flags & Qt.WindowType.WindowStaysOnTopHint)
-        assert startup.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        assert startup.focusPolicy() == Qt.FocusPolicy.NoFocus
-    finally:
-        startup.deleteLater()
-        app.processEvents()
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
+from opencae.app.startup_window import StartupWindow
+
+app = QApplication.instance() or QApplication([])
+startup = StartupWindow()
+try:
+    flags = startup.windowFlags()
+    assert (flags & Qt.WindowType.WindowType_Mask) == Qt.WindowType.SplashScreen
+    assert flags & Qt.WindowType.WindowDoesNotAcceptFocus
+    assert not (flags & Qt.WindowType.WindowStaysOnTopHint)
+    assert startup.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+    assert startup.focusPolicy() == Qt.FocusPolicy.NoFocus
+finally:
+    startup.close()
+    startup.deleteLater()
+    app.processEvents()
+''')
 
     application_source = (ROOT / "opencae/app/application.py").read_text(
         encoding="utf-8"
@@ -105,12 +123,20 @@ def test_assembly_guidance_only_appears_without_active_instances(project_factory
 
 def test_seed_part_dialog_has_apply_ok_and_cancel():
     """Seed Part supports preview-style Apply plus conventional OK/Cancel."""
-    app = QApplication.instance() or QApplication([])
-    dialog = DefaultSeedDialog()
+    _run_isolated_qt(r'''
+from PyQt6.QtWidgets import QApplication, QDialogButtonBox
+from opencae.ui.dialogs.default_seed import DefaultSeedDialog
+
+app = QApplication.instance() or QApplication([])
+dialog = DefaultSeedDialog()
+try:
     buttons = dialog.findChild(QDialogButtonBox)
     assert buttons is not None
     assert buttons.button(QDialogButtonBox.StandardButton.Apply) is not None
     assert buttons.button(QDialogButtonBox.StandardButton.Ok) is not None
     assert buttons.button(QDialogButtonBox.StandardButton.Cancel) is not None
+finally:
     dialog.close()
-    assert app is not None
+    dialog.deleteLater()
+    app.processEvents()
+''')

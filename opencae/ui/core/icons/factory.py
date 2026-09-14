@@ -7,6 +7,7 @@ from .kinds import IconKind
 from .legacy import IconKind as LegacyKind
 from .legacy import make_icon as make_legacy_icon
 from .modern_renderer import make_modern_icon
+from .sketch_renderer import make_sketch_icon
 
 _ICON_MAP = {
     IconKind.FILE:LegacyKind.OUTPUT, IconKind.SAVE:LegacyKind.EXPORT, IconKind.IMPORT:LegacyKind.IMPORT,
@@ -72,6 +73,9 @@ def _x_icon(size: int, accent: str | None = None) -> QIcon:
 def make_icon(kind: IconKind, size: int = 40, accent: str | None = None) -> QIcon:
     if kind in {IconKind.DELETE, IconKind.SUPPRESS}:
         return _x_icon(size, accent)
+    sketch = make_sketch_icon(kind, size, accent)
+    if sketch is not None:
+        return sketch
     modern = make_modern_icon(kind, size, accent)
     if modern is not None:
         return modern

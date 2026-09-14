@@ -14,6 +14,7 @@ class PartPage(ResponsiveRibbonPage):
                 "GEOMETRY",
                 (
                     A.NEW_PART,
+                    A.SKETCH_FEATURE,
                     A.DUPLICATE_PART,
                     A.IMPORT_GEOMETRY,
                     A.IMPORT_MESH,

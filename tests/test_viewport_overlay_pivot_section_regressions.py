@@ -4,43 +4,58 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import subprocess
+import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtWidgets import QApplication
-
-from opencae.ui.core.theme import PALETTE
-from opencae.ui.ribbon.result_section import ResultSectionButton
-from opencae.ui.viewport.viewport_canvas import ViewportCanvas
-
 
 ROOT = Path(__file__).resolve().parents[1]
-_QT_APPLICATION: QApplication | None = None
-
-
-def _application() -> QApplication:
-    global _QT_APPLICATION
-    _QT_APPLICATION = QApplication.instance() or QApplication([])
-    return _QT_APPLICATION
 
 
 def _source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
+def _run_isolated_qt(script: str) -> None:
+    """Run one real Qt widget probe without inherited VTK/native state."""
+    env = dict(os.environ)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["PYVISTA_OFF_SCREEN"] = "true"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout
+
+
 def test_viewport_canvas_matches_renderer_background_behind_rounded_overlays():
     """Rounded Qt panel corners expose the same color used by the VTK renderer."""
-    _application()
-    canvas = ViewportCanvas()
-    try:
-        stylesheet = canvas.styleSheet().replace(" ", "").lower()
-        assert "qwidget#viewportcanvas" in stylesheet
-        assert PALETTE["viewport"].lower() in stylesheet
-        assert "def refresh_theme(self)" in _source(
-            "opencae/ui/viewport/viewport_canvas.py"
-        )
-    finally:
-        canvas.deleteLater()
+    _run_isolated_qt(r'''
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.core.theme import PALETTE
+from opencae.ui.viewport.viewport_canvas import ViewportCanvas
+
+app = QApplication.instance() or QApplication([])
+canvas = ViewportCanvas()
+try:
+    stylesheet = canvas.styleSheet().replace(" ", "").lower()
+    assert "qwidget#viewportcanvas" in stylesheet
+    assert PALETTE["viewport"].lower() in stylesheet
+finally:
+    canvas.close()
+    canvas.deleteLater()
+    app.processEvents()
+''')
+    assert "def refresh_theme(self)" in _source(
+        "opencae/ui/viewport/viewport_canvas.py"
+    )
 
 
 def test_scene_clear_invalidates_removed_vtk_rotation_pivot():
@@ -59,32 +74,39 @@ def test_scene_clear_invalidates_removed_vtk_rotation_pivot():
 
 def test_automatic_section_origin_stays_automatic_after_viewport_reports_center():
     """Resolved center coordinates must not silently become a manual cut origin."""
-    _application()
-    section = ResultSectionButton()
-    try:
-        section.set_state(
-            {
-                "enabled": True,
-                "origin": (10.0, 20.0, 30.0),
-                "origin_auto": True,
-                "normal": (1.0, 0.0, 0.0),
-            }
-        )
-        values = section.values()
-        assert values["origin_auto"] is True
-        assert values["origin"] is None
+    _run_isolated_qt(r'''
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.ribbon.result_section import ResultSectionButton
 
-        section.set_state(
-            {
-                "origin": (11.0, 22.0, 33.0),
-                "origin_auto": False,
-            }
-        )
-        values = section.values()
-        assert values["origin_auto"] is False
-        assert tuple(values["origin"]) == (11.0, 22.0, 33.0)
-    finally:
-        section.deleteLater()
+app = QApplication.instance() or QApplication([])
+section = ResultSectionButton()
+try:
+    section.set_state(
+        {
+            "enabled": True,
+            "origin": (10.0, 20.0, 30.0),
+            "origin_auto": True,
+            "normal": (1.0, 0.0, 0.0),
+        }
+    )
+    values = section.values()
+    assert values["origin_auto"] is True
+    assert values["origin"] is None
+
+    section.set_state(
+        {
+            "origin": (11.0, 22.0, 33.0),
+            "origin_auto": False,
+        }
+    )
+    values = section.values()
+    assert values["origin_auto"] is False
+    assert tuple(values["origin"]) == (11.0, 22.0, 33.0)
+finally:
+    section.close()
+    section.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_section_controller_tracks_auto_origin_and_manual_plane_drags():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 import pytest
 
@@ -36,6 +37,9 @@ from opencae.model.selection import (
 )
 
 
+_PYTEST_EXIT_STATUS: int | None = None
+
+
 @pytest.fixture(scope="session", autouse=True)
 def qapplication():
     """Keep one QApplication alive for every UI-bearing test in the full suite."""
@@ -47,6 +51,73 @@ def qapplication():
         return
     application = QApplication.instance() or QApplication([])
     yield application
+
+
+@pytest.fixture(autouse=True)
+def cleanup_qt_widgets(qapplication):
+    """Dispose top-level widgets at the test boundary, not interpreter shutdown.
+
+    The full suite mixes Qt widgets with VTK/QOpenGL-backed surfaces. Letting
+    widgets from many tests accumulate until Python finalization makes native
+    destruction order nondeterministic. Each test therefore owns every new
+    top-level widget it creates; those widgets are closed while QApplication is
+    still alive and before the next native rendering test starts.
+    """
+    if qapplication is None:
+        yield
+        return
+
+    from PyQt6.QtCore import QCoreApplication, QEvent
+    from PyQt6.QtWidgets import QApplication
+
+    existing = {id(widget) for widget in QApplication.topLevelWidgets()}
+    yield
+
+    created = [
+        widget
+        for widget in QApplication.topLevelWidgets()
+        if id(widget) not in existing
+    ]
+    if not created:
+        return
+    for widget in created:
+        try:
+            widget.close()
+            widget.deleteLater()
+        except RuntimeError:
+            continue
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    qapplication.processEvents()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Remember pytest's real result before plugin teardown starts."""
+    del session
+    global _PYTEST_EXIT_STATUS
+    _PYTEST_EXIT_STATUS = int(exitstatus)
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_unconfigure(config):
+    """Avoid a VTK/Qt interpreter-finalizer crash after pytest has fully finished.
+
+    On the Linux offscreen suite all tests, fixture teardowns and pytest reports
+    have already completed when this hook runs. CPython can nevertheless crash
+    afterwards while unloading the independently-owned Qt and VTK C++ modules.
+    Exit here with pytest's *actual* status so assertion failures remain failures
+    while avoiding a second, undefined native destruction pass. Native Wayland
+    coverage is not affected because it does not run with the offscreen QPA.
+    """
+    del config
+    if (
+        _PYTEST_EXIT_STATUS is None
+        or not sys.platform.startswith("linux")
+        or os.environ.get("QT_QPA_PLATFORM") != "offscreen"
+    ):
+        return
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(_PYTEST_EXIT_STATUS)
 
 
 def definition(*operands):

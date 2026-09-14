@@ -4,6 +4,7 @@ from opencae.ui.actions.ids import A
 def build(menu_bar, actions):
     menu = menu_bar.addMenu("&Geometry")
     menu.addAction(actions.get(A.NEW_PART))
+    menu.addAction(actions.get(A.SKETCH_FEATURE))
     menu.addAction(actions.get(A.IMPORT_GEOMETRY))
     menu.addSeparator()
     menu.addAction(actions.get(A.PARTITION))

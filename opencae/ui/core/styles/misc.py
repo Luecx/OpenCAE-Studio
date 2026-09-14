@@ -3,7 +3,8 @@
 
 def css(p):
     return f"""
-    QToolBar#RibbonHost {{
+    QToolBar#RibbonHost,
+    QWidget#SketchRibbonHost {{
         background: {p['panel']};
         border: none;
         border-bottom: 1px solid {p['border']};
@@ -11,6 +12,16 @@ def css(p):
         padding: 0;
     }}
     QToolBar#RibbonHost::separator {{ width: 0; }}
+
+    /* One canonical slim viewport-toolbar surface for the main viewport and
+       every secondary editor.  The main viewport historically inherited the
+       window surface implicitly; make that relationship explicit so Windows,
+       X11 and Wayland paint exactly the same color. */
+    QWidget#ViewportToolbar {{
+        background: {p['window']};
+        border: none;
+    }}
+
     QGroupBox {{
         border: 1px solid {p['border']};
         border-radius: 3px;

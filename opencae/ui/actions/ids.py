@@ -25,7 +25,7 @@ class A:
     PROFILE_CHANNEL = "profile.channel"; PROFILE_U = "profile.u"
     PROFILE_H = "profile.h"; PROFILE_CIRCLE = "profile.circle"
     PROFILE_GENERAL = "profile.general"; PROFILE_GRAPH = "profile.graph"
-    NEW_PART = "part.new"; DUPLICATE_PART = "part.duplicate"; IMPORT_GEOMETRY = "part.import"
+    NEW_PART = "part.new"; SKETCH_FEATURE = "part.sketch"; DUPLICATE_PART = "part.duplicate"; IMPORT_GEOMETRY = "part.import"
     IMPORT_MESH = "part.import_mesh"; PARTITION = "part.partition"
     SUPPRESS_FEATURE = "part.suppress_feature"; REBUILD_GEOMETRY = "part.rebuild_geometry"
     DEFAULT_SEED = "mesh.default_seed"; EDGE_SEED = "mesh.edge_seed"

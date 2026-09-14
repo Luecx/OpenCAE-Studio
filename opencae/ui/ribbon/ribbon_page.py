@@ -137,9 +137,8 @@ class ResponsiveRibbonPage(QWidget):
         if self._required_width(collapsed) <= available_width:
             return frozenset()
 
-        # Deliberately continue in this one call until the page fits. This is
-        # what allows Geometry -> Mesh -> Datum -> Regions to all collapse
-        # during a single continuous window resize when necessary.
+        # Collapse the widest group first and stop as soon as the page fits.
+        # This keeps as much of the ribbon expanded as the current width allows.
         for spec in self._collapse_candidates():
             collapsed.add(spec.title)
             if self._required_width(collapsed) <= available_width:
@@ -155,25 +154,38 @@ class ResponsiveRibbonPage(QWidget):
         self._render_groups(target)
 
     def _render_groups(self, collapsed_titles):
-        while self._groups_layout.count():
-            item = self._groups_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
+        # Treat a responsive transition as one visual operation. Qt may deliver
+        # resize/paint events while deleteLater() widgets are still alive; that
+        # used to produce the overlapped icon/text pile-up seen in narrow
+        # ribbons. Suppress painting until the new group set is complete.
+        self._groups_host.setUpdatesEnabled(False)
+        try:
+            while self._groups_layout.count():
+                item = self._groups_layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    # Removing a widget from a layout does not hide it immediately;
+                    # detach it synchronously before rebuilding.
+                    widget.hide()
+                    widget.setParent(None)
+                    widget.deleteLater()
 
-        self._group_widgets.clear()
-        for spec in self._specs:
-            rendered_spec = replace(
-                spec,
-                collapsed=spec.title in collapsed_titles,
-            )
-            group = RibbonGroup(rendered_spec, self.actions, self._groups_host)
-            self._groups_layout.addWidget(group)
-            self._group_widgets.append(group)
-        self._groups_layout.addStretch(1)
-        self.refresh_theme()
-        self._groups_host.updateGeometry()
-        self.updateGeometry()
+            self._group_widgets.clear()
+            for spec in self._specs:
+                rendered_spec = replace(
+                    spec,
+                    collapsed=spec.title in collapsed_titles,
+                )
+                group = RibbonGroup(rendered_spec, self.actions, self._groups_host)
+                self._groups_layout.addWidget(group)
+                self._group_widgets.append(group)
+            self._groups_layout.addStretch(1)
+            self.refresh_theme()
+            self._groups_host.updateGeometry()
+            self.updateGeometry()
+        finally:
+            self._groups_host.setUpdatesEnabled(True)
+            self._groups_host.update()
 
 
 class RibbonPage(ResponsiveRibbonPage):

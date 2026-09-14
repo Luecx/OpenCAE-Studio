@@ -4,39 +4,36 @@ from __future__ import annotations
 
 import os
 from collections import Counter
+from pathlib import Path
+import subprocess
+import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QImage
-from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QWidget
-
-from opencae.ui.viewport.view_cube import ViewCube
-from opencae.ui.viewport.view_cube_camera import ViewCubeCameraController
 from opencae.ui.viewport.view_cube_polyhedron import (
     beveled_cube_faces,
     camera_view_matrix,
-    view_rotation,
 )
-from opencae.ui.viewport.viewport_canvas import ViewportCanvas
 
-_QT_APPLICATION: QApplication | None = None
-
-
-def _application() -> QApplication:
-    """Return the single Qt application required for offscreen widget tests."""
-    global _QT_APPLICATION
-    _QT_APPLICATION = QApplication.instance() or QApplication([])
-    return _QT_APPLICATION
+ROOT = Path(__file__).resolve().parents[1]
 
 
-def _render(widget: ViewCube) -> QImage:
-    """Render the production cube into a transparent-initialized target."""
-    image = QImage(widget.size(), QImage.Format.Format_ARGB32_Premultiplied)
-    image.fill(Qt.GlobalColor.transparent)
-    widget.render(image)
-    return image
+def _run_isolated_qt(script: str) -> None:
+    """Exercise one native Qt paint/event probe in an uncontaminated process."""
+    env = dict(os.environ)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["PYVISTA_OFF_SCREEN"] = "true"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout
 
 
 def test_beveled_cube_has_expected_face_topology() -> None:
@@ -77,21 +74,40 @@ def test_face_shapes_match_square_rectangle_triangle_contract() -> None:
 
 def test_generic_orientation_keeps_all_visible_connector_faces() -> None:
     """Prevent shallow but front-facing edge strips from disappearing during orbit."""
-    _application()
-    widget = ViewCube()
+    _run_isolated_qt(r'''
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+from opencae.ui.viewport.view_cube_polyhedron import view_rotation
+
+app = QApplication.instance() or QApplication([])
+widget = ViewCube()
+try:
     widget.set_view_matrix(view_rotation(52.0, -31.0, 14.0))
     visible = widget._visible_faces()
-
     assert sum(face[1][0] == "main" for face in visible) == 3
     assert sum(face[1][0] == "edge" for face in visible) == 6
     assert sum(face[1][0] == "corner" for face in visible) == 4
+finally:
+    widget.close()
+    widget.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_view_cube_paints_opaque_non_uniform_pixels() -> None:
     """Ensure a complete raster is produced instead of a transparent black box."""
-    _application()
-    widget = ViewCube()
-    image = _render(widget)
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QImage
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+
+app = QApplication.instance() or QApplication([])
+widget = ViewCube()
+try:
+    image = QImage(widget.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    widget.render(image)
     colors = {
         image.pixelColor(x, y).name(QColor.NameFormat.HexArgb)
         for x, y in ((0, 0), (87, 42), (57, 87), (116, 87), (87, 116))
@@ -102,39 +118,82 @@ def test_view_cube_paints_opaque_non_uniform_pixels() -> None:
         for x in range(image.width())
         for y in range(image.height())
     )
+finally:
+    widget.close()
+    widget.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_orientation_change_produces_a_different_projection() -> None:
     """Verify that external camera changes alter the displayed cube live."""
-    _application()
-    widget = ViewCube()
-    initial = _render(widget)
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QImage
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+from opencae.ui.viewport.view_cube_polyhedron import view_rotation
+
+app = QApplication.instance() or QApplication([])
+widget = ViewCube()
+try:
+    initial = QImage(widget.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    initial.fill(Qt.GlobalColor.transparent)
+    widget.render(initial)
     matrix = view_rotation(52.0, -31.0, 14.0)
     widget.set_view_matrix(matrix)
-    rotated = _render(widget)
+    rotated = QImage(widget.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    rotated.fill(Qt.GlobalColor.transparent)
+    widget.render(rotated)
     assert initial != rotated
     assert widget.view_matrix == matrix
+finally:
+    widget.close()
+    widget.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_view_cube_uses_stable_opaque_native_surface_composition() -> None:
     """Protect visibility and mouse ownership above the native VTK widget."""
-    _application()
-    widget = ViewCube()
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+
+app = QApplication.instance() or QApplication([])
+widget = ViewCube()
+try:
     assert widget.testAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
     assert not widget.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
     assert widget.testAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
     assert widget.mask().isEmpty()
+finally:
+    widget.close()
+    widget.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_visible_main_face_emits_world_normal() -> None:
     """Keep painted face hits connected to their world-space view normals."""
-    application = _application()
-    widget = ViewCube()
-    emitted = []
-    widget.view_requested.connect(emitted.append)
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QImage
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+
+app = QApplication.instance() or QApplication([])
+widget = ViewCube()
+emitted = []
+widget.view_requested.connect(emitted.append)
+try:
     widget.show()
-    application.processEvents()
-    _render(widget)
+    app.processEvents()
+    image = QImage(widget.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    widget.render(image)
     polygon, expected, _label = next(
         region for region in reversed(widget._hit_regions) if region[2] == "TOP"
     )
@@ -144,6 +203,11 @@ def test_visible_main_face_emits_world_normal() -> None:
         pos=polygon.boundingRect().center().toPoint(),
     )
     assert emitted == [expected]
+finally:
+    widget.close()
+    widget.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_camera_basis_maps_conventional_cae_views() -> None:
@@ -157,9 +221,15 @@ def test_camera_basis_maps_conventional_cae_views() -> None:
     assert right[2] == (1.0, 0.0, 0.0)
 
 
-class _Camera:
-    """Minimal observable camera used to verify the production binding."""
+def test_camera_controller_tracks_and_animates_face_normals() -> None:
+    """Synchronize free rotation and smoothly preserve distance on cube clicks."""
+    _run_isolated_qt(r'''
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+from opencae.ui.viewport.view_cube_camera import ViewCubeCameraController
 
+class Camera:
     def __init__(self):
         self.position = (1.0, 1.0, 1.0)
         self.focal_point = (0.0, 0.0, 0.0)
@@ -167,40 +237,30 @@ class _Camera:
         self.callback = None
 
     def AddObserver(self, _event, callback):
-        """Store the camera callback and return a deterministic observer id."""
         self.callback = callback
         return 17
 
     def RemoveObserver(self, observer_id):
-        """Record successful observer removal."""
         assert observer_id == 17
         self.callback = None
 
-
-class _Plotter:
-    """Minimal plotter recording camera direction application side effects."""
-
+class Plotter:
     def __init__(self):
-        self.camera = _Camera()
+        self.camera = Camera()
         self.clipping_resets = 0
         self.renders = 0
 
     def reset_camera_clipping_range(self):
-        """Record clipping-range synchronization."""
         self.clipping_resets += 1
 
     def render(self):
-        """Record the one requested viewport frame."""
         self.renders += 1
 
-
-def test_camera_controller_tracks_and_animates_face_normals() -> None:
-    """Synchronize free rotation and smoothly preserve distance on cube clicks."""
-    _application()
-    cube = ViewCube()
-    plotter = _Plotter()
-    controller = ViewCubeCameraController(plotter, cube)
-
+app = QApplication.instance() or QApplication([])
+cube = ViewCube()
+plotter = Plotter()
+controller = ViewCubeCameraController(plotter, cube)
+try:
     plotter.camera.position = (4.0, 0.0, 0.0)
     plotter.camera.up = (0.0, 0.0, 1.0)
     plotter.camera.callback()
@@ -214,18 +274,34 @@ def test_camera_controller_tracks_and_animates_face_normals() -> None:
     assert plotter.renders > 1
     controller.close()
     assert plotter.camera.callback is None
+finally:
+    controller.close()
+    cube.close()
+    cube.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_canvas_places_opaque_cube_on_render_surface() -> None:
     """Keep the cube inside the VTK surface with native-compatible composition."""
-    application = _application()
-    canvas = ViewportCanvas()
-    render_surface = QWidget(canvas)
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QWidget
+from opencae.ui.viewport.viewport_canvas import ViewportCanvas
 
+app = QApplication.instance() or QApplication([])
+canvas = ViewportCanvas()
+render_surface = QWidget(canvas)
+try:
     canvas.set_render_widget(render_surface)
     canvas.resize(640, 420)
-    application.processEvents()
+    app.processEvents()
 
     assert canvas.cube.parentWidget() is render_surface
     assert canvas.cube.testAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
     assert not canvas.cube.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+finally:
+    canvas.close()
+    canvas.deleteLater()
+    app.processEvents()
+''')

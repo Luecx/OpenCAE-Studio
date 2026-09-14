@@ -78,9 +78,19 @@ def ribbon_label(text: str) -> tuple[str, bool]:
 
 def wrapped_ribbon_text(text: str) -> str:
     """Wrap a ribbon caption into at most two visually balanced lines."""
-    words = text.replace("…", "").split()
+    clean = text.replace("…", "").strip()
+    # Slash-separated semantic group names such as ``Construction/Grid`` are
+    # otherwise one long Qt word and get elided inside the canonical 78 px
+    # ribbon button. Break explicitly at the semantic separator while keeping
+    # the visible slash.
+    if "/" in clean and " " not in clean:
+        left, right = clean.split("/", 1)
+        if left and right:
+            return f"{left}/\n{right}"
+
+    words = clean.split()
     if len(words) <= 1:
-        return text
+        return clean
     if len(words) == 2:
         return "\n".join(words)
 
@@ -108,4 +118,12 @@ def action_button(action: QAction, *, large: bool = True) -> QToolButton:
         widget.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         widget.setIconSize(QSize(20, 20))
         widget.setFixedSize(30, 30)
+
+    # QAction menus are uncommon in the ribbon, but when an action deliberately
+    # owns one (for example Sketcher Arc/Dimension), expose it as an ordinary
+    # instant-popup ribbon control instead of requiring a press-and-hold.
+    menu = action.menu()
+    if menu is not None:
+        widget.setMenu(menu)
+        widget.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
     return widget

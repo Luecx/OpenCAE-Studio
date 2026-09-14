@@ -10,13 +10,44 @@ from typing import Any
 from .model_registry import model_class
 from .persistent_model_field import is_persistent_model_field
 
+_MODEL_REF_KEY = "__model_ref__"
+
 
 def encode_model(value: Any) -> Any:
-    """Convert one model value into JSON-compatible registered type data."""
+    """Convert one model value into JSON-compatible registered type data.
+
+    Most OpenCAE relationships use explicit ``EntityRef`` value objects. A few
+    tightly-owned model graphs intentionally expose direct Python object
+    relationships. Objects in such a graph opt in with ``__model_identity__``;
+    their graph root opts in with ``__model_identity_scope__`` so local IDs stay
+    local (for example two duplicated sketches may legitimately reuse point IDs).
+    """
+
+    return _encode_model(value, {})
+
+
+def _encode_model(value: Any, identities: dict[str, Any]) -> Any:
     if is_dataclass(value):
+        local_identities = (
+            {} if _starts_identity_scope(value) else identities
+        )
+        identity = _identity_of(value)
+        if identity:
+            existing = local_identities.get(identity)
+            if existing is value:
+                return {_MODEL_REF_KEY: identity}
+            if existing is not None:
+                raise ValueError(
+                    f"Duplicate persistent model identity '{identity}' for "
+                    f"{type(value).__name__}"
+                )
+            local_identities[identity] = value
+
         type_name = getattr(type(value), "model_type", None)
         data = {
-            field_info.name: encode_model(getattr(value, field_info.name))
+            field_info.name: _encode_model(
+                getattr(value, field_info.name), local_identities
+            )
             for field_info in fields(value)
             if is_persistent_model_field(field_info)
         }
@@ -26,20 +57,45 @@ def encode_model(value: Any) -> Any:
     if isinstance(value, Path):
         return {"__path__": str(value)}
     if isinstance(value, tuple):
-        return {"__tuple__": [encode_model(item) for item in value]}
+        return {
+            "__tuple__": [_encode_model(item, identities) for item in value]
+        }
     if isinstance(value, list):
-        return [encode_model(item) for item in value]
+        return [_encode_model(item, identities) for item in value]
     if isinstance(value, dict):
-        return {key: encode_model(item) for key, item in value.items()}
+        return {
+            key: _encode_model(item, identities)
+            for key, item in value.items()
+        }
     return value
 
 
 def decode_model(value: Any) -> Any:
     """Reconstruct one model value and reject fields outside the current schema."""
+
+    return _decode_model(value, {})
+
+
+def _decode_model(value: Any, identities: dict[str, Any]) -> Any:
     if isinstance(value, list):
-        return [decode_model(item) for item in value]
+        return [_decode_model(item, identities) for item in value]
     if not isinstance(value, dict):
         return value
+
+    if _MODEL_REF_KEY in value:
+        unknown = set(value) - {_MODEL_REF_KEY}
+        if unknown:
+            raise ValueError(
+                "Unexpected model-reference fields: "
+                + ", ".join(sorted(unknown))
+            )
+        identity = str(value[_MODEL_REF_KEY] or "")
+        try:
+            return identities[identity]
+        except KeyError as exc:
+            raise ValueError(
+                f"Model reference '{identity}' appears before its owned object"
+            ) from exc
 
     if "__path__" in value:
         unknown = set(value) - {"__path__"}
@@ -55,11 +111,16 @@ def decode_model(value: Any) -> Any:
             raise ValueError(
                 f"Unexpected tuple fields: {', '.join(sorted(unknown))}"
             )
-        return tuple(decode_model(item) for item in value["__tuple__"])
+        return tuple(
+            _decode_model(item, identities) for item in value["__tuple__"]
+        )
 
     if "__type__" in value:
         type_name = value["__type__"]
         cls = model_class(type_name)
+        local_identities = (
+            {} if bool(getattr(cls, "__model_identity_scope__", False)) else identities
+        )
         if is_dataclass(cls):
             accepted = {
                 field_info.name
@@ -76,10 +137,34 @@ def decode_model(value: Any) -> Any:
             accepted = None
 
         kwargs = {
-            key: decode_model(item)
+            key: _decode_model(item, local_identities)
             for key, item in value.items()
             if key != "__type__" and (accepted is None or key in accepted)
         }
-        return cls(**kwargs)
+        result = cls(**kwargs)
+        identity = _identity_of(result)
+        if identity:
+            existing = local_identities.get(identity)
+            if existing is not None and existing is not result:
+                raise ValueError(
+                    f"Duplicate decoded model identity '{identity}'"
+                )
+            local_identities[identity] = result
+        return result
 
-    return {key: decode_model(item) for key, item in value.items()}
+    return {
+        key: _decode_model(item, identities)
+        for key, item in value.items()
+    }
+
+
+def _identity_of(value: Any) -> str:
+    """Return the explicit graph identity for opt-in model objects."""
+
+    if not bool(getattr(type(value), "__model_identity__", False)):
+        return ""
+    return str(getattr(value, "id", "") or "")
+
+
+def _starts_identity_scope(value: Any) -> bool:
+    return bool(getattr(type(value), "__model_identity_scope__", False))

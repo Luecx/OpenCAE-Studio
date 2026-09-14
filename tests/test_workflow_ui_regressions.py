@@ -1,24 +1,36 @@
 """Regression coverage for workflow ribbon, context menu and dialog behavior."""
 
 import ast
+import os
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
-from PyQt6.QtCore import QPointF, QTimer, Qt
-from PyQt6.QtWidgets import QApplication, QDialog
+from PyQt6.QtCore import QPointF, Qt
 
-from opencae.deck_formats.selection import builtin_profile_id
-from opencae.model.core import EntityRef
-from opencae.model.entities.analysis import Analysis, AnalysisStep
-from opencae.solvers.registry import available_solvers
-from opencae.ui.core.icons.factory import _ICON_MAP, _x_icon, make_icon
-from opencae.ui.core.icons.kinds import IconKind
-from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
 from opencae.ui.viewport.click_gesture import ClickGestureTracker
 from opencae.ui.visibility_state import VisibilityState
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _run_isolated_qt(script: str) -> None:
+    env = dict(os.environ)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    env["PYVISTA_OFF_SCREEN"] = "true"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout
 
 
 def _ribbon_groups(relative_path):
@@ -123,34 +135,48 @@ def test_context_menu_keeps_unavailable_actions_visible_but_disabled():
 
 
 def test_delete_uses_the_canonical_close_glyph():
-    app = QApplication.instance() or QApplication([])
-    size = 32
-    actual = make_icon(IconKind.DELETE, size).pixmap(size, size).toImage()
-    expected = _x_icon(size).pixmap(size, size).toImage()
+    _run_isolated_qt(r'''
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.core.icons.factory import _ICON_MAP, _x_icon, make_icon
+from opencae.ui.core.icons.kinds import IconKind
 
-    assert actual == expected
-    assert IconKind.DELETE not in _ICON_MAP
+app = QApplication.instance() or QApplication([])
+size = 32
+actual = make_icon(IconKind.DELETE, size).pixmap(size, size).toImage()
+expected = _x_icon(size).pixmap(size, size).toImage()
+assert actual == expected
+assert IconKind.DELETE not in _ICON_MAP
+''')
 
 
 def test_analysis_dialog_remains_usable_after_exec_returns():
-    app = QApplication.instance() or QApplication([])
-    step = AnalysisStep(name="Static", step_type="Linear Static")
-    analysis = Analysis(
-        name="Analysis-1",
-        step_refs=[EntityRef.of(step, "AnalysisStep")],
-    )
-    settings = SimpleNamespace(deck_profiles={})
-    dialog = AnalysisDialog(
-        analysis,
-        [step],
-        available_solvers(),
-        settings,
-        existing_names=(),
-    )
+    _run_isolated_qt(r'''
+from types import SimpleNamespace
+from PyQt6.QtCore import QTimer
+from PyQt6.QtWidgets import QApplication, QDialog
+from opencae.deck_formats.selection import builtin_profile_id
+from opencae.model.core import EntityRef
+from opencae.model.entities.analysis import Analysis, AnalysisStep
+from opencae.solvers.registry import available_solvers
+from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
 
+app = QApplication.instance() or QApplication([])
+step = AnalysisStep(name="Static", step_type="Linear Static")
+analysis = Analysis(
+    name="Analysis-1",
+    step_refs=[EntityRef.of(step, "AnalysisStep")],
+)
+settings = SimpleNamespace(deck_profiles={})
+dialog = AnalysisDialog(
+    analysis,
+    [step],
+    available_solvers(),
+    settings,
+    existing_names=(),
+)
+try:
     QTimer.singleShot(0, dialog.accept)
     result = dialog.exec()
-
     assert result == QDialog.DialogCode.Accepted
     assert dialog.validate()
     candidate = dialog.result()
@@ -158,8 +184,11 @@ def test_analysis_dialog_remains_usable_after_exec_returns():
     assert candidate.solver == "FEMaster"
     assert candidate.deck_profile_id == builtin_profile_id("FEMaster")
     assert [reference.entity_id for reference in candidate.step_refs] == [step.id]
+finally:
+    dialog.close()
     dialog.deleteLater()
     app.processEvents()
+''')
 
 
 class _MouseEvent:

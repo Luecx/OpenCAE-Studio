@@ -16,10 +16,17 @@ def extract_mesh(gmsh, part_id: str, dimension: int, fingerprint: str) -> MeshSn
     points = np.asarray(coords, dtype=float).reshape(-1, 3)
     lookup = {int(tag): index for index, tag in enumerate(node_tags)}
     blocks: list[MeshBlock] = []
+    quality_tags: list[int] = []
     element_types, element_tag_blocks, node_blocks = gmsh.model.mesh.getElements(-1, -1)
-    all_tags: list[int] = []
-    for element_type, element_tags, node_block in zip(element_types, element_tag_blocks, node_blocks):
-        name, dim, order, num_nodes, _, num_primary = gmsh.model.mesh.getElementProperties(int(element_type))
+    for element_type, element_tags, node_block in zip(
+        element_types,
+        element_tag_blocks,
+        node_blocks,
+    ):
+        name, dim, order, num_nodes, _, num_primary = gmsh.model.mesh.getElementProperties(
+            int(element_type)
+        )
+        tags = np.asarray(element_tags, dtype=np.int64)
         raw = np.asarray(node_block, dtype=np.int64).reshape(-1, num_nodes)
         connectivity = np.asarray(
             [[lookup[int(tag)] for tag in row] for row in raw],
@@ -33,12 +40,23 @@ def extract_mesh(gmsh, part_id: str, dimension: int, fingerprint: str) -> MeshSn
                 order=order,
                 primary_nodes=num_primary,
                 connectivity=connectivity,
-                element_tags=np.asarray(element_tags, dtype=np.int64),
+                element_tags=tags,
             )
         )
-    for tags in gmsh.model.mesh.getElements(-1, -1)[1]:
-        all_tags.extend(int(tag) for tag in tags)
-    qualities = _qualities(gmsh, all_tags)
+        # gmsh.model.mesh.generate(3) also creates the boundary surface and edge
+        # elements required to describe the CAD topology. Those lower-dimensional
+        # elements are useful for entity membership, but they are not FE elements
+        # persisted by OpenCAE and some Gmsh quality measures (notably minSICN)
+        # do not support 2-node line element type 1. Keep quality statistics aligned
+        # with the top-dimensional FE payload only.
+        if int(dim) == int(dimension):
+            quality_tags.extend(int(tag) for tag in tags)
+
+    qualities = (
+        _qualities(gmsh, quality_tags)
+        if int(dimension) >= 2
+        else None
+    )
     entity_nodes, entity_elements = extract_entity_membership(gmsh)
     return MeshSnapshot(
         part_id=part_id,

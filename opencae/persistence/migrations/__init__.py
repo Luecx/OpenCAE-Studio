@@ -3,9 +3,13 @@
 from copy import deepcopy
 
 from .v23_to_v24 import migrate_v23_to_v24
+from .v24_to_v25 import migrate_v24_to_v25
 
 
-_MIGRATIONS = {23: migrate_v23_to_v24}
+_MIGRATIONS = {
+    23: migrate_v23_to_v24,
+    24: migrate_v24_to_v25,
+}
 
 
 def migrate_project_data(data, source_version: int, target_version: int):
