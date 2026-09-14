@@ -11,17 +11,14 @@ import sys
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QWidget
+from PyQt6.QtWidgets import QApplication
 
 from opencae.ui.viewport.view_cube import ViewCube
-from opencae.ui.viewport.view_cube_camera import ViewCubeCameraController
 from opencae.ui.viewport.view_cube_polyhedron import (
     beveled_cube_faces,
     camera_view_matrix,
     view_rotation,
 )
-from opencae.ui.viewport.viewport_canvas import ViewportCanvas
 
 ROOT = Path(__file__).resolve().parents[1]
 _QT_APPLICATION: QApplication | None = None
@@ -216,9 +213,15 @@ def test_camera_basis_maps_conventional_cae_views() -> None:
     assert right[2] == (1.0, 0.0, 0.0)
 
 
-class _Camera:
-    """Minimal observable camera used to verify the production binding."""
+def test_camera_controller_tracks_and_animates_face_normals() -> None:
+    """Synchronize free rotation and smoothly preserve distance on cube clicks."""
+    _run_isolated_qt(r'''
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
+from opencae.ui.viewport.view_cube import ViewCube
+from opencae.ui.viewport.view_cube_camera import ViewCubeCameraController
 
+class Camera:
     def __init__(self):
         self.position = (1.0, 1.0, 1.0)
         self.focal_point = (0.0, 0.0, 0.0)
@@ -226,40 +229,30 @@ class _Camera:
         self.callback = None
 
     def AddObserver(self, _event, callback):
-        """Store the camera callback and return a deterministic observer id."""
         self.callback = callback
         return 17
 
     def RemoveObserver(self, observer_id):
-        """Record successful observer removal."""
         assert observer_id == 17
         self.callback = None
 
-
-class _Plotter:
-    """Minimal plotter recording camera direction application side effects."""
-
+class Plotter:
     def __init__(self):
-        self.camera = _Camera()
+        self.camera = Camera()
         self.clipping_resets = 0
         self.renders = 0
 
     def reset_camera_clipping_range(self):
-        """Record clipping-range synchronization."""
         self.clipping_resets += 1
 
     def render(self):
-        """Record the one requested viewport frame."""
         self.renders += 1
 
-
-def test_camera_controller_tracks_and_animates_face_normals() -> None:
-    """Synchronize free rotation and smoothly preserve distance on cube clicks."""
-    _application()
-    cube = ViewCube()
-    plotter = _Plotter()
-    controller = ViewCubeCameraController(plotter, cube)
-
+app = QApplication.instance() or QApplication([])
+cube = ViewCube()
+plotter = Plotter()
+controller = ViewCubeCameraController(plotter, cube)
+try:
     plotter.camera.position = (4.0, 0.0, 0.0)
     plotter.camera.up = (0.0, 0.0, 1.0)
     plotter.camera.callback()
@@ -273,18 +266,34 @@ def test_camera_controller_tracks_and_animates_face_normals() -> None:
     assert plotter.renders > 1
     controller.close()
     assert plotter.camera.callback is None
+finally:
+    controller.close()
+    cube.close()
+    cube.deleteLater()
+    app.processEvents()
+''')
 
 
 def test_canvas_places_opaque_cube_on_render_surface() -> None:
     """Keep the cube inside the VTK surface with native-compatible composition."""
-    application = _application()
-    canvas = ViewportCanvas()
-    render_surface = QWidget(canvas)
+    _run_isolated_qt(r'''
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QWidget
+from opencae.ui.viewport.viewport_canvas import ViewportCanvas
 
+app = QApplication.instance() or QApplication([])
+canvas = ViewportCanvas()
+render_surface = QWidget(canvas)
+try:
     canvas.set_render_widget(render_surface)
     canvas.resize(640, 420)
-    application.processEvents()
+    app.processEvents()
 
     assert canvas.cube.parentWidget() is render_surface
     assert canvas.cube.testAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
     assert not canvas.cube.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+finally:
+    canvas.close()
+    canvas.deleteLater()
+    app.processEvents()
+''')
