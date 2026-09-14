@@ -154,8 +154,14 @@ class SketchFeatureDialog(QDialog):
         self.toolbar.addSeparator()
         undo = self.toolbar.addAction(make_icon(IconKind.UNDO, 18), "Undo")
         redo = self.toolbar.addAction(make_icon(IconKind.REDO, 18), "Redo")
-        undo.triggered.connect(self.canvas.undo)
-        redo.triggered.connect(self.canvas.redo)
+        # The toolbar is built before the canvas. Resolve the canvas lazily when
+        # the action is triggered instead of dereferencing it during construction.
+        undo.triggered.connect(
+            lambda _checked=False: self.canvas.undo()
+        )
+        redo.triggered.connect(
+            lambda _checked=False: self.canvas.redo()
+        )
         self.toolbar.addSeparator()
         for tool, label in (
             ("Point", "Point"),
