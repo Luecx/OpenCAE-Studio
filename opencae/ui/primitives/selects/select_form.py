@@ -6,16 +6,13 @@ from PyQt6.QtCore import QPoint, QPointF, QTimer, Qt
 from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QComboBox, QWidget
 
+from opencae.ui.core.metrics import COMBO_POPUP_EXTRA_HEIGHT, COMBO_POPUP_ROW_HEIGHT
+from opencae.ui.core.theme import PALETTE
 from opencae.ui.primitives.inputs.geometry import apply_primary_input_geometry
-
-_POPUP_ROW_HEIGHT = 24
-_POPUP_EXTRA_HEIGHT = 8
-_CHEVRON_HALF_WIDTH = 6
-_CHEVRON_HALF_HEIGHT = 3
 
 
 class SelectForm(QComboBox):
-    """Canonical primary-height select used by forms and reusable composites."""
+    """Canonical primary combo whose popup shows complete rows when possible."""
 
     def __init__(
         self,
@@ -26,79 +23,91 @@ class SelectForm(QComboBox):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumWidth(0)
+        apply_primary_input_geometry(self)
+        self.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.setMinimumContentsLength(16)
         if object_name:
             self.setObjectName(object_name)
-        apply_primary_input_geometry(self)
         if items:
             self.addItems(tuple(str(item) for item in items))
         if current is not None:
             self.setCurrentText(str(current))
 
     def showPopup(self) -> None:
+        """Open the popup sized to complete rows instead of native defaults."""
         view = self.view()
-        count = self.count()
-        if count:
-            visible_rows = min(count, 20)
-            view.setMinimumHeight(
-                visible_rows * _POPUP_ROW_HEIGHT + _POPUP_EXTRA_HEIGHT
-            )
-            view.setVerticalScrollBarPolicy(
-                Qt.ScrollBarPolicy.ScrollBarAsNeeded
-                if count > visible_rows
-                else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-            )
+        view.setMinimumHeight(0)
+        view.setMaximumHeight(16_777_215)
+        view.setSpacing(0)
+        self.setMaxVisibleItems(max(1, self.count()))
         super().showPopup()
-        QTimer.singleShot(0, self._match_popup_width)
+        self._fit_popup_to_contents()
+        QTimer.singleShot(0, self._fit_popup_to_contents)
+
+    def _fit_popup_to_contents(self) -> None:
+        count = self.count()
+        if count <= 0:
+            return
+
+        view = self.view()
+        content_height = 2 * view.frameWidth() + COMBO_POPUP_EXTRA_HEIGHT
+        for row in range(count):
+            hinted = view.sizeHintForRow(row)
+            content_height += max(
+                COMBO_POPUP_ROW_HEIGHT,
+                hinted if hinted > 0 else 0,
+            )
+
+        screen = self.screen()
+        if screen is None:
+            return
+        available = screen.availableGeometry()
+        top = self.mapToGlobal(QPoint(0, 0)).y()
+        bottom = self.mapToGlobal(QPoint(0, self.height())).y()
+        room_below = max(0, available.bottom() - bottom - 6)
+        room_above = max(0, top - available.top() - 6)
+        available_height = max(room_below, room_above)
+        if available_height <= 0:
+            return
+
+        target_height = min(content_height, available_height)
+        complete = target_height >= content_height
+        view.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            if complete
+            else Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        view.setMinimumHeight(target_height)
+        view.setMaximumHeight(target_height)
+
+        popup = view.window()
+        if popup is None or popup is self.window():
+            return
+        chrome = max(0, popup.height() - view.height())
+        popup_height = target_height + chrome
+        popup.setMinimumHeight(popup_height)
+        popup.setMaximumHeight(popup_height)
+        popup.resize(max(popup.width(), self.width()), popup_height)
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
-        rect = self.rect()
-        center_x = rect.right() - 12
-        center_y = rect.center().y()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.setPen(QPen(self._chevron_color(), 1.5))
-        points = (
-            QPointF(
-                center_x - _CHEVRON_HALF_WIDTH,
-                center_y - _CHEVRON_HALF_HEIGHT,
-            ),
-            QPointF(center_x, center_y + _CHEVRON_HALF_HEIGHT),
-            QPointF(
-                center_x + _CHEVRON_HALF_WIDTH,
-                center_y - _CHEVRON_HALF_HEIGHT,
-            ),
+        color = PALETTE["accent"] if self.hasFocus() else PALETTE["muted"]
+        painter.setPen(
+            QPen(
+                QColor(color),
+                1.7,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+            )
         )
-        painter.drawPolyline(*points)
+        x = self.width() - 14.0
+        y = self.height() / 2.0 - 1.0
+        painter.drawLine(QPointF(x - 4.0, y - 2.0), QPointF(x, y + 2.0))
+        painter.drawLine(QPointF(x, y + 2.0), QPointF(x + 4.0, y - 2.0))
         painter.end()
-
-    def _chevron_color(self) -> QColor:
-        palette = self.palette()
-        return QColor(
-            palette.color(
-                palette.ColorGroup.Disabled
-                if not self.isEnabled()
-                else palette.ColorGroup.Active,
-                palette.ColorRole.Text,
-            )
-        )
-
-    def _match_popup_width(self) -> None:
-        view = self.view()
-        window = view.window()
-        if window is None:
-            return
-        desired_width = max(self.width(), view.sizeHintForColumn(0) + 32)
-        global_pos = self.mapToGlobal(QPoint(0, self.height()))
-        screen = self.screen()
-        if screen is not None:
-            available = screen.availableGeometry()
-            desired_width = min(desired_width, available.width())
-            global_pos.setX(
-                min(
-                    max(global_pos.x(), available.left()),
-                    available.right() - desired_width + 1,
-                )
-            )
-        window.resize(desired_width, window.height())
-        window.move(global_pos)
