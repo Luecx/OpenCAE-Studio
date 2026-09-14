@@ -4,14 +4,33 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from PyQt6.QtWidgets import QCheckBox, QDoubleSpinBox, QLineEdit, QSpinBox, QWidget
 
-from opencae.ui.templates import NumericUnitInput, apply_primary_control_height
+from opencae.ui.primitives.inputs import (
+    BooleanInput,
+    ChoiceInput,
+    IntegerInput,
+    TextInput,
+)
+from opencae.ui.templates import NumericUnitInput
 
 from .file_path import FilePathEditor
-from .widgets import ChevronComboBox, ReferenceSelector
+from .widgets import ReferenceSelector
+
+
+class FieldKind(StrEnum):
+    """Supported primitive/composite editor families for declarative fields."""
+
+    TEXT = "text"
+    CHOICE = "choice"
+    REFERENCE = "reference"
+    INTEGER = "int"
+    FLOAT = "float"
+    BOOLEAN = "bool"
+    FILE = "file"
 
 
 @dataclass(frozen=True)
@@ -20,7 +39,7 @@ class FieldSpec:
 
     key: str
     label: str
-    kind: str = "text"
+    kind: FieldKind | str = FieldKind.TEXT
     default: Any = ""
     choices: tuple[Any, ...] = ()
     minimum: float = -1e12
@@ -35,28 +54,26 @@ class FieldSpec:
 
 def create_editor(spec: FieldSpec) -> QWidget:
     """Create the canonical editor for one declarative field specification."""
-    if spec.kind == "choice":
-        widget = ChevronComboBox()
-        widget.addItems(spec.choices)
+    kind = FieldKind(spec.kind)
+    if kind is FieldKind.CHOICE:
+        widget = ChoiceInput()
+        widget.addItems(str(value) for value in spec.choices)
         widget.setCurrentText(str(spec.default))
-        apply_primary_control_height(widget)
-    elif spec.kind == "reference":
+    elif kind is FieldKind.REFERENCE:
         widget = ReferenceSelector(
             spec.choices,
             spec.default,
             spec.create_callback,
             spec.pick_callback,
         )
-    elif spec.kind == "int":
-        widget = QSpinBox()
+    elif kind is FieldKind.INTEGER:
         lower = max(-2_147_483_648, int(spec.minimum))
         upper = min(2_147_483_647, int(spec.maximum))
-        widget.setRange(lower, upper)
-        widget.setValue(max(lower, min(upper, int(spec.default))))
+        value = max(lower, min(upper, int(spec.default)))
+        widget = IntegerInput(value, minimum=lower, maximum=upper)
         if spec.suffix:
             widget.setSuffix(spec.suffix)
-        apply_primary_control_height(widget)
-    elif spec.kind == "float":
+    elif kind is FieldKind.FLOAT:
         # Units are display metadata, so keep them in the same fixed right-hand
         # segment used by Material/Profile/Section numeric controls.
         widget = NumericUnitInput(
@@ -66,15 +83,12 @@ def create_editor(spec: FieldSpec) -> QWidget:
             maximum=spec.maximum,
             decimals=spec.decimals,
         )
-    elif spec.kind == "bool":
-        widget = QCheckBox()
-        widget.setChecked(bool(spec.default))
-    elif spec.kind == "file":
+    elif kind is FieldKind.BOOLEAN:
+        widget = BooleanInput(checked=bool(spec.default))
+    elif kind is FieldKind.FILE:
         widget = FilePathEditor(str(spec.default), spec.file_filter)
     else:
-        widget = QLineEdit(str(spec.default))
-        widget.setReadOnly(spec.read_only)
-        apply_primary_control_height(widget)
+        widget = TextInput(str(spec.default), read_only=spec.read_only)
 
     widget.setMinimumWidth(0)
     return widget
@@ -82,7 +96,7 @@ def create_editor(spec: FieldSpec) -> QWidget:
 
 def editor_value(widget: QWidget):
     """Extract the normalized Python value from a generic field editor."""
-    if isinstance(widget, ChevronComboBox):
+    if isinstance(widget, ChoiceInput):
         return widget.currentText()
     if isinstance(widget, ReferenceSelector):
         return widget.currentValue()
