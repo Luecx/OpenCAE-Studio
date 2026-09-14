@@ -8,7 +8,6 @@ from PyQt6.QtCore import (
     QElapsedTimer,
     QPointF,
     QRectF,
-    QSize,
     QSignalBlocker,
     Qt,
     QTimer,
@@ -17,21 +16,21 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QPolygonF
 from PyQt6.QtWidgets import (
     QButtonGroup,
-    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
-    QLabel,
-    QRadioButton,
     QSizePolicy,
-    QSlider,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from opencae.results.navigation import display_field, fields_for, frame_keys
 from opencae.ui.core.theme import PALETTE
-from opencae.ui.core.widgets import ChevronComboBox
+from opencae.ui.primitives.buttons import ButtonTimeManagerMedia
+from opencae.ui.primitives.inputs import InputTimeManagerSpeed
+from opencae.ui.primitives.labels import LabelBody, LabelTimeManagerHeading
+from opencae.ui.primitives.radios import RadioForm
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.primitives.sliders import SliderHorizontal
 from .time_manager_plot import TimeManagerPlot
 
 
@@ -176,9 +175,8 @@ class TimeManagerPanel(QWidget):
         mode_layout = QHBoxLayout(mode_row)
         mode_layout.setContentsMargins(0, 0, 0, 0)
         mode_layout.setSpacing(8)
-        self.current_frame = QRadioButton("Current frame")
-        self.across_frames = QRadioButton("Across frames")
-        self.across_frames.setChecked(True)
+        self.current_frame = RadioForm("Current frame")
+        self.across_frames = RadioForm("Across frames", checked=True)
         self.mode_group = QButtonGroup(self)
         self.mode_group.addButton(self.current_frame)
         self.mode_group.addButton(self.across_frames)
@@ -198,7 +196,7 @@ class TimeManagerPanel(QWidget):
 
         side.addSpacing(1)
         side.addWidget(self._heading("Current step"))
-        self.step = ChevronComboBox()
+        self.step = SelectForm()
         self.step.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
@@ -214,8 +212,9 @@ class TimeManagerPanel(QWidget):
         self.stop_button = self._media_button("stop", "Stop")
         self.next_button = self._media_button("next", "Next frame")
         self.last_button = self._media_button("last", "Last frame")
-        self.loop_button = self._media_button("loop", "Loop playback")
-        self.loop_button.setCheckable(True)
+        self.loop_button = self._media_button(
+            "loop", "Loop playback", checkable=True
+        )
 
         self.controls_row = QWidget()
         controls_layout = QHBoxLayout(self.controls_row)
@@ -256,16 +255,13 @@ class TimeManagerPanel(QWidget):
         speed_layout = QHBoxLayout(speed_row)
         speed_layout.setContentsMargins(0, 0, 0, 0)
         speed_layout.setSpacing(8)
-        self.speed_slider = QSlider(Qt.Orientation.Horizontal)
-        self.speed_slider.setRange(25, 400)
-        self.speed_slider.setValue(100)
-        self.speed = QDoubleSpinBox()
-        self.speed.setRange(0.25, 4.0)
-        self.speed.setSingleStep(0.25)
-        self.speed.setDecimals(2)
-        self.speed.setValue(1.0)
-        self.speed.setSuffix(" x")
-        self.speed.setFixedWidth(76)
+        self.speed_slider = SliderHorizontal(
+            minimum=25,
+            maximum=400,
+            value=100,
+            parent=speed_row,
+        )
+        self.speed = InputTimeManagerSpeed(parent=speed_row)
         self.speed_slider.valueChanged.connect(self._speed_slider_changed)
         self.speed.valueChanged.connect(self._speed_spin_changed)
         speed_layout.addWidget(self.speed_slider, 1)
@@ -276,9 +272,9 @@ class TimeManagerPanel(QWidget):
 
         # Keep compatibility labels as state holders for callers/tests, but the
         # visible frame summary is hosted in the native lower dock tab strip.
-        self.total_frames = QLabel("0", self)
+        self.total_frames = LabelBody("0", self)
         self.total_frames.hide()
-        self.current_frame_label = QLabel("—", self)
+        self.current_frame_label = LabelBody("—", self)
         self.current_frame_label.hide()
 
         content = QWidget()
@@ -292,24 +288,15 @@ class TimeManagerPanel(QWidget):
 
     @staticmethod
     def _heading(text):
-        label = QLabel(text)
-        label.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-        )
-        label.setStyleSheet(
-            f"color:{PALETTE['muted']};font-weight:600;font-size:9pt;"
-        )
-        return label
+        return LabelTimeManagerHeading(text)
 
     @staticmethod
-    def _media_button(kind, tooltip):
-        button = QToolButton()
-        button.setObjectName("TimeManagerControl")
-        button.setIcon(_playback_icon(kind))
-        button.setIconSize(QSize(18, 18))
-        button.setToolTip(tooltip)
-        button.setFixedSize(28, 28)
-        return button
+    def _media_button(kind, tooltip, *, checkable=False):
+        return ButtonTimeManagerMedia(
+            icon=_playback_icon(kind),
+            tooltip=tooltip,
+            checkable=checkable,
+        )
 
     def set_display_state(self, result, field, options):
         """Consume the authoritative Results-ribbon display state."""
