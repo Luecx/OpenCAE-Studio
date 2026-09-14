@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 _SKETCH_DIALOG_SMOKE = r'''
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QWidget
 
 import opencae.ui.sketcher.dialog as dialog_module
@@ -40,6 +41,8 @@ try:
     assert dialog.canvas.tool == "Select"
     assert dialog.mode_combo.currentText() == "Extrusion"
     assert not dialog.canvas.show_revolve_axis
+    assert dialog.canvas.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert dialog.canvas.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
 
     for tool in (
         "Select",
@@ -59,7 +62,7 @@ try:
 
     constraint_kinds = {
         str(action.property("constraintKind"))
-        for action in dialog.toolbar.actions()
+        for action in dialog._constraint_actions.values()
         if action.property("constraintKind")
     }
     assert {
@@ -77,6 +80,28 @@ try:
         "Symmetry",
         "Fixed",
     } <= constraint_kinds
+
+    dimension_kinds = {
+        str(action.property("dimensionKind"))
+        for action in dialog._dimension_actions.values()
+    }
+    assert {
+        "Distance",
+        "DistanceX",
+        "DistanceY",
+        "Angle",
+        "Radius",
+        "Diameter",
+    } <= dimension_kinds
+    assert dialog.dimension_action.menu() is not None
+    assert not dialog.dimension_action.icon().isNull()
+    assert not dialog.grid_action.icon().isNull()
+    assert not dialog.construction_action.icon().isNull()
+
+    # The narrow state must become exactly the three semantic group buttons.
+    assert dialog.ribbon._target_collapsed_groups(700) == frozenset(
+        {"PRIMITIVES", "CONSTRAINTS", "CONSTRUCTION/GRID"}
+    )
 
     dialog.mode_combo.setCurrentText("Revolve")
     assert dialog.canvas.show_revolve_axis
@@ -102,14 +127,39 @@ kinds = (
     IconKind.SKETCH_RECTANGLE,
     IconKind.SKETCH_CIRCLE,
     IconKind.SKETCH_ARC,
+    IconKind.SKETCH_ARC_CENTER,
+    IconKind.SKETCH_ARC_3POINT,
     IconKind.SKETCH_ELLIPSE,
     IconKind.SKETCH_SPLINE,
     IconKind.SKETCH_SLOT,
+    IconKind.SKETCH_PRIMITIVES_MORE,
     IconKind.SKETCH_CONSTRUCTION,
+    IconKind.SKETCH_GRID,
+    IconKind.SKETCH_SNAP,
     IconKind.SKETCH_CONSTRAINT,
+    IconKind.SKETCH_CONSTRAINT_COINCIDENT,
+    IconKind.SKETCH_CONSTRAINT_HORIZONTAL,
+    IconKind.SKETCH_CONSTRAINT_VERTICAL,
+    IconKind.SKETCH_CONSTRAINT_PARALLEL,
+    IconKind.SKETCH_CONSTRAINT_PERPENDICULAR,
+    IconKind.SKETCH_CONSTRAINT_TANGENT,
+    IconKind.SKETCH_CONSTRAINT_EQUAL,
+    IconKind.SKETCH_CONSTRAINT_CONCENTRIC,
+    IconKind.SKETCH_CONSTRAINT_MIDPOINT,
+    IconKind.SKETCH_CONSTRAINT_COLLINEAR,
+    IconKind.SKETCH_CONSTRAINT_POINT_ON,
+    IconKind.SKETCH_CONSTRAINT_SYMMETRY,
+    IconKind.SKETCH_CONSTRAINT_FIXED,
+    IconKind.SKETCH_CONSTRAINT_MORE,
     IconKind.SKETCH_DIMENSION,
+    IconKind.SKETCH_DIMENSION_DISTANCE,
+    IconKind.SKETCH_DIMENSION_HORIZONTAL,
+    IconKind.SKETCH_DIMENSION_VERTICAL,
+    IconKind.SKETCH_DIMENSION_ANGLE,
+    IconKind.SKETCH_DIMENSION_RADIUS,
+    IconKind.SKETCH_DIMENSION_DIAMETER,
 )
-assert all(not make_icon(kind, 24).isNull() for kind in kinds)
+assert all(not make_icon(kind, 42).isNull() for kind in kinds)
 '''
 
 
@@ -132,7 +182,7 @@ def _run_isolated_qt(script: str) -> None:
     assert result.returncode == 0, result.stdout
 
 
-def test_sketch_dialog_constructs_with_complete_toolbar_and_mode_switch():
+def test_sketch_dialog_constructs_with_responsive_ribbon_and_mode_switch():
     _run_isolated_qt(_SKETCH_DIALOG_SMOKE)
 
 
