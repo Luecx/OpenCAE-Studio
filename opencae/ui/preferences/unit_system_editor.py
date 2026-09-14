@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QLineEdit, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
-from opencae.ui.core.widgets import ChevronComboBox
-from opencae.ui.templates import apply_primary_control_height, field_block, field_row
+from opencae.ui.primitives.inputs import InputFormText
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.templates import field_block, field_row
 from opencae.units.catalog import BASE_CATALOGS
 
 
@@ -20,8 +21,7 @@ class UnitSystemEditor(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(12)
 
-        self.name = QLineEdit()
-        apply_primary_control_height(self.name)
+        self.name = InputFormText()
         root.addWidget(field_block("Name", self.name))
 
         self.combos = {}
@@ -33,10 +33,8 @@ class UnitSystemEditor(QWidget):
             ("time", "Time"),
             ("temperature", "Temperature"),
         ):
-            combo = ChevronComboBox()
-            combo.setMinimumWidth(0)
+            combo = SelectForm()
             combo.addItems(tuple(BASE_CATALOGS[key]))
-            apply_primary_control_height(combo)
             self.combos[key] = combo
             (first_row if len(first_row) < 2 else second_row).append(field_block(label, combo))
         root.addWidget(field_row(*first_row))
