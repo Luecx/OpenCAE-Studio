@@ -38,15 +38,31 @@ from opencae.model.selection import (
 
 @pytest.fixture(scope="session", autouse=True)
 def qapplication():
-    """Keep one QApplication alive for every UI-bearing test in the full suite."""
+    """Keep one QApplication alive and destroy native GUI state deterministically."""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     try:
+        from PyQt6 import sip
+        from PyQt6.QtCore import QCoreApplication, QEvent
         from PyQt6.QtWidgets import QApplication
+        import pyvista as pv
     except ImportError:
         yield None
         return
+
     application = QApplication.instance() or QApplication([])
     yield application
+
+    # Every test already owns/cleans its top-level widgets below.  At session
+    # shutdown only native rendering registries and QApplication itself should
+    # remain.  Dispose them while Qt/VTK modules are still fully imported rather
+    # than relying on Python's undefined cross-module finalization order.
+    pv.close_all()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    application.processEvents()
+    application.quit()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    application.processEvents()
+    sip.delete(application)
 
 
 @pytest.fixture(autouse=True)
