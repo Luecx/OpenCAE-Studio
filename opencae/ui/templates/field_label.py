@@ -1,17 +1,7 @@
-"""Provides the canonical label used above editor controls and values."""
+"""Compatibility export for the canonical form-field label primitive."""
 
-from __future__ import annotations
+from opencae.ui.primitives.labels import LabelForm
 
-from opencae.ui.primitives.semantic_label import SemanticLabel
+FieldLabel = LabelForm
 
-
-class FieldLabel(SemanticLabel):
-    """Render the shared muted label used by label-above-control fields."""
-
-    def __init__(self, text: str, parent=None):
-        """Create one semantic editor-field label."""
-        super().__init__(
-            str(text),
-            object_name="PrimaryFieldLabel",
-            parent=parent,
-        )
+__all__ = ["FieldLabel"]
