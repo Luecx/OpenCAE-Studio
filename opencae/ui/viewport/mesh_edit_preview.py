@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from opencae.model.entities.fem import MeshEntityOrigin
 from opencae.ui.core.theme import PALETTE
 from .safe_operations import remove_actor
 
@@ -69,20 +70,20 @@ def show_connectivity_preview(viewport, mesh, node_ids, element_type=None) -> No
         except (KeyError, TypeError, ValueError):
             continue
 
-    # Element creation is driven by mesh-node picking. Keep every available
-    # node visible while the dialog is open, using the same neutral point color
-    # as CAD vertex picking. Selected connectivity is drawn larger and in the
-    # canonical selection color below so it remains visually distinct.
+    # Authored nodes are persistent scene actors. Only generated/imported nodes
+    # need this temporary point cloud while an element connectivity is picked.
     available_points = []
     try:
         available_points = [
             coordinates
-            for node_id, coordinates in zip(
+            for node_id, coordinates, origin in zip(
                 mesh.nodes.ids,
                 mesh.nodes.coordinates,
+                mesh.nodes.origins,
                 strict=True,
             )
             if int(node_id) not in selected_ids
+            and MeshEntityOrigin.coerce(origin) != MeshEntityOrigin.AUTHORED
         ]
     except (AttributeError, TypeError, ValueError):
         available_points = []

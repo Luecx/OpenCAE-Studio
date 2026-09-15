@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pyvista as pv
 
+from opencae.model.entities.fem import MeshEntityOrigin
 from opencae.ui.core.theme import PALETTE
 from .instance_transform import transform_points
 from .surface_shading import mesh_cell_colors
@@ -38,6 +39,46 @@ def build_grid(snapshot, instance=None):
     grid.point_data["node_id"] = snapshot.node_tags
     grid.cell_data["element_id"] = np.asarray(element_ids, dtype=np.int64)
     return grid
+
+
+def build_authored_node_grid(part, instance=None):
+    """Build a point-only dataset for nodes created explicitly by the user."""
+    nodes = tuple(
+        node
+        for node in part.mesh.nodes
+        if node.origin == MeshEntityOrigin.AUTHORED
+    )
+    if not nodes:
+        return None
+    points = np.asarray([node.coordinates for node in nodes], dtype=float)
+    if instance is not None:
+        points = transform_points(points, instance)
+    grid = pv.PolyData(points)
+    grid.point_data["node_id"] = np.asarray(
+        [node.id for node in nodes],
+        dtype=np.int64,
+    )
+    return grid
+
+
+def add_authored_nodes(plotter, part, instance=None):
+    """Render user-authored nodes persistently, independently of element cells."""
+    grid = build_authored_node_grid(part, instance)
+    if grid is None:
+        return None, None
+    prefix = f"{instance.name}-" if instance else ""
+    actor = plotter.add_points(
+        grid,
+        color=PALETTE["cad_vertex"],
+        point_size=11,
+        render_points_as_spheres=True,
+        lighting=False,
+        pickable=False,
+        name=f"{prefix}authored-mesh-nodes",
+        reset_camera=False,
+        render=False,
+    )
+    return actor, grid
 
 
 def add_mesh(plotter, snapshot, instance=None, *, hidden_elements=()):

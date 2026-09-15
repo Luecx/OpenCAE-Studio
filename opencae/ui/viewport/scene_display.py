@@ -63,6 +63,8 @@ class SceneDisplayMixin:
             self.face_actors
             or self.mesh_actor
             or self.mesh_actors
+            or getattr(self, "authored_node_actor", None)
+            or getattr(self, "authored_node_actors", ())
             or self.result_actor
         ):
             self.owner.plotter.view_isometric()

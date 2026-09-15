@@ -44,14 +44,21 @@ class PointSelectionState:
         context = self.owner.context_pick
         if context.active and not context.accepts(SelectableKind.MESH_NODE):
             return []
+        scene = self.owner.scene
+        grids = [
+            (None, scene.mesh_grid),
+            (None, getattr(scene, "authored_node_grid", None)),
+            *scene.mesh_grids.items(),
+            *getattr(scene, "authored_node_grids", {}).items(),
+        ]
         result = []
-        for instance_id, grid in [(None, self.owner.scene.mesh_grid), *self.owner.scene.mesh_grids.items()]:
+        for instance_id, grid in grids:
             if grid is None or not grid.n_points:
                 continue
             index = int(grid.find_closest_point(point))
             ids = np.asarray(grid.point_data.get("node_id", np.arange(grid.n_points)))
             node_id = int(ids[index])
-            instance = self.owner.scene.instance_for(instance_id) if instance_id else None
+            instance = scene.instance_for(instance_id) if instance_id else None
             label = f"Node-{node_id}"
             if instance:
                 label = f"{instance.name}.{label}"
