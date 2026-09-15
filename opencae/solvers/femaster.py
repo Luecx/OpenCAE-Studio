@@ -54,9 +54,10 @@ class FEMasterAdapter(SolverAdapter):
         ]
 
     def result_candidates(self, output_base: Path) -> list[Path]:
+        """Prefer native RES; FRD remains an independent fallback result source."""
         return [
-            output_base.with_suffix(".frd"),
             output_base.with_suffix(".res"),
+            output_base.with_suffix(".frd"),
         ]
 
 
