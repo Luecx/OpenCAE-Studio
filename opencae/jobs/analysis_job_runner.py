@@ -6,7 +6,6 @@ from pathlib import Path
 from PyQt6.QtCore import QObject, QProcess, QTimer, pyqtSignal
 
 from opencae.controllers.background_task import BackgroundTask
-from opencae.persistence.project_io import save_project
 
 
 _PHASES = (
@@ -68,7 +67,7 @@ class AnalysisJobRunner(QObject):
         task.start()
 
     def _prepare(self):
-        """Generate the deck and persist the immutable run snapshot off the GUI thread."""
+        """Generate the immutable solver deck off the GUI thread."""
         analysis = self.project.resolve(self.analysis_id)
         self.directory.mkdir(parents=True, exist_ok=True)
         extension = str(getattr(self.adapter, "deck_extension", ".inp"))
@@ -79,14 +78,6 @@ class AnalysisJobRunner(QObject):
             profile=self.deck_profile,
         )
         deck_path.write_text(text, encoding=_profile_encoding(self.deck_profile))
-
-        # A native FEMaster RES intentionally contains result data, not OpenCAE
-        # model semantics. Save the exact submitted model next to results.res so
-        # profiles, sections, orientations and the persisted mesh are available
-        # when that RES is opened later without the original project.
-        candidates = tuple(self.adapter.result_candidates(self.output_base))
-        if any(Path(candidate).suffix.lower() == ".res" for candidate in candidates):
-            save_project(self.project, self.output_base.with_suffix(".ocae"))
 
         command = self.adapter.build_command(
             self.executable,
@@ -170,7 +161,15 @@ class AnalysisJobRunner(QObject):
         self.process = None
         if process is not None:
             process.deleteLater()
-        self._finish(130 if self._stopping else int(code))
+        exit_code = 130 if self._stopping else int(code)
+        if exit_code == 0:
+            try:
+                self.progress.emit(0.98, "Finalizing results")
+                self.adapter.postprocess_results(self.project, self.output_base)
+            except Exception as exc:
+                self.output.emit(f"\nResult post-processing failed: {exc}\n")
+                exit_code = 1
+        self._finish(exit_code)
 
     def _process_error(self, error):
         process = self.process
