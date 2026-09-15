@@ -1,20 +1,15 @@
 """Explicit remesh-decision dialog for mixed-origin meshes."""
 
-from PyQt6.QtWidgets import QCheckBox, QDialog
+from PyQt6.QtWidgets import QDialog
 
 from opencae.model.mesh import (
     RemeshAssociationMode,
     RemeshPolicy,
     RemeshReplacementMode,
 )
-from opencae.ui.core.widgets import ChevronComboBox
-from opencae.ui.templates import (
-    SectionHeading,
-    apply_primary_control_height,
-    dialog_buttons,
-    dialog_layout,
-    field_block,
-)
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.templates import SectionHeading, dialog_buttons, dialog_layout, field_block
 
 
 class RemeshPolicyDialog(QDialog):
@@ -27,7 +22,7 @@ class RemeshPolicyDialog(QDialog):
         root = dialog_layout(self)
         root.addWidget(SectionHeading("Existing manual/imported mesh data"))
 
-        self.replacement = ChevronComboBox()
+        self.replacement = SelectForm()
         self.replacement.addItem(
             "Replace the entire mesh",
             RemeshReplacementMode.REPLACE_ALL,
@@ -37,13 +32,12 @@ class RemeshPolicyDialog(QDialog):
             RemeshReplacementMode.REPLACE_GENERATED,
         )
         self.replacement.setCurrentIndex(1)
-        apply_primary_control_height(self.replacement)
         root.addWidget(field_block("Replacement rule", self.replacement))
 
-        self.discard_associations = QCheckBox(
+        self.discard_associations = CheckForm(
             "Discard CAD associations after remeshing"
         )
-        self.convert_to_authored = QCheckBox(
+        self.convert_to_authored = CheckForm(
             "Convert the final mesh to a pure authored mesh"
         )
         root.addWidget(self.discard_associations)

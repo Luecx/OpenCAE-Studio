@@ -10,9 +10,7 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QHeaderView,
     QHBoxLayout,
-    QLineEdit,
     QMessageBox,
-    QSpinBox,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -29,14 +27,14 @@ from opencae.model.entities.amplitudes import (
     sample_function,
 )
 from opencae.model.naming import is_unique
+from opencae.ui.composites.controls import ControlNumericUnit
 from opencae.ui.core.apply_dialog import ApplyDialog
-from opencae.ui.core.widgets import AmplitudeCurvePreview, ChevronComboBox
+from opencae.ui.core.widgets import AmplitudeCurvePreview
+from opencae.ui.primitives.buttons import ButtonFormAction, ButtonFormDanger
+from opencae.ui.primitives.inputs import InputFormInteger, InputFormText
+from opencae.ui.primitives.selects import SelectForm
 from opencae.ui.templates import (
-    ButtonRole,
-    NumericUnitInput,
     SectionHeading,
-    apply_primary_control_height,
-    button,
     dialog_buttons,
     dialog_layout,
     field_block,
@@ -57,16 +55,15 @@ class AmplitudeDialog(ApplyDialog):
         super().__init__(parent)
         self.amplitude = amplitude
         self.existing_names = tuple(existing_names)
-        self._parameter_widgets: dict[str, NumericUnitInput] = {}
+        self._parameter_widgets: dict[str, ControlNumericUnit] = {}
 
         self.setWindowTitle(f"{'Edit' if amplitude else 'Create'} Amplitude")
         self.setMinimumSize(980, 620)
         root = dialog_layout(self)
 
-        self.name = QLineEdit(
+        self.name = InputFormText(
             amplitude.name if amplitude else (default_name or "Amplitude-1")
         )
-        apply_primary_control_height(self.name)
         root.addWidget(field_block("Name", self.name))
         root.addWidget(SectionHeading("Amplitude Definition"))
 
@@ -79,9 +76,6 @@ class AmplitudeDialog(ApplyDialog):
             getattr(amplitude, "time_basis", "Step time"),
         )
 
-        # One shared grid owns both column headers and both content areas.  Using
-        # separate rows here makes small spacing/stretch differences visible as
-        # a broken vertical split, especially when the curve has more stretch.
         content = QWidget()
         content_layout = QGridLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -94,8 +88,6 @@ class AmplitudeDialog(ApplyDialog):
         content_layout.addWidget(field_block("Definition", self.mode), 0, 0)
         content_layout.addWidget(field_block("Time basis", self.time_basis), 0, 1)
 
-        # Function-page construction immediately creates its first live preview,
-        # so the preview must exist before either editor page is initialized.
         self.preview = AmplitudeCurvePreview()
         self.stack = QStackedWidget()
         self.stack.setMinimumWidth(430)
@@ -111,9 +103,7 @@ class AmplitudeDialog(ApplyDialog):
 
         self._last_mode = self.mode.currentText()
         self.mode.currentIndexChanged.connect(self._mode_changed)
-        self.time_basis.currentIndexChanged.connect(
-            lambda _index: self._update_preview()
-        )
+        self.time_basis.currentIndexChanged.connect(lambda _index: self._update_preview())
         self._mode_changed()
 
     def _tabular_page(self, amplitude):
@@ -133,9 +123,7 @@ class AmplitudeDialog(ApplyDialog):
         self.table = _AmplitudePointTable()
         self.table.setColumnCount(2)
         self.table.setHorizontalHeaderLabels(("Time", "Value"))
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -148,20 +136,16 @@ class AmplitudeDialog(ApplyDialog):
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(8)
-        controls.addWidget(button("Add point", clicked=self._add_point))
-        controls.addWidget(
-            button(
-                "Delete point",
-                role=ButtonRole.DANGER,
-                clicked=self._delete_point,
-            )
-        )
+        add_button = ButtonFormAction("Add point")
+        add_button.clicked.connect(self._add_point)
+        delete_button = ButtonFormDanger("Delete point")
+        delete_button.clicked.connect(self._delete_point)
+        controls.addWidget(add_button)
+        controls.addWidget(delete_button)
         controls.addStretch(1)
         layout.addLayout(controls)
 
-        self.interpolation.currentIndexChanged.connect(
-            lambda _index: self._update_preview()
-        )
+        self.interpolation.currentIndexChanged.connect(lambda _index: self._update_preview())
         self.table.itemChanged.connect(lambda _item: self._update_preview())
         self.table.pasted.connect(self._update_preview)
         return page
@@ -182,24 +166,23 @@ class AmplitudeDialog(ApplyDialog):
         self.parameter_layout.setSpacing(10)
         layout.addWidget(self.parameter_host)
 
-        self.sample_start = NumericUnitInput(
+        self.sample_start = ControlNumericUnit(
             getattr(amplitude, "sample_start", 0.0),
             minimum=-1e30,
             maximum=1e30,
             decimals=10,
         )
-        self.sample_end = NumericUnitInput(
+        self.sample_end = ControlNumericUnit(
             getattr(amplitude, "sample_end", 1.0),
             minimum=-1e30,
             maximum=1e30,
             decimals=10,
         )
-        self.sample_intervals = QSpinBox()
-        self.sample_intervals.setRange(1, 10000)
-        self.sample_intervals.setValue(
-            int(getattr(amplitude, "sample_intervals", 100))
+        self.sample_intervals = InputFormInteger(
+            int(getattr(amplitude, "sample_intervals", 100)),
+            minimum=1,
+            maximum=10000,
         )
-        apply_primary_control_height(self.sample_intervals)
         layout.addWidget(
             field_row(
                 field_block("Start time", self.sample_start),
@@ -213,13 +196,9 @@ class AmplitudeDialog(ApplyDialog):
             getattr(amplitude, "function_parameters", {}) or {}
         )
         self.function_type.currentIndexChanged.connect(self._rebuild_parameters)
-        self.sample_start.valueChanged.connect(
-            lambda _value: self._update_preview()
-        )
+        self.sample_start.valueChanged.connect(lambda _value: self._update_preview())
         self.sample_end.valueChanged.connect(lambda _value: self._update_preview())
-        self.sample_intervals.valueChanged.connect(
-            lambda _value: self._update_preview()
-        )
+        self.sample_intervals.valueChanged.connect(lambda _value: self._update_preview())
         self._rebuild_parameters()
         return page
 
@@ -236,7 +215,7 @@ class AmplitudeDialog(ApplyDialog):
             defaults.update(self._stored_function_parameters)
         fields = []
         for key, value in defaults.items():
-            editor = NumericUnitInput(
+            editor = ControlNumericUnit(
                 value,
                 minimum=-1e30,
                 maximum=1e30,
@@ -249,9 +228,7 @@ class AmplitudeDialog(ApplyDialog):
             self.parameter_layout.addWidget(field_row(*fields))
         else:
             for start in range(0, len(fields), 2):
-                self.parameter_layout.addWidget(
-                    field_row(*fields[start:start + 2])
-                )
+                self.parameter_layout.addWidget(field_row(*fields[start:start + 2]))
         self._update_preview()
 
     def _mode_changed(self, _index=None):
@@ -292,16 +269,8 @@ class AmplitudeDialog(ApplyDialog):
             time, value = 0.0, 0.0
         self.table.blockSignals(True)
         self.table.insertRow(insert_at)
-        self.table.setItem(
-            insert_at,
-            0,
-            QTableWidgetItem(_number_text(time)),
-        )
-        self.table.setItem(
-            insert_at,
-            1,
-            QTableWidgetItem(_number_text(value)),
-        )
+        self.table.setItem(insert_at, 0, QTableWidgetItem(_number_text(time)))
+        self.table.setItem(insert_at, 1, QTableWidgetItem(_number_text(value)))
         self.table.blockSignals(False)
         self.table.selectRow(insert_at)
         self._update_preview()
@@ -334,9 +303,7 @@ class AmplitudeDialog(ApplyDialog):
             except (AttributeError, TypeError, ValueError):
                 if allow_invalid:
                     continue
-                raise ValueError(
-                    f"Row {row + 1} contains an invalid time or value"
-                )
+                raise ValueError(f"Row {row + 1} contains an invalid time or value")
             points.append((time, value))
         if not allow_invalid:
             if len(points) < 2:
@@ -347,10 +314,7 @@ class AmplitudeDialog(ApplyDialog):
         return points
 
     def _function_parameters(self):
-        return {
-            key: widget.value()
-            for key, widget in self._parameter_widgets.items()
-        }
+        return {key: widget.value() for key, widget in self._parameter_widgets.items()}
 
     def _function_points(self):
         return sample_function(
@@ -366,11 +330,7 @@ class AmplitudeDialog(ApplyDialog):
             if self.mode.currentText() == "Function":
                 points = self._function_points()
                 stride = max(1, len(points) // 20)
-                knots = (
-                    points
-                    if len(points) <= 32
-                    else [*points[::stride], points[-1]]
-                )
+                knots = points if len(points) <= 32 else [*points[::stride], points[-1]]
                 self.preview.set_data(points, knots)
             else:
                 knots = self._table_points()
@@ -480,13 +440,11 @@ class _AmplitudePointTable(QTableWidget):
 
 
 def _combo(values, current):
-    combo = ChevronComboBox()
-    combo.setMinimumWidth(0)
+    combo = SelectForm()
     for value in values:
         combo.addItem(str(value), str(value))
     index = combo.findData(str(current))
     combo.setCurrentIndex(max(0, index))
-    apply_primary_control_height(combo)
     return combo
 
 

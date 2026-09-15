@@ -2,27 +2,15 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import (
-    QGroupBox,
-    QLineEdit,
-    QMessageBox,
-    QSpinBox,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QGroupBox, QMessageBox, QStackedWidget, QVBoxLayout, QWidget
 
 from opencae.model.core import EntityRef
+from opencae.ui.composites.controls import ControlNumericUnit, ControlReferenceSelector
 from opencae.ui.core.apply_dialog import ApplyDialog
-from opencae.ui.core.widgets import ChevronComboBox, MatrixEditor, ReferenceSelector
-from opencae.ui.templates import (
-    NumericUnitInput,
-    apply_primary_control_height,
-    dialog_layout,
-    dialog_buttons,
-    field_block,
-    field_row,
-)
+from opencae.ui.core.widgets import MatrixEditor
+from opencae.ui.primitives.inputs import InputFormInteger, InputFormText
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.templates import dialog_layout, dialog_buttons, field_block, field_row
 
 SECTION_TYPES = ("Solid", "Shell", "Beam", "Truss")
 SHELL_TYPES = ("Integrated shell section", "ABD shell section")
@@ -54,17 +42,14 @@ class SectionDialog(ApplyDialog):
 
         root = dialog_layout(self)
 
-        self.name = QLineEdit(section.name if section else default_name)
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(section.name if section else default_name)
         root.addWidget(field_block("Name", self.name))
 
-        self.kind = ChevronComboBox()
-        self.kind.setMinimumWidth(0)
+        self.kind = SelectForm()
         self.kind.addItems(SECTION_TYPES)
         self.kind.setCurrentText(
             section.section_type if section else (initial_type or "Solid")
         )
-        apply_primary_control_height(self.kind)
         root.addWidget(field_block("Section type", self.kind))
 
         self.stack = QStackedWidget()
@@ -78,18 +63,11 @@ class SectionDialog(ApplyDialog):
         )
 
         self.solid_material = self._reference_page(
-            "Material",
-            materials,
-            material_current,
-            create_material,
+            "Material", materials, material_current, create_material
         )
         self.stack.addWidget(self.solid_material[0])
 
-        self.shell_page = self._shell_page(
-            materials,
-            material_current,
-            create_material,
-        )
+        self.shell_page = self._shell_page(materials, material_current, create_material)
         self.stack.addWidget(self.shell_page)
 
         self.beam_page, self.beam_material, self.beam_profile = self._beam_page(
@@ -103,9 +81,7 @@ class SectionDialog(ApplyDialog):
         self.stack.addWidget(self.beam_page)
 
         self.truss_page, self.truss_material, self.truss_area = self._truss_page(
-            materials,
-            material_current,
-            create_material,
+            materials, material_current, create_material
         )
         self.stack.addWidget(self.truss_page)
 
@@ -119,7 +95,6 @@ class SectionDialog(ApplyDialog):
 
     @staticmethod
     def _vertical_page() -> tuple[QWidget, QVBoxLayout]:
-        """Create a dynamic section page using the standard vertical rhythm."""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -128,42 +103,39 @@ class SectionDialog(ApplyDialog):
 
     @classmethod
     def _reference_page(cls, text, values, current, callback):
-        """Create a page containing one labelled object-reference selector."""
         page, layout = cls._vertical_page()
-        selector = ReferenceSelector(values, current, callback)
+        selector = ControlReferenceSelector(values, current, callback)
         layout.addWidget(field_block(text, selector))
         layout.addStretch(1)
         return page, selector
 
     def _shell_page(self, materials, current, callback):
-        """Build integrated and ABD shell-section editors."""
         page, layout = self._vertical_page()
 
-        self.shell_definition = ChevronComboBox()
-        self.shell_definition.setMinimumWidth(0)
+        self.shell_definition = SelectForm()
         self.shell_definition.addItems(SHELL_TYPES)
         self.shell_definition.setCurrentText(
             getattr(self.section, "shell_definition", SHELL_TYPES[0])
         )
-        apply_primary_control_height(self.shell_definition)
         layout.addWidget(field_block("Shell formulation", self.shell_definition))
 
         self.shell_stack = QStackedWidget()
         layout.addWidget(self.shell_stack, 1)
 
         integrated, integrated_layout = self._vertical_page()
-        self.shell_material = ReferenceSelector(materials, current, callback)
-        self.shell_thickness = NumericUnitInput(
+        self.shell_material = ControlReferenceSelector(materials, current, callback)
+        self.shell_thickness = ControlNumericUnit(
             value=getattr(self.section, "thickness", 1.0),
             unit=self.units.symbol("length") if self.units is not None else "",
             minimum=1e-12,
             maximum=1e12,
             decimals=6,
         )
-        self.shell_points = QSpinBox()
-        self.shell_points.setRange(1, 99)
-        self.shell_points.setValue(getattr(self.section, "integration_points", 5))
-        apply_primary_control_height(self.shell_points)
+        self.shell_points = InputFormInteger(
+            getattr(self.section, "integration_points", 5),
+            minimum=1,
+            maximum=99,
+        )
 
         integrated_layout.addWidget(field_block("Material", self.shell_material))
         integrated_layout.addWidget(
@@ -195,19 +167,14 @@ class SectionDialog(ApplyDialog):
         abd_layout.addStretch(1)
         self.shell_stack.addWidget(abd)
 
-        self.shell_definition.currentIndexChanged.connect(
-            self.shell_stack.setCurrentIndex
-        )
-        self.shell_stack.setCurrentIndex(
-            SHELL_TYPES.index(self.shell_definition.currentText())
-        )
+        self.shell_definition.currentIndexChanged.connect(self.shell_stack.setCurrentIndex)
+        self.shell_stack.setCurrentIndex(SHELL_TYPES.index(self.shell_definition.currentText()))
         return page
 
     def _beam_page(self, materials, profiles, material, profile, cm, cp):
-        """Build the material/profile selectors for beam sections."""
         page, layout = self._vertical_page()
-        mat = ReferenceSelector(materials, material, cm)
-        prof = ReferenceSelector(profiles, profile, cp)
+        mat = ControlReferenceSelector(materials, material, cm)
+        prof = ControlReferenceSelector(profiles, profile, cp)
         layout.addWidget(
             field_row(
                 field_block("Material", mat),
@@ -218,10 +185,9 @@ class SectionDialog(ApplyDialog):
         return page, mat, prof
 
     def _truss_page(self, materials, material, callback):
-        """Build the material and cross-sectional-area editor for trusses."""
         page, layout = self._vertical_page()
-        mat = ReferenceSelector(materials, material, callback)
-        area = NumericUnitInput(
+        mat = ControlReferenceSelector(materials, material, callback)
+        area = ControlNumericUnit(
             value=getattr(self.section, "area", 1.0),
             unit=self.units.symbol("area") if self.units is not None else "",
             minimum=1e-12,
@@ -238,11 +204,9 @@ class SectionDialog(ApplyDialog):
         return page, mat, area
 
     def _resize(self, *_args) -> None:
-        """Refresh the preferred dialog size after switching section type."""
         self.adjustSize()
 
     def validate(self) -> bool:
-        """Validate naming and required section references before committing."""
         name = self.name.text().strip()
         values = self.values()
         kind = values["section_type"]
@@ -287,11 +251,9 @@ class SectionDialog(ApplyDialog):
 
     @staticmethod
     def _ref(value, kind):
-        """Create a persistent entity reference for a selected resource."""
         return EntityRef(str(value), kind) if value else None
 
     def values(self) -> dict:
-        """Return constructor values for the currently selected section type."""
         kind = self.kind.currentText()
         result = {"name": self.name.text().strip(), "section_type": kind}
         if kind == "Solid":
@@ -323,7 +285,6 @@ class SectionDialog(ApplyDialog):
         return result
 
     def prepare_new(self, default_name, existing_names) -> None:
-        """Reset name state when Apply keeps a create dialog open."""
         self.section = None
         self.existing_names = {name.casefold() for name in existing_names}
         self.name.setText(default_name)

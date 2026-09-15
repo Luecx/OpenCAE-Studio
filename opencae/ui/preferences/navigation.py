@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtWidgets import QLabel, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QLabel, QListWidget, QListWidgetItem, QVBoxLayout, QWidget
+
+from opencae.ui.primitives.inputs import InputSearch
 
 
 _GROUP_ROLE = Qt.ItemDataRole.UserRole
@@ -26,10 +28,10 @@ class PreferencesNavigation(QWidget):
         layout.setContentsMargins(10, 12, 10, 12)
         layout.setSpacing(10)
 
-        self.search = QLineEdit()
-        self.search.setObjectName("PreferencesSearch")
-        self.search.setPlaceholderText("Search settings")
-        self.search.setClearButtonEnabled(True)
+        self.search = InputSearch(
+            "Search settings",
+            object_name="PreferencesSearch",
+        )
         layout.addWidget(self.search)
 
         self.list = QListWidget()

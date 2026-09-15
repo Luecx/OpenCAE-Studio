@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QDialog,
     QDoubleSpinBox,
-    QLineEdit,
     QMessageBox,
-    QSpinBox,
     QStackedWidget,
     QTabWidget,
     QVBoxLayout,
@@ -16,23 +13,17 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.model.entities.analysis import StepType
-from opencae.ui.core.widgets import ChevronComboBox
-from opencae.ui.templates import (
-    CheckList,
-    SectionHeading,
-    apply_primary_control_height,
-    dialog_layout,
-    dialog_buttons,
-    field_block,
-    field_row,
-)
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.inputs import InputFormInteger, InputFormNumber, InputFormText
+from opencae.ui.primitives.lists import ListCheck
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.templates import SectionHeading, dialog_layout, dialog_buttons, field_block, field_row
 
 
 class StepDialog(QDialog):
     """Edit one analysis step and the loads/supports active during that step."""
 
     def __init__(self, step, loads, supports, parent=None, existing_names=()):
-        """Build type-dependent step settings plus reusable checked entity selectors."""
         super().__init__(parent)
         self.step = step
         self.existing_names = tuple(existing_names)
@@ -43,17 +34,10 @@ class StepDialog(QDialog):
 
         root = dialog_layout(self)
 
-        self.name = QLineEdit(step.name)
-        apply_primary_control_height(self.name)
-        self.modes = QSpinBox()
-        self.modes.setRange(1, 100000)
-        self.modes.setValue(step.number_of_modes)
-        apply_primary_control_height(self.modes)
+        self.name = InputFormText(step.name)
+        self.modes = InputFormInteger(step.number_of_modes, minimum=1, maximum=100000)
 
-        if step.step_type in {
-            StepType.EIGENFREQUENCY,
-            StepType.LINEAR_BUCKLING,
-        }:
+        if step.step_type in {StepType.EIGENFREQUENCY, StepType.LINEAR_BUCKLING}:
             root.addWidget(
                 field_row(
                     field_block("Name", self.name),
@@ -70,13 +54,13 @@ class StepDialog(QDialog):
 
         root.addWidget(SectionHeading("Active Entities"))
         support_ids = [ref.entity_id for ref in step.support_refs]
-        self.supports = CheckList(supports, support_ids)
+        self.supports = ListCheck(supports, support_ids)
         support_field = field_block("Active supports", self.supports)
 
         self.loads = None
         if step.uses_loads:
             load_ids = [ref.entity_id for ref in step.load_refs]
-            self.loads = CheckList(loads, load_ids)
+            self.loads = ListCheck(loads, load_ids)
             root.addWidget(
                 field_row(
                     support_field,
@@ -107,18 +91,14 @@ class StepDialog(QDialog):
         increment_layout.setContentsMargins(10, 10, 10, 10)
         increment_layout.setSpacing(10)
 
-        self.nonlinear_control = ChevronComboBox()
+        self.nonlinear_control = SelectForm()
         self.nonlinear_control.addItem("Load control", "LOAD")
         self.nonlinear_control.addItem("Path control", "PATH")
         index = self.nonlinear_control.findData(control)
         self.nonlinear_control.setCurrentIndex(max(index, 0))
 
-        self.max_increments = self._integer(
-            settings.get("max_increments", 100), 1, 1_000_000
-        )
-        self.max_iterations = self._integer(
-            settings.get("max_iterations", 25), 1, 10_000
-        )
+        self.max_increments = self._integer(settings.get("max_increments", 100), 1, 1_000_000)
+        self.max_iterations = self._integer(settings.get("max_iterations", 25), 1, 10_000)
         increment_layout.addWidget(
             field_row(
                 field_block("Control method", self.nonlinear_control),
@@ -132,8 +112,10 @@ class StepDialog(QDialog):
         self.control_stack.addWidget(self._build_path_control_page(settings))
         increment_layout.addWidget(self.control_stack)
 
-        self.adaptive = QCheckBox("Automatic / adaptive increment sizing")
-        self.adaptive.setChecked(bool(settings.get("adaptive", True)))
+        self.adaptive = CheckForm(
+            "Automatic / adaptive increment sizing",
+            checked=bool(settings.get("adaptive", True)),
+        )
         increment_layout.addWidget(self.adaptive)
         tabs.addTab(increments, "Incrementation")
 
@@ -153,15 +135,9 @@ class StepDialog(QDialog):
             )
         )
 
-        self.fast_iterations = self._integer(
-            settings.get("fast_iterations", 6), 1, 10_000
-        )
-        self.slow_iterations = self._integer(
-            settings.get("slow_iterations", 10), 1, 10_000
-        )
-        self.maximum_cutbacks = self._integer(
-            settings.get("maximum_cutbacks", 20), 0, 10_000
-        )
+        self.fast_iterations = self._integer(settings.get("fast_iterations", 6), 1, 10_000)
+        self.slow_iterations = self._integer(settings.get("slow_iterations", 10), 1, 10_000)
+        self.maximum_cutbacks = self._integer(settings.get("maximum_cutbacks", 20), 0, 10_000)
         convergence_layout.addWidget(
             field_row(
                 field_block("Fast convergence", self.fast_iterations),
@@ -170,27 +146,21 @@ class StepDialog(QDialog):
             )
         )
 
-        self.regularize_zero_rows = QCheckBox("Regularize weak / zero tangent rows")
-        self.regularize_zero_rows.setChecked(
-            bool(settings.get("regularize_zero_rows", False))
+        self.regularize_zero_rows = CheckForm(
+            "Regularize weak / zero tangent rows",
+            checked=bool(settings.get("regularize_zero_rows", False)),
         )
         self.regularization_alpha = self._number(
             settings.get("regularization_alpha", 1.0e-4), 0.0, 1.0e12
         )
         convergence_layout.addWidget(self.regularize_zero_rows)
-        convergence_layout.addWidget(
-            field_block("Regularization scale", self.regularization_alpha)
-        )
+        convergence_layout.addWidget(field_block("Regularization scale", self.regularization_alpha))
         convergence_layout.addStretch(1)
         tabs.addTab(convergence, "Convergence")
 
-        self.nonlinear_control.currentIndexChanged.connect(
-            self._sync_nonlinear_control_page
-        )
+        self.nonlinear_control.currentIndexChanged.connect(self._sync_nonlinear_control_page)
         self.adaptive.toggled.connect(self._sync_increment_controls)
-        self.regularize_zero_rows.toggled.connect(
-            self.regularization_alpha.setEnabled
-        )
+        self.regularize_zero_rows.toggled.connect(self.regularization_alpha.setEnabled)
         self._sync_nonlinear_control_page()
         self._sync_increment_controls()
         self.regularization_alpha.setEnabled(self.regularize_zero_rows.isChecked())
@@ -270,21 +240,22 @@ class StepDialog(QDialog):
 
     @staticmethod
     def _number(value, minimum, maximum):
-        editor = QDoubleSpinBox()
-        editor.setRange(float(minimum), float(maximum))
-        editor.setDecimals(12)
-        editor.setValue(float(value))
+        editor = InputFormNumber(
+            value,
+            minimum=float(minimum),
+            maximum=float(maximum),
+            decimals=12,
+        )
         editor.setStepType(QDoubleSpinBox.StepType.AdaptiveDecimalStepType)
-        apply_primary_control_height(editor)
         return editor
 
     @staticmethod
     def _integer(value, minimum, maximum):
-        editor = QSpinBox()
-        editor.setRange(int(minimum), int(maximum))
-        editor.setValue(int(value))
-        apply_primary_control_height(editor)
-        return editor
+        return InputFormInteger(
+            value,
+            minimum=int(minimum),
+            maximum=int(maximum),
+        )
 
     def _sync_nonlinear_control_page(self, *_):
         path = self.nonlinear_control.currentData() == "PATH"
@@ -306,7 +277,6 @@ class StepDialog(QDialog):
             editor.setEnabled(adaptive)
 
     def _accept(self) -> None:
-        """Validate unique naming and nonlinear increment consistency."""
         from opencae.model.naming import is_unique
 
         if not is_unique(self.name.text(), self.existing_names, self.step.name):
@@ -318,21 +288,9 @@ class StepDialog(QDialog):
             return
         if self.step.step_type is StepType.NONLINEAR_STATIC:
             path = self.nonlinear_control.currentData() == "PATH"
-            minimum = (
-                self.minimum_arc_length.value()
-                if path
-                else self.minimum_increment.value()
-            )
-            initial = (
-                self.initial_arc_length.value()
-                if path
-                else self.initial_increment.value()
-            )
-            maximum = (
-                self.maximum_arc_length.value()
-                if path
-                else self.maximum_increment.value()
-            )
+            minimum = self.minimum_arc_length.value() if path else self.minimum_increment.value()
+            initial = self.initial_arc_length.value() if path else self.initial_increment.value()
+            maximum = self.maximum_arc_length.value() if path else self.maximum_increment.value()
             if self.adaptive.isChecked() and not minimum <= initial <= maximum:
                 QMessageBox.warning(
                     self,
@@ -371,7 +329,6 @@ class StepDialog(QDialog):
         return settings
 
     def values(self) -> dict:
-        """Return edited step settings and IDs of all checked entities."""
         result = {
             "name": self.name.text().strip(),
             "number_of_modes": self.modes.value(),

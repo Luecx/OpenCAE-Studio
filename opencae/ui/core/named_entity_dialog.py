@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from PyQt6.QtWidgets import QLineEdit, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.naming import is_unique
-from opencae.ui.templates import (
-    apply_primary_control_height,
-    dialog_buttons,
-    scaffold_dialog,
-)
+from opencae.ui.primitives.inputs import InputFormText
+from opencae.ui.templates import dialog_buttons, scaffold_dialog
 from opencae.ui.templates.dialogs import DEFAULT_DIALOG_WIDTH
 
 from .apply_dialog import ApplyDialog
@@ -29,7 +26,6 @@ class NamedEntityDialog(ApplyDialog):
         parent=None,
         width=DEFAULT_DIALOG_WIDTH,
     ):
-        """Build the common name field and leave room for subclass-specific content."""
         super().__init__(parent)
         self.value = deepcopy(value)
         self._existing_names = tuple(existing_names)
@@ -38,20 +34,17 @@ class NamedEntityDialog(ApplyDialog):
         scaffold = scaffold_dialog(self, title, width=int(width), modal=False)
         self.root = scaffold.root
         self.form = scaffold.form
-        self.name = QLineEdit(self._current_name)
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(self._current_name)
         self.form.addRow("Name", self.name)
 
         self.buttons = dialog_buttons(include_apply=False)
         self._finished_layout = False
 
     def add_widget(self, widget):
-        """Append one specialized widget below the canonical field stack."""
         self.root.addWidget(widget)
         return widget
 
     def finish(self):
-        """Bind and append standard buttons exactly once."""
         if self._finished_layout:
             return
         self._finished_layout = True
@@ -59,12 +52,10 @@ class NamedEntityDialog(ApplyDialog):
         self.root.addWidget(self.buttons)
 
     def apply_name(self, candidate):
-        """Copy the edited display name onto a candidate entity."""
         candidate.name = self.name.text().strip()
         return candidate
 
     def validate(self) -> bool:
-        """Require a non-empty name unique within the supplied scope."""
         name = self.name.text().strip()
         if not name:
             QMessageBox.warning(self, "Missing name", "Enter a name.")

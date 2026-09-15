@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QRadioButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
-from opencae.ui.templates import NumericUnitInput, field_block
+from opencae.ui.composites.controls import ControlNumericUnit
+from opencae.ui.primitives.radios import RadioForm
+from opencae.ui.templates import field_block
 
 
 class AutomaticManualValueEditor(QWidget):
@@ -26,22 +28,21 @@ class AutomaticManualValueEditor(QWidget):
         value_decimals=9,
         parent=None,
     ):
-        """Build automatic/manual mode choices with canonical numeric fields."""
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
-        self.automatic = QRadioButton(automatic_text)
-        self.manual = QRadioButton(manual_text)
-        self.factor = NumericUnitInput(
+        self.automatic = RadioForm(automatic_text, checked=bool(automatic))
+        self.manual = RadioForm(manual_text, checked=not bool(automatic))
+        self.factor = ControlNumericUnit(
             factor,
             "",
             minimum=float(factor_range[0]),
             maximum=float(factor_range[1]),
             decimals=int(factor_decimals),
         )
-        self.value = NumericUnitInput(
+        self.value = ControlNumericUnit(
             max(float(value), float(value_range[0])),
             "",
             minimum=float(value_range[0]),
@@ -49,8 +50,6 @@ class AutomaticManualValueEditor(QWidget):
             decimals=int(value_decimals),
         )
 
-        self.automatic.setChecked(bool(automatic))
-        self.manual.setChecked(not bool(automatic))
         self.automatic.toggled.connect(self._sync_enabled)
         self.manual.toggled.connect(self._sync_enabled)
 
@@ -61,7 +60,6 @@ class AutomaticManualValueEditor(QWidget):
         self._sync_enabled()
 
     def values(self) -> tuple[bool, float, float]:
-        """Return automatic mode, factor and absolute value."""
         return (
             self.automatic.isChecked(),
             self.factor.value(),
@@ -69,6 +67,5 @@ class AutomaticManualValueEditor(QWidget):
         )
 
     def _sync_enabled(self, *_):
-        """Enable only the numeric field that belongs to the selected mode."""
         self.factor.setEnabled(self.automatic.isChecked())
         self.value.setEnabled(self.manual.isChecked())

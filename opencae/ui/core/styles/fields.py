@@ -1,6 +1,6 @@
 """Styles editable fields and the shared primary-control geometry contract."""
 
-from opencae.ui.templates.control_metrics import (
+from opencae.ui.core.metrics import (
     COMBO_POPUP_ROW_HEIGHT,
     PRIMARY_CONTROL_HEIGHT,
 )

@@ -3,13 +3,12 @@
 from pathlib import Path
 from shutil import copy2
 
-from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QFileDialog,
     QHBoxLayout,
     QMessageBox,
-    QToolButton,
     QWidget,
 )
 
@@ -17,6 +16,7 @@ from opencae.results import FrdLoader
 from opencae.results.navigation import display_field
 from opencae.ui.actions.ids import A
 from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.primitives.buttons import ButtonResultsRibbonAction
 from opencae.ui.viewport.result_visualization import auto_deformation_scale
 from .result_deformation import ResultDeformationButton
 from .result_field_menu import ResultFieldButton
@@ -211,15 +211,12 @@ class ResultsPage(QWidget):
         self._wire_queries()
 
     def _save_button(self):
-        button = QToolButton()
-        button.setText("Save Results")
-        button.setIcon(make_icon(IconKind.SAVE, 28))
-        button.setIconSize(QSize(28, 28))
-        button.setToolButtonStyle(
-            Qt.ToolButtonStyle.ToolButtonTextUnderIcon
+        button = ButtonResultsRibbonAction(
+            "Save Results",
+            icon=make_icon(IconKind.SAVE, 28),
+            width=82,
+            parent=self,
         )
-        button.setProperty("ribbonButton", True)
-        button.setFixedSize(82, 70)
         button.clicked.connect(self._save_results)
         button.setEnabled(False)
         return button
@@ -354,10 +351,6 @@ class ResultsPage(QWidget):
             signature = self._contour_field_signature(field)
             if signature != self._range_signature:
                 self._range_signature = signature
-                # Selecting another field/component/step starts from a sensible
-                # current-frame range. Moving only between frames leaves the
-                # concrete range untouched so all-frame/manual ranges remain
-                # useful for visual comparison.
                 self.range.set_range(*current_range)
                 return
         self._emit()
@@ -491,8 +484,6 @@ class ResultsPage(QWidget):
         if not scales:
             value = auto_deformation_scale(self.result, field)
         else:
-            # Smaller scale corresponds to the frame with the largest physical
-            # displacement, so it is the safe common scale for every frame.
             value = min(scales)
         self._apply_deformation_scale(value)
 

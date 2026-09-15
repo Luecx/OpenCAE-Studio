@@ -1,16 +1,7 @@
-"""Provides a thin reusable separator between editor columns."""
+"""Compatibility export for the canonical vertical separator primitive."""
 
-from __future__ import annotations
+from opencae.ui.primitives.separators.separator_vertical import SeparatorVertical
 
-from PyQt6.QtWidgets import QFrame
+VerticalSeparator = SeparatorVertical
 
-
-class VerticalSeparator(QFrame):
-    """Draw the shared one-pixel divider used by split editor layouts."""
-
-    def __init__(self, parent=None):
-        """Create a vertical separator with no extra content or interaction."""
-        super().__init__(parent)
-        self.setObjectName("EditorVerticalSeparator")
-        self.setFrameShape(QFrame.Shape.VLine)
-        self.setFrameShadow(QFrame.Shadow.Plain)
+__all__ = ["VerticalSeparator"]

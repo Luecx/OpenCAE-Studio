@@ -3,23 +3,11 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (
-    QFrame,
-    QLineEdit,
-    QMessageBox,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import QFrame, QMessageBox, QScrollArea, QVBoxLayout, QWidget
 
 from opencae.ui.core.apply_dialog import ApplyDialog
-from opencae.ui.templates import (
-    SectionHeading,
-    apply_primary_control_height,
-    dialog_layout,
-    dialog_buttons,
-    field_block,
-)
+from opencae.ui.primitives.inputs import InputFormText
+from opencae.ui.templates import SectionHeading, dialog_layout, dialog_buttons, field_block
 from .material_behavior_card import MaterialBehaviorCard
 from .material_behavior_specs import CATEGORIES
 
@@ -35,7 +23,6 @@ class MaterialDialog(ApplyDialog):
         default_name="Material-1",
         units=None,
     ):
-        """Build the material editor from shared field and heading templates."""
         super().__init__(parent)
         self.material = material
         self.units = units
@@ -48,9 +35,10 @@ class MaterialDialog(ApplyDialog):
 
         root = dialog_layout(self)
 
-        self.name = QLineEdit(material.name if material else default_name)
-        self.name.setObjectName("MaterialNameInput")
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(
+            material.name if material else default_name,
+            object_name="MaterialNameInput",
+        )
         root.addWidget(field_block("Name", self.name))
         root.addWidget(SectionHeading("Material Definitions"))
 
@@ -59,8 +47,6 @@ class MaterialDialog(ApplyDialog):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setObjectName("MaterialDefinitionsScroll")
-        # The viewport is explicitly transparent so the dialog background stays
-        # continuous between the heading and the behavior cards.
         scroll.viewport().setObjectName("MaterialDefinitionsViewport")
         scroll.viewport().setAutoFillBackground(False)
 
@@ -94,7 +80,6 @@ class MaterialDialog(ApplyDialog):
         root.addWidget(buttons)
 
     def validate(self) -> bool:
-        """Reject empty or duplicate material names before committing."""
         name = self.name.text().strip()
         if not name:
             QMessageBox.warning(self, "Invalid material", "Enter a material name.")
@@ -111,7 +96,6 @@ class MaterialDialog(ApplyDialog):
         return True
 
     def values(self) -> dict:
-        """Return Material constructor values from the current inline editors."""
         behaviors = []
         for category in CATEGORIES:
             behavior = self.cards[category].behavior_value()
@@ -127,7 +111,6 @@ class MaterialDialog(ApplyDialog):
         }
 
     def prepare_new(self, default_name, existing_names) -> None:
-        """Reset the reusable dialog after Apply creates a new Material."""
         self.material = None
         self.existing_names = {name.casefold() for name in existing_names}
         self.name.setText(default_name)

@@ -40,7 +40,8 @@ def test_analysis_start_opens_live_monitor_with_job_scoped_stop():
     assert "def stop_job(self, job_id)" in manager
     assert "if job.id in self._runners" in manager
     assert "stop_callback=stop_callback" in manager
-    assert "self.stop_button = QPushButton(\"Stop\")" in monitor
+    assert 'self.stop_button = ButtonFormAction(' in monitor
+    assert '"Stop"' in monitor
     assert "callback()" in monitor
 
 

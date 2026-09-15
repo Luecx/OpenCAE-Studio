@@ -1,12 +1,5 @@
-"""Defines semantic presentation roles for reusable label templates."""
+"""Compatibility import for the canonical semantic label role."""
 
-from enum import StrEnum
+from opencae.ui.primitives.label_role import LabelRole
 
-
-class LabelRole(StrEnum):
-    """Semantic style role applied by the shared label factory."""
-
-    BODY = "body"
-    TITLE = "title"
-    MUTED = "muted"
-    GROUP = "group"
+__all__ = ["LabelRole"]

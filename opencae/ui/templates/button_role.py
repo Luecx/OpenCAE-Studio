@@ -1,12 +1,15 @@
-"""Defines semantic presentation roles for reusable button templates."""
+"""Compatibility semantic roles for the legacy template button factory."""
 
 from enum import StrEnum
 
 
 class ButtonRole(StrEnum):
-    """Semantic style role applied by the shared button factory."""
+    """Template-level role mapped to a concrete flat button primitive."""
 
     DEFAULT = "default"
     PRIMARY = "primary"
     DANGER = "danger"
     TOOL = "tool"
+
+
+__all__ = ["ButtonRole"]

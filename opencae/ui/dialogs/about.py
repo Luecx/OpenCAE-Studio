@@ -3,8 +3,9 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QDialog
 
-from opencae.ui.core.controls import primary_button
-from opencae.ui.templates import LabelRole, dialog_layout, label
+from opencae.ui.primitives.buttons import ButtonFormPrimary
+from opencae.ui.primitives.labels import LabelMuted, LabelTitle
+from opencae.ui.templates import dialog_layout
 
 
 class AboutDialog(QDialog):
@@ -18,15 +19,14 @@ class AboutDialog(QDialog):
         self.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
 
         layout = dialog_layout(self)
-        layout.addWidget(label("OpenCAE Studio", role=LabelRole.TITLE))
-        description = label(
+        layout.addWidget(LabelTitle("OpenCAE Studio"))
+        description = LabelMuted(
             "Modular PyQt6 CAE modelling prototype\n"
-            "Deck-oriented, solver-independent architecture.",
-            role=LabelRole.MUTED,
+            "Deck-oriented, solver-independent architecture."
         )
         description.setWordWrap(True)
         layout.addWidget(description)
 
-        close = primary_button("Close")
+        close = ButtonFormPrimary("Close")
         close.clicked.connect(self.accept)
         layout.addWidget(close, 0, Qt.AlignmentFlag.AlignRight)

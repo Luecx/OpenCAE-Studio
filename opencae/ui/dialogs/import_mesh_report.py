@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (
-    QDialog,
-    QDialogButtonBox,
-    QLabel,
-    QPlainTextEdit,
-    QVBoxLayout,
-)
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QPlainTextEdit, QVBoxLayout
+
+from opencae.ui.primitives.inputs import InputFormMultiline
+from opencae.ui.primitives.labels import LabelBody
 
 
 class ImportMeshReportDialog(QDialog):
@@ -21,21 +18,19 @@ class ImportMeshReportDialog(QDialog):
 
         issues = list(getattr(report, "not_imported", ()) or ())
         warnings = list(getattr(report, "warnings", ()) or ())
-        if issues:
-            summary = QLabel(
+        summary = LabelBody(
+            (
                 f"{source_name} was imported as an orphan mesh, but "
                 f"{len(issues)} keyword block(s) were not fully imported. "
                 "Every affected block is listed below."
             )
-        else:
-            summary = QLabel(
-                f"{source_name} was imported. No unsupported keyword blocks were found."
-            )
+            if issues
+            else f"{source_name} was imported. No unsupported keyword blocks were found."
+        )
         summary.setWordWrap(True)
         layout.addWidget(summary)
 
-        details = QPlainTextEdit(self)
-        details.setReadOnly(True)
+        details = InputFormMultiline(read_only=True, parent=self)
         details.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         details.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse

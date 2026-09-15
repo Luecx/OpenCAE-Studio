@@ -1,24 +1,18 @@
-"""Provides the canonical compact button used by viewport toolbars."""
+"""Compatibility constructor for canonical viewport command primitives."""
 
-from PyQt6.QtWidgets import QToolButton, QWidget
-
-
-VIEWPORT_TOOL_HEIGHT = 28
+from opencae.ui.core.metrics import VIEWPORT_TOOL_HEIGHT
+from opencae.ui.primitives.buttons import ButtonViewportAction, ButtonViewportToggle
 
 
-class ViewportToolButton(QToolButton):
-    """Render one consistently sized action or mode in a viewport toolbar."""
+def ViewportToolButton(text: str = "", checkable: bool = False, parent=None):
+    """Return the concrete viewport primitive matching the requested behavior.
 
-    def __init__(
-        self,
-        text: str,
-        *,
-        checkable: bool = False,
-        parent: QWidget | None = None,
-    ) -> None:
-        """Initialize text, check behavior, and canonical toolbar geometry."""
-        super().__init__(parent)
-        self.setText(text)
-        self.setCheckable(checkable)
-        self.setProperty("viewportTool", True)
-        self.setFixedHeight(VIEWPORT_TOOL_HEIGHT)
+    This compatibility surface preserves the historical constructor used by
+    older consumers without reintroducing the removed generic ``ViewportButton``
+    hierarchy.
+    """
+    primitive = ButtonViewportToggle if checkable else ButtonViewportAction
+    return primitive(text, parent=parent)
+
+
+__all__ = ["VIEWPORT_TOOL_HEIGHT", "ViewportToolButton"]

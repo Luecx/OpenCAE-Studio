@@ -9,21 +9,14 @@ from PyQt6.QtCore import QSignalBlocker, Qt
 from PyQt6.QtGui import QAction, QActionGroup
 from PyQt6.QtWidgets import (
     QButtonGroup,
-    QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QInputDialog,
-    QLabel,
-    QLineEdit,
-    QListWidget,
     QListWidgetItem,
     QMenu,
     QMessageBox,
-    QPushButton,
     QSplitter,
     QStackedWidget,
     QVBoxLayout,
@@ -43,9 +36,20 @@ from opencae.model.entities.geometry import (
 from opencae.sketch import constraint_label, solve_sketch
 from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.metrics import RIBBON_ICON_SIZE, RIBBON_PAGE_HEIGHT
+from opencae.ui.primitives.buttons import (
+    ButtonFormAction,
+    ButtonFormDanger,
+    ButtonViewportAction,
+    ButtonViewportToggle,
+)
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.inputs import InputFormNumber, InputFormText
+from opencae.ui.primitives.labels import LabelForm, LabelGroup, LabelMuted, LabelStatus
+from opencae.ui.primitives.lists import ListForm
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.primitives.separators import SeparatorHorizontal
 from opencae.ui.ribbon.ribbon_page import ResponsiveRibbonPage
 from opencae.ui.ribbon.specs import RibbonGroupSpec
-from opencae.ui.templates import ViewportToolButton
 
 from .editor_canvas import SketchEditorCanvas
 from .preview import SketchFeaturePreview
@@ -92,8 +96,6 @@ class SketchFeatureDialog(QDialog):
         self._constraint_actions: dict[str, QAction] = {}
         self._dimension_actions: dict[str, QAction] = {}
 
-        # Build the actual drafting surfaces before the ribbon so action wiring
-        # never depends on a partially constructed dialog.
         self.canvas = SketchEditorCanvas(self._feature.sketch, self)
         self.preview = SketchFeaturePreview(self)
         self._build_ribbon_actions()
@@ -228,8 +230,6 @@ class SketchFeatureDialog(QDialog):
             "3-Point Arc",
             IconKind.SKETCH_ARC_3POINT,
         )
-        # Menu-only tools must remain in the QActionGroup but not consume their
-        # own top-level ribbon slots.
         self._ribbon_actions.pop("_menu.center_arc", None)
         self._ribbon_actions.pop("_menu.three_point_arc", None)
         arc.menu().addAction(center_arc)
@@ -375,11 +375,10 @@ class SketchFeatureDialog(QDialog):
         row.setContentsMargins(8, 5, 8, 5)
         row.setSpacing(4)
 
-        self.view_sketch = ViewportToolButton("Sketch", checkable=True, parent=bar)
-        self.view_preview = ViewportToolButton(
-            "3D Preview", checkable=True, parent=bar
+        self.view_sketch = ButtonViewportToggle(
+            "Sketch", checked=True, parent=bar
         )
-        self.view_sketch.setChecked(True)
+        self.view_preview = ButtonViewportToggle("3D Preview", parent=bar)
         self.view_group = QButtonGroup(bar)
         self.view_group.setExclusive(True)
         self.view_group.addButton(self.view_sketch)
@@ -387,8 +386,9 @@ class SketchFeatureDialog(QDialog):
         row.addWidget(self.view_sketch)
         row.addWidget(self.view_preview)
         row.addStretch(1)
-        self.fit_button = ViewportToolButton("Fit", parent=bar)
-        self.fit_button.setToolTip("Center and fit the sketch")
+        self.fit_button = ButtonViewportAction(
+            "Fit", tooltip="Center and fit the sketch", parent=bar
+        )
         row.addWidget(self.fit_button)
         layout.addWidget(bar)
 
@@ -407,77 +407,86 @@ class SketchFeatureDialog(QDialog):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
-        title = QLabel("FEATURE", panel)
+        title = LabelGroup("FEATURE", panel)
         title.setObjectName("SketchInspectorHeading")
         layout.addWidget(title)
-        layout.addWidget(QLabel("Name", panel))
-        self.name_edit = QLineEdit(panel)
+        layout.addWidget(LabelForm("Name", panel))
+        self.name_edit = InputFormText(parent=panel)
         layout.addWidget(self.name_edit)
-        layout.addWidget(QLabel("Type", panel))
-        self.mode_combo = QComboBox(panel)
+        layout.addWidget(LabelForm("Type", panel))
+        self.mode_combo = SelectForm(panel)
         self.mode_combo.addItems(tuple(mode.value for mode in SketchFeatureMode))
         layout.addWidget(self.mode_combo)
-        layout.addWidget(QLabel("Operation", panel))
-        self.operation_combo = QComboBox(panel)
+        layout.addWidget(LabelForm("Operation", panel))
+        self.operation_combo = SelectForm(panel)
         self.operation_combo.addItems(("New", "Add", "Cut", "Intersect"))
         layout.addWidget(self.operation_combo)
 
-        self.depth_label = QLabel("Depth", panel)
+        self.depth_label = LabelForm("Depth", panel)
         self.depth_spin = self._length_spin(panel)
-        self.angle_label = QLabel("Angle", panel)
-        self.angle_spin = QDoubleSpinBox(panel)
-        self.angle_spin.setRange(0.001, 360.0)
-        self.angle_spin.setDecimals(3)
-        self.angle_spin.setSingleStep(5.0)
-        self.angle_spin.setSuffix("°")
+        self.angle_label = LabelForm("Angle", panel)
+        self.angle_spin = InputFormNumber(
+            minimum=0.001,
+            maximum=360.0,
+            decimals=3,
+            step=5.0,
+            suffix="°",
+            parent=panel,
+        )
         layout.addWidget(self.depth_label)
         layout.addWidget(self.depth_spin)
         layout.addWidget(self.angle_label)
         layout.addWidget(self.angle_spin)
 
-        self.symmetric_check = QCheckBox("Symmetric about sketch plane", panel)
-        self.reverse_check = QCheckBox("Reverse direction", panel)
+        self.symmetric_check = CheckForm(
+            "Symmetric about sketch plane", parent=panel
+        )
+        self.reverse_check = CheckForm("Reverse direction", parent=panel)
         layout.addWidget(self.symmetric_check)
         layout.addWidget(self.reverse_check)
-        self.axis_note = QLabel(
+        self.axis_note = LabelMuted(
             "Revolve axis: X axis\nShown dash-dot in the sketch.", panel
         )
-        self.axis_note.setWordWrap(True)
         self.axis_note.setObjectName("SketchAxisNote")
+        self.axis_note.setWordWrap(True)
         layout.addWidget(self.axis_note)
 
-        separator = QFrame(panel)
-        separator.setFrameShape(QFrame.Shape.HLine)
-        layout.addWidget(separator)
-        constraints_title = QLabel("CONSTRAINTS & DIMENSIONS", panel)
+        layout.addWidget(SeparatorHorizontal(panel))
+        constraints_title = LabelGroup("CONSTRAINTS & DIMENSIONS", panel)
         constraints_title.setObjectName("SketchInspectorHeading")
         layout.addWidget(constraints_title)
-        self.constraint_list = QListWidget(panel)
-        self.constraint_list.setObjectName("SketchConstraintList")
+        self.constraint_list = ListForm(
+            object_name="SketchConstraintList",
+            parent=panel,
+        )
         layout.addWidget(self.constraint_list, 1)
         constraint_row = QHBoxLayout()
-        self.delete_constraint_button = QPushButton("Remove", panel)
-        self.solve_button = QPushButton("Solve", panel)
+        self.delete_constraint_button = ButtonFormDanger("Remove", panel)
+        self.solve_button = ButtonFormAction("Solve", parent=panel)
         constraint_row.addWidget(self.delete_constraint_button)
         constraint_row.addWidget(self.solve_button)
         layout.addLayout(constraint_row)
 
-        separator2 = QFrame(panel)
-        separator2.setFrameShape(QFrame.Shape.HLine)
-        layout.addWidget(separator2)
-        options_title = QLabel("SKETCH OPTIONS", panel)
+        layout.addWidget(SeparatorHorizontal(panel))
+        options_title = LabelGroup("SKETCH OPTIONS", panel)
         options_title.setObjectName("SketchInspectorHeading")
         layout.addWidget(options_title)
-        self.auto_constraints_check = QCheckBox(
-            "Automatic H/V constraints", panel
+        self.auto_constraints_check = CheckForm(
+            "Automatic H/V constraints", checked=True, parent=panel
         )
-        self.auto_constraints_check.setChecked(True)
-        self.snap_grid_check = QCheckBox("Snap to grid", panel)
-        self.snap_grid_check.setChecked(self.canvas.sketch.snap_grid)
-        self.snap_geometry_check = QCheckBox("Snap to geometry", panel)
-        self.snap_geometry_check.setChecked(self.canvas.sketch.snap_geometry)
-        self.show_dimensions_check = QCheckBox("Show dimensions", panel)
-        self.show_dimensions_check.setChecked(True)
+        self.snap_grid_check = CheckForm(
+            "Snap to grid",
+            checked=self.canvas.sketch.snap_grid,
+            parent=panel,
+        )
+        self.snap_geometry_check = CheckForm(
+            "Snap to geometry",
+            checked=self.canvas.sketch.snap_geometry,
+            parent=panel,
+        )
+        self.show_dimensions_check = CheckForm(
+            "Show dimensions", checked=True, parent=panel
+        )
         layout.addWidget(self.auto_constraints_check)
         layout.addWidget(self.snap_grid_check)
         layout.addWidget(self.snap_geometry_check)
@@ -490,9 +499,10 @@ class SketchFeatureDialog(QDialog):
         row = QHBoxLayout(footer)
         row.setContentsMargins(10, 6, 10, 7)
         row.setSpacing(8)
-        self.status_label = QLabel("Ready", footer)
-        self.status_label.setObjectName("SketchStatus")
-        self.hint_label = QLabel("", footer)
+        self.status_label = LabelStatus(
+            "Ready", object_name="SketchStatus", parent=footer
+        )
+        self.hint_label = LabelMuted("", footer)
         self.hint_label.setObjectName("SketchHint")
         row.addWidget(self.status_label)
         row.addWidget(self.hint_label, 1)
@@ -895,11 +905,13 @@ class SketchFeatureDialog(QDialog):
 
     @staticmethod
     def _length_spin(parent):
-        spin = QDoubleSpinBox(parent)
-        spin.setRange(1.0e-9, 1.0e12)
-        spin.setDecimals(6)
-        spin.setSingleStep(1.0)
-        return spin
+        return InputFormNumber(
+            minimum=1.0e-9,
+            maximum=1.0e12,
+            decimals=6,
+            step=1.0,
+            parent=parent,
+        )
 
     def _selection_warning(self, text):
         self.hint_label.setText(str(text))

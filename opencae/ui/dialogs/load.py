@@ -2,16 +2,11 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QCheckBox
-
-from opencae.ui.core.widgets import ChevronComboBox, ComponentsWidget, ReferenceSelector
-from opencae.ui.templates import (
-    NumericUnitInput,
-    SectionHeading,
-    apply_primary_control_height,
-    field_block,
-    field_row,
-)
+from opencae.ui.composites.controls import ControlNumericUnit, ControlReferenceSelector
+from opencae.ui.core.widgets import ComponentsWidget
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.templates import SectionHeading, field_block, field_row
 
 from .load_common import BaseLoadDialog
 
@@ -45,7 +40,6 @@ class LoadDialog(BaseLoadDialog):
         target_requirement=None,
         units=None,
     ):
-        """Build the fields required by the selected load type."""
         units = units or getattr(getattr(parent, "controllers", None), "units", None)
         show_csys = load_type in {"Concentrated Load", "Surface Traction", "Volume Load"}
         show_region = load_type != "Temperature"
@@ -76,13 +70,11 @@ class LoadDialog(BaseLoadDialog):
         symbol = lambda quantity: units.symbol(quantity) if units is not None else ""
 
         if load_type == "Concentrated Load":
-            self.distribution = ChevronComboBox()
-            self.distribution.setMinimumWidth(0)
+            self.distribution = SelectForm()
             self.distribution.addItem("Value per resolved node", "per_node")
             self.distribution.addItem("Total value, uniformly distributed", "total_uniform")
             index = self.distribution.findData(str(getattr(load, "distribution", "per_node")))
             self.distribution.setCurrentIndex(max(0, index))
-            apply_primary_control_height(self.distribution)
             self.form.addRow("Interpretation", self.distribution)
 
             self.root.addWidget(SectionHeading("Load Components"))
@@ -128,7 +120,7 @@ class LoadDialog(BaseLoadDialog):
                 if load and getattr(load, "temperature_field_ref", None)
                 else (fields[0].id if fields else "")
             )
-            self.temperature_field = ReferenceSelector(fields, current)
+            self.temperature_field = ControlReferenceSelector(fields, current)
             self.form.addRow("Reference temperature", self.scalar)
             self.form.addRow("Temperature field", self.temperature_field)
 
@@ -157,8 +149,10 @@ class LoadDialog(BaseLoadDialog):
                     field_block("Angular acceleration", self.inertia[3]),
                 )
             )
-            self.point_masses = QCheckBox("Consider point masses")
-            self.point_masses.setChecked(bool(getattr(load, "consider_point_masses", False)))
+            self.point_masses = CheckForm(
+                "Consider point masses",
+                checked=bool(getattr(load, "consider_point_masses", False)),
+            )
             self.root.addWidget(self.point_masses)
 
         if load_type in _AMPLITUDE_LOAD_TYPES:
@@ -168,7 +162,7 @@ class LoadDialog(BaseLoadDialog):
                 else None
             )
             self.root.addWidget(SectionHeading("Amplitude"))
-            self.amplitude = ReferenceSelector(
+            self.amplitude = ControlReferenceSelector(
                 (("None", None), *tuple(amplitudes)),
                 current_amplitude,
             )
@@ -178,8 +172,7 @@ class LoadDialog(BaseLoadDialog):
 
     @staticmethod
     def _number(value, unit=""):
-        """Return the canonical scalar editor used by single-value loads."""
-        return NumericUnitInput(
+        return ControlNumericUnit(
             value,
             unit,
             minimum=-1e300,
@@ -188,7 +181,6 @@ class LoadDialog(BaseLoadDialog):
         )
 
     def values(self):
-        """Return constructor values for the active load type."""
         values = self.common_values()
         if self.components is not None:
             values["components"] = self.components.values()

@@ -1,14 +1,7 @@
-"""Provides the canonical heading for grouped editor sections."""
+"""Compatibility export for the canonical section-heading primitive."""
 
-from __future__ import annotations
+from opencae.ui.primitives.labels import LabelSection
 
-from PyQt6.QtWidgets import QLabel
+SectionHeading = LabelSection
 
-
-class SectionHeading(QLabel):
-    """Render a reusable section title with the shared OpenCAE accent marker."""
-
-    def __init__(self, text: str, parent=None):
-        """Create one semantic editor-section heading."""
-        super().__init__(str(text), parent)
-        self.setObjectName("EditorSectionHeading")
+__all__ = ["SectionHeading"]

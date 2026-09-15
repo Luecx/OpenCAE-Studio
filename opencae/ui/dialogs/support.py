@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QLineEdit, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.naming import is_unique
 from opencae.model.selection import RegionDefinition
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.widgets import ComponentsWidget, CompactRegionSelector, ReferenceSelector
+from opencae.ui.primitives.inputs import InputFormText
 from opencae.ui.templates import (
     SectionHeading,
-    apply_primary_control_height,
     dialog_layout,
     dialog_buttons,
     field_block,
@@ -49,10 +49,9 @@ class SupportDialog(ApplyDialog):
         self.setMinimumSize(760, 500)
         root = dialog_layout(self)
 
-        self.name = QLineEdit(
+        self.name = InputFormText(
             support.name if support else (default_name or f"{support_type}-1")
         )
-        apply_primary_control_height(self.name)
         root.addWidget(field_block("Name", self.name))
         root.addWidget(SectionHeading("Boundary Condition"))
 

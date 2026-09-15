@@ -1,10 +1,11 @@
 """Top-level workflow stage selector."""
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QToolButton, QWidget
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QWidget
 
 from opencae.ui.core.metrics import STAGE_BAR_HEIGHT
 from opencae.ui.core.theme import PALETTE
+from opencae.ui.primitives.buttons import ButtonStageChoice
 
 STAGES = (
     "MATERIALS",
@@ -36,7 +37,7 @@ class StageBar(QWidget):
         self.group.setExclusive(True)
         self.buttons = {}
         for index, stage in enumerate(STAGES):
-            button = self._button(stage)
+            button = ButtonStageChoice(stage)
             button.clicked.connect(
                 lambda checked=False, name=stage: self.stage_changed.emit(name)
             )
@@ -64,20 +65,3 @@ class StageBar(QWidget):
         """
         for button in self.buttons.values():
             button.setStyleSheet(css)
-
-    @staticmethod
-    def _button(stage):
-        button = QToolButton()
-        button.setText(stage)
-        button.setCheckable(True)
-        button.setAutoExclusive(True)
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
-        widths = {
-            "BOUNDARY CONDITIONS": 158,
-            "CONSTRAINTS": 108,
-            "ANALYSIS": 96,
-            "STUDIES": 92,
-        }
-        button.setMinimumWidth(widths.get(stage, 82))
-        button.setFixedHeight(40)
-        return button

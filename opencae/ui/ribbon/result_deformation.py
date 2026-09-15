@@ -3,42 +3,32 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import (
-    QButtonGroup,
-    QHBoxLayout,
-    QMenu,
-    QRadioButton,
-    QToolButton,
-    QVBoxLayout,
-    QWidget,
-    QWidgetAction,
+from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QVBoxLayout, QWidget
+
+from opencae.ui.composites.controls import ControlNumericUnit
+from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.primitives.buttons.button_form_action import ButtonFormAction
+from opencae.ui.primitives.buttons.button_results_ribbon_options import (
+    ButtonResultsRibbonOptions,
 )
-
-from opencae.ui.core.icon_factory import IconKind
-from opencae.ui.templates import NumericUnitInput, button, field_block
-
-from .result_widgets import ribbon_button
+from opencae.ui.primitives.radios import RadioForm
+from opencae.ui.templates import field_block
 
 
-class ResultDeformationButton(QToolButton):
-    """Open deformation state and scale settings from one ribbon popup."""
+class ResultDeformationButton(ButtonResultsRibbonOptions):
+    """Open deformation state and scale settings from one Results ribbon popup."""
 
     settings_changed = pyqtSignal()
     auto_frame_requested = pyqtSignal()
     auto_frames_requested = pyqtSignal()
 
     def __init__(self, parent=None):
-        """Build an instant popup with explicit on/off radio buttons."""
-        super().__init__(parent)
-        template = ribbon_button("Deformed", IconKind.DEFORMATION, False)
-        self.setText(template.text())
-        self.setIcon(template.icon())
-        self.setIconSize(template.iconSize())
-        self.setToolButtonStyle(template.toolButtonStyle())
-        self.setProperty("ribbonButton", True)
-        self.setFixedSize(82, 70)
-        self.setCheckable(False)
-        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        super().__init__(
+            "Deformed",
+            icon=make_icon(IconKind.DEFORMATION, 28),
+            width=82,
+            parent=parent,
+        )
 
         panel = QWidget()
         panel.setMinimumWidth(320)
@@ -50,9 +40,8 @@ class ResultDeformationButton(QToolButton):
         state_layout = QHBoxLayout(state_row)
         state_layout.setContentsMargins(0, 0, 0, 0)
         state_layout.setSpacing(16)
-        self.disabled = QRadioButton("Off")
-        self.enabled = QRadioButton("On")
-        self.disabled.setChecked(True)
+        self.disabled = RadioForm("Off", checked=True)
+        self.enabled = RadioForm("On")
         self.state_group = QButtonGroup(self)
         self.state_group.addButton(self.disabled)
         self.state_group.addButton(self.enabled)
@@ -61,10 +50,7 @@ class ResultDeformationButton(QToolButton):
         state_layout.addStretch(1)
         layout.addWidget(field_block("Deformation", state_row))
 
-        # Automatic scaling can legitimately be far below 1e-6 when a result
-        # contains very large physical displacements. Fifteen decimals preserve
-        # those factors instead of silently rounding the display scale to zero.
-        self.scale = NumericUnitInput(
+        self.scale = ControlNumericUnit(
             1.0,
             "",
             minimum=0.0,
@@ -77,8 +63,8 @@ class ResultDeformationButton(QToolButton):
         auto_layout = QHBoxLayout(auto_row)
         auto_layout.setContentsMargins(0, 0, 0, 0)
         auto_layout.setSpacing(8)
-        self.auto_frame = button("Current Frame")
-        self.auto_frames = button("All Frames")
+        self.auto_frame = ButtonFormAction("Current Frame")
+        self.auto_frames = ButtonFormAction("All Frames")
         self.auto_frame.setToolTip(
             "Fit the deformation scale to displacement in the current frame"
         )
@@ -94,24 +80,17 @@ class ResultDeformationButton(QToolButton):
         reset_row = QHBoxLayout()
         reset_row.setContentsMargins(0, 0, 0, 0)
         reset_row.addStretch(1)
-        reset = button("Reset to 1")
+        reset = ButtonFormAction("Reset to 1")
         reset.clicked.connect(lambda: self.scale.setValue(1.0))
         reset_row.addWidget(reset)
         layout.addLayout(reset_row)
 
-        menu = QMenu(self)
-        action = QWidgetAction(menu)
-        action.setDefaultWidget(panel)
-        menu.addAction(action)
-        self.setMenu(menu)
-
+        self.set_options_panel(panel)
         self.enabled.toggled.connect(self.settings_changed.emit)
         self.scale.valueChanged.connect(self.settings_changed.emit)
 
     def values(self):
-        """Return whether deformation is enabled and its current display scale."""
         return self.enabled.isChecked(), self.scale.value()
 
     def set_scale(self, value):
-        """Replace the current deformation scale without changing enable state."""
         self.scale.setValue(float(value))

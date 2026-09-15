@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QCheckBox, QLineEdit, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.entities.constraints import (
     CONNECTOR_TYPES,
@@ -12,18 +12,14 @@ from opencae.model.entities.constraints import (
     direct_control_point_error,
 )
 from opencae.model.naming import is_unique
+from opencae.ui.composites.controls import ControlNumericUnit
+from opencae.ui.composites.groups import GroupCheckGrid
 from opencae.ui.core.apply_dialog import ApplyDialog
-from opencae.ui.core.widgets import ChevronComboBox, CompactRegionSelector
-from opencae.ui.templates import (
-    CheckGrid,
-    NumericUnitInput,
-    SectionHeading,
-    apply_primary_control_height,
-    dialog_layout,
-    dialog_buttons,
-    field_block,
-    field_row,
-)
+from opencae.ui.core.widgets import CompactRegionSelector
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.inputs import InputFormText
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.templates import SectionHeading, dialog_layout, dialog_buttons, field_block, field_row
 
 from .constraint_dialog_layout import (
     master_definition,
@@ -52,7 +48,6 @@ class ConstraintDialog(ApplyDialog):
         validator=None,
         units=None,
     ):
-        """Build the constraint definition and its type-dependent option sections."""
         super().__init__(parent)
         self.project = project
         self.existing_names = tuple(existing_names)
@@ -66,15 +61,12 @@ class ConstraintDialog(ApplyDialog):
         self.setMinimumSize(760, 560)
         root = dialog_layout(self)
 
-        self.name = QLineEdit(getattr(constraint, "name", default_name))
-        apply_primary_control_height(self.name)
-        self.kind = ChevronComboBox()
-        self.kind.setMinimumWidth(0)
+        self.name = InputFormText(getattr(constraint, "name", default_name))
+        self.kind = SelectForm()
         for value in ConstraintType:
             self.kind.addItem(value.value, value.value)
         current_kind = str(getattr(constraint, "constraint_type", initial_type))
         self.kind.setCurrentIndex(max(0, self.kind.findData(current_kind)))
-        apply_primary_control_height(self.kind)
         root.addWidget(
             field_row(
                 field_block("Name", self.name),
@@ -108,7 +100,7 @@ class ConstraintDialog(ApplyDialog):
 
         components = tuple(getattr(constraint, "components", (1, 1, 1, 1, 1, 1)))
         self.component_section = section_container(root, "Degrees of Freedom")
-        self.components = CheckGrid(
+        self.components = GroupCheckGrid(
             ("U1", "U2", "U3", "R1", "R2", "R3"),
             components,
             columns=3,
@@ -116,10 +108,12 @@ class ConstraintDialog(ApplyDialog):
         self.component_section.layout().addWidget(self.components)
 
         self.tie_section = section_container(root, "Tie Options")
-        self.adjust = QCheckBox("Adjust slave nodes to the master surface")
-        self.adjust.setChecked(bool(getattr(constraint, "adjust", False)))
+        self.adjust = CheckForm(
+            "Adjust slave nodes to the master surface",
+            checked=bool(getattr(constraint, "adjust", False)),
+        )
         distance_unit = self.units.symbol("length") if self.units is not None else ""
-        self.distance = NumericUnitInput(
+        self.distance = ControlNumericUnit(
             float(getattr(constraint, "distance", 0.0) or 0.0),
             distance_unit,
             minimum=0.0,
@@ -134,13 +128,12 @@ class ConstraintDialog(ApplyDialog):
         )
 
         self.connector_section = section_container(root, "Connector Options")
-        self.connector_type = ChevronComboBox()
+        self.connector_type = SelectForm()
         for value in CONNECTOR_TYPES:
             self.connector_type.addItem(value.title(), value)
         current_connector = str(getattr(constraint, "connector_type", "BEAM")).upper()
         connector_index = self.connector_type.findData(current_connector)
         self.connector_type.setCurrentIndex(max(0, connector_index))
-        apply_primary_control_height(self.connector_type)
         self.connector_section.layout().addWidget(
             field_block("Connector type", self.connector_type)
         )
@@ -157,7 +150,6 @@ class ConstraintDialog(ApplyDialog):
         self._update_type()
 
     def _pick(self, role, owner, done, finished):
-        """Delegate one constraint-side viewport pick to the owning controller."""
         if self.pick_callback:
             return self.pick_callback(
                 self.constraint_type(), role, owner, done, finished
@@ -165,7 +157,6 @@ class ConstraintDialog(ApplyDialog):
         return None
 
     def _save(self, role, owner, definition):
-        """Delegate saving a selected region when the controller exposes that action."""
         if self.save_callback:
             return self.save_callback(
                 self.constraint_type(), role, owner, definition
@@ -173,13 +164,9 @@ class ConstraintDialog(ApplyDialog):
         return None
 
     def constraint_type(self):
-        """Return the currently selected canonical constraint type."""
         return ConstraintType.coerce(self.kind.currentData())
 
     def _update_type(self) -> None:
-        """Apply type-specific region requirements, labels, and option visibility."""
-        # A pick policy belongs to one concrete type. End a running session
-        # before changing requirements so the viewport cannot return stale hits.
         self.master.finish_pick()
         self.slave.finish_pick()
         kind = self.constraint_type()
@@ -194,9 +181,6 @@ class ConstraintDialog(ApplyDialog):
         self.component_section.setVisible(coupling)
         self.tie_section.setVisible(tie)
         self.connector_section.setVisible(connector)
-
-        # Direct control points are visual selections, whereas tie masters and
-        # connector node sets may intentionally use the extended region editor.
         self.master.set_extended_visible(tie or connector)
         self.slave.set_extended_visible(True)
         if (coupling or kind == ConstraintType.RIGID_BODY) and not self.master.definition().empty:
@@ -205,15 +189,12 @@ class ConstraintDialog(ApplyDialog):
         self._emit_preview()
 
     def _emit_preview(self) -> None:
-        """Publish both current region definitions for persistent viewport highlighting."""
         self.preview_changed.emit(self.master.definition(), self.slave.definition())
 
     def preview_definitions(self):
-        """Return master/control and slave/body definitions for initial preview setup."""
         return self.master.definition(), self.slave.definition()
 
     def values(self) -> dict:
-        """Return constructor values for the active constraint type."""
         kind = self.constraint_type()
         values = {"name": self.name.text().strip(), "constraint_type": kind}
         if kind in {ConstraintType.KINEMATIC, ConstraintType.DISTRIBUTING}:
@@ -242,7 +223,6 @@ class ConstraintDialog(ApplyDialog):
         return values
 
     def validate(self) -> bool:
-        """Validate naming and both region definitions before a constraint is committed."""
         allowed = [
             item
             for item in self.existing_names
@@ -270,7 +250,6 @@ class ConstraintDialog(ApplyDialog):
         return True
 
     def prepare_new(self, default_name, existing_names) -> None:
-        """Reset selection and naming state after Apply creates a constraint."""
         self.constraint = None
         self.existing_names = tuple(existing_names)
         self.name.setText(default_name)
