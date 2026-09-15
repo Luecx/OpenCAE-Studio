@@ -1,226 +1,155 @@
-"""Provide frame playback and interpolation controls for stored solver results."""
+"""Provides the lower-workspace Time Manager controls and compact frame plot."""
 
 from __future__ import annotations
 
-from math import pi, sin
+import math
 
-from PyQt6.QtCore import (
-    QElapsedTimer,
-    QPointF,
-    QRectF,
-    QSignalBlocker,
-    Qt,
-    QTimer,
-    pyqtSignal,
-)
-from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QPolygonF
+import numpy as np
+from PyQt6.QtCore import QTimer, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
 from PyQt6.QtWidgets import (
-    QButtonGroup,
-    QFrame,
     QHBoxLayout,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
-from opencae.results.navigation import display_field, fields_for, frame_keys
+from opencae.results.navigation import field_for_frame, fields_for, frame_keys, step_ids, step_label
+from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.theme import PALETTE
 from opencae.ui.primitives.buttons import ButtonTimeManagerMedia
 from opencae.ui.primitives.inputs import InputTimeManagerSpeed
 from opencae.ui.primitives.labels import LabelBody, LabelTimeManagerHeading
 from opencae.ui.primitives.radios import RadioForm
-from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.primitives.selects import SelectTimeManagerStep
 from opencae.ui.primitives.sliders import SliderHorizontal
-from .time_manager_plot import TimeManagerPlot
+from opencae.ui.templates import field_block
 
 
-def frame_axis(values):
-    """Return the stable one-based frame axis and whether solver values are time-like."""
-    raw = [float(value) for value in values]
-    if not raw:
-        return [], False
-    strictly_increasing = len(raw) > 1 and all(
-        raw[index + 1] > raw[index] + 1.0e-14
-        for index in range(len(raw) - 1)
-    )
-    # Playback speed is expressed against a stable frame ordinal. Solver frame
-    # values stay available as the plotted y-series but never stretch x-space.
-    return [float(index + 1) for index in range(len(raw))], strictly_increasing
+class TimeManagerPlot(QWidget):
+    """Draw the active frame path and allow direct frame selection."""
 
+    frame_selected = pyqtSignal(int)
 
-def frame_bracket(axis, value):
-    """Return bounding frame indices and interpolation alpha for one axis value."""
-    values = [float(item) for item in axis]
-    if not values:
-        return 0, 0, 0.0
-    target = float(value)
-    if target <= values[0]:
-        return 0, 0, 0.0
-    if target >= values[-1]:
-        last = len(values) - 1
-        return last, last, 0.0
-    for right in range(1, len(values)):
-        if target <= values[right]:
-            left = right - 1
-            span = values[right] - values[left]
-            alpha = 0.0 if span <= 1.0e-14 else (target - values[left]) / span
-            return left, right, min(max(alpha, 0.0), 1.0)
-    last = len(values) - 1
-    return last, last, 0.0
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._frames = []
+        self._current = 0
+        self.setMinimumHeight(130)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
+    def set_frames(self, frames, current=0):
+        self._frames = list(frames)
+        self._current = max(0, min(int(current), max(0, len(self._frames) - 1)))
+        self.update()
 
-def current_frame_amplitude(phase):
-    """Run one full signed response cycle: 0 -> +1 -> 0 -> -1 -> 0."""
-    value = min(max(float(phase), 0.0), 1.0)
-    return sin(2.0 * pi * value)
+    def set_current(self, index):
+        self._current = max(0, min(int(index), max(0, len(self._frames) - 1)))
+        self.update()
 
+    def paintEvent(self, event):
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor(PALETTE["panel"]))
+        if not self._frames:
+            painter.setPen(QColor(PALETTE["muted"]))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No result frames")
+            return
+        margin = 24
+        width = max(1, self.width() - 2 * margin)
+        height = max(1, self.height() - 2 * margin)
+        count = len(self._frames)
+        baseline = margin + height * 0.5
+        accent = QColor(PALETTE["accent"])
+        muted = QColor(PALETTE["muted"])
+        painter.setPen(QPen(muted, 1.0))
+        painter.drawLine(margin, int(baseline), margin + width, int(baseline))
+        points = []
+        for index in range(count):
+            x = margin + (0 if count == 1 else width * index / (count - 1))
+            points.append((x, baseline))
+        for index, (x, y) in enumerate(points):
+            radius = 5 if index == self._current else 3
+            painter.setBrush(accent if index == self._current else muted)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(int(x - radius), int(y - radius), radius * 2, radius * 2)
 
-def _playback_icon(kind: str, size: int = 18) -> QIcon:
-    """Draw crisp theme-native playback glyphs without platform media icons."""
-    pixmap = QPixmap(size, size)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-    color = QColor(PALETTE["text"])
-    pen = QPen(color, 1.8)
-    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-    painter.setPen(pen)
-    painter.setBrush(color)
-
-    def triangle(points):
-        painter.drawPolygon(QPolygonF([QPointF(*point) for point in points]))
-
-    if kind == "play":
-        triangle(((5.0, 3.5), (14.5, 9.0), (5.0, 14.5)))
-    elif kind == "stop":
-        painter.drawRoundedRect(QRectF(5.0, 5.0, 8.0, 8.0), 1.0, 1.0)
-    elif kind in {"previous", "first"}:
-        triangle(((9.0, 4.0), (4.5, 9.0), (9.0, 14.0)))
-        triangle(((14.0, 4.0), (9.5, 9.0), (14.0, 14.0)))
-        if kind == "first":
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawLine(QPointF(3.0, 4.0), QPointF(3.0, 14.0))
-    elif kind in {"next", "last"}:
-        triangle(((4.0, 4.0), (8.5, 9.0), (4.0, 14.0)))
-        triangle(((9.0, 4.0), (13.5, 9.0), (9.0, 14.0)))
-        if kind == "last":
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawLine(QPointF(15.0, 4.0), QPointF(15.0, 14.0))
-    elif kind == "loop":
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawArc(QRectF(3.0, 3.5, 12.0, 10.0), 25 * 16, 155 * 16)
-        painter.drawArc(QRectF(3.0, 4.5, 12.0, 10.0), 205 * 16, 155 * 16)
-        painter.setBrush(color)
-        triangle(((13.0, 2.8), (16.0, 5.0), (12.4, 6.0)))
-        triangle(((5.0, 15.2), (2.0, 13.0), (5.6, 12.0)))
-
-    painter.end()
-    return QIcon(pixmap)
+    def mousePressEvent(self, event):
+        if not self._frames or event.button() != Qt.MouseButton.LeftButton:
+            return super().mousePressEvent(event)
+        margin = 24
+        width = max(1, self.width() - 2 * margin)
+        if len(self._frames) == 1:
+            index = 0
+        else:
+            fraction = (event.position().x() - margin) / width
+            index = round(max(0.0, min(1.0, fraction)) * (len(self._frames) - 1))
+        self.frame_selected.emit(int(index))
 
 
 class TimeManagerPanel(QWidget):
-    """Synchronize result playback with the authoritative Results ribbon state."""
+    """Own result-frame navigation and playback state for the lower workspace."""
 
-    frame_summary_changed = pyqtSignal(str, str)
+    frame_changed = pyqtSignal(object, object, object)
+    summary_changed = pyqtSignal(str, str)
 
     FRAME_INTERVAL_MS = 16
-    ACROSS_BASE_FPS = 4.0
+    ACROSS_BASE_FPS = 6.0
 
-    def __init__(self, results_page=None, viewport=None, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.results_page = results_page
-        self.viewport = viewport
         self._result = None
         self._field = None
         self._options = {}
-        self._frames = []
-        self._frame_values = []
-        self._axis = []
-        self._has_time_axis = False
-        self._current_index = -1
-        self._play_position = 0.0
-        self._phase = 0.0
-        self._playing = False
-        self._playback_visible_index = -1
         self._playback_options = None
+        self._frames = []
+        self._current_index = 0
         self._frame_grid_cache = {}
-        self._clock = QElapsedTimer()
         self._timer = QTimer(self)
         self._timer.setInterval(self.FRAME_INTERVAL_MS)
-        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self._timer.timeout.connect(self._tick)
+        self._timer.timeout.connect(self._advance_playback)
+        self._phase = 0.0
+        self._last_tick = None
         self._build()
-        if self.results_page is not None:
-            self.results_page.result_requested.connect(self.set_display_state)
-        self._set_available(False)
 
     def _build(self):
         root = QHBoxLayout(self)
-        root.setContentsMargins(6, 3, 6, 4)
-        root.setSpacing(8)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        self.sidebar = QFrame()
-        self.sidebar.setObjectName("TimeManagerSidebar")
+        self.sidebar = QWidget()
         self.sidebar.setFixedWidth(290)
-        self.sidebar.setStyleSheet(
-            "QFrame#TimeManagerSidebar { background: transparent; border: none; }"
-        )
         side = QVBoxLayout(self.sidebar)
-        side.setContentsMargins(8, 4, 8, 4)
-        side.setSpacing(5)
+        side.setContentsMargins(14, 10, 14, 10)
+        side.setSpacing(8)
 
-        side.addWidget(self._heading("Playback Mode"))
-        mode_row = QWidget()
-        mode_layout = QHBoxLayout(mode_row)
-        mode_layout.setContentsMargins(0, 0, 0, 0)
-        mode_layout.setSpacing(8)
-        self.current_frame = RadioForm("Current frame")
-        self.across_frames = RadioForm("Across frames", checked=True)
-        self.mode_group = QButtonGroup(self)
-        self.mode_group.addButton(self.current_frame)
-        self.mode_group.addButton(self.across_frames)
-        mode_layout.addWidget(
-            self.current_frame,
-            1,
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-        )
-        mode_layout.addWidget(
-            self.across_frames,
-            1,
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-        )
-        side.addWidget(mode_row)
-        self.current_frame.toggled.connect(self._mode_changed)
-        self.across_frames.toggled.connect(self._mode_changed)
-
-        side.addSpacing(1)
-        side.addWidget(self._heading("Current step"))
-        self.step = SelectForm()
-        self.step.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Fixed,
-        )
-        self.step.currentIndexChanged.connect(self._step_selected)
+        side.addWidget(self._heading("Step"))
+        self.step = SelectTimeManagerStep(parent=self.sidebar)
+        self.step.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.step.currentIndexChanged.connect(self._step_changed)
         side.addWidget(self.step)
 
-        side.addSpacing(1)
-        side.addWidget(self._heading("Controls"))
+        side.addSpacing(2)
+        side.addWidget(self._heading("Playback"))
+        self.current_frame = RadioForm("Current frame", parent=self.sidebar)
+        self.across_frames = RadioForm("Across frames", checked=True, parent=self.sidebar)
+        self.current_frame.toggled.connect(self._mode_changed)
+        self.across_frames.toggled.connect(self._mode_changed)
+        side.addWidget(self.current_frame)
+        side.addWidget(self.across_frames)
+
+        self.controls_row = QWidget(self.sidebar)
+        controls = QHBoxLayout(self.controls_row)
+        controls.setContentsMargins(0, 0, 0, 0)
+        controls.setSpacing(4)
         self.first_button = self._media_button("first", "First frame")
         self.previous_button = self._media_button("previous", "Previous frame")
         self.play_button = self._media_button("play", "Play")
         self.stop_button = self._media_button("stop", "Stop")
         self.next_button = self._media_button("next", "Next frame")
         self.last_button = self._media_button("last", "Last frame")
-        self.loop_button = self._media_button(
-            "loop", "Loop playback", checkable=True
-        )
-
-        self.controls_row = QWidget()
-        controls_layout = QHBoxLayout(self.controls_row)
-        controls_layout.setContentsMargins(0, 0, 0, 0)
-        controls_layout.setSpacing(3)
-        controls_layout.addStretch(1)
+        self.loop_button = self._media_button("loop", "Loop", checkable=True)
         for button in (
             self.first_button,
             self.previous_button,
@@ -230,8 +159,10 @@ class TimeManagerPanel(QWidget):
             self.last_button,
             self.loop_button,
         ):
-            controls_layout.addWidget(button)
-        controls_layout.addStretch(1)
+            button.setParent(self.controls_row)
+            controls.addWidget(button)
+        controls.addStretch(1)
+        controls.addSpacing(1)
         side.addWidget(self.controls_row)
 
         self.first_button.clicked.connect(lambda: self._select_frame(0))
@@ -272,9 +203,9 @@ class TimeManagerPanel(QWidget):
 
         # Keep compatibility labels as state holders for callers/tests, but the
         # visible frame summary is hosted in the native lower dock tab strip.
-        self.total_frames = LabelBody("0", self)
+        self.total_frames = LabelBody("0", parent=self)
         self.total_frames.hide()
-        self.current_frame_label = LabelBody("—", self)
+        self.current_frame_label = LabelBody("—", parent=self)
         self.current_frame_label.hide()
 
         content = QWidget()
@@ -309,107 +240,200 @@ class TimeManagerPanel(QWidget):
         self._sync_step_selector()
         self._sync_frames()
 
-    def _sync_step_selector(self):
-        choose = getattr(self.results_page, "choose", None)
-        source = getattr(choose, "step", None)
-        blocker = QSignalBlocker(self.step)
+    def clear(self):
+        self._stop_playback(restore=False)
+        self._result = None
+        self._field = None
+        self._options = {}
+        self._playback_options = None
+        self._frames = []
+        self._frame_grid_cache.clear()
         self.step.clear()
-        if source is not None:
-            for index in range(source.count()):
-                self.step.addItem(source.itemText(index), source.itemData(index))
-            self.step.setCurrentIndex(source.currentIndex())
-        del blocker
+        self.total_frames.setText("0")
+        self.current_frame_label.setText("—")
+        self.summary_changed.emit("0", "—")
+        self.plot.set_frames(())
+
+    def _sync_step_selector(self):
+        current = self.step.currentData()
+        self.step.blockSignals(True)
+        self.step.clear()
+        if self._result is not None and self._field is not None:
+            fields = tuple(getattr(self._result, "fields", ()))
+            for index, step_id in enumerate(step_ids(fields)):
+                self.step.addItem(step_label(self._result, step_id, index), step_id)
+        if current is not None:
+            index = self.step.findData(current)
+            if index >= 0:
+                self.step.setCurrentIndex(index)
+        self.step.blockSignals(False)
 
     def _sync_frames(self):
-        choose = getattr(self.results_page, "choose", None)
-        fields = list(getattr(choose, "fields", ()) or ())
-        if self._result is None or self._field is None or not fields:
+        if self._result is None or self._field is None:
             self._frames = []
-            self._frame_values = []
-            self._axis = []
-            self._current_index = -1
-            self.total_frames.setText("0")
-            self.current_frame_label.setText("—")
-            self._emit_frame_summary()
-            self._refresh_plot()
-            self._set_available(False)
-            return
-
-        step_id = int(self._field.metadata.get("step_id", 1))
-        component = self._field.metadata.get("component", "Magnitude")
-        current_frame_id = int(self._field.metadata.get("frame_id", 1))
-        compatible = []
-        for frame_id, value in frame_keys(fields, step_id):
-            source = next(
-                (
-                    item
-                    for item in fields_for(fields, step_id, frame_id)
-                    if item.name == self._field.name
-                ),
-                None,
-            )
-            if source is None:
-                continue
-            display = display_field(source, component)
-            combo_index = next(
-                (
-                    index
-                    for index in range(choose.frame.count())
-                    if (choose.frame.itemData(index) or (None,))[0] == frame_id
-                ),
-                -1,
-            )
-            compatible.append((frame_id, float(value), display, combo_index))
-
-        self._frames = compatible
-        self._frame_values = [item[1] for item in compatible]
-        self._axis, self._has_time_axis = frame_axis(self._frame_values)
-        self._current_index = next(
-            (
-                index
-                for index, item in enumerate(compatible)
-                if item[0] == current_frame_id
-            ),
-            0 if compatible else -1,
+        else:
+            fields = tuple(getattr(self._result, "fields", ()))
+            step_id = self.step.currentData()
+            if step_id is None:
+                ids = step_ids(fields)
+                step_id = ids[0] if ids else None
+            self._frames = list(frame_keys(fields, step_id)) if step_id is not None else []
+        self._current_index = max(0, min(self._current_index, max(0, len(self._frames) - 1)))
+        self.total_frames.setText(str(len(self._frames)))
+        self.current_frame_label.setText(
+            str(self._current_index + 1) if self._frames else "—"
         )
-        self.total_frames.setText(str(len(compatible)))
-        self._update_current_label(self._current_index)
-        self._refresh_plot()
-        self._set_available(bool(compatible))
-        self._update_navigation()
+        self.summary_changed.emit(
+            self.total_frames.text(),
+            self.current_frame_label.text(),
+        )
+        self.plot.set_frames(self._frames, self._current_index)
+        self._refresh_buttons()
 
-    def _refresh_plot(self):
+    def _step_changed(self, *_):
+        self._current_index = 0
+        self._frame_grid_cache.clear()
+        self._sync_frames()
+        self._emit_current()
+
+    def _mode_changed(self, *_):
+        if self.sender() is self.current_frame and self.current_frame.isChecked():
+            self.across_frames.setChecked(False)
+        elif self.sender() is self.across_frames and self.across_frames.isChecked():
+            self.current_frame.setChecked(False)
+
+    def _select_frame(self, index):
         if not self._frames:
-            self.plot.set_series([], [], x_label="Frame", y_label="Value")
             return
-        if self.current_frame.isChecked():
-            phases = [index / 64.0 for index in range(65)]
-            values = [current_frame_amplitude(value) for value in phases]
-            self.plot.set_series(
-                phases,
-                values,
-                cursor_x=self._phase if self._playing else None,
-                x_label="Time",
-                y_label="Scale",
-                show_markers=False,
-                interactive=False,
-            )
+        target = max(0, min(int(index), len(self._frames) - 1))
+        if target == self._current_index:
+            self.plot.set_current(target)
             return
-        self.plot.set_series(
-            self._axis,
-            self._frame_values,
-            current_index=self._current_index,
-            cursor_x=self._play_position if self._playing else None,
-            x_label="Frame",
-            y_label="Time (s)" if self._has_time_axis else "Solver frame value",
-            show_markers=True,
-            interactive=True,
+        self._current_index = target
+        self.current_frame_label.setText(str(target + 1))
+        self.summary_changed.emit(
+            self.total_frames.text(),
+            self.current_frame_label.text(),
         )
+        self.plot.set_current(target)
+        self._emit_current()
+        self._refresh_buttons()
 
-    def _set_available(self, available):
-        for widget in (
-            self.current_frame,
-            self.across_frames,
+    def _play(self):
+        if not self._frames:
+            return
+        self._phase = 0.0
+        self._last_tick = None
+        self._timer.start()
+        self._refresh_buttons()
+
+    def _stop_playback(self, *, restore):
+        was_active = self._timer.isActive()
+        self._timer.stop()
+        self._last_tick = None
+        if restore and was_active:
+            self._emit_current()
+        self._refresh_buttons()
+
+    def _advance_playback(self):
+        if not self._frames:
+            self._stop_playback(restore=False)
+            return
+        import time
+
+        now = time.monotonic()
+        previous = self._last_tick
+        self._last_tick = now
+        if previous is None:
+            return
+        elapsed = max(0.0, now - previous)
+        speed = max(0.25, float(self.speed.value()))
+        if self.current_frame.isChecked():
+            self._phase += elapsed * speed
+            factor = math.sin(self._phase * 2.0 * math.pi)
+            if self._phase >= 1.0:
+                if self.loop_button.isChecked():
+                    self._phase %= 1.0
+                else:
+                    self._stop_playback(restore=True)
+                    return
+            self._emit_scaled(factor)
+            return
+        frame_advance = elapsed * self.ACROSS_BASE_FPS * speed
+        self._phase += frame_advance
+        target = int(self._phase)
+        if target <= 0:
+            return
+        self._phase -= target
+        next_index = self._current_index + target
+        if next_index >= len(self._frames):
+            if self.loop_button.isChecked():
+                next_index %= len(self._frames)
+            else:
+                self._select_frame(len(self._frames) - 1)
+                self._stop_playback(restore=False)
+                return
+        self._select_frame(next_index)
+
+    def _emit_current(self):
+        if not self._frames or self._result is None or self._field is None:
+            return
+        field, grid = self._frame_payload(self._current_index)
+        if field is None:
+            return
+        self.frame_changed.emit(field, grid, dict(self._options))
+
+    def _emit_scaled(self, factor):
+        field, grid = self._frame_payload(self._current_index)
+        if field is None or grid is None:
+            return
+        scaled = grid.copy(deep=True)
+        scalar = _scalar_name(field)
+        if scalar and scalar in scaled.point_data:
+            scaled.point_data[scalar] = np.asarray(scaled.point_data[scalar]) * float(factor)
+        displacement = _displacement_keys(scaled)
+        if displacement:
+            for key in displacement:
+                scaled.point_data[key] = np.asarray(scaled.point_data[key]) * float(factor)
+        self.frame_changed.emit(field, scaled, dict(self._options))
+
+    def _frame_payload(self, index):
+        if self._result is None or self._field is None or not self._frames:
+            return None, None
+        index = max(0, min(int(index), len(self._frames) - 1))
+        frame_id, _value = self._frames[index]
+        step_id = self.step.currentData()
+        fields = tuple(getattr(self._result, "fields", ()))
+        field = field_for_frame(self._field, fields, step_id, frame_id)
+        if field is None:
+            return None, None
+        cache_key = (step_id, frame_id, getattr(field, "name", None), getattr(field, "metadata", {}).get("component"))
+        if cache_key not in self._frame_grid_cache:
+            loader = getattr(self._result, "load_field_grid", None)
+            if not callable(loader):
+                return field, None
+            self._frame_grid_cache[cache_key] = loader(field)
+        return field, self._frame_grid_cache[cache_key]
+
+    def _speed_slider_changed(self, value):
+        numeric = max(0.25, min(4.0, float(value) / 100.0))
+        if abs(self.speed.value() - numeric) <= 1.0e-12:
+            return
+        self.speed.blockSignals(True)
+        self.speed.setValue(numeric)
+        self.speed.blockSignals(False)
+
+    def _speed_spin_changed(self, value):
+        target = int(round(max(0.25, min(4.0, float(value))) * 100.0))
+        if self.speed_slider.value() == target:
+            return
+        self.speed_slider.blockSignals(True)
+        self.speed_slider.setValue(target)
+        self.speed_slider.blockSignals(False)
+
+    def _refresh_buttons(self):
+        active = bool(self._frames)
+        for button in (
             self.first_button,
             self.previous_button,
             self.play_button,
@@ -417,254 +441,69 @@ class TimeManagerPanel(QWidget):
             self.next_button,
             self.last_button,
             self.loop_button,
-            self.step,
-            self.speed_slider,
-            self.speed,
         ):
-            widget.setEnabled(bool(available))
+            button.setEnabled(active)
+        self.first_button.setEnabled(active and self._current_index > 0)
+        self.previous_button.setEnabled(active and self._current_index > 0)
+        self.next_button.setEnabled(active and self._current_index + 1 < len(self._frames))
+        self.last_button.setEnabled(active and self._current_index + 1 < len(self._frames))
+        self.stop_button.setEnabled(self._timer.isActive())
+        self.play_button.setEnabled(active and not self._timer.isActive())
 
-    def _update_navigation(self):
-        count = len(self._frames)
-        valid = 0 <= self._current_index < count
-        self.first_button.setEnabled(valid and self._current_index > 0)
-        self.previous_button.setEnabled(valid and self._current_index > 0)
-        self.next_button.setEnabled(valid and self._current_index + 1 < count)
-        self.last_button.setEnabled(valid and self._current_index + 1 < count)
-        self.play_button.setEnabled(
-            valid and (self.current_frame.isChecked() or count > 1)
-        )
-        self.stop_button.setEnabled(valid)
 
-    def _update_current_label(self, index):
-        count = len(self._frames)
-        self.current_frame_label.setText(
-            f"{index + 1} / {count}" if 0 <= index < count else "—"
-        )
-        self._emit_frame_summary()
-        if self.across_frames.isChecked():
-            self.plot.set_current_index(index)
+def _scalar_name(field):
+    metadata = getattr(field, "metadata", {}) or {}
+    component = metadata.get("component")
+    name = getattr(field, "name", None)
+    return f"{name}:{component}" if name and component else name
 
-    def _emit_frame_summary(self):
-        self.frame_summary_changed.emit(
-            self.total_frames.text(),
-            self.current_frame_label.text(),
-        )
 
-    def _select_frame(self, index):
-        if not self._frames:
-            return
-        target = min(max(int(index), 0), len(self._frames) - 1)
-        self._stop_playback(restore=False)
-        combo_index = self._frames[target][3]
-        choose = getattr(self.results_page, "choose", None)
-        if choose is not None and combo_index >= 0:
-            choose.frame.setCurrentIndex(combo_index)
-        else:
-            self._current_index = target
-            self._update_current_label(target)
-            self._refresh_plot()
-            self._restore_exact()
+def _displacement_keys(grid):
+    candidates = (("U1", "U2", "U3"), ("u", "v", "w"))
+    for keys in candidates:
+        if all(key in grid.point_data for key in keys):
+            return keys
+    return None
 
-    def _step_selected(self, index):
-        if self.results_page is None or index < 0:
-            return
-        self._stop_playback(restore=False)
-        choose = getattr(self.results_page, "choose", None)
-        if choose is not None and index < choose.step.count():
-            choose.step.setCurrentIndex(index)
 
-    def _mode_changed(self, _checked=False):
-        if self._playing:
-            self._stop_playback(restore=True)
-        self._phase = 0.0
-        self._playback_options = None
-        self._refresh_plot()
-        self._update_navigation()
-
-    def _speed_slider_changed(self, value):
-        blocker = QSignalBlocker(self.speed)
-        self.speed.setValue(float(value) / 100.0)
-        del blocker
-
-    def _speed_spin_changed(self, value):
-        blocker = QSignalBlocker(self.speed_slider)
-        self.speed_slider.setValue(round(float(value) * 100.0))
-        del blocker
-
-    def _play(self):
-        if not self._frames or self._current_index < 0:
-            return
-        if self.across_frames.isChecked() and len(self._frames) < 2:
-            return
-        fields = (
-            [item[2] for item in self._frames]
-            if self.across_frames.isChecked()
-            else [self._frames[self._current_index][2]]
-        )
-        # Range calculation is intentionally outside the 60 Hz tick loop.
-        self._playback_options = self._animation_options(fields)
-        self._playing = True
-        self._phase = 0.0
-        self._play_position = self._axis[self._current_index]
-        self._playback_visible_index = self._current_index
-        self._clock.start()
-        self._timer.start()
-        self._refresh_plot()
-        self._tick(initial=True)
-
-    def _tick(self, initial=False):
-        if not self._playing:
-            return
-        elapsed = (
-            0.0
-            if initial
-            else min(max(self._clock.restart() / 1000.0, 0.0), 0.10)
-        )
-        multiplier = float(self.speed.value())
-        if self.across_frames.isChecked():
-            # 1x is a practical four keyframes/second baseline. Interpolation is
-            # still rendered at ~60 Hz, so the response is fast without becoming
-            # a discrete frame slideshow.
-            self._play_position += elapsed * multiplier * self.ACROSS_BASE_FPS
-            start = self._axis[0]
-            end = self._axis[-1]
-            if self._play_position > end + 1.0e-12:
-                if self.loop_button.isChecked():
-                    span = max(end - start, 1.0)
-                    self._play_position = start + (
-                        (self._play_position - start) % span
-                    )
-                else:
-                    self._stop_playback(restore=False)
-                    self._select_frame(len(self._frames) - 1)
-                    return
-            left, right, alpha = frame_bracket(
-                self._axis,
-                self._play_position,
-            )
-            visible = right if alpha >= 0.5 else left
-            if visible != self._playback_visible_index:
-                self._playback_visible_index = visible
-                self._update_current_label(visible)
-            self.plot.set_cursor_x(self._play_position)
-            self._render_interpolated(left, right, alpha)
-            return
-
-        self._phase += elapsed * multiplier
-        if self._phase > 1.0 + 1.0e-12:
-            if self.loop_button.isChecked():
-                self._phase %= 1.0
-            else:
-                self._stop_playback(restore=True)
-                return
-        self.plot.set_cursor_x(self._phase)
-        self._render_current_factor(current_frame_amplitude(self._phase))
-
-    def _render_interpolated(self, left, right, alpha):
-        if self.viewport is None or self._result is None:
-            return
-        first = self._frames[left][2]
-        second = self._frames[right][2]
-        options = dict(
-            self._playback_options
-            or self._animation_options([item[2] for item in self._frames])
-        )
-        options["_animation"] = {
-            "mode": "interpolate",
-            "next_field": second,
-            "source_grid": self._cached_grid(first),
-            "next_grid": self._cached_grid(second),
-            "alpha": float(alpha),
-        }
-        self.viewport.scene.show_result(self._result, first, options)
-
-    def _render_current_factor(self, factor):
-        if self.viewport is None or self._result is None or self._current_index < 0:
-            return
-        field = self._frames[self._current_index][2]
-        options = dict(
-            self._playback_options or self._animation_options([field])
-        )
-        options["_animation"] = {
-            "mode": "factor",
-            "source_grid": self._cached_grid(field),
-            "factor": float(factor),
-        }
-        self.viewport.scene.show_result(self._result, field, options)
-
-    def _cached_grid(self, field):
-        """Materialize each solver frame at most once during one display state."""
-        if self._result is None or field is None:
-            return None
-        source = str(getattr(self._result, "source_file", "") or "")
-        if not source:
-            return None
-        step_id = field.metadata.get("step_id")
-        frame_id = field.metadata.get("frame_id")
-        key = (source, step_id, frame_id)
-        if key in self._frame_grid_cache:
-            return self._frame_grid_cache[key]
-        loader = getattr(self.results_page, "loader", None)
-        if loader is None:
-            return None
-        try:
-            grid = loader.pyvista_grid(source, step_id, frame_id)
-        except (OSError, RuntimeError, TypeError, ValueError):
-            return None
-        self._frame_grid_cache[key] = grid
-        return grid
-
-    def _animation_options(self, fields):
-        """Freeze automatic contour limits so changing values remain visually comparable."""
-        options = dict(self._options)
-        settings = dict(options.get("range", {}) or {})
-        loader = getattr(self.results_page, "loader", None)
-        source = getattr(self._result, "source_file", "")
-        if loader is None or not source or not fields:
-            return options
-        minimum_auto = settings.get(
-            "minimum_auto",
-            settings.get("auto", True),
-        )
-        maximum_auto = settings.get(
-            "maximum_auto",
-            settings.get("auto", True),
-        )
-        if not minimum_auto and not maximum_auto:
-            return options
-        ranges = []
-        for field in fields:
-            try:
-                ranges.append(loader.scalar_range(source, field))
-            except (OSError, RuntimeError, TypeError, ValueError):
-                continue
-        if not ranges:
-            return options
-        if minimum_auto:
-            settings["minimum"] = min(value[0] for value in ranges)
-            settings["minimum_auto"] = False
-        if maximum_auto:
-            settings["maximum"] = max(value[1] for value in ranges)
-            settings["maximum_auto"] = False
-        options["range"] = settings
-        return options
-
-    def _stop_playback(self, *, restore):
-        was_playing = self._playing or self._timer.isActive()
-        self._playing = False
-        self._timer.stop()
-        self.plot.set_cursor_x(None)
-        self._playback_visible_index = -1
-        self._playback_options = None
-        if restore and was_playing:
-            self._restore_exact()
-            self._update_current_label(self._current_index)
-
-    def _restore_exact(self):
-        if self.viewport is None or self._result is None or self._field is None:
-            return
-        self.viewport.scene.show_result(
-            self._result,
-            self._field,
-            dict(self._options),
-        )
+def _playback_icon(kind, size=16):
+    """Create a crisp monochrome transport icon from application palette colors."""
+    if kind == "play":
+        return make_icon(IconKind.RUN, size)
+    if kind == "stop":
+        return make_icon(IconKind.STOP, size)
+    if kind == "previous":
+        return make_icon(IconKind.PREVIOUS_FRAME, size)
+    if kind == "next":
+        return make_icon(IconKind.NEXT_FRAME, size)
+    color = QColor(PALETTE["text"])
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(color, max(1.2, size / 10.0)))
+    painter.setBrush(color)
+    if kind in {"first", "last"}:
+        left = kind == "first"
+        x_bar = size * (0.25 if left else 0.75)
+        x_tip = size * (0.70 if left else 0.30)
+        x_base = size * (0.43 if left else 0.57)
+        painter.drawLine(int(x_bar), int(size * 0.22), int(x_bar), int(size * 0.78))
+        polygon = QPolygonF()
+        from PyQt6.QtCore import QPointF
+        polygon.append(QPointF(x_tip, size * 0.22))
+        polygon.append(QPointF(x_tip, size * 0.78))
+        polygon.append(QPointF(x_base, size * 0.50))
+        painter.drawPolygon(polygon)
+    elif kind == "loop":
+        path = QPainterPath()
+        path.moveTo(size * 0.24, size * 0.40)
+        path.cubicTo(size * 0.30, size * 0.20, size * 0.70, size * 0.20, size * 0.76, size * 0.40)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(path)
+        path = QPainterPath()
+        path.moveTo(size * 0.76, size * 0.60)
+        path.cubicTo(size * 0.70, size * 0.80, size * 0.30, size * 0.80, size * 0.24, size * 0.60)
+        painter.drawPath(path)
+    painter.end()
+    return QIcon(pixmap)
