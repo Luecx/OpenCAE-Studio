@@ -10,6 +10,7 @@ from .button_form_primary import ButtonFormPrimary
 from .button_form_toggle import ButtonFormToggle
 from .button_inline_action import ButtonInlineAction
 from .button_inline_toggle import ButtonInlineToggle
+from .button_material_behavior_action import ButtonMaterialBehaviorAction
 from .button_project_menu_close import ButtonProjectMenuClose
 from .button_project_menu_select import ButtonProjectMenuSelect
 from .button_project_selector import ButtonProjectSelector
@@ -27,6 +28,7 @@ from .button_status_menu import ButtonStatusMenu
 from .button_time_manager_media import ButtonTimeManagerMedia
 from .button_viewport_action import ButtonViewportAction
 from .button_viewport_toggle import ButtonViewportToggle
+from .button_workspace_status_tab import ButtonWorkspaceStatusTab
 from .ribbon_action_factory import ribbon_button_for_action
 
 __all__ = [
@@ -40,6 +42,7 @@ __all__ = [
     "ButtonFormToggle",
     "ButtonInlineAction",
     "ButtonInlineToggle",
+    "ButtonMaterialBehaviorAction",
     "ButtonProjectMenuClose",
     "ButtonProjectMenuSelect",
     "ButtonProjectSelector",
@@ -57,5 +60,6 @@ __all__ = [
     "ButtonTimeManagerMedia",
     "ButtonViewportAction",
     "ButtonViewportToggle",
+    "ButtonWorkspaceStatusTab",
     "ribbon_button_for_action",
 ]
