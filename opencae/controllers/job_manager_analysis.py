@@ -175,7 +175,7 @@ def finish_analysis(manager, job_id, adapter, output_base, code) -> None:
         ),
         None,
     )
-    if completed and source and source.suffix.lower() == ".frd":
+    if completed and source:
         _attach_solver_result(manager, job.id, source)
 
     manager.progress_changed.emit(
@@ -187,7 +187,7 @@ def finish_analysis(manager, job_id, adapter, output_base, code) -> None:
 
 
 def _attach_solver_result(manager, job_id: str, source: Path) -> None:
-    """Read potentially large FRD metadata on a worker thread."""
+    """Read potentially large stored-result metadata on a worker thread."""
     tasks = getattr(manager, "_result_metadata_tasks", None)
     if tasks is None:
         tasks = {}
