@@ -265,8 +265,9 @@ def test_sketcher_styling_is_part_of_central_theme_pipeline():
     assert "setStyleSheet(" not in dialog
 
 
-def test_schema_25_is_reserved_for_registered_sketch_types():
+def test_schema_26_keeps_sketch_types_and_adds_beam_n1_migration():
     codec = (ROOT / "opencae/persistence/project_codec.py").read_text(encoding="utf-8")
     migrations = (ROOT / "opencae/persistence/migrations/__init__.py").read_text(encoding="utf-8")
-    assert "CURRENT_SCHEMA_VERSION = 25" in codec
+    assert "CURRENT_SCHEMA_VERSION = 26" in codec
     assert "migrate_v24_to_v25" in migrations
+    assert "migrate_v25_to_v26" in migrations
