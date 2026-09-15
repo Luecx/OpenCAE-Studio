@@ -175,9 +175,9 @@ def test_result_range_button_uses_bound_auto_icons_labels_and_symmetry_link():
         app.processEvents()
 
     source = (ROOT / "opencae/ui/ribbon/result_range.py").read_text(encoding="utf-8")
-    assert 'SectionHeading("Range")' in source
-    assert 'SectionHeading("Color Mapping")' in source
-    assert 'SectionHeading("Outside Range")' in source
+    assert 'LabelSection("Range")' in source
+    assert 'LabelSection("Color Mapping")' in source
+    assert 'LabelSection("Outside Range")' in source
     assert source.count("ResultRangeSeparator") >= 2
     assert '"Auto Frame"' not in source
     assert '"Auto Frames"' not in source
@@ -223,7 +223,7 @@ def test_deformation_and_section_buttons_open_instant_popups_with_radio_state():
     section_source = (ROOT / "opencae/ui/ribbon/result_section.py").read_text(encoding="utf-8")
     assert "Align normal" not in section_source
     assert "_set_axis" not in section_source
-    assert 'SectionHeading("Plane")' in section_source
+    assert 'LabelSection("Plane")' in section_source
 
 
 def test_radio_buttons_use_application_theme_indicator():
