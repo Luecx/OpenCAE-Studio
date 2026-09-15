@@ -33,8 +33,21 @@ def recover_normal_stress(
     source_b: np.ndarray,
     xi: np.ndarray,
     coefficients: np.ndarray,
+    *,
+    solver_element_ids: np.ndarray | None = None,
+    element_nodal_forces: dict[int, np.ndarray] | None = None,
 ) -> np.ndarray | None:
     """Recover signed axial+bending stress at generated beam surface points."""
+    if solver_element_ids is not None and element_nodal_forces:
+        recovered = _from_element_nodal(
+            solver_element_ids,
+            xi,
+            coefficients,
+            element_nodal_forces,
+        )
+        if recovered is not None:
+            return recovered
+
     keys = section_force_keys(grid)
     if keys is None:
         return None
@@ -78,6 +91,34 @@ def stress_display_values(name: str | None, values: np.ndarray) -> np.ndarray:
     if "MISES" in upper or "MAGNITUDE" in upper or "ABS" in upper:
         return np.abs(values)
     return values
+
+
+def _from_element_nodal(
+    solver_element_ids: np.ndarray,
+    xi: np.ndarray,
+    coefficients: np.ndarray,
+    forces: dict[int, np.ndarray],
+) -> np.ndarray | None:
+    """Interpolate FEMaster [N,Vy,Vz,T,My,Mz] rows along every beam."""
+    result = np.full(len(solver_element_ids), np.nan, dtype=float)
+    found = False
+    for element_id in np.unique(solver_element_ids):
+        rows = forces.get(int(element_id))
+        if rows is None or len(rows) == 0:
+            continue
+        mask = solver_element_ids == element_id
+        local_xi = xi[mask]
+        first = np.asarray(rows[0], dtype=float)
+        second = np.asarray(rows[min(1, len(rows) - 1)], dtype=float)
+        resultants = (1.0 - local_xi[:, None]) * first + local_xi[:, None] * second
+        coeff = coefficients[mask]
+        result[mask] = (
+            coeff[:, 0] * resultants[:, 0]
+            + coeff[:, 1] * resultants[:, 4]
+            + coeff[:, 2] * resultants[:, 5]
+        )
+        found = True
+    return result if found else None
 
 
 def _interpolated(grid, key, source_a, source_b, xi, count):
