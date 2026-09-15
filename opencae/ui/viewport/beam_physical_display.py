@@ -1,4 +1,4 @@
-"""Own physical-beam generation for editor scenes and self-contained FRD results."""
+"""Own physical-beam presentation for editor scenes and self-contained FRD results."""
 
 from __future__ import annotations
 
@@ -9,28 +9,22 @@ from PyQt6.QtWidgets import QApplication, QProgressDialog
 from opencae.geometry.cache import CACHE
 from opencae.geometry.orphan_mesh import snapshot_from_part
 from opencae.model.entities.elements import BeamElementDefinition
-from opencae.results import FrdLoader
 from opencae.results.beam_physical_model import beam_occurrences, part_beam_occurrences
 from opencae.results.beam_physical_representation import (
+    PHYSICAL_BEAM_CELL,
     build_beam_physical_representation_from_occurrences,
 )
-from opencae.results.frd_beam_metadata import (
-    beam_occurrences_from_frd,
-    section_forces_from_frd,
-)
+from opencae.results.frd_beam_metadata import beam_occurrences_from_frd
 from .pyvista_mesh import add_physical_mesh, build_grid
 
 
 class BeamPhysicalDisplayController:
-    """Render physical beams freshly in editors and from embedded FRD metadata."""
+    """Toggle beam visibility in results and generate editor-only beam overlays."""
 
     def __init__(self, viewport) -> None:
         self.viewport = viewport
         self.enabled = False
         self._bound = False
-        self._loader = FrdLoader()
-        self._representations = {}
-        self._section_forces = {}
         self._last_options: dict = {}
         self._editor_actors = []
 
@@ -43,17 +37,22 @@ class BeamPhysicalDisplayController:
 
     def sync_availability(self, *_args) -> None:
         if self.viewport.stage == "RESULTS":
-            self.viewport.toolbar.set_beam_available(
-                self._result_has_beams(getattr(self.viewport, "_active_result", None))
+            available = self._result_has_beams(
+                getattr(self.viewport, "_active_result", None)
             )
-            return
-        project = self._project()
-        self.viewport.toolbar.set_beam_available(
-            bool(project is not None and self._editor_has_beams(project))
-        )
+        else:
+            project = self._project()
+            available = bool(
+                project is not None and self._editor_has_beams(project)
+            )
+        self.viewport.toolbar.set_beam_available(available)
 
     def result_changed(self, result) -> None:
-        self.viewport.toolbar.set_beam_available(self._result_has_beams(result))
+        available = self._result_has_beams(result)
+        if self.viewport.stage == "RESULTS" and self.enabled and not available:
+            self.enabled = False
+            self.viewport.toolbar.set_beam_physical(False)
+        self.viewport.toolbar.set_beam_available(available)
 
     def stage_changed(self, _stage=None) -> None:
         self._clear_editor_display(render=False)
@@ -63,6 +62,7 @@ class BeamPhysicalDisplayController:
         self.viewport.plotter.render()
 
     def model_changed(self, *_args) -> None:
+        """Invalidate editor beam overlays after any authored model mutation."""
         if self.viewport.stage != "RESULTS" and self.enabled:
             self._clear_editor_display(render=False)
             self.enabled = False
@@ -78,41 +78,15 @@ class BeamPhysicalDisplayController:
             self._set_editor_enabled(requested)
 
     def prepare_options(self, result, field, options=None) -> dict:
+        """Attach only the desired result subset; the loader owns beam expansion."""
+        del field
         prepared = dict(options or {})
         self._last_options = dict(options or {})
-        if not self.enabled or result is None or self.viewport.stage != "RESULTS":
-            return prepared
-
-        try:
-            representation = self._ensure_representation(result, field, show_progress=False)
-            animation = dict(prepared.get("_animation", {}) or {})
-            source = animation.get("source_grid")
-            if source is None:
-                source = self._grid(result, field)
-            expanded = self._expand(representation, source, result, field)
-            animation["source_grid"] = expanded
-            prepared["range"] = _expanded_range_settings(
-                self._loader,
-                result,
-                field,
-                expanded,
-                prepared.get("range"),
-            )
-
-            next_field = animation.get("next_field")
-            if next_field is not None:
-                next_grid = animation.get("next_grid")
-                if next_grid is None:
-                    next_grid = self._grid(result, next_field)
-                animation["next_grid"] = self._expand(
-                    representation,
-                    next_grid,
-                    result,
-                    next_field,
-                )
-            prepared["_animation"] = animation
-        except (OSError, RuntimeError, TypeError, ValueError) as exc:
-            self._reject(str(exc))
+        prepared["_physical_beams"] = bool(
+            self.enabled
+            and self.viewport.stage == "RESULTS"
+            and self._result_has_beams(result)
+        )
         return prepared
 
     def reset(self) -> None:
@@ -124,16 +98,12 @@ class BeamPhysicalDisplayController:
 
     def _set_result_enabled(self, requested: bool) -> None:
         result = getattr(self.viewport, "_active_result", None)
-        field = getattr(self.viewport, "_active_result_field", None)
         if requested and result is None:
             self._reject("Open a solver result before enabling physical beams")
             return
-        if requested:
-            try:
-                self._ensure_representation(result, field, show_progress=True)
-            except (OSError, RuntimeError, TypeError, ValueError) as exc:
-                self._reject(str(exc))
-                return
+        if requested and not self._result_has_beams(result):
+            self._reject("This FRD contains no embedded OpenCAE beam metadata")
+            return
         self.enabled = requested
         self.viewport.toolbar.set_beam_physical(requested)
         self._rerender_active()
@@ -193,7 +163,9 @@ class BeamPhysicalDisplayController:
                 groups.append((part, None, owned))
 
         if not groups:
-            raise ValueError("The current model has no beam elements with assigned profiles")
+            raise ValueError(
+                "The current model has no beam elements with assigned profiles"
+            )
 
         total = sum(len(owned) for _part, _instance, owned in groups)
         dialog = self._progress_dialog(total) if show_progress else None
@@ -217,9 +189,14 @@ class BeamPhysicalDisplayController:
                     source_element_ids=True,
                 )
                 expanded = representation.expand(source)
-                beam_ids = tuple(int(item.source_element_id) for item in owned)
-                cell_ids = np.asarray(expanded.cell_data["element_id"], dtype=np.int64)
-                indices = np.flatnonzero(np.isin(cell_ids, beam_ids))
+                physical = np.asarray(
+                    expanded.cell_data.get(
+                        PHYSICAL_BEAM_CELL,
+                        np.zeros(expanded.n_cells, dtype=np.uint8),
+                    ),
+                    dtype=bool,
+                )
+                indices = np.flatnonzero(physical)
                 if len(indices):
                     grids.append(expanded.extract_cells(indices))
                 offset += len(owned)
@@ -240,10 +217,14 @@ class BeamPhysicalDisplayController:
     def _editor_grid(self, part, instance=None):
         snapshot = CACHE.mesh(part.id) or snapshot_from_part(part)
         if snapshot is None:
-            raise ValueError(f"Generate a mesh for Part '{part.name}' before showing beams")
+            raise ValueError(
+                f"Generate a mesh for Part '{part.name}' before showing beams"
+            )
         grid = build_grid(snapshot, instance, include_all_dimensions=True)
         if grid is None:
-            raise ValueError(f"Part '{part.name}' has no renderable finite elements")
+            raise ValueError(
+                f"Part '{part.name}' has no renderable finite elements"
+            )
         return grid
 
     def _clear_editor_display(self, *, render: bool) -> None:
@@ -276,74 +257,6 @@ class BeamPhysicalDisplayController:
             options,
         )
 
-    def _ensure_representation(self, result, field, *, show_progress: bool):
-        source = str(getattr(result, "source_file", "") or "")
-        if not source.lower().endswith(".frd"):
-            raise ValueError("Stored solver results must be an FRD file")
-        identity = str(getattr(result, "id", "") or source or id(result))
-        key = (identity, source)
-        cached = self._representations.get(key)
-        if cached is not None:
-            return cached
-
-        occurrences = beam_occurrences_from_frd(source)
-        if not occurrences:
-            raise ValueError("This FRD contains no embedded OpenCAE beam metadata")
-        grid = self._grid(result, field)
-        dialog = self._progress_dialog(len(occurrences)) if show_progress else None
-
-        def progress(current, total, label):
-            if dialog is None:
-                return
-            dialog.setRange(0, max(1, int(total)))
-            dialog.setValue(int(current))
-            dialog.setLabelText(str(label))
-            QApplication.processEvents()
-
-        try:
-            representation = build_beam_physical_representation_from_occurrences(
-                occurrences,
-                grid,
-                progress=progress,
-                source_element_ids=False,
-            )
-            if dialog is not None:
-                dialog.setValue(dialog.maximum())
-                QApplication.processEvents()
-        finally:
-            if dialog is not None:
-                dialog.close()
-        self._representations[key] = representation
-        return representation
-
-    def _expand(self, representation, grid, result, field):
-        if "_opencae_beam_xi" in grid.point_data:
-            return grid
-        step_id = _metadata_int(field, "step_id")
-        frame_id = _metadata_int(field, "frame_id")
-        return representation.expand(
-            grid,
-            _scalar_name(field),
-            element_nodal_forces=self._forces(result, step_id, frame_id),
-        )
-
-    def _forces(self, result, step_id, frame_id):
-        source = str(getattr(result, "source_file", "") or "")
-        key = (source, step_id, frame_id)
-        if key not in self._section_forces:
-            self._section_forces[key] = section_forces_from_frd(source, step_id, frame_id)
-        return self._section_forces[key]
-
-    def _grid(self, result, field):
-        source = str(getattr(result, "source_file", "") or "")
-        if not source:
-            raise ValueError("The selected result has no solver result file")
-        return self._loader.pyvista_grid(
-            source,
-            _metadata_int(field, "step_id"),
-            _metadata_int(field, "frame_id"),
-        )
-
     def _progress_dialog(self, total=0) -> QProgressDialog:
         maximum = max(0, int(total))
         dialog = QProgressDialog(
@@ -367,13 +280,19 @@ class BeamPhysicalDisplayController:
         self._clear_editor_display(render=False)
         self.enabled = False
         self.viewport.toolbar.set_beam_physical(False)
-        self.viewport.message.emit(message or "Could not generate physical beams")
+        self.viewport.message.emit(
+            message or "Could not generate physical beams"
+        )
         self.viewport.plotter.render()
 
     def _project(self):
         if self.viewport.stage == "RESULTS":
             return None
-        return self.viewport.store.project if self.viewport.store is not None else None
+        return (
+            self.viewport.store.project
+            if self.viewport.store is not None
+            else None
+        )
 
     def _result_has_beams(self, result) -> bool:
         source = str(getattr(result, "source_file", "") or "")
@@ -427,67 +346,3 @@ def beam_physical_controller(viewport) -> BeamPhysicalDisplayController:
         viewport._beam_physical_controller = controller
     controller.bind_toolbar()
     return controller
-
-
-def _expanded_range_settings(loader, result, field, grid, settings):
-    current = dict(settings or {})
-    scalar = _scalar_name(field)
-    source = str(getattr(result, "source_file", "") or "")
-    if not scalar or not source or not current:
-        return current
-
-    if scalar in grid.point_data:
-        values = np.asarray(grid.point_data[scalar], dtype=float)
-    elif scalar in grid.cell_data:
-        values = np.asarray(grid.cell_data[scalar], dtype=float)
-    else:
-        return current
-    finite = values[np.isfinite(values)]
-    if not len(finite):
-        return current
-
-    try:
-        baseline = loader.scalar_range(source, field)
-    except (OSError, RuntimeError, TypeError, ValueError):
-        return current
-    if baseline is None or len(baseline) != 2:
-        return current
-
-    expanded = (float(finite.min()), float(finite.max()))
-    for name, index in (("minimum", 0), ("maximum", 1)):
-        value = current.get(name)
-        if value is None:
-            continue
-        try:
-            unchanged = bool(
-                np.isclose(
-                    float(value),
-                    float(baseline[index]),
-                    rtol=1.0e-9,
-                    atol=1.0e-12,
-                    equal_nan=False,
-                )
-            )
-        except (TypeError, ValueError):
-            unchanged = False
-        if unchanged:
-            current[name] = expanded[index]
-    return current
-
-
-def _metadata_int(field, key: str) -> int | None:
-    metadata = getattr(field, "metadata", {}) or {}
-    value = metadata.get(key)
-    try:
-        return int(value) if value is not None else None
-    except (TypeError, ValueError):
-        return None
-
-
-def _scalar_name(field) -> str | None:
-    if field is None:
-        return None
-    metadata = getattr(field, "metadata", {}) or {}
-    block = str(metadata.get("block", getattr(field, "name", "")) or "")
-    component = str(metadata.get("component", "Magnitude") or "Magnitude")
-    return f"{block}:{component}" if block else None
