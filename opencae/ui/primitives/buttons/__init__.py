@@ -23,6 +23,7 @@ from .button_ribbon_menu import ButtonRibbonMenu
 from .button_ribbon_options import ButtonRibbonOptions
 from .button_ribbon_toggle import ButtonRibbonToggle
 from .button_stage_choice import ButtonStageChoice
+from .button_status_menu import ButtonStatusMenu
 from .button_time_manager_media import ButtonTimeManagerMedia
 from .button_viewport_action import ButtonViewportAction
 from .button_viewport_toggle import ButtonViewportToggle
@@ -52,6 +53,7 @@ __all__ = [
     "ButtonRibbonOptions",
     "ButtonRibbonToggle",
     "ButtonStageChoice",
+    "ButtonStatusMenu",
     "ButtonTimeManagerMedia",
     "ButtonViewportAction",
     "ButtonViewportToggle",
