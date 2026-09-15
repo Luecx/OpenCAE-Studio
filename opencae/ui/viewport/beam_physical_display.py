@@ -104,14 +104,20 @@ class BeamPhysicalDisplayController:
         self.viewport.toolbar.set_beam_available(False)
 
     def _rerender_active(self) -> None:
-        """Rebuild only the active result presentation after a toggle change."""
+        """Rebuild the active result once after a representation toggle."""
         result = getattr(self.viewport, "_active_result", None)
         if result is None:
             return
+        options = dict(self._last_options)
+        # The animation fast path assumes invariant topology. Switching between
+        # line beams and expanded beam surfaces changes topology, so force one
+        # ordinary rebuild. The Time Manager can resume in-place animation on
+        # its next frame with the newly established representation.
+        options.pop("_animation", None)
         self.viewport.scene.show_result(
             result,
             getattr(self.viewport, "_active_result_field", None),
-            dict(self._last_options),
+            options,
         )
 
     def _ensure_representation(self, result, field, *, show_progress: bool):
