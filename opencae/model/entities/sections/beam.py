@@ -1,6 +1,7 @@
 """Beam-section model with an explicit local n1 orientation axis."""
 
 from dataclasses import dataclass, field
+from math import isfinite
 
 from ...core import register_model_type
 from .base import Section
@@ -19,6 +20,8 @@ class BeamSection(Section):
         values = tuple(float(value) for value in self.n1)
         if len(values) != 3:
             raise ValueError("Beam section n1 must contain exactly three components")
+        if not all(isfinite(value) for value in values):
+            raise ValueError("Beam section n1 must contain only finite components")
         if sum(value * value for value in values) <= 1.0e-24:
             raise ValueError("Beam section n1 must be a non-zero vector")
         self.n1 = values
