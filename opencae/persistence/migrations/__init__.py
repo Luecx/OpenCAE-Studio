@@ -4,11 +4,13 @@ from copy import deepcopy
 
 from .v23_to_v24 import migrate_v23_to_v24
 from .v24_to_v25 import migrate_v24_to_v25
+from .v25_to_v26 import migrate_v25_to_v26
 
 
 _MIGRATIONS = {
     23: migrate_v23_to_v24,
     24: migrate_v24_to_v25,
+    25: migrate_v25_to_v26,
 }
 
 
