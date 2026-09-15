@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QProgressDialog
 
@@ -22,9 +20,18 @@ class BeamPhysicalDisplayController:
     def __init__(self, viewport) -> None:
         self.viewport = viewport
         self.enabled = False
+        self._bound = False
         self._loader = FrdLoader()
         self._representations = {}
         self._section_forces = {}
+        self._last_options: dict = {}
+
+    def bind_toolbar(self) -> None:
+        """Connect the viewport Beam toggle exactly once."""
+        if self._bound:
+            return
+        self.viewport.toolbar.beam_physical_changed.connect(self.set_enabled)
+        self._bound = True
 
     def result_changed(self, result) -> None:
         """Update toolbar availability when the active stored result changes."""
@@ -34,8 +41,8 @@ class BeamPhysicalDisplayController:
     def set_enabled(self, enabled: bool) -> None:
         """Toggle beam surfaces, building the current result lazily on first use."""
         requested = bool(enabled)
-        result = self.viewport._active_result
-        field = self.viewport._active_result_field
+        result = getattr(self.viewport, "_active_result", None)
+        field = getattr(self.viewport, "_active_result_field", None)
         if requested and result is None:
             self._reject("Open a solver result before enabling physical beams")
             return
@@ -47,56 +54,73 @@ class BeamPhysicalDisplayController:
                 return
         self.enabled = requested
         self.viewport.toolbar.set_beam_physical(requested)
-        self.viewport.rerender_active_solution()
+        self._rerender_active()
 
     def prepare_options(self, result, field, options=None) -> dict:
         """Inject expanded current/next grids into the existing result pipeline."""
         prepared = dict(options or {})
+        self._last_options = dict(options or {})
         if not self.enabled or result is None:
             return prepared
 
-        representation = self._ensure_representation(
-            result,
-            field,
-            show_progress=False,
-        )
-        animation = dict(prepared.get("_animation", {}) or {})
-        source = animation.get("source_grid")
-        if source is None:
-            source = self._grid(result, field)
-        animation["source_grid"] = self._expand(
-            representation,
-            source,
-            result,
-            field,
-        )
-
-        next_field = animation.get("next_field")
-        if next_field is not None:
-            next_grid = animation.get("next_grid")
-            if next_grid is None:
-                next_grid = self._grid(result, next_field)
-            animation["next_grid"] = self._expand(
-                representation,
-                next_grid,
+        try:
+            representation = self._ensure_representation(
                 result,
-                next_field,
+                field,
+                show_progress=False,
+            )
+            animation = dict(prepared.get("_animation", {}) or {})
+            source = animation.get("source_grid")
+            if source is None:
+                source = self._grid(result, field)
+            animation["source_grid"] = self._expand(
+                representation,
+                source,
+                result,
+                field,
             )
 
-        prepared["_animation"] = animation
+            next_field = animation.get("next_field")
+            if next_field is not None:
+                next_grid = animation.get("next_grid")
+                if next_grid is None:
+                    next_grid = self._grid(result, next_field)
+                animation["next_grid"] = self._expand(
+                    representation,
+                    next_grid,
+                    result,
+                    next_field,
+                )
+            prepared["_animation"] = animation
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            self._reject(str(exc))
         return prepared
 
     def reset(self) -> None:
         """Disable the display toggle while retaining reusable runtime caches."""
         self.enabled = False
+        self._last_options = {}
         self.viewport.toolbar.set_beam_physical(False)
         self.viewport.toolbar.set_beam_available(False)
+
+    def _rerender_active(self) -> None:
+        """Rebuild only the active result presentation after a toggle change."""
+        result = getattr(self.viewport, "_active_result", None)
+        if result is None:
+            return
+        self.viewport.scene.show_result(
+            result,
+            getattr(self.viewport, "_active_result_field", None),
+            dict(self._last_options),
+        )
 
     def _ensure_representation(self, result, field, *, show_progress: bool):
         project = self.viewport.store.project if self.viewport.store is not None else None
         if project is None:
             raise ValueError("Physical beam rendering requires an active project")
-        key = (str(getattr(result, "id", "")), id(project))
+        source = str(getattr(result, "source_file", "") or "")
+        identity = str(getattr(result, "id", "") or source or id(result))
+        key = (identity, source, id(project))
         cached = self._representations.get(key)
         if cached is not None:
             return cached
@@ -178,6 +202,16 @@ class BeamPhysicalDisplayController:
         self.enabled = False
         self.viewport.toolbar.set_beam_physical(False)
         self.viewport.message.emit(message or "Could not generate physical beams")
+
+
+def beam_physical_controller(viewport) -> BeamPhysicalDisplayController:
+    """Return the one lazy beam-display controller owned by a viewport."""
+    controller = getattr(viewport, "_beam_physical_controller", None)
+    if controller is None:
+        controller = BeamPhysicalDisplayController(viewport)
+        viewport._beam_physical_controller = controller
+    controller.bind_toolbar()
+    return controller
 
 
 def _metadata_int(field, key: str) -> int | None:
