@@ -18,7 +18,9 @@ from typing import Iterable
 import numpy as np
 
 from opencae.model.entities.profiles import create_profile
+from opencae.model.entities.profiles.section_geometry import section_patches
 from .beam_physical_model import beam_occurrences
+from .beam_physical_stress import stress_coefficients
 from .frd_parser import parse_frd
 from .res_parser import parse_res
 
@@ -101,48 +103,52 @@ def embed_femaster_beam_metadata(project, frd_path: str | Path, res_path: str | 
 
 
 def read_frd_beam_metadata(path: str | Path) -> FrdBeamMetadata:
-    """Parse only OpenCAE ``1UOCAE`` records from an FRD file."""
+    """Parse the contiguous OpenCAE ``1UOCAE`` header records from an FRD file."""
     schema = 0
     profile_parts: dict[int, tuple[int, int, dict[int, str]]] = {}
     beam_rows: list[tuple[int, int, tuple[float, float, float]]] = []
     force_parts: dict[tuple[int, int, int, int], dict[int, tuple[float, ...]]] = {}
+    seen_metadata = False
 
     with Path(path).open("r", errors="replace") as stream:
         for raw in stream:
-            if not raw.startswith(_PREFIX):
-                continue
-            tokens = raw[len(_PREFIX):].strip().split()
-            if not tokens:
-                continue
-            tag = tokens[0].upper()
-            try:
-                if tag == "SCHEMA" and len(tokens) >= 2:
-                    schema = int(tokens[1])
-                elif tag == "P" and len(tokens) >= 6:
-                    profile_id = int(tokens[1])
-                    type_id = int(tokens[2])
-                    index = int(tokens[3])
-                    total = int(tokens[4])
-                    current = profile_parts.setdefault(profile_id, (type_id, total, {}))
-                    current[2][index] = tokens[5]
-                elif tag == "B" and len(tokens) >= 6:
-                    beam_rows.append(
-                        (
-                            int(tokens[1]),
-                            int(tokens[2]),
-                            (float(tokens[3]), float(tokens[4]), float(tokens[5])),
+            if raw.startswith(_PREFIX):
+                seen_metadata = True
+                tokens = raw[len(_PREFIX):].strip().split()
+                if not tokens:
+                    continue
+                tag = tokens[0].upper()
+                try:
+                    if tag == "SCHEMA" and len(tokens) >= 2:
+                        schema = int(tokens[1])
+                    elif tag == "P" and len(tokens) >= 6:
+                        profile_id = int(tokens[1])
+                        type_id = int(tokens[2])
+                        index = int(tokens[3])
+                        total = int(tokens[4])
+                        current = profile_parts.setdefault(profile_id, (type_id, total, {}))
+                        current[2][index] = tokens[5]
+                    elif tag == "B" and len(tokens) >= 6:
+                        beam_rows.append(
+                            (
+                                int(tokens[1]),
+                                int(tokens[2]),
+                                (float(tokens[3]), float(tokens[4]), float(tokens[5])),
+                            )
                         )
-                    )
-                elif tag in {"F1", "F2"} and len(tokens) >= 9:
-                    step = int(tokens[1])
-                    frame = int(tokens[2])
-                    element = int(tokens[3])
-                    end = int(tokens[4])
-                    values = tuple(float(value) for value in tokens[5:8])
-                    slot = 0 if tag == "F1" else 1
-                    force_parts.setdefault((step, frame, element, end), {})[slot] = values
-            except (TypeError, ValueError):
+                    elif tag in {"F1", "F2"} and len(tokens) >= 8:
+                        step = int(tokens[1])
+                        frame = int(tokens[2])
+                        element = int(tokens[3])
+                        end = int(tokens[4])
+                        values = tuple(float(value) for value in tokens[5:8])
+                        slot = 0 if tag == "F1" else 1
+                        force_parts.setdefault((step, frame, element, end), {})[slot] = values
+                except (TypeError, ValueError):
+                    continue
                 continue
+            if seen_metadata or raw.startswith(("    2C", "    3C", "  100C")):
+                break
 
     profiles: dict[int, object] = {}
     for profile_id, (type_id, total, chunks) in profile_parts.items():
@@ -205,6 +211,34 @@ def section_forces_from_frd(
     if len(same_step) == 1:
         return same_step[0]
     return {}
+
+
+def beam_normal_stress_range(
+    path: str | Path,
+    step_id: int | None = None,
+    frame_id: int | None = None,
+) -> tuple[float, float] | None:
+    """Return exact axial+bending extrema over all embedded profile patch vertices."""
+    metadata = read_frd_beam_metadata(path)
+    forces = section_forces_from_frd(path, step_id, frame_id)
+    extrema: list[float] = []
+    for occurrence in metadata.beams:
+        endpoints = forces.get(int(occurrence.solver_element_id))
+        if endpoints is None or endpoints.shape[0] < 2 or endpoints.shape[1] < 6:
+            continue
+        properties = occurrence.profile.properties()
+        for patch in section_patches(occurrence.profile):
+            for y, z in np.asarray(patch, dtype=float):
+                axial, my, mz = stress_coefficients(properties, float(y), float(z))
+                for row in endpoints[:2]:
+                    extrema.append(
+                        float(axial * row[0] + my * row[4] + mz * row[5])
+                    )
+    finite = np.asarray(extrema, dtype=float)
+    finite = finite[np.isfinite(finite)]
+    if not len(finite):
+        return None
+    return float(finite.min()), float(finite.max())
 
 
 def _model_records(occurrences: Iterable) -> Iterable[str]:
