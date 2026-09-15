@@ -1,11 +1,4 @@
-"""Embed and read OpenCAE physical-beam metadata inside one FRD file.
-
-OpenCAE result viewing is intentionally FRD-only. FEMaster may emit a temporary
-native RES during a solve; this module extracts only beam section resultants from
-that file and stores them, together with profile definitions and transformed n1
-vectors, as versioned FRD ``1U`` user records. The resulting FRD is self-contained
-and can be opened without the original project or any sidecar file.
-"""
+"""Embed/read all OpenCAE physical-beam result semantics inside one FRD file."""
 
 from __future__ import annotations
 
@@ -63,11 +56,11 @@ class EmbeddedBeamOccurrence:
     profile: object
 
     @property
-    def direction(self) -> tuple[float, float, float]:
+    def direction(self):
         return self.n1
 
     @property
-    def source_element_id(self) -> int:
+    def source_element_id(self):
         return self.solver_element_id
 
 
@@ -79,91 +72,85 @@ class FrdBeamMetadata:
     forces: dict[tuple[int, int], dict[int, np.ndarray]]
 
 
-def embed_femaster_beam_metadata(project, frd_path: str | Path, res_path: str | Path) -> None:
-    """Rewrite one FEMaster FRD with all physical-beam data required by OpenCAE."""
+def embed_femaster_beam_metadata(project, frd_path, res_path) -> None:
+    """Make FEMaster's FRD self-contained, using RES only as a temporary source."""
     frd = Path(frd_path)
     if not frd.is_file():
         raise FileNotFoundError(f"FEMaster did not create expected FRD result '{frd.name}'")
-
     occurrences = beam_occurrences(project)
     if not occurrences:
         _rewrite_metadata(frd, ())
         return
-
     res = Path(res_path)
     if not res.is_file():
         raise FileNotFoundError(
             "Physical beam post-processing requires FEMaster section forces. "
             f"Expected temporary result '{res.name}'."
         )
-
     records = list(_model_records(occurrences))
     records.extend(_force_records(frd, res, occurrences))
     _rewrite_metadata(frd, records)
 
 
-def read_frd_beam_metadata(path: str | Path) -> FrdBeamMetadata:
-    """Parse the contiguous OpenCAE ``1UOCAE`` header records from an FRD file."""
+def read_frd_beam_metadata(path) -> FrdBeamMetadata:
+    """Read the contiguous versioned OpenCAE user-header block from an FRD."""
     schema = 0
     profile_parts: dict[int, tuple[int, int, dict[int, str]]] = {}
-    beam_rows: list[tuple[int, int, tuple[float, float, float]]] = []
+    beam_rows = []
     force_parts: dict[tuple[int, int, int, int], dict[int, tuple[float, ...]]] = {}
-    seen_metadata = False
-
+    seen = False
     with Path(path).open("r", errors="replace") as stream:
         for raw in stream:
             if raw.startswith(_PREFIX):
-                seen_metadata = True
+                seen = True
                 tokens = raw[len(_PREFIX):].strip().split()
                 if not tokens:
                     continue
-                tag = tokens[0].upper()
                 try:
+                    tag = tokens[0].upper()
                     if tag == "SCHEMA" and len(tokens) >= 2:
                         schema = int(tokens[1])
                     elif tag == "P" and len(tokens) >= 6:
-                        profile_id = int(tokens[1])
-                        type_id = int(tokens[2])
-                        index = int(tokens[3])
-                        total = int(tokens[4])
+                        profile_id, type_id = int(tokens[1]), int(tokens[2])
+                        index, total = int(tokens[3]), int(tokens[4])
                         current = profile_parts.setdefault(profile_id, (type_id, total, {}))
                         current[2][index] = tokens[5]
                     elif tag == "B" and len(tokens) >= 6:
-                        beam_rows.append(
-                            (
-                                int(tokens[1]),
-                                int(tokens[2]),
-                                (float(tokens[3]), float(tokens[4]), float(tokens[5])),
-                            )
-                        )
+                        beam_rows.append((
+                            int(tokens[1]),
+                            int(tokens[2]),
+                            (float(tokens[3]), float(tokens[4]), float(tokens[5])),
+                        ))
                     elif tag in {"F1", "F2"} and len(tokens) >= 8:
-                        step = int(tokens[1])
-                        frame = int(tokens[2])
-                        element = int(tokens[3])
-                        end = int(tokens[4])
-                        values = tuple(float(value) for value in tokens[5:8])
-                        slot = 0 if tag == "F1" else 1
-                        force_parts.setdefault((step, frame, element, end), {})[slot] = values
+                        key = (
+                            int(tokens[1]), int(tokens[2]),
+                            int(tokens[3]), int(tokens[4]),
+                        )
+                        force_parts.setdefault(key, {})[0 if tag == "F1" else 1] = tuple(
+                            float(value) for value in tokens[5:8]
+                        )
                 except (TypeError, ValueError):
                     continue
                 continue
-            if seen_metadata or raw.startswith(("    2C", "    3C", "  100C")):
+            if seen or raw.startswith(("    2C", "    3C", "  100C")):
                 break
 
-    profiles: dict[int, object] = {}
+    profiles = {}
     for profile_id, (type_id, total, chunks) in profile_parts.items():
-        if len(chunks) != total or type_id not in _PROFILE_NAMES:
+        if type_id not in _PROFILE_NAMES or len(chunks) != total:
             continue
-        encoded = "".join(chunks[index] for index in range(total))
         try:
+            encoded = "".join(chunks[index] for index in range(total))
             padding = "=" * (-len(encoded) % 4)
-            dimensions = json.loads(base64.urlsafe_b64decode(encoded + padding).decode("utf-8"))
+            dimensions = json.loads(
+                base64.urlsafe_b64decode(encoded + padding).decode("utf-8")
+            )
             profiles[profile_id] = create_profile(
                 _PROFILE_NAMES[type_id],
                 name=f"FRD Profile {profile_id}",
                 dimensions=dict(dimensions or {}),
             )
-        except (ValueError, TypeError, json.JSONDecodeError):
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             continue
 
     beams = tuple(
@@ -172,7 +159,6 @@ def read_frd_beam_metadata(path: str | Path) -> FrdBeamMetadata:
         if profile_id in profiles
     )
 
-    forces: dict[tuple[int, int], dict[int, np.ndarray]] = {}
     grouped: dict[tuple[int, int, int], dict[int, np.ndarray]] = {}
     for (step, frame, element, end), parts in force_parts.items():
         if 0 not in parts or 1 not in parts:
@@ -180,126 +166,114 @@ def read_frd_beam_metadata(path: str | Path) -> FrdBeamMetadata:
         grouped.setdefault((step, frame, element), {})[end] = np.asarray(
             (*parts[0], *parts[1]), dtype=float
         )
+    forces: dict[tuple[int, int], dict[int, np.ndarray]] = {}
     for (step, frame, element), endpoints in grouped.items():
-        if 0 not in endpoints or 1 not in endpoints:
-            continue
-        forces.setdefault((step, frame), {})[element] = np.vstack(
-            (endpoints[0], endpoints[1])
-        )
-
+        if 0 in endpoints and 1 in endpoints:
+            forces.setdefault((step, frame), {})[element] = np.vstack(
+                (endpoints[0], endpoints[1])
+            )
     return FrdBeamMetadata(schema, profiles, beams, forces)
 
 
-def beam_occurrences_from_frd(path: str | Path) -> tuple[EmbeddedBeamOccurrence, ...]:
+def beam_occurrences_from_frd(path):
     return read_frd_beam_metadata(path).beams
 
 
-def section_forces_from_frd(
-    path: str | Path,
-    step_id: int | None = None,
-    frame_id: int | None = None,
-) -> dict[int, np.ndarray]:
+def section_forces_from_frd(path, step_id=None, frame_id=None):
     metadata = read_frd_beam_metadata(path)
     if not metadata.forces:
         return {}
-    step = int(step_id or 1)
-    frame = int(frame_id or 1)
+    step, frame = int(step_id or 1), int(frame_id or 1)
     exact = metadata.forces.get((step, frame))
     if exact is not None:
         return exact
-    same_step = [value for (current_step, _), value in metadata.forces.items() if current_step == step]
-    if len(same_step) == 1:
-        return same_step[0]
-    return {}
+    same_step = [
+        values for (current_step, _), values in metadata.forces.items()
+        if current_step == step
+    ]
+    return same_step[0] if len(same_step) == 1 else {}
 
 
-def beam_normal_stress_range(
-    path: str | Path,
-    step_id: int | None = None,
-    frame_id: int | None = None,
-) -> tuple[float, float] | None:
-    """Return exact axial+bending extrema over all embedded profile patch vertices."""
+def beam_normal_stress_range(path, step_id=None, frame_id=None):
+    """Return axial+bending extrema over all embedded profile-patch vertices."""
     metadata = read_frd_beam_metadata(path)
-    forces = section_forces_from_frd(path, step_id, frame_id)
-    extrema: list[float] = []
+    forces = metadata.forces.get((int(step_id or 1), int(frame_id or 1)), {})
+    extrema = []
     for occurrence in metadata.beams:
         endpoints = forces.get(int(occurrence.solver_element_id))
-        if endpoints is None or endpoints.shape[0] < 2 or endpoints.shape[1] < 6:
+        if endpoints is None:
             continue
         properties = occurrence.profile.properties()
         for patch in section_patches(occurrence.profile):
             for y, z in np.asarray(patch, dtype=float):
                 axial, my, mz = stress_coefficients(properties, float(y), float(z))
                 for row in endpoints[:2]:
-                    extrema.append(
-                        float(axial * row[0] + my * row[4] + mz * row[5])
-                    )
+                    extrema.append(float(axial * row[0] + my * row[4] + mz * row[5]))
     finite = np.asarray(extrema, dtype=float)
     finite = finite[np.isfinite(finite)]
-    if not len(finite):
-        return None
-    return float(finite.min()), float(finite.max())
+    return (float(finite.min()), float(finite.max())) if len(finite) else None
 
 
-def _model_records(occurrences: Iterable) -> Iterable[str]:
+def _model_records(occurrences: Iterable):
     yield f"{_PREFIX}SCHEMA {_SCHEMA}"
-    profile_ids: dict[tuple[int, str], int] = {}
-    profile_for_occurrence: dict[int, int] = {}
-    next_profile_id = 1
-
+    profile_ids = {}
+    element_profiles = {}
     for occurrence in occurrences:
         profile = occurrence.profile
         profile_type = str(getattr(profile, "profile_type", "General"))
         type_id = _PROFILE_TYPES.get(profile_type, _PROFILE_TYPES["General"])
         payload = json.dumps(
             dict(getattr(profile, "dimensions", {}) or {}),
-            separators=(",", ":"),
-            sort_keys=True,
+            separators=(",", ":"), sort_keys=True,
         )
-        encoded = base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii").rstrip("=")
+        encoded = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
         key = (type_id, encoded)
         profile_id = profile_ids.get(key)
         if profile_id is None:
-            profile_id = next_profile_id
-            next_profile_id += 1
+            profile_id = len(profile_ids) + 1
             profile_ids[key] = profile_id
-            chunks = [encoded[index:index + _PROFILE_CHUNK] for index in range(0, len(encoded), _PROFILE_CHUNK)] or [""]
-            total = len(chunks)
+            chunks = [
+                encoded[index:index + _PROFILE_CHUNK]
+                for index in range(0, len(encoded), _PROFILE_CHUNK)
+            ] or [""]
             for index, chunk in enumerate(chunks):
-                yield f"{_PREFIX}P {profile_id} {type_id} {index} {total} {chunk}"
-        profile_for_occurrence[int(occurrence.solver_element_id)] = profile_id
-
+                yield f"{_PREFIX}P {profile_id} {type_id} {index} {len(chunks)} {chunk}"
+        element_profiles[int(occurrence.solver_element_id)] = profile_id
     for occurrence in occurrences:
         element = int(occurrence.solver_element_id)
-        profile_id = profile_for_occurrence[element]
         n1 = tuple(float(value) for value in occurrence.n1)
         yield (
-            f"{_PREFIX}B {element} {profile_id} "
+            f"{_PREFIX}B {element} {element_profiles[element]} "
             f"{n1[0]:.9e} {n1[1]:.9e} {n1[2]:.9e}"
         )
 
 
-def _force_records(frd: Path, res: Path, occurrences: Iterable) -> Iterable[str]:
+def _force_records(frd: Path, res: Path, occurrences: Iterable):
     valid_elements = {int(item.solver_element_id) for item in occurrences}
-    blocks = _res_force_blocks(res)
+    raw_blocks = _res_force_blocks(res)
+    blocks = {
+        loadcase: _normalize_force_ids(values, valid_elements)
+        for loadcase, values in raw_blocks.items()
+    }
     if not blocks:
         return ()
 
     data = parse_frd(frd)
-    frames = sorted({(int(block.step_id), int(block.frame_id)) for block in data.fields}) or [(1, 1)]
+    frames = sorted({
+        (int(block.step_id), int(block.frame_id)) for block in data.fields
+    }) or [(1, 1)]
     step_order = []
-    for step, _frame in frames:
+    for step, _ in frames:
         if step not in step_order:
             step_order.append(step)
     loadcases = list(blocks)
 
-    records: list[str] = []
+    records = []
     for step, frame in frames:
         loadcase = step if step in blocks else None
-        if loadcase is None and step in step_order:
+        if loadcase is None:
             index = step_order.index(step)
-            if index < len(loadcases):
-                loadcase = loadcases[index]
+            loadcase = loadcases[index] if index < len(loadcases) else None
         values_by_element = blocks.get(loadcase, {})
         for element in sorted(valid_elements):
             endpoints = values_by_element.get(element)
@@ -313,46 +287,63 @@ def _force_records(frd: Path, res: Path, occurrences: Iterable) -> Iterable[str]
                 )
                 records.append(
                     f"{_PREFIX}F2 {step} {frame} {element} {end} "
-                    + " ".join(f"{value:.7e}" for value in values[3:6])
+                    + " ".join(f"{value:.7e}" for value in values[3:])
                 )
     return records
 
 
-def _res_force_blocks(path: Path) -> dict[int, dict[int, np.ndarray]]:
-    data = parse_res(path)
-    result: dict[int, dict[int, np.ndarray]] = {}
-    for block in data.fields:
+def _normalize_force_ids(values: dict[int, np.ndarray], valid: set[int]):
+    """Accept FEMaster's element indices whether its RES writer is 0- or 1-based."""
+    if not values or not valid:
+        return {}
+    exact = len(set(values) & valid)
+    plus_one = len({value + 1 for value in values} & valid)
+    minus_one = len({value - 1 for value in values} & valid)
+    offset = 0
+    if plus_one > exact and plus_one >= minus_one:
+        offset = 1
+    elif minus_one > exact:
+        offset = -1
+    return {
+        int(element) + offset: rows
+        for element, rows in values.items()
+        if int(element) + offset in valid
+    }
+
+
+def _res_force_blocks(path: Path):
+    result = {}
+    for block in parse_res(path).fields:
         if block.name.upper() not in _SECTION_FORCE_NAMES or block.domain != "ELEMENT_NODAL":
             continue
-        grouped: dict[int, dict[int, np.ndarray]] = {}
+        grouped = {}
         for indices, values in block.values.items():
             if len(indices) < 2:
                 continue
             try:
-                element = int(str(indices[0]).strip())
-                local_node = int(str(indices[1]).strip())
-            except ValueError:
+                element, local_node = int(indices[0]), int(indices[1])
+            except (TypeError, ValueError):
                 continue
             current = np.asarray(values, dtype=float)
-            if len(current) < 6:
-                continue
-            grouped.setdefault(element, {})[local_node] = current[:6]
-        packed: dict[int, np.ndarray] = {}
+            if len(current) >= 6:
+                grouped.setdefault(element, {})[local_node] = current[:6]
+        packed = {}
         for element, rows in grouped.items():
-            if len(rows) < 2:
-                continue
-            ordered = [rows[index] for index in sorted(rows)[:2]]
-            packed[element] = np.vstack(ordered).astype(float, copy=False)
+            if len(rows) >= 2:
+                packed[element] = np.vstack(
+                    [rows[index] for index in sorted(rows)[:2]]
+                ).astype(float, copy=False)
         if packed:
             result[int(block.loadcase)] = packed
     return result
 
 
 def _rewrite_metadata(path: Path, records: Iterable[str]) -> None:
-    original = path.read_text(errors="replace").splitlines()
-    body = [line for line in original if not line.startswith(_PREFIX)]
-    header = list(records)
-    text = "\n".join((*header, *body)) + "\n"
+    body = [
+        line for line in path.read_text(errors="replace").splitlines()
+        if not line.startswith(_PREFIX)
+    ]
+    text = "\n".join((*list(records), *body)) + "\n"
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(text, encoding="utf-8")
     temporary.replace(path)
