@@ -25,10 +25,10 @@ class BeamOccurrence:
     n1: tuple[float, float, float]
     section: BeamSection
     profile: Profile
+    instance_name: str = ""
 
     @property
     def direction(self) -> tuple[float, float, float]:
-        """Compatibility alias; ``n1`` is the authoritative section direction."""
         return self.n1
 
 
@@ -70,6 +70,7 @@ def beam_occurrences(project) -> tuple[BeamOccurrence, ...]:
                             n1=tuple(float(value) for value in n1),
                             section=section,
                             profile=profile,
+                            instance_name=str(instance.name),
                         )
                     )
                 next_solver_id += 1
