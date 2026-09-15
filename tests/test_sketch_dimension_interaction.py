@@ -12,16 +12,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_ribbon_toggle_style_and_collapsed_menus_have_one_interaction_layer():
     buttons = (ROOT / "opencae/ui/core/styles/buttons.py").read_text(encoding="utf-8")
-    menus = (ROOT / "opencae/ui/templates/menus.py").read_text(encoding="utf-8")
+    collapsed = (ROOT / "opencae/ui/composites/collapsed_action_group.py").read_text(
+        encoding="utf-8"
+    )
     dialog = (ROOT / "opencae/ui/sketcher/constraint_dialog.py").read_text(
         encoding="utf-8"
     )
 
     assert 'QToolButton[ribbonButton="true"]:checked' in buttons
     assert "background: {p['panel_active']};" in buttons
-    assert "def _leaf_actions(action: QAction)" in menus
-    assert "leaves.extend(_leaf_actions(child))" in menus
-    assert "for leaf in _leaf_actions(action):" in menus
+    assert "def _leaf_actions(action: QAction)" in collapsed
+    assert "leaves.extend(_leaf_actions(child))" in collapsed
+    assert "for leaf in _leaf_actions(action):" in collapsed
     assert 'IconKind.PREVIOUS_FRAME' in dialog
     assert 'IconKind.NEXT_FRAME' in dialog
 
