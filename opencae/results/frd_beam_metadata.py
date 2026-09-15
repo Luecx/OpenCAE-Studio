@@ -252,8 +252,8 @@ def _force_records(frd: Path, res: Path, occurrences: Iterable):
     valid_elements = {int(item.solver_element_id) for item in occurrences}
     raw_blocks = _res_force_blocks(res)
     blocks = {
-        loadcase: _normalize_force_ids(values, valid_elements)
-        for loadcase, values in raw_blocks.items()
+        key: _normalize_force_ids(values, valid_elements)
+        for key, values in raw_blocks.items()
     }
     if not blocks:
         return ()
@@ -266,15 +266,24 @@ def _force_records(frd: Path, res: Path, occurrences: Iterable):
     for step, _ in frames:
         if step not in step_order:
             step_order.append(step)
-    loadcases = list(blocks)
+    loadcase_order = []
+    for loadcase, _ in blocks:
+        if loadcase not in loadcase_order:
+            loadcase_order.append(loadcase)
 
     records = []
     for step, frame in frames:
-        loadcase = step if step in blocks else None
+        loadcase = step if any(key[0] == step for key in blocks) else None
         if loadcase is None:
             index = step_order.index(step)
-            loadcase = loadcases[index] if index < len(loadcases) else None
-        values_by_element = blocks.get(loadcase, {})
+            loadcase = loadcase_order[index] if index < len(loadcase_order) else None
+        values_by_element = blocks.get((loadcase, frame))
+        if values_by_element is None:
+            same_loadcase = [
+                values for (current_loadcase, _), values in blocks.items()
+                if current_loadcase == loadcase
+            ]
+            values_by_element = same_loadcase[0] if len(same_loadcase) == 1 else {}
         for element in sorted(valid_elements):
             endpoints = values_by_element.get(element)
             if endpoints is None or endpoints.shape[0] < 2 or endpoints.shape[1] < 6:
@@ -334,7 +343,7 @@ def _res_force_blocks(path: Path):
                     [rows[index] for index in sorted(rows)[:2]]
                 ).astype(float, copy=False)
         if packed:
-            result[int(block.loadcase)] = packed
+            result[(int(block.loadcase), int(block.frame_id))] = packed
     return result
 
 
