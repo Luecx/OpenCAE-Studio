@@ -9,6 +9,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _UI_ROOT = _REPO_ROOT / "opencae" / "ui"
 _PRIMITIVES_ROOT = _UI_ROOT / "primitives"
+_STYLES_ROOT = _UI_ROOT / "core" / "styles"
 
 # Ordinary interactive controls must be instantiated through a concrete
 # structurally named primitive. Framework containers/views such as QWidget,
@@ -26,6 +27,15 @@ _FORBIDDEN_DIRECT_CONTROLS = {
     "QSlider",
     "QPlainTextEdit",
 }
+
+# Theme/style modules are a bootstrap dependency of the whole UI. They may use
+# core tokens/metrics, but must never import higher-level widget construction
+# packages or theme initialization becomes cyclic.
+_FORBIDDEN_STYLE_IMPORT_PREFIXES = (
+    "opencae.ui.templates",
+    "opencae.ui.composites",
+    "opencae.ui.primitives",
+)
 
 # These were transitional generic/Sketch-only widget abstractions. Reintroducing
 # one would recreate the parallel hierarchy this refactor intentionally removed.
@@ -126,6 +136,31 @@ def test_ui_consumers_construct_standard_controls_through_primitives():
     assert not violations, (
         "UI consumers must instantiate structurally named primitives instead of "
         "ordinary Qt controls:\n" + "\n".join(violations)
+    )
+
+
+def test_theme_style_modules_do_not_depend_on_widget_layers():
+    violations: list[str] = []
+    for path in sorted(_STYLES_ROOT.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                module = node.module
+                if module.startswith(_FORBIDDEN_STYLE_IMPORT_PREFIXES):
+                    violations.append(
+                        f"{_relative(path)}:{node.lineno}: imports {module}"
+                    )
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith(_FORBIDDEN_STYLE_IMPORT_PREFIXES):
+                        violations.append(
+                            f"{_relative(path)}:{node.lineno}: imports {alias.name}"
+                        )
+
+    assert not violations, (
+        "Theme/style modules are bootstrap code and must depend only on core "
+        "tokens/metrics, never templates/composites/primitives:\n"
+        + "\n".join(violations)
     )
 
 
