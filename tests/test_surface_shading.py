@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pyvista as pv
 
+from opencae.ui.viewport.result_visualization import _supports_result_shading
 from opencae.ui.viewport.surface_shading import (
     mesh_cell_colors,
     supports_surface_shading,
@@ -47,3 +48,29 @@ def test_point_cloud_cell_colors_do_not_attempt_normal_generation():
 
     assert colors.shape == (1, 3)
     assert colors.dtype == np.uint8
+
+
+def test_solution_line_grid_disables_surface_shading():
+    grid = pv.UnstructuredGrid(
+        np.asarray((2, 0, 1), dtype=np.int64),
+        np.asarray((pv.CellType.LINE,), dtype=np.uint8),
+        np.asarray(((0.0, 0.0, 0.0), (1.0, 0.0, 0.0))),
+    )
+
+    assert _supports_result_shading(grid) is False
+
+
+def test_solution_surface_grid_keeps_surface_shading():
+    grid = pv.UnstructuredGrid(
+        np.asarray((3, 0, 1, 2), dtype=np.int64),
+        np.asarray((pv.CellType.TRIANGLE,), dtype=np.uint8),
+        np.asarray(
+            (
+                (0.0, 0.0, 0.0),
+                (1.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0),
+            )
+        ),
+    )
+
+    assert _supports_result_shading(grid) is True

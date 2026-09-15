@@ -6,6 +6,7 @@ from opencae.results import FrdLoader
 from opencae.ui.core.theme import PALETTE
 from .contour_mapping import contour_plot_kwargs
 from .scalar_bar import install_scalar_bar_end_caps, scalar_bar_args
+from .surface_shading import supports_surface_shading
 
 _LOADER = FrdLoader()
 _SOURCE_POINT_INDEX = "_opencae_source_point_index"
@@ -22,6 +23,7 @@ def add_result(plotter, result, field=None, options=None):
     display_scalar = _render_scalar(grid, scalar, clim)
     mapping = contour_plot_kwargs(range_settings)
     show_edges = bool(options.get("mesh_lines", True))
+    shaded_result = _supports_result_shading(grid)
     actor = plotter.add_mesh(
         grid,
         scalars=display_scalar,
@@ -32,11 +34,12 @@ def add_result(plotter, result, field=None, options=None):
         above_color=mapping["above_color"],
         show_edges=False,
         edge_color=PALETTE["mesh_lines"],
-        line_width=1.0,
-        lighting=True,
-        ambient=.22,
-        diffuse=.76,
-        smooth_shading=True,
+        line_width=1.0 if shaded_result else 2.4,
+        lighting=shaded_result,
+        ambient=.22 if shaded_result else 1.0,
+        diffuse=.76 if shaded_result else 0.0,
+        smooth_shading=shaded_result,
+        render_lines_as_tubes=not shaded_result,
         scalar_bar_args=(
             scalar_bar_args(
                 scalar,
@@ -156,6 +159,15 @@ def _result_grids(result, field, options):
         options,
         copy_grid=not owns_transient_copy,
     )
+
+
+def _supports_result_shading(grid) -> bool:
+    """Return whether a result grid has polygonal surface cells to shade."""
+    try:
+        surface = grid.extract_surface(algorithm="dataset_surface")
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        return False
+    return supports_surface_shading(surface)
 
 
 def _replace_actor_input(actor, dataset):
