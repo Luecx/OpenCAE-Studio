@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import numpy as np
+import pyvista as pv
 
 from opencae.model.entities.profiles import GraphProfile, RectangleProfile
 from opencae.model.entities.profiles.section_geometry import section_patches
+from opencae.results.beam_physical_representation import BeamPhysicalRepresentation
 from opencae.results.beam_physical_stress import (
     recover_normal_stress,
     stress_coefficients,
@@ -91,6 +93,53 @@ def test_section_force_recovery_interpolates_beam_end_resultants():
     )
 
     np.testing.assert_allclose(recovered, (5.0, 10.0, 15.0))
+
+
+def test_expanded_beam_points_receive_translation_plus_rotation_cross_offset():
+    source = pv.UnstructuredGrid(
+        np.asarray((2, 0, 1), dtype=np.int64),
+        np.asarray((3,), dtype=np.uint8),
+        np.asarray(((0.0, 0.0, 0.0), (1.0, 0.0, 0.0))),
+    )
+    source.point_data["node_id"] = np.asarray((1, 2), dtype=np.int64)
+    source.cell_data["element_id"] = np.asarray((7,), dtype=np.int64)
+    for key in ("DISP:D1", "DISP:D2", "DISP:D3"):
+        source.point_data[key] = np.zeros(2, dtype=float)
+    source.point_data["DISP:D4"] = np.zeros(2, dtype=float)
+    source.point_data["DISP:D5"] = np.zeros(2, dtype=float)
+    source.point_data["DISP:D6"] = np.ones(2, dtype=float)
+
+    representation = BeamPhysicalRepresentation(
+        cells=np.asarray((4, 2, 3, 5, 4), dtype=np.int64),
+        celltypes=np.asarray((9,), dtype=np.uint8),
+        cell_source=np.asarray((0,), dtype=np.int64),
+        source_point_count=2,
+        source_node_ids=np.asarray((1, 2), dtype=np.int64),
+        source_element_ids=np.asarray((7,), dtype=np.int64),
+        generated_source_a=np.asarray((0, 0, 0, 0), dtype=np.int64),
+        generated_source_b=np.asarray((1, 1, 1, 1), dtype=np.int64),
+        generated_xi=np.asarray((0.0, 0.0, 1.0, 1.0), dtype=float),
+        generated_offset=np.asarray(
+            ((0.0, 1.0, 0.0), (0.0, -1.0, 0.0),
+             (0.0, 1.0, 0.0), (0.0, -1.0, 0.0)),
+            dtype=float,
+        ),
+        generated_stress_coefficients=np.zeros((4, 3), dtype=float),
+        generated_solver_element_ids=np.full(4, 7, dtype=np.int64),
+    )
+
+    expanded = representation.expand(source)
+
+    np.testing.assert_allclose(
+        expanded.point_data["DISP:D1"][2:],
+        (-1.0, 1.0, -1.0, 1.0),
+    )
+    np.testing.assert_allclose(expanded.point_data["DISP:D2"][2:], 0.0)
+    np.testing.assert_allclose(expanded.point_data["DISP:D3"][2:], 0.0)
+    np.testing.assert_allclose(
+        expanded.point_data["_opencae_beam_xi"][2:],
+        (0.0, 0.0, 1.0, 1.0),
+    )
 
 
 def test_res_section_force_parser_preserves_local_endpoint_order(tmp_path):
