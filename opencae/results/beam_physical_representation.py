@@ -18,6 +18,8 @@ from .beam_physical_stress import (
 ProgressCallback = Callable[[int, int, str], None]
 _BEAM_NORMAL_STRESS = "BEAM:Normal Stress"
 _VTK_HEXAHEDRON = 12
+PHYSICAL_BEAM_CELL = "_opencae_physical_beam"
+BEAM_CENTERLINE_CELL = "_opencae_beam_centerline"
 
 
 @dataclass(slots=True)
@@ -36,6 +38,7 @@ class BeamPhysicalRepresentation:
     generated_offset: np.ndarray
     generated_stress_coefficients: np.ndarray
     generated_solver_element_ids: np.ndarray
+    replaced_source_cells: np.ndarray | None = None
 
     @property
     def generated_point_count(self) -> int:
@@ -48,7 +51,7 @@ class BeamPhysicalRepresentation:
         *,
         element_nodal_forces: dict[int, np.ndarray] | None = None,
     ):
-        """Replace mapped beam lines by hexahedral visualization cells."""
+        """Return a superset grid containing centerlines and physical beam cells."""
         import pyvista as pv
 
         self._validate(source_grid)
@@ -56,6 +59,7 @@ class BeamPhysicalRepresentation:
         self._map_point_data(source_grid, grid)
         self._map_cell_data(source_grid, grid)
         self._attach_mapping(source_grid, grid)
+        self._attach_cell_roles(source_grid, grid)
 
         stress = recover_normal_stress(
             source_grid,
@@ -70,6 +74,7 @@ class BeamPhysicalRepresentation:
             values = np.full(grid.n_points, np.nan, dtype=float)
             values[self.source_point_count :] = stress
             grid.point_data[_BEAM_NORMAL_STRESS] = values
+            self._attach_stress_components(grid, stress)
             if _is_stress_scalar(selected_scalar):
                 displayed = (
                     np.asarray(grid.point_data[selected_scalar], dtype=float).copy()
@@ -142,6 +147,30 @@ class BeamPhysicalRepresentation:
             if len(values) == source_grid.n_cells:
                 target.cell_data[str(key)] = values[self.cell_source]
 
+    def _attach_cell_roles(self, source_grid, target) -> None:
+        physical = np.zeros(target.n_cells, dtype=np.uint8)
+        physical[source_grid.n_cells :] = 1
+        centerline = np.zeros(target.n_cells, dtype=np.uint8)
+        if self.replaced_source_cells is not None and len(self.replaced_source_cells):
+            indices = np.asarray(self.replaced_source_cells, dtype=np.int64)
+            indices = indices[(indices >= 0) & (indices < source_grid.n_cells)]
+            centerline[indices] = 1
+        target.cell_data[PHYSICAL_BEAM_CELL] = physical
+        target.cell_data[BEAM_CENTERLINE_CELL] = centerline
+
+    def _attach_stress_components(self, target, stress: np.ndarray) -> None:
+        """Populate physical beam tensor components as pure local normal stress."""
+        start = self.source_point_count
+        for key in tuple(target.point_data.keys()):
+            text = str(key)
+            if not _is_stress_scalar(text):
+                continue
+            values = np.asarray(target.point_data[text], dtype=float).copy()
+            if len(values) != target.n_points:
+                continue
+            values[start:] = stress_display_values(text, stress)
+            target.point_data[text] = values
+
     def _attach_mapping(self, source_grid, target) -> None:
         start = self.source_point_count
         source_nodes = (
@@ -200,8 +229,9 @@ def build_beam_physical_representation_from_occurrences(
 ):
     """Build physical beam volumes for an explicit set of model occurrences.
 
-    ``source_element_ids`` selects whether the source grid exposes Part-local
-    element IDs (editor meshes) or exported solver IDs (stored result meshes).
+    The returned topology deliberately keeps the original beam centerline cells
+    and appends the generated hexahedra. Presentation code can therefore switch
+    between line and physical views by filtering one shared result dataset.
     """
     occurrences = tuple(occurrences)
     if not occurrences:
@@ -286,8 +316,6 @@ def build_beam_physical_representation_from_occurrences(
     celltypes: list[int] = []
     cell_source: list[int] = []
     for cell_index in range(source_grid.n_cells):
-        if cell_index in replaced_cells:
-            continue
         ids = tuple(int(value) for value in source_grid.get_cell(cell_index).point_ids)
         cells.extend((len(ids), *ids))
         celltypes.append(int(source_grid.celltypes[cell_index]))
@@ -315,6 +343,7 @@ def build_beam_physical_representation_from_occurrences(
         generated_offset=np.asarray(generated_offsets, dtype=float),
         generated_stress_coefficients=np.asarray(generated_coefficients, dtype=float),
         generated_solver_element_ids=np.asarray(generated_solver_ids, dtype=np.int64),
+        replaced_source_cells=np.asarray(sorted(replaced_cells), dtype=np.int64),
     )
 
 
