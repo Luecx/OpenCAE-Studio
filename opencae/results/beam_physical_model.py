@@ -26,6 +26,11 @@ class BeamOccurrence:
     section: BeamSection
     profile: Profile
 
+    @property
+    def direction(self) -> tuple[float, float, float]:
+        """Compatibility alias; ``n1`` is the authoritative section direction."""
+        return self.n1
+
 
 def beam_occurrences(project) -> tuple[BeamOccurrence, ...]:
     """Reproduce FEMaster export numbering and return only renderable beams."""
