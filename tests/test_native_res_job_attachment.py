@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from opencae.controllers import job_manager_analysis
 from opencae.model.entities.jobs import Job, JobStatus
+from opencae.solvers.femaster import FEMasterAdapter
 
 
 class _Signal:
@@ -21,17 +22,8 @@ class _Project:
         return self.job if str(identifier) == self.job.id else None
 
 
-class _Adapter:
-    @staticmethod
-    def result_candidates(output_base: Path):
-        return [
-            output_base.with_suffix(".res"),
-            output_base.with_suffix(".frd"),
-        ]
-
-
 def test_finish_analysis_attaches_native_res_before_frd(tmp_path, monkeypatch):
-    """A successful FEMaster job must not discard an available native RES."""
+    """A successful FEMaster job must attach native RES when both outputs exist."""
     output_base = tmp_path / "results"
     output_base.with_suffix(".res").write_text("LC 1\n", encoding="utf-8")
     output_base.with_suffix(".frd").write_text("FRD\n", encoding="utf-8")
@@ -54,10 +46,16 @@ def test_finish_analysis_attaches_native_res_before_frd(tmp_path, monkeypatch):
         lambda _manager, _job_id, source: selected.append(Path(source)),
     )
 
+    adapter = FEMasterAdapter()
+    assert adapter.result_candidates(output_base) == [
+        output_base.with_suffix(".res"),
+        output_base.with_suffix(".frd"),
+    ]
+
     job_manager_analysis.finish_analysis(
         manager,
         job.id,
-        _Adapter(),
+        adapter,
         output_base,
         0,
     )
