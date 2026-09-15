@@ -58,7 +58,7 @@ class ProjectController:
         self._fit_loaded_content()
 
     def open_results(self):
-        """Attach an external FRD result set to the current Project."""
+        """Attach exactly one external FRD result set to the current Project."""
         path = open_file(
             self.parent,
             "Open Results",
@@ -66,22 +66,28 @@ class ProjectController:
         )
         if not path:
             return
+        source = Path(path)
+        if source.suffix.lower() != ".frd":
+            self.store.message.emit(
+                "Could not open results: OpenCAE Results accepts FRD files only"
+            )
+            return
         try:
-            fields = FrdLoader().fields(path)
+            fields = FrdLoader().fields(source)
         except Exception as exc:
             self.store.message.emit(f"Could not open results: {exc}")
             return
-        name = next_name(Path(path).stem or "Solution", self.store.project.results)
+        name = next_name(source.stem or "Solution", self.store.project.results)
         result = ResultSet(
             name=name,
             job_ref=None,
-            source_file=str(Path(path)),
+            source_file=str(source),
             status="Available",
             fields=fields,
             metadata={"external": True},
         )
         self.store.add_entity(
-            f"Opened results {Path(path).name}",
+            f"Opened results {source.name}",
             self.store.project.id,
             "results",
             result,

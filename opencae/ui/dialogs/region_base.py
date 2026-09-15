@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLineEdit, QMessageBox
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox
 
 from opencae.model.naming import is_unique, next_name_from_names
 from opencae.model.selection import RegionDefinition
 from opencae.ui.core.widgets import RegionSelectionWidget
+from opencae.ui.primitives.inputs import InputFormText
 from opencae.ui.templates import (
     SectionHeading,
-    apply_primary_control_height,
     dialog_buttons,
     dialog_layout,
     field_block,
@@ -50,8 +50,7 @@ class RegionDialog(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
         root = dialog_layout(self)
-        self.name = QLineEdit(getattr(region, "name", default_name))
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(getattr(region, "name", default_name))
         root.addWidget(field_block("Name", self.name))
         root.addWidget(SectionHeading("Region Definition"))
 

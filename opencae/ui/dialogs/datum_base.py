@@ -17,6 +17,7 @@ from opencae.model.naming import is_unique
 from opencae.ui.core.widgets import ChevronComboBox
 from opencae.ui.core.widgets.pick_reference import PickReference
 from opencae.ui.core.widgets.xyz_picker import XYZPicker
+from opencae.ui.primitives.inputs import InputFormText
 from opencae.ui.templates import (
     SectionHeading,
     apply_close_buttons,
@@ -46,8 +47,7 @@ class DatumDialogBase(QDialog):
         self.setMinimumWidth(680)
 
         layout = dialog_layout(self)
-        self.name = QLineEdit(default_name)
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(default_name)
         self.method = ChevronComboBox()
         self.method.setMinimumWidth(0)
         self.method.addItems(methods)

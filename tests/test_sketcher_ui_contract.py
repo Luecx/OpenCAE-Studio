@@ -80,6 +80,9 @@ def test_sketcher_reuses_main_ribbon_metrics_and_progressive_collapse_policy():
     )
     ribbon = (ROOT / "opencae/ui/ribbon/ribbon_page.py").read_text(encoding="utf-8")
     group = (ROOT / "opencae/ui/ribbon/ribbon_group.py").read_text(encoding="utf-8")
+    button_config = (ROOT / "opencae/ui/primitives/buttons/_configure.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "ResponsiveRibbonPage" in public_dialog
     assert "RIBBON_PAGE_HEIGHT" in public_dialog
@@ -104,7 +107,7 @@ def test_sketcher_reuses_main_ribbon_metrics_and_progressive_collapse_policy():
     assert "widget.hide()" in ribbon
     assert "widget.setParent(None)" in ribbon
     assert "RIBBON_BUTTON_WIDTH" in ribbon
-    assert "RIBBON_BUTTON_HEIGHT" in (ROOT / "opencae/ui/templates/primitives.py").read_text(encoding="utf-8")
+    assert "RIBBON_BUTTON_HEIGHT" in button_config
     assert "PALETTE['ribbon_separator']" in group
     assert "QToolBar" not in dialog
 
@@ -262,8 +265,9 @@ def test_sketcher_styling_is_part_of_central_theme_pipeline():
     assert "setStyleSheet(" not in dialog
 
 
-def test_schema_25_is_reserved_for_registered_sketch_types():
+def test_schema_26_keeps_sketch_types_and_adds_beam_n1_migration():
     codec = (ROOT / "opencae/persistence/project_codec.py").read_text(encoding="utf-8")
     migrations = (ROOT / "opencae/persistence/migrations/__init__.py").read_text(encoding="utf-8")
-    assert "CURRENT_SCHEMA_VERSION = 25" in codec
+    assert "CURRENT_SCHEMA_VERSION = 26" in codec
     assert "migrate_v24_to_v25" in migrations
+    assert "migrate_v25_to_v26" in migrations

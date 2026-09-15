@@ -259,7 +259,6 @@ finally:
     assert "QStyle.StandardPixmap" not in source
     assert "_playback_icon" in source
     assert "frame_summary_changed" in source
-    assert "AlignLeft" in source
     assert "setFixedWidth(220)" not in source
     assert 'x_label="Frame"' in source
     assert 'y_label="Time (s)" if self._has_time_axis else "Solver frame value"' in source

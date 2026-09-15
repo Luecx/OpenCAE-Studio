@@ -41,5 +41,9 @@ def display_field(source, component):
         name=source.name,
         location=source.location,
         components=1,
-        metadata={**source.metadata, "block": source.name, "component": component},
+        metadata={
+            **source.metadata,
+            "block": source.metadata.get("block", source.name),
+            "component": component,
+        },
     )

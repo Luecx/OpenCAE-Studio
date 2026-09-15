@@ -6,6 +6,7 @@ from pathlib import Path
 from opencae.deck_formats import DeckProfile, ProfileCommandWriter
 from opencae.model.core import ExportContext, SolverName
 from opencae.model.validation import validate_project
+from opencae.results.frd_beam_metadata import embed_femaster_beam_metadata
 from opencae.solvers.femaster_dsl import require_valid
 from .base import SolverAdapter
 
@@ -54,10 +55,19 @@ class FEMasterAdapter(SolverAdapter):
         ]
 
     def result_candidates(self, output_base: Path) -> list[Path]:
-        return [
-            output_base.with_suffix(".frd"),
-            output_base.with_suffix(".res"),
-        ]
+        """Expose exactly one self-contained result format to OpenCAE."""
+        return [output_base.with_suffix(".frd")]
+
+    def postprocess_results(self, project, output_base: Path) -> None:
+        """Embed beam semantics/resultants into FRD and discard temporary RES."""
+        frd = output_base.with_suffix(".frd")
+        res = output_base.with_suffix(".res")
+        embed_femaster_beam_metadata(project, frd, res)
+        if res.is_file():
+            res.unlink()
+        sidecar = output_base.with_suffix(".ocae")
+        if sidecar.is_file():
+            sidecar.unlink()
 
 
 def _profile(value) -> DeckProfile | None:

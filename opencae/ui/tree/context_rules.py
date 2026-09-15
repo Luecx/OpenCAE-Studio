@@ -26,9 +26,9 @@ def available(action_id, store, kind):
         return part is not None and (
             action_id == A.CREATE_NODE or bool(part.mesh.node_count)
         )
-    if action_id in {
-        A.EDIT_NODE, A.DELETE_NODE, A.EDIT_ELEMENT, A.DELETE_ELEMENT,
-    }:
+    if action_id == A.EDIT_NODE:
+        return bool(part and part.mesh.node_count)
+    if action_id in {A.DELETE_NODE, A.EDIT_ELEMENT, A.DELETE_ELEMENT}:
         return isinstance(store.selection, ViewportSelection)
     if action_id == A.GENERATE_MESH:
         return has_geometry and bool(part.mesh.seeds)

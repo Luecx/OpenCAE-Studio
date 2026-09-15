@@ -183,7 +183,11 @@ class CompactRegionSelector(QWidget):
             return
         self._set_picking_visual(True)
         try:
-            cancel = self.pick_callback(self, self.apply_pick, self._session_finished)
+            cancel = self.pick_callback(
+                self,
+                self.apply_pick,
+                self._session_finished,
+            )
         except Exception:
             blocker = QSignalBlocker(self.pick_button)
             self.pick_button.setChecked(False)

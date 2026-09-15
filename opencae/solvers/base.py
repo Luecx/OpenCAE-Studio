@@ -41,3 +41,7 @@ class SolverAdapter(ABC):
 
     def result_candidates(self, output_base: Path) -> list[Path]:
         return []
+
+    def postprocess_results(self, project: Project, output_base: Path) -> None:
+        """Finalize solver outputs before the Job publishes a ResultSet."""
+        del project, output_base

@@ -5,14 +5,26 @@ from pathlib import Path
 import numpy as np
 
 from opencae.model.entities.jobs import ResultField
+from .beam_physical_representation import (
+    build_beam_physical_representation_from_occurrences,
+)
 from .derived_fields import attach_derived, component_values, derived_names
+from .frd_beam_metadata import (
+    beam_normal_stress_range,
+    beam_occurrences_from_frd,
+    read_frd_beam_metadata,
+    section_forces_from_frd,
+)
 from .frd_parser import parse_frd
 from .frd_types import FRD_CELL_TYPES
 
 
 class FrdLoader:
+    """Load one FRD into OpenCAE's canonical in-memory result representation."""
+
     def __init__(self):
         self._cache = {}
+        self._beam_representations = {}
 
     def read(self, path):
         key = str(Path(path).resolve())
@@ -22,7 +34,8 @@ class FrdLoader:
 
     def fields(self, path):
         result = []
-        for block in self.read(path).fields:
+        data = self.read(path)
+        for block in data.fields:
             result.append(
                 ResultField(
                     name=block.name,
@@ -38,11 +51,68 @@ class FrdLoader:
                     },
                 )
             )
+
+        metadata = read_frd_beam_metadata(path)
+        frame_values = {
+            (int(block.step_id), int(block.frame_id)): float(block.frame_value)
+            for block in data.fields
+        }
+        for step_id, frame_id in sorted(metadata.forces):
+            result.append(
+                ResultField(
+                    name="Beam Normal Stress",
+                    location="Element",
+                    components=1,
+                    metadata={
+                        "components": ["Normal Stress"],
+                        "derived": [],
+                        "default_component": "Normal Stress",
+                        "block": "BEAM",
+                        "step_id": int(step_id),
+                        "frame_id": int(frame_id),
+                        "frame_value": frame_values.get(
+                            (int(step_id), int(frame_id)), 0.0
+                        ),
+                        "embedded_beam_normal_stress": True,
+                    },
+                )
+            )
         return result
 
     def scalar_range(self, path, field):
         if field is None:
             return (0.0, 1.0)
+        if field.metadata.get("embedded_beam_normal_stress"):
+            values = beam_normal_stress_range(
+                path,
+                field.metadata.get("step_id"),
+                field.metadata.get("frame_id"),
+            )
+            return values if values is not None else (0.0, 1.0)
+
+        # Beam-enabled FRDs are already expanded at the loader boundary. Derive
+        # ranges from that exact canonical grid so the scalar bar includes beam
+        # surface values, rotational displacement offsets, and derived stresses.
+        if read_frd_beam_metadata(path).beams:
+            grid = self.pyvista_grid(
+                path,
+                field.metadata.get("step_id"),
+                field.metadata.get("frame_id"),
+            )
+            scalar = _field_scalar_name(field)
+            store = (
+                grid.point_data
+                if scalar in grid.point_data
+                else grid.cell_data
+                if scalar in grid.cell_data
+                else None
+            )
+            if store is not None:
+                values = np.asarray(store[scalar], dtype=float)
+                finite = values[np.isfinite(values)]
+                if len(finite):
+                    return float(finite.min()), float(finite.max())
+
         data = self.read(path)
         block_index = int(field.metadata.get("block_index", 0))
         component = field.metadata.get("component", "Magnitude")
@@ -65,6 +135,7 @@ class FrdLoader:
         )
 
     def pyvista_grid(self, path, step_id=None, frame_id=None):
+        """Return the canonical result grid; beam FRDs are expanded here once."""
         import pyvista as pv
 
         data = self.read(path)
@@ -93,15 +164,31 @@ class FrdLoader:
         grid.point_data["node_id"] = np.asarray(tags, np.int64)
         grid.cell_data["element_id"] = np.asarray(element_ids, np.int64)
         self._attach_fields(grid, data, tags, step_id, frame_id)
-
-        # IDs and attached FRD arrays are metadata until the caller explicitly
-        # selects a result field. Do not let PyVista choose one implicitly and
-        # create its default horizontal scalar bar for a nominal geometry view.
+        grid = self._expand_beams(path, grid, step_id, frame_id)
         try:
             grid.set_active_scalars(None)
         except (AttributeError, KeyError, TypeError, ValueError):
             pass
         return grid
+
+    def _expand_beams(self, path, grid, step_id, frame_id):
+        source = str(Path(path).resolve())
+        occurrences = beam_occurrences_from_frd(source)
+        if not occurrences:
+            return grid
+        representation = self._beam_representations.get(source)
+        if representation is None:
+            representation = build_beam_physical_representation_from_occurrences(
+                occurrences,
+                grid,
+                source_element_ids=False,
+            )
+            self._beam_representations[source] = representation
+        forces = section_forces_from_frd(source, step_id, frame_id)
+        return representation.expand(
+            grid,
+            element_nodal_forces=forces,
+        )
 
     @staticmethod
     def _attach_fields(grid, data, tags, step_id, frame_id):
@@ -139,3 +226,10 @@ class FrdLoader:
                 else np.linalg.norm(physical, axis=1)
             )
             attach_derived(grid, block.name, block.components, values)
+
+
+def _field_scalar_name(field) -> str:
+    metadata = dict(getattr(field, "metadata", {}) or {})
+    block = str(metadata.get("block", getattr(field, "name", "")) or "")
+    component = str(metadata.get("component", metadata.get("default_component", "Magnitude")) or "Magnitude")
+    return f"{block}:{component}"

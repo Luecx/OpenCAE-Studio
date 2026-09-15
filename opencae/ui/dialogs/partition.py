@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLineEdit, QMessageBox, QStackedWidget
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox, QStackedWidget
 
 from opencae.model.entities.geometry import PartitionEdgeFeature, PartitionFaceFeature
 from opencae.model.selection import RegionDefinition, local_geometry_tags
@@ -13,6 +13,7 @@ from opencae.ui.core.widgets import (
     PointSelectionWidget,
     ReferenceSelector,
 )
+from opencae.ui.primitives.inputs import InputFormText
 from opencae.ui.templates import (
     FieldStack,
     NumericUnitInput,
@@ -66,8 +67,7 @@ class PartitionDialog(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
         root = dialog_layout(self)
-        self.name = QLineEdit(getattr(feature, "name", "Partition-1"))
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(getattr(feature, "name", "Partition-1"))
         self.kind = ChevronComboBox()
         self.kind.setMinimumWidth(0)
         self.kind.addItems(PARTITION_TYPES)

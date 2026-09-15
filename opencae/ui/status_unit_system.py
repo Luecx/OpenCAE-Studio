@@ -1,20 +1,18 @@
+"""Status-bar selector for the active project unit system."""
+
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QMenu
 
-from opencae.ui.primitives.buttons import ButtonPresentation, MenuButton
+from opencae.ui.primitives.buttons import ButtonStatusMenu
 
 
-class UnitSystemStatus(MenuButton):
+class UnitSystemStatus(ButtonStatusMenu):
     system_selected = pyqtSignal(str)
     edit_requested = pyqtSignal()
 
     def __init__(self, parent=None):
-        super().__init__(
-            presentation=ButtonPresentation.DEFAULT,
-            object_name="UnitSystemStatus",
-            parent=parent,
-        )
+        super().__init__(object_name="UnitSystemStatus", parent=parent)
 
     def refresh(self, systems, selected):
         self.setText(f"Units: {selected or 'None'}")

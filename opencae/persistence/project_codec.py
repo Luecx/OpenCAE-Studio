@@ -11,7 +11,7 @@ from opencae.model.project import Project
 from .migrations import migrate_project_data
 
 PROJECT_FORMAT = "opencae-project"
-CURRENT_SCHEMA_VERSION = 25
+CURRENT_SCHEMA_VERSION = 26
 MINIMUM_SCHEMA_VERSION = 23
 _ENVELOPE_FIELDS = {"format", "schema_version", "project"}
 

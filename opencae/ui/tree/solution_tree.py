@@ -2,7 +2,7 @@
 
 import logging
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QKeyEvent, QStandardItem, QStandardItemModel
 from PyQt6.QtWidgets import QAbstractItemView, QMenu, QTreeView
 
@@ -235,6 +235,15 @@ class SolutionTree(QTreeView):
         if result is not None:
             self.solution_requested.emit(result, field)
 
+    def _request_delete(self, result):
+        """Delete only after the current menu/key event releases its QModelIndex."""
+        if result is None:
+            return
+        QTimer.singleShot(
+            0,
+            lambda selected=result: self.delete_requested.emit(selected),
+        )
+
     def _context_menu(self, position):
         index = self.indexAt(position)
         result = (
@@ -249,7 +258,7 @@ class SolutionTree(QTreeView):
         delete_action = menu.addAction("Delete Result")
         selected = menu.exec(self.viewport().mapToGlobal(position))
         if selected is delete_action:
-            self.delete_requested.emit(result)
+            self._request_delete(result)
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key.Key_Delete:
@@ -260,7 +269,7 @@ class SolutionTree(QTreeView):
                 else None
             )
             if result is not None:
-                self.delete_requested.emit(result)
+                self._request_delete(result)
                 event.accept()
                 return
         super().keyPressEvent(event)

@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QInputDialog, QWidget
 
 from opencae.ui.core.fields import FieldSpec, create_editor
 from opencae.ui.core.icon_factory import IconKind, make_icon
-from opencae.ui.core.widgets import ChevronComboBox
+from opencae.ui.primitives.selects import SelectForm
 from opencae.ui.templates import (
     ButtonRole,
     ButtonSpec,
@@ -48,8 +48,8 @@ class DeckProfileToolbar(QWidget):
                 default="FEMaster",
             )
         )
-        if not isinstance(profile, ChevronComboBox):
-            raise TypeError("Deck profile selector must use ChevronComboBox")
+        if not isinstance(profile, SelectForm):
+            raise TypeError("Deck profile selector must use SelectForm")
         self.profile_combo = profile
         self.profile_combo.setMinimumWidth(340)
         layout.addWidget(self.profile_combo, 1)

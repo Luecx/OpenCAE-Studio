@@ -1,13 +1,22 @@
+"""Provide the Results ribbon field/step/frame selector popover."""
+
 from PyQt6.QtCore import QSignalBlocker, pyqtSignal
 from PyQt6.QtWidgets import QFormLayout, QWidget
 
-from opencae.results.navigation import display_field, fields_for, frame_keys, frame_label, step_ids, step_label
+from opencae.results.navigation import (
+    display_field,
+    fields_for,
+    frame_keys,
+    frame_label,
+    step_ids,
+    step_label,
+)
 from opencae.ui.core.icon_factory import IconKind, make_icon
-from opencae.ui.core.widgets import ChevronComboBox
-from opencae.ui.primitives.buttons import OptionsButton
+from opencae.ui.primitives.buttons import ButtonResultsRibbonOptions
+from opencae.ui.primitives.selects import SelectForm
 
 
-class ResultFieldButton(OptionsButton):
+class ResultFieldButton(ButtonResultsRibbonOptions):
     selection_changed = pyqtSignal()
     navigation_changed = pyqtSignal(bool, bool)
 
@@ -15,9 +24,7 @@ class ResultFieldButton(OptionsButton):
         super().__init__(
             "Field",
             icon=make_icon(IconKind.RESULT_FIELD, 28),
-            icon_size=28,
             width=92,
-            height=70,
             parent=parent,
         )
         self.result = None
@@ -26,7 +33,7 @@ class ResultFieldButton(OptionsButton):
         form = QFormLayout(panel)
         form.setContentsMargins(12, 10, 12, 10)
         self.step, self.frame, self.field, self.component = (
-            ChevronComboBox() for _ in range(4)
+            SelectForm() for _ in range(4)
         )
         for label, combo in (
             ("Step", self.step),
@@ -40,13 +47,6 @@ class ResultFieldButton(OptionsButton):
         self.set_options_panel(panel)
 
     def set_solution(self, result, fields, preferred=None):
-        """Load one ResultSet and select its first available field by default.
-
-        Without an explicit preferred field the selectors intentionally resolve
-        to the first step, first frame and first field. This avoids PyVista
-        falling back to an arbitrary active FRD array and gives newly opened
-        result files one deterministic contour immediately.
-        """
         self.result, self.fields = result, fields
         blockers = [QSignalBlocker(combo) for combo in self._combos()]
         self._steps(preferred)
@@ -164,7 +164,7 @@ class ResultFieldButton(OptionsButton):
         target = (
             preferred.metadata.get("component", "Magnitude")
             if preferred
-            else component_name
+            else component_name or source.metadata.get("default_component")
         )
         if target:
             index = self.component.findText(str(target))

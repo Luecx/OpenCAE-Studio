@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
+
+from opencae.ui.primitives.buttons import ButtonWorkspaceStatusTab
 
 
 class WorkspaceStatusTabs(QWidget):
@@ -29,12 +31,7 @@ class WorkspaceStatusTabs(QWidget):
         layout.setSpacing(0)
 
         for key, text in self._ITEMS:
-            button = QToolButton(self)
-            button.setText(text)
-            button.setCheckable(True)
-            button.setAutoRaise(False)
-            button.setProperty("workspaceStatusTab", True)
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button = ButtonWorkspaceStatusTab(text, parent=self)
             button.clicked.connect(
                 lambda _checked=False, value=key: self.activated.emit(value)
             )
