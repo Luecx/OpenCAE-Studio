@@ -59,9 +59,9 @@ _BEAM_FIELDS = (
     ("profile_name", "Referenced OpenCAE profile", "BEAM_PROFILE"),
     ("section_type", "Native inline beam-profile type", "RECT"),
     ("profile_data", "Native comma-separated profile dimensions", "40.0, 20.0"),
-    ("orientation_x", "Section direction X component", 0.0),
-    ("orientation_y", "Section direction Y component", 1.0),
-    ("orientation_z", "Section direction Z component", 0.0),
+    ("orientation_x", "Beam n1 X component", 0.0),
+    ("orientation_y", "Beam n1 Y component", 1.0),
+    ("orientation_z", "Beam n1 Z component", 0.0),
 )
 
 
