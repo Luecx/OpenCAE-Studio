@@ -8,6 +8,7 @@ from opencae.ui.core.theme import PALETTE
 from .safe_operations import remove_actor
 
 
+_AVAILABLE_POINT_ACTOR = "mesh-edit-preview-available-points"
 _POINT_ACTOR = "mesh-edit-preview-points"
 _LINE_ACTOR = "mesh-edit-preview-lines"
 _POSITION_ACTOR = "mesh-edit-preview-position"
@@ -17,6 +18,7 @@ def clear_mesh_edit_preview(viewport, *, render=True) -> None:
     plotter = getattr(viewport, "plotter", None)
     if plotter is None:
         return
+    remove_actor(plotter, _AVAILABLE_POINT_ACTOR, render=False)
     remove_actor(plotter, _POINT_ACTOR, render=False)
     remove_actor(plotter, _LINE_ACTOR, render=False)
     remove_actor(plotter, _POSITION_ACTOR, render=False)
@@ -53,22 +55,57 @@ def show_connectivity_preview(viewport, mesh, node_ids, element_type=None) -> No
     plotter = getattr(viewport, "plotter", None)
     if plotter is None:
         return
+    remove_actor(plotter, _AVAILABLE_POINT_ACTOR, render=False)
     remove_actor(plotter, _POINT_ACTOR, render=False)
     remove_actor(plotter, _LINE_ACTOR, render=False)
+
+    selected_ids = set()
     points = []
     for node_id in node_ids or ():
         try:
-            points.append(mesh.node(int(node_id)).coordinates)
+            node_id = int(node_id)
+            points.append(mesh.node(node_id).coordinates)
+            selected_ids.add(node_id)
         except (KeyError, TypeError, ValueError):
             continue
-    if not points:
-        try:
-            plotter.render()
-        except (AttributeError, RuntimeError, TypeError, ValueError):
-            pass
-        return
-    array = np.asarray(points, dtype=float)
+
+    # Element creation is driven by mesh-node picking. Keep every available
+    # node visible while the dialog is open, using the same neutral point color
+    # as CAD vertex picking. Selected connectivity is drawn larger and in the
+    # canonical selection color below so it remains visually distinct.
+    available_points = []
     try:
+        available_points = [
+            coordinates
+            for node_id, coordinates in zip(
+                mesh.nodes.ids,
+                mesh.nodes.coordinates,
+                strict=True,
+            )
+            if int(node_id) not in selected_ids
+        ]
+    except (AttributeError, TypeError, ValueError):
+        available_points = []
+
+    try:
+        if available_points:
+            plotter.add_points(
+                np.asarray(available_points, dtype=float),
+                color=PALETTE["cad_vertex"],
+                point_size=11,
+                render_points_as_spheres=True,
+                lighting=False,
+                name=_AVAILABLE_POINT_ACTOR,
+                pickable=False,
+                reset_camera=False,
+                render=False,
+            )
+
+        if not points:
+            plotter.render()
+            return
+
+        array = np.asarray(points, dtype=float)
         plotter.add_points(
             array,
             color=PALETTE["selection_3d"],
