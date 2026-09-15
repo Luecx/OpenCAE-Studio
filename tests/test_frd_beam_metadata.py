@@ -10,6 +10,7 @@ from opencae.results import FrdLoader
 from opencae.results.frd_beam_metadata import (
     _map_force_ids,
     _normalize_force_ids,
+    _res_force_blocks,
     _semantic_element_aliases,
     beam_normal_stress_range,
     read_frd_beam_metadata,
@@ -77,28 +78,17 @@ def test_embedded_beam_stress_is_exposed_as_an_frd_result_field(tmp_path):
 
 def test_semantic_instance_element_ids_map_to_exported_solver_ids():
     occurrences = (
-        SimpleNamespace(
-            solver_element_id=3,
-            source_element_id=17,
-            instance_name="bolt",
-        ),
-        SimpleNamespace(
-            solver_element_id=9,
-            source_element_id=17,
-            instance_name="bracket",
-        ),
+        SimpleNamespace(solver_element_id=3, source_element_id=17, instance_name="bolt"),
+        SimpleNamespace(solver_element_id=9, source_element_id=17, instance_name="bracket"),
     )
     aliases = _semantic_element_aliases(occurrences)
     assert aliases["bolt.17"] == 3
     assert aliases["bracket.17"] == 9
     assert "17" not in aliases
-
     bolt = np.ones((2, 6))
     bracket = np.full((2, 6), 2.0)
     mapped = _map_force_ids(
-        {"bolt.17": bolt, "bracket.17": bracket},
-        aliases,
-        {3, 9},
+        {"bolt.17": bolt, "bracket.17": bracket}, aliases, {3, 9}
     )
     assert set(mapped) == {3, 9}
     np.testing.assert_allclose(mapped[3], bolt)
@@ -113,3 +103,25 @@ def test_temporary_numeric_res_element_ids_are_normalized_only_when_offset_is_cl
     np.testing.assert_allclose(shifted[2], values[1])
     exact = _normalize_force_ids({1: values[0], 2: values[1]}, {1, 2})
     assert set(exact) == {1, 2}
+
+
+def test_temporary_res_preserves_semantic_ids_and_frame_suffixes(tmp_path):
+    path = tmp_path / "results.res"
+    path.write_text(
+        """LC 4
+FIELD, NAME=LOCAL_SECTION_FORCES_0, TYPE=ELEMENT_NODAL, INDEX_COLS=2, VALUE_COLS=6, ROWS=2
+bolt.17 0 1 2 3 4 5 6
+bolt.17 1 7 8 9 10 11 12
+END FIELD
+FIELD, NAME=LOCAL_SECTION_FORCES_1, TYPE=ELEMENT_NODAL, INDEX_COLS=2, VALUE_COLS=6, ROWS=2
+bolt.17 0 13 14 15 16 17 18
+bolt.17 1 19 20 21 22 23 24
+END FIELD
+""",
+        encoding="utf-8",
+    )
+    blocks = _res_force_blocks(path)
+    assert set(blocks) == {(4, 1), (4, 2)}
+    assert set(blocks[(4, 1)]) == {"bolt.17"}
+    np.testing.assert_allclose(blocks[(4, 1)]["bolt.17"][0], (1, 2, 3, 4, 5, 6))
+    np.testing.assert_allclose(blocks[(4, 2)]["bolt.17"][1], (19, 20, 21, 22, 23, 24))
