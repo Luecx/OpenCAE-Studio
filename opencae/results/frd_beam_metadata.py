@@ -249,10 +249,12 @@ def _model_records(occurrences: Iterable):
 
 
 def _force_records(frd: Path, res: Path, occurrences: Iterable):
+    occurrences = tuple(occurrences)
     valid_elements = {int(item.solver_element_id) for item in occurrences}
+    aliases = _semantic_element_aliases(occurrences)
     raw_blocks = _res_force_blocks(res)
     blocks = {
-        key: _normalize_force_ids(values, valid_elements)
+        key: _map_force_ids(values, aliases, valid_elements)
         for key, values in raw_blocks.items()
     }
     if not blocks:
@@ -301,45 +303,90 @@ def _force_records(frd: Path, res: Path, occurrences: Iterable):
     return records
 
 
+def _semantic_element_aliases(occurrences: Iterable):
+    """Map FEMaster's `instance.local`/bare local RES IDs to solver element IDs."""
+    aliases = {}
+    bare = {}
+    for occurrence in occurrences:
+        solver = int(occurrence.solver_element_id)
+        local = str(int(occurrence.source_element_id))
+        bare.setdefault(local, set()).add(solver)
+        instance_name = str(getattr(occurrence, "instance_name", "") or "")
+        if instance_name:
+            aliases[f"{instance_name}.{local}"] = solver
+    for local, solver_ids in bare.items():
+        if len(solver_ids) == 1:
+            aliases[local] = next(iter(solver_ids))
+    return aliases
+
+
+def _map_force_ids(values, aliases, valid):
+    """Resolve semantic RES element IDs, with numeric ±1 fallback only if needed."""
+    mapped = {}
+    unresolved = {}
+    for semantic, rows in values.items():
+        key = str(semantic).strip()
+        solver = aliases.get(key)
+        if solver is not None:
+            mapped[int(solver)] = rows
+            continue
+        try:
+            numeric = int(key)
+        except ValueError:
+            continue
+        if numeric in valid:
+            mapped[numeric] = rows
+        else:
+            unresolved[numeric] = rows
+
+    if unresolved:
+        exact = len(set(unresolved) & valid)
+        plus_one = len({value + 1 for value in unresolved} & valid)
+        minus_one = len({value - 1 for value in unresolved} & valid)
+        offset = 1 if plus_one > exact and plus_one >= minus_one else -1 if minus_one > exact else 0
+        for element, rows in unresolved.items():
+            target = element + offset
+            if target in valid and target not in mapped:
+                mapped[target] = rows
+    return mapped
+
+
 def _normalize_force_ids(values: dict[int, np.ndarray], valid: set[int]):
-    """Accept FEMaster's element indices whether its RES writer is 0- or 1-based."""
-    if not values or not valid:
-        return {}
-    exact = len(set(values) & valid)
-    plus_one = len({value + 1 for value in values} & valid)
-    minus_one = len({value - 1 for value in values} & valid)
-    offset = 0
-    if plus_one > exact and plus_one >= minus_one:
-        offset = 1
-    elif minus_one > exact:
-        offset = -1
-    return {
-        int(element) + offset: rows
-        for element, rows in values.items()
-        if int(element) + offset in valid
-    }
+    """Compatibility helper used by regression tests for numeric-only RES IDs."""
+    return _map_force_ids(
+        {str(element): rows for element, rows in values.items()}, {}, valid
+    )
 
 
 def _res_force_blocks(path: Path):
     result = {}
     for block in parse_res(path).fields:
-        if block.name.upper() not in _SECTION_FORCE_NAMES or block.domain != "ELEMENT_NODAL":
+        raw_name = block.name.upper()
+        display_name = block.display_name.upper()
+        if (
+            raw_name not in _SECTION_FORCE_NAMES
+            and display_name not in _SECTION_FORCE_NAMES
+            and not any(raw_name.startswith(f"{name}_") for name in _SECTION_FORCE_NAMES)
+        ):
+            continue
+        if block.domain != "ELEMENT_NODAL":
             continue
         grouped = {}
         for indices, values in block.values.items():
             if len(indices) < 2:
                 continue
+            semantic_element = str(indices[0]).strip()
             try:
-                element, local_node = int(indices[0]), int(indices[1])
+                local_node = int(indices[1])
             except (TypeError, ValueError):
                 continue
             current = np.asarray(values, dtype=float)
             if len(current) >= 6:
-                grouped.setdefault(element, {})[local_node] = current[:6]
+                grouped.setdefault(semantic_element, {})[local_node] = current[:6]
         packed = {}
-        for element, rows in grouped.items():
+        for semantic_element, rows in grouped.items():
             if len(rows) >= 2:
-                packed[element] = np.vstack(
+                packed[semantic_element] = np.vstack(
                     [rows[index] for index in sorted(rows)[:2]]
                 ).astype(float, copy=False)
         if packed:
