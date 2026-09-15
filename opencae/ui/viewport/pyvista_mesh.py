@@ -6,7 +6,7 @@ import pyvista as pv
 from opencae.model.entities.fem import MeshEntityOrigin
 from opencae.ui.core.theme import PALETTE
 from .instance_transform import transform_points
-from .surface_shading import mesh_cell_colors
+from .surface_shading import mesh_cell_colors, supports_surface_shading
 
 _CELL_TYPES = {(1, 2): 3, (2, 3): 5, (2, 4): 9, (3, 4): 10, (3, 5): 14, (3, 6): 13, (3, 8): 12}
 
@@ -94,23 +94,37 @@ def add_mesh(plotter, snapshot, instance=None, *, hidden_elements=()):
     if not grid.n_cells:
         return None, grid
     surface = _display_surface(grid)
+    shaded_surface = supports_surface_shading(surface)
     surface.cell_data["display_rgb"] = mesh_cell_colors(surface)
     actor = plotter.add_mesh(
-        surface, scalars="display_rgb", rgb=True, show_edges=False,
-        lighting=True, smooth_shading=True, ambient=0.88, diffuse=0.12,
-        specular=0.0, pickable=False,
-        name=f"{prefix}generated-mesh-surface", render=False,
+        surface,
+        scalars="display_rgb",
+        rgb=True,
+        show_edges=False,
+        lighting=shaded_surface,
+        smooth_shading=shaded_surface,
+        ambient=0.88 if shaded_surface else 1.0,
+        diffuse=0.12 if shaded_surface else 0.0,
+        specular=0.0,
+        line_width=2.4 if not shaded_surface else 1.0,
+        render_lines_as_tubes=not shaded_surface,
+        pickable=False,
+        name=f"{prefix}generated-mesh-surface",
+        render=False,
     )
-    plotter.add_mesh(
-        surface.extract_all_edges(), color=PALETTE["mesh_lines"], line_width=1.35,
-        lighting=False, render_lines_as_tubes=False, pickable=False,
-        name=f"{prefix}generated-mesh-lines", render=False,
-    )
+    if shaded_surface:
+        plotter.add_mesh(
+            surface.extract_all_edges(), color=PALETTE["mesh_lines"], line_width=1.35,
+            lighting=False, render_lines_as_tubes=False, pickable=False,
+            name=f"{prefix}generated-mesh-lines", render=False,
+        )
     return actor, grid
 
 
 def _display_surface(grid):
     surface = grid.extract_surface(algorithm="dataset_surface")
+    if not supports_surface_shading(surface):
+        return surface
     try:
         return surface.compute_normals(
             cell_normals=True, point_normals=True, split_vertices=True,
