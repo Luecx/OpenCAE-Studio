@@ -6,6 +6,7 @@ import numpy as np
 
 from opencae.model.entities.jobs import ResultField
 from .derived_fields import attach_derived, component_values, derived_names
+from .frd_beam_metadata import beam_normal_stress_range, read_frd_beam_metadata
 from .frd_parser import parse_frd
 from .frd_types import FRD_CELL_TYPES
 
@@ -22,7 +23,8 @@ class FrdLoader:
 
     def fields(self, path):
         result = []
-        for block in self.read(path).fields:
+        data = self.read(path)
+        for block in data.fields:
             result.append(
                 ResultField(
                     name=block.name,
@@ -38,11 +40,43 @@ class FrdLoader:
                     },
                 )
             )
+
+        metadata = read_frd_beam_metadata(path)
+        frame_values = {
+            (int(block.step_id), int(block.frame_id)): float(block.frame_value)
+            for block in data.fields
+        }
+        for step_id, frame_id in sorted(metadata.forces):
+            result.append(
+                ResultField(
+                    name="Beam Normal Stress",
+                    location="Element",
+                    components=1,
+                    metadata={
+                        "components": ["Normal Stress"],
+                        "derived": [],
+                        "default_component": "Normal Stress",
+                        "block": "BEAM",
+                        "step_id": int(step_id),
+                        "frame_id": int(frame_id),
+                        "frame_value": frame_values.get((int(step_id), int(frame_id)), 0.0),
+                        "embedded_beam_normal_stress": True,
+                    },
+                )
+            )
         return result
 
     def scalar_range(self, path, field):
         if field is None:
             return (0.0, 1.0)
+        if field.metadata.get("embedded_beam_normal_stress"):
+            values = beam_normal_stress_range(
+                path,
+                field.metadata.get("step_id"),
+                field.metadata.get("frame_id"),
+            )
+            return values if values is not None else (0.0, 1.0)
+
         data = self.read(path)
         block_index = int(field.metadata.get("block_index", 0))
         component = field.metadata.get("component", "Magnitude")
@@ -93,10 +127,6 @@ class FrdLoader:
         grid.point_data["node_id"] = np.asarray(tags, np.int64)
         grid.cell_data["element_id"] = np.asarray(element_ids, np.int64)
         self._attach_fields(grid, data, tags, step_id, frame_id)
-
-        # IDs and attached FRD arrays are metadata until the caller explicitly
-        # selects a result field. Do not let PyVista choose one implicitly and
-        # create its default horizontal scalar bar for a nominal geometry view.
         try:
             grid.set_active_scalars(None)
         except (AttributeError, KeyError, TypeError, ValueError):
