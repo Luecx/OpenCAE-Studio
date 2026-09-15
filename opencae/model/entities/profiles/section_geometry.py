@@ -4,6 +4,11 @@ The returned patches describe non-overlapping material area in local ``(y, z)``
 coordinates about the profile centroid. Standard profiles are deliberately
 quadrangulated so physical beam visualization can extrude every patch into one
 VTK hexahedron without introducing triangular caps or overlapping solids.
+
+Straight wall/arm segments use four patches (five stations) along their length.
+Classical thin-walled profiles keep flange/web or wall/wall intersections as
+explicit corner/junction rectangles instead of hiding those regions inside one
+of the adjacent strips.
 """
 
 from __future__ import annotations
@@ -13,6 +18,9 @@ import math
 import numpy as np
 
 from .base import Profile
+
+_LINEAR_SEGMENTS = 4
+_EPS = 1.0e-12
 
 
 def section_patches(profile: Profile, circle_segments: int = 24) -> tuple[np.ndarray, ...]:
@@ -24,7 +32,9 @@ def section_patches(profile: Profile, circle_segments: int = 24) -> tuple[np.nda
     cz = float(properties.get("Centroid z", 0.0) or 0.0)
 
     if kind == "Rectangle":
-        patches = (_rectangle(_positive(values, "width"), _positive(values, "height")),)
+        patches = _subdivide_rect(
+            _rectangle(_positive(values, "width"), _positive(values, "height"))
+        )
     elif kind == "Box":
         patches = _box(values)
     elif kind == "Circle":
@@ -40,7 +50,7 @@ def section_patches(profile: Profile, circle_segments: int = 24) -> tuple[np.nda
     elif kind == "Graph profile":
         patches = _graph(values)
     else:
-        patches = (_equivalent_rectangle(properties),)
+        patches = _subdivide_rect(_equivalent_rectangle(properties))
 
     offset = np.asarray((cy, cz), dtype=float)
     result = []
@@ -72,38 +82,35 @@ def _rectangle(width: float, height: float) -> np.ndarray:
 
 
 def _box(values) -> tuple[np.ndarray, ...]:
-    """Partition a hollow box into four non-overlapping rectangles."""
+    """Partition a hollow box into explicit corners plus subdivided wall strips."""
     width = _positive(values, "width")
     height = _positive(values, "height")
     thickness = min(_positive(values, "thickness"), width / 2, height / 2)
     if thickness <= 0.0:
-        return (_rectangle(width, height),)
+        return _subdivide_rect(_rectangle(width, height))
 
-    z0 = -height / 2
-    z1 = height / 2
-    inner_z0 = z0 + thickness
-    inner_z1 = z1 - thickness
-    patches = [
-        _rect_bounds(-width / 2, width / 2, z0, inner_z0),
-        _rect_bounds(-width / 2, width / 2, inner_z1, z1),
-    ]
-    if inner_z1 > inner_z0:
-        patches.extend(
-            (
-                _rect_bounds(
-                    -width / 2,
-                    -width / 2 + thickness,
-                    inner_z0,
-                    inner_z1,
-                ),
-                _rect_bounds(
-                    width / 2 - thickness,
-                    width / 2,
-                    inner_z0,
-                    inner_z1,
-                ),
-            )
-        )
+    y0, y1 = -width / 2, width / 2
+    z0, z1 = -height / 2, height / 2
+    iy0, iy1 = y0 + thickness, y1 - thickness
+    iz0, iz1 = z0 + thickness, z1 - thickness
+    if iy1 <= iy0 + _EPS or iz1 <= iz0 + _EPS:
+        return _subdivide_rect(_rectangle(width, height))
+
+    corners = (
+        _rect_bounds(y0, iy0, z0, iz0),
+        _rect_bounds(iy1, y1, z0, iz0),
+        _rect_bounds(iy1, y1, iz1, z1),
+        _rect_bounds(y0, iy0, iz1, z1),
+    )
+    strips = (
+        _rect_bounds(iy0, iy1, z0, iz0),
+        _rect_bounds(iy0, iy1, iz1, z1),
+        _rect_bounds(y0, iy0, iz0, iz1),
+        _rect_bounds(iy1, y1, iz0, iz1),
+    )
+    patches = list(corners)
+    for strip in strips:
+        patches.extend(_subdivide_rect(strip))
     return tuple(patches)
 
 
@@ -165,36 +172,61 @@ def _pipe(values, segments: int) -> tuple[np.ndarray, ...]:
 
 
 def _i_profile(values) -> tuple[np.ndarray, ...]:
-    """Partition I/H material into disjoint flange/web rectangles."""
+    """Partition I/H material into junction blocks and subdivided clear strips."""
     height, width, web, flange = _open_dimensions(values)
-    return (
-        _rect_bounds(-width / 2, width / 2, -height / 2, -height / 2 + flange),
-        _rect_bounds(-web / 2, web / 2, -height / 2 + flange, height / 2 - flange),
-        _rect_bounds(-width / 2, width / 2, height / 2 - flange, height / 2),
-    )
+    y0, y1 = -width / 2, width / 2
+    wy0, wy1 = -web / 2, web / 2
+    z0, z1 = -height / 2, height / 2
+    fz0, fz1 = z0 + flange, z1 - flange
+
+    patches = [
+        _rect_bounds(wy0, wy1, z0, fz0),
+        _rect_bounds(wy0, wy1, fz1, z1),
+    ]
+    for strip in (
+        _rect_bounds(y0, wy0, z0, fz0),
+        _rect_bounds(wy1, y1, z0, fz0),
+        _rect_bounds(y0, wy0, fz1, z1),
+        _rect_bounds(wy1, y1, fz1, z1),
+        _rect_bounds(wy0, wy1, fz0, fz1),
+    ):
+        patches.extend(_subdivide_rect(strip))
+    return tuple(patches)
 
 
 def _channel(values) -> tuple[np.ndarray, ...]:
-    """Partition channel material without overlapping flange/web intersections."""
+    """Partition channel material into corner blocks and subdivided clear strips."""
     height, width, web, flange = _open_dimensions(values)
-    return (
-        _rect_bounds(0.0, width, 0.0, flange),
+    patches = [
+        _rect_bounds(0.0, web, 0.0, flange),
+        _rect_bounds(0.0, web, height - flange, height),
+    ]
+    for strip in (
+        _rect_bounds(web, width, 0.0, flange),
+        _rect_bounds(web, width, height - flange, height),
         _rect_bounds(0.0, web, flange, height - flange),
-        _rect_bounds(0.0, width, height - flange, height),
-    )
+    ):
+        patches.extend(_subdivide_rect(strip))
+    return tuple(patches)
 
 
 def _u_profile(values) -> tuple[np.ndarray, ...]:
-    """Partition U-profile material into one base and two disjoint legs."""
+    """Partition U material into corner blocks and subdivided base/leg strips."""
     overall_width = _positive(values, "height")
     leg_height = _positive(values, "flange_width")
     base = min(_positive(values, "web_thickness"), leg_height)
     leg = min(_positive(values, "flange_thickness"), overall_width / 2)
-    return (
-        _rect_bounds(0.0, overall_width, 0.0, base),
+    patches = [
+        _rect_bounds(0.0, leg, 0.0, base),
+        _rect_bounds(overall_width - leg, overall_width, 0.0, base),
+    ]
+    for strip in (
+        _rect_bounds(leg, overall_width - leg, 0.0, base),
         _rect_bounds(0.0, leg, base, leg_height),
         _rect_bounds(overall_width - leg, overall_width, base, leg_height),
-    )
+    ):
+        patches.extend(_subdivide_rect(strip))
+    return tuple(patches)
 
 
 def _graph(values) -> tuple[np.ndarray, ...]:
@@ -220,16 +252,21 @@ def _graph(values) -> tuple[np.ndarray, ...]:
         if length <= 1.0e-12 or thickness <= 0.0:
             continue
         normal = np.asarray((-tangent[1], tangent[0])) / length * thickness * 0.5
-        patches.append(
-            np.asarray(
-                (
-                    first + normal,
-                    second + normal,
-                    second - normal,
-                    first - normal,
+        for index in range(_LINEAR_SEGMENTS):
+            a = index / _LINEAR_SEGMENTS
+            b = (index + 1) / _LINEAR_SEGMENTS
+            start = first + a * tangent
+            end = first + b * tangent
+            patches.append(
+                np.asarray(
+                    (
+                        start + normal,
+                        end + normal,
+                        end - normal,
+                        start - normal,
+                    )
                 )
             )
-        )
     return tuple(patches)
 
 
@@ -266,6 +303,41 @@ def _open_dimensions(values) -> tuple[float, float, float, float]:
     web = min(_positive(values, "web_thickness"), width)
     flange = min(_positive(values, "flange_thickness"), height / 2)
     return height, width, web, flange
+
+
+def _subdivide_rect(patch: np.ndarray, segments: int = _LINEAR_SEGMENTS) -> tuple[np.ndarray, ...]:
+    """Split a rectangular strip along its longer local axis into equal patches."""
+    polygon = np.asarray(patch, dtype=float)
+    if polygon.shape != (4, 2):
+        return ()
+    edge_01 = float(np.linalg.norm(polygon[1] - polygon[0]))
+    edge_12 = float(np.linalg.norm(polygon[2] - polygon[1]))
+    if edge_01 <= _EPS or edge_12 <= _EPS:
+        return ()
+    count = max(1, int(segments))
+    if count == 1:
+        return (polygon,)
+
+    # _rect_bounds produces p0->p1 along y and p1->p2 along z. Splitting the
+    # longer pair gives five stations along the actual wall/arm direction while
+    # retaining one element through the thickness.
+    if edge_01 >= edge_12:
+        left0, left1 = polygon[0], polygon[3]
+        right0, right1 = polygon[1], polygon[2]
+    else:
+        left0, left1 = polygon[0], polygon[1]
+        right0, right1 = polygon[3], polygon[2]
+
+    result = []
+    for index in range(count):
+        a = index / count
+        b = (index + 1) / count
+        p0 = (1.0 - a) * left0 + a * right0
+        p1 = (1.0 - b) * left0 + b * right0
+        p2 = (1.0 - b) * left1 + b * right1
+        p3 = (1.0 - a) * left1 + a * right1
+        result.append(np.asarray((p0, p1, p2, p3), dtype=float))
+    return tuple(result)
 
 
 def _rect_bounds(y0, y1, z0, z1) -> np.ndarray:
