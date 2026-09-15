@@ -1,5 +1,6 @@
 """Shared scene presentation behavior for model, live and stored results."""
 
+from .beam_physical_display import beam_physical_controller
 from .field_visualization import add_field
 from .solution_scene import show_result
 
@@ -22,7 +23,7 @@ class SceneDisplayMixin:
         """Return whether two workflow stages can reuse the same base scene.
 
         Entering Results deliberately keeps the current scene alive until the
-        selected ResultSet replaces it.  Scheduling an intermediate base-scene
+        selected ResultSet replaces it. Scheduling an intermediate base-scene
         rebuild here races result loading and can otherwise clear a freshly
         loaded FRD on the next Qt event turn.
         """
@@ -95,5 +96,15 @@ class SceneDisplayMixin:
         )
 
     def show_result(self, result, field=None, options=None):
-        """Replace the base scene with one stored solver result presentation."""
-        show_result(self, result, field, options)
+        """Replace the base scene with one stored solver result presentation.
+
+        Physical beams are inserted here rather than in one caller so ordinary
+        field changes and Time Manager animation frames share the same expansion
+        path and the same cached beam topology.
+        """
+        self.owner._active_result = result
+        self.owner._active_result_field = field
+        controller = beam_physical_controller(self.owner)
+        controller.result_changed(result)
+        prepared = controller.prepare_options(result, field, options)
+        show_result(self, result, field, prepared)
