@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLineEdit, QMessageBox
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox
 
 from opencae.model.naming import is_unique
 from opencae.ui.core.widgets import ChevronComboBox, XYZPicker
+from opencae.ui.primitives.inputs import InputFormText
 from opencae.ui.templates import (
     SectionHeading,
     apply_primary_control_height,
@@ -40,8 +41,7 @@ class CoordinateSystemDialog(QDialog):
 
         root = dialog_layout(self)
 
-        self.name = QLineEdit(default_name)
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(default_name)
         self.kind = ChevronComboBox()
         self.kind.setMinimumWidth(0)
         self.kind.addItems(("Rectangular", "Cylindrical"))
