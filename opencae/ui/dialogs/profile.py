@@ -6,7 +6,6 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
-    QLineEdit,
     QMessageBox,
     QScrollArea,
     QVBoxLayout,
@@ -19,6 +18,7 @@ from opencae.model.entities.profiles.calculations import (
 )
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.widgets import ChevronComboBox
+from opencae.ui.primitives.inputs import InputFormText
 from opencae.ui.templates import (
     NumericUnitInput,
     SectionHeading,
@@ -74,8 +74,7 @@ class ProfileDialog(ApplyDialog):
 
         root = dialog_layout(self)
 
-        self.name = QLineEdit(profile.name if profile else default_name)
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(profile.name if profile else default_name)
         root.addWidget(field_block("Name", self.name))
 
         self.kind = ChevronComboBox()
