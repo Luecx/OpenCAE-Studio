@@ -29,22 +29,16 @@ def _field():
 
 
 def test_expanded_beam_points_extend_default_contour_range():
-    result = SimpleNamespace(source_file="results.res")
+    result = SimpleNamespace(source_file="results.frd")
     settings = {
         "minimum": -2.0,
         "maximum": 2.0,
         "minimum_auto": False,
         "maximum_auto": False,
     }
-
     adjusted = _expanded_range_settings(
-        _Loader(),
-        result,
-        _field(),
-        _Grid(),
-        settings,
+        _Loader(), result, _field(), _Grid(), settings
     )
-
     assert adjusted["minimum"] == -7.5
     assert adjusted["maximum"] == 4.25
     assert settings["minimum"] == -2.0
@@ -52,21 +46,15 @@ def test_expanded_beam_points_extend_default_contour_range():
 
 
 def test_expanded_beam_range_preserves_manually_changed_bound():
-    result = SimpleNamespace(source_file="results.res")
+    result = SimpleNamespace(source_file="results.frd")
     settings = {
         "minimum": -1.0,
         "maximum": 2.0,
         "minimum_auto": False,
         "maximum_auto": False,
     }
-
     adjusted = _expanded_range_settings(
-        _Loader(),
-        result,
-        _field(),
-        _Grid(),
-        settings,
+        _Loader(), result, _field(), _Grid(), settings
     )
-
     assert adjusted["minimum"] == -1.0
     assert adjusted["maximum"] == 4.25
