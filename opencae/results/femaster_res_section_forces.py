@@ -21,7 +21,7 @@ def load_local_section_forces(
     result_source: str | Path,
     step_id: int | None = None,
 ) -> dict[int, np.ndarray]:
-    """Return ``element_id -> (local_node, six resultants)`` from sibling RES."""
+    """Return ordered endpoint resultants ``[N,Vy,Vz,T,My,Mz]`` per element."""
     source = Path(result_source)
     path = source if source.suffix.lower() == ".res" else source.with_suffix(".res")
     if not path.is_file():
@@ -60,11 +60,8 @@ def load_local_section_forces(
                 continue
 
             if line == "END FIELD":
-                if active and result:
-                    # The requested loadcase has been found completely; later
-                    # fields cannot improve this section-force snapshot.
-                    if requested is not None:
-                        break
+                if active and result and requested is not None:
+                    break
                 collecting = False
                 active = False
                 continue
@@ -89,11 +86,13 @@ def load_local_section_forces(
     for element_id, rows in result.items():
         if not rows:
             continue
-        size = max(rows) + 1
-        values = np.zeros((size, 6), dtype=float)
-        for local_node, row in rows.items():
-            values[local_node, : min(6, len(row))] = row[:6]
-        packed[element_id] = values
+        # Solver-local node labels are conventionally one-based (1, 2). Keep
+        # their ordering, but do not use those labels as zero-based array indices.
+        # Stress recovery consumes row 0 as the first beam end and row 1 as the
+        # second regardless of the textual numbering convention.
+        packed[element_id] = np.vstack(
+            [rows[local_node] for local_node in sorted(rows)]
+        ).astype(float, copy=False)
     return packed
 
 
