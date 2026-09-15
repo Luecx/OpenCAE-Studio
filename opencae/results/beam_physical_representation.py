@@ -1,4 +1,4 @@
-"""Build and apply the lazy solid-like visualization representation for beams."""
+"""Build and apply hexahedral visualization volumes for beam elements."""
 
 from __future__ import annotations
 
@@ -17,11 +17,12 @@ from .beam_physical_stress import (
 
 ProgressCallback = Callable[[int, int, str], None]
 _BEAM_NORMAL_STRESS = "BEAM:Normal Stress"
+_VTK_HEXAHEDRON = 12
 
 
 @dataclass(slots=True)
 class BeamPhysicalRepresentation:
-    """Cached beam surface topology and mappings for compatible source frames."""
+    """Cached beam volume topology and mappings for compatible source frames."""
 
     cells: np.ndarray
     celltypes: np.ndarray
@@ -47,7 +48,7 @@ class BeamPhysicalRepresentation:
         *,
         element_nodal_forces: dict[int, np.ndarray] | None = None,
     ):
-        """Replace mapped beam lines by section surfaces in one source frame."""
+        """Replace mapped beam lines by hexahedral visualization cells."""
         import pyvista as pv
 
         self._validate(source_grid)
@@ -197,7 +198,7 @@ def build_beam_physical_representation_from_occurrences(
     *,
     source_element_ids: bool = True,
 ):
-    """Build physical beam surfaces for an explicit set of model occurrences.
+    """Build physical beam volumes for an explicit set of model occurrences.
 
     ``source_element_ids`` selects whether the source grid exposes Part-local
     element IDs (editor meshes) or exported solver IDs (stored result meshes).
@@ -253,6 +254,7 @@ def build_beam_physical_representation_from_occurrences(
         if not patches:
             continue
         properties = occurrence.profile.properties()
+        generated_before = len(generated_sources_a)
         for patch in patches:
             _append_patch(
                 patch,
@@ -272,7 +274,8 @@ def build_beam_physical_representation_from_occurrences(
                 generated_coefficients,
                 generated_cells,
             )
-        replaced_cells.add(cell_index)
+        if len(generated_sources_a) > generated_before:
+            replaced_cells.add(cell_index)
 
     if progress:
         progress(total, total, "Finalizing beam representation")
@@ -291,7 +294,7 @@ def build_beam_physical_representation_from_occurrences(
         cell_source.append(cell_index)
     for cell_index, ids in generated_cells:
         cells.extend((len(ids), *ids))
-        celltypes.append(9 if len(ids) == 4 else 5)
+        celltypes.append(_VTK_HEXAHEDRON)
         cell_source.append(cell_index)
 
     source_node_ids = (
@@ -319,8 +322,6 @@ def _solver_cell_map(element_ids: np.ndarray) -> dict[int, int]:
     """Map OpenCAE/FEMaster input IDs to FRD cells for 0- or 1-based FRD IDs."""
     if len(element_ids) == 0:
         return {}
-    # FEMaster's current FRD writer emits dense internal IDs from zero while
-    # CalculiX-style FRD commonly retains one-based input identifiers.
     offset = 1 if int(np.min(element_ids)) == 0 else 0
     return {
         int(result_id) + offset: index
@@ -346,8 +347,12 @@ def _append_patch(
     coefficients,
     cells,
 ):
+    """Extrude one quadrilateral section patch into one VTK hexahedron."""
+    patch = np.asarray(patch, dtype=float)
+    if patch.shape != (4, 2) or not np.all(np.isfinite(patch)):
+        return
+
     start = source_point_count + len(sources_a)
-    count = len(patch)
     for xi in (0.0, 1.0):
         for y, z in patch:
             sources_a.append(first)
@@ -356,27 +361,13 @@ def _append_patch(
             xis.append(xi)
             offsets.append(ey * float(y) + ez * float(z))
             coefficients.append(stress_coefficients(properties, float(y), float(z)))
-    for index in range(count):
-        next_index = (index + 1) % count
-        cells.append((
+
+    cells.append(
+        (
             cell_index,
-            (
-                start + index,
-                start + next_index,
-                start + count + next_index,
-                start + count + index,
-            ),
-        ))
-    for offset in (0, count):
-        for index in range(1, count - 1):
-            triangle = (
-                start + offset,
-                start + offset + index,
-                start + offset + index + 1,
-            )
-            if offset == 0:
-                triangle = (triangle[0], triangle[2], triangle[1])
-            cells.append((cell_index, triangle))
+            tuple(start + index for index in range(8)),
+        )
+    )
 
 
 def _section_frame(axis, preferred):

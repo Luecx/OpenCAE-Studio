@@ -36,7 +36,14 @@ _STRING_CELL_LABELS = {
 
 
 def node_values(grid, point, field=None):
-    index = int(grid.find_closest_point(point))
+    """Return the logical FE node nearest a picked result position.
+
+    Physical beam surfaces contain generated visualization points with
+    ``node_id == -1``. Map those points back to the corresponding original beam
+    endpoint before reporting node metadata or nodal field values.
+    """
+    picked_index = int(grid.find_closest_point(point))
+    index = _logical_node_index(grid, picked_index)
     node_id = int(
         grid.point_data.get("node_id", np.arange(grid.n_points))[index]
     )
@@ -88,7 +95,10 @@ def _cell_type_label(cell):
         cell_type = int(raw_type)
     except (TypeError, ValueError):
         key = str(raw_type).strip().casefold().replace("vtk_", "")
-        base = _STRING_CELL_LABELS.get(key, str(raw_type).strip().replace("_", " ").title())
+        base = _STRING_CELL_LABELS.get(
+            key,
+            str(raw_type).strip().replace("_", " ").title(),
+        )
         count = len(getattr(cell, "point_ids", ()))
         return f"{base} ({count}-node)" if count else base or "VTK cell"
 
@@ -139,13 +149,61 @@ def _all_point_rows(grid, index):
     return [
         (name, _value(np.asarray(values)[index]))
         for name, values in grid.point_data.items()
-        if name != "node_id"
+        if name != "node_id" and not str(name).startswith("_opencae_")
     ]
 
 
+def _logical_node_index(grid, index: int) -> int:
+    node_ids = np.asarray(
+        grid.point_data.get("node_id", np.arange(grid.n_points)),
+        dtype=np.int64,
+    )
+    if index < 0 or index >= len(node_ids) or int(node_ids[index]) >= 0:
+        return int(index)
+
+    logical_id = _mapped_beam_node_id(grid, index)
+    if logical_id is None:
+        return int(index)
+    matches = np.flatnonzero(node_ids == int(logical_id))
+    return int(matches[0]) if len(matches) else int(index)
+
+
 def _node_ids(grid, indices):
-    values = np.asarray(grid.point_data.get("node_id", indices))
-    return [int(values[int(index)]) for index in indices]
+    values = np.asarray(
+        grid.point_data.get("node_id", np.arange(grid.n_points)),
+        dtype=np.int64,
+    )
+    result = []
+    for raw_index in indices:
+        index = int(raw_index)
+        node_id = int(values[index])
+        if node_id < 0:
+            mapped = _mapped_beam_node_id(grid, index)
+            if mapped is not None:
+                node_id = int(mapped)
+        result.append(node_id)
+    return result
+
+
+def _mapped_beam_node_id(grid, index: int) -> int | None:
+    required = (
+        "_opencae_beam_node_a",
+        "_opencae_beam_node_b",
+        "_opencae_beam_xi",
+    )
+    if not all(name in grid.point_data for name in required):
+        return None
+    try:
+        first = int(grid.point_data["_opencae_beam_node_a"][index])
+        second = int(grid.point_data["_opencae_beam_node_b"][index])
+        xi = float(grid.point_data["_opencae_beam_xi"][index])
+    except (IndexError, TypeError, ValueError):
+        return None
+    if first < 0 and second < 0:
+        return None
+    if not np.isfinite(xi):
+        return first if first >= 0 else second
+    return first if xi <= 0.5 else second
 
 
 def _value(value):

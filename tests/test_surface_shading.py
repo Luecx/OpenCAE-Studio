@@ -17,7 +17,10 @@ def test_line_polydata_uses_flat_cell_colors_without_normals():
     assert supports_surface_shading(mesh) is False
     colors = mesh_cell_colors(mesh)
 
-    assert colors.shape == (1, 3)
+    # PyVista versions differ in whether PolyData(points) retains implicit
+    # vertex cells after lines are assigned. The rendering contract is one RGB
+    # row per actual cell, independent of that representation detail.
+    assert colors.shape == (mesh.n_cells, 3)
     assert colors.dtype == np.uint8
 
 
