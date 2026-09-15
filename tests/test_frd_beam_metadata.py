@@ -2,12 +2,15 @@
 
 import base64
 import json
+from types import SimpleNamespace
 
 import numpy as np
 
 from opencae.results import FrdLoader
 from opencae.results.frd_beam_metadata import (
+    _map_force_ids,
     _normalize_force_ids,
+    _semantic_element_aliases,
     beam_normal_stress_range,
     read_frd_beam_metadata,
     section_forces_from_frd,
@@ -42,9 +45,7 @@ def _write_embedded_frd(path):
 def test_frd_user_records_round_trip_profile_n1_and_twelve_section_forces(tmp_path):
     path = tmp_path / "results.frd"
     _write_embedded_frd(path)
-
     metadata = read_frd_beam_metadata(path)
-
     assert metadata.schema == 1
     assert set(metadata.profiles) == {1}
     assert metadata.profiles[1].profile_type == "Rectangle"
@@ -61,10 +62,8 @@ def test_frd_user_records_round_trip_profile_n1_and_twelve_section_forces(tmp_pa
 def test_embedded_beam_stress_is_exposed_as_an_frd_result_field(tmp_path):
     path = tmp_path / "results.frd"
     _write_embedded_frd(path)
-
     loader = FrdLoader()
     fields = loader.fields(path)
-
     assert len(fields) == 1
     field = fields[0]
     assert field.name == "Beam Normal Stress"
@@ -76,15 +75,41 @@ def test_embedded_beam_stress_is_exposed_as_an_frd_result_field(tmp_path):
     np.testing.assert_allclose(beam_normal_stress_range(path, 1, 1), (1.0, 2.0))
 
 
-def test_temporary_res_element_ids_are_normalized_only_when_offset_is_clear():
-    values = {
-        0: np.zeros((2, 6)),
-        1: np.ones((2, 6)),
-    }
+def test_semantic_instance_element_ids_map_to_exported_solver_ids():
+    occurrences = (
+        SimpleNamespace(
+            solver_element_id=3,
+            source_element_id=17,
+            instance_name="bolt",
+        ),
+        SimpleNamespace(
+            solver_element_id=9,
+            source_element_id=17,
+            instance_name="bracket",
+        ),
+    )
+    aliases = _semantic_element_aliases(occurrences)
+    assert aliases["bolt.17"] == 3
+    assert aliases["bracket.17"] == 9
+    assert "17" not in aliases
+
+    bolt = np.ones((2, 6))
+    bracket = np.full((2, 6), 2.0)
+    mapped = _map_force_ids(
+        {"bolt.17": bolt, "bracket.17": bracket},
+        aliases,
+        {3, 9},
+    )
+    assert set(mapped) == {3, 9}
+    np.testing.assert_allclose(mapped[3], bolt)
+    np.testing.assert_allclose(mapped[9], bracket)
+
+
+def test_temporary_numeric_res_element_ids_are_normalized_only_when_offset_is_clear():
+    values = {0: np.zeros((2, 6)), 1: np.ones((2, 6))}
     shifted = _normalize_force_ids(values, {1, 2})
     assert set(shifted) == {1, 2}
     np.testing.assert_allclose(shifted[1], values[0])
     np.testing.assert_allclose(shifted[2], values[1])
-
     exact = _normalize_force_ids({1: values[0], 2: values[1]}, {1, 2})
     assert set(exact) == {1, 2}
