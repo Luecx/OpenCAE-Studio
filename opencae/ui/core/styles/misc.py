@@ -13,6 +13,15 @@ def css(p):
     }}
     QToolBar#RibbonHost::separator {{ width: 0; }}
 
+    QLabel#RibbonGroupTitle {{
+        color: {p['accent']};
+        font-size: 8pt;
+        font-weight: 600;
+        letter-spacing: 1px;
+        border: none;
+        background: transparent;
+    }}
+
     /* One canonical slim viewport-toolbar surface for the main viewport and
        every secondary editor.  The main viewport historically inherited the
        window surface implicitly; make that relationship explicit so Windows,
