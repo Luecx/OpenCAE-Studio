@@ -22,7 +22,7 @@ class BeamOccurrence:
     instance_id: str
     source_element_id: int
     connectivity: tuple[int, ...]
-    direction: tuple[float, float, float]
+    n1: tuple[float, float, float]
     section: BeamSection
     profile: Profile
 
@@ -54,7 +54,7 @@ def beam_occurrences(project) -> tuple[BeamOccurrence, ...]:
                 section_profile = sections.get(int(local_id)) if is_beam else None
                 if section_profile is not None:
                     section, profile = section_profile
-                    direction = rotation @ np.asarray(section.direction, dtype=float)
+                    n1 = rotation @ np.asarray(section.n1, dtype=float)
                     result.append(
                         BeamOccurrence(
                             solver_element_id=next_solver_id,
@@ -62,7 +62,7 @@ def beam_occurrences(project) -> tuple[BeamOccurrence, ...]:
                             instance_id=instance.id,
                             source_element_id=int(local_id),
                             connectivity=tuple(int(value) for value in connectivity),
-                            direction=tuple(float(value) for value in direction),
+                            n1=tuple(float(value) for value in n1),
                             section=section,
                             profile=profile,
                         )
