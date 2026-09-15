@@ -321,9 +321,9 @@ def _semantic_element_aliases(occurrences: Iterable):
 
 
 def _map_force_ids(values, aliases, valid):
-    """Resolve semantic RES element IDs, with numeric ±1 fallback only if needed."""
+    """Resolve semantic RES IDs first, then choose one numeric offset per block."""
     mapped = {}
-    unresolved = {}
+    numeric = {}
     for semantic, rows in values.items():
         key = str(semantic).strip()
         solver = aliases.get(key)
@@ -331,20 +331,21 @@ def _map_force_ids(values, aliases, valid):
             mapped[int(solver)] = rows
             continue
         try:
-            numeric = int(key)
+            numeric[int(key)] = rows
         except ValueError:
             continue
-        if numeric in valid:
-            mapped[numeric] = rows
-        else:
-            unresolved[numeric] = rows
 
-    if unresolved:
-        exact = len(set(unresolved) & valid)
-        plus_one = len({value + 1 for value in unresolved} & valid)
-        minus_one = len({value - 1 for value in unresolved} & valid)
-        offset = 1 if plus_one > exact and plus_one >= minus_one else -1 if minus_one > exact else 0
-        for element, rows in unresolved.items():
+    if numeric:
+        ids = set(numeric)
+        exact = len(ids & valid)
+        plus_one = len({value + 1 for value in ids} & valid)
+        minus_one = len({value - 1 for value in ids} & valid)
+        offset = 0
+        if plus_one > exact and plus_one >= minus_one:
+            offset = 1
+        elif minus_one > exact:
+            offset = -1
+        for element, rows in numeric.items():
             target = element + offset
             if target in valid and target not in mapped:
                 mapped[target] = rows
