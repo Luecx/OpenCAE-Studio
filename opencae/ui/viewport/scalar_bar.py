@@ -51,6 +51,32 @@ def scalar_bar_args(title, plotter=None, *, outside_colors=False):
     }
 
 
+def update_scalar_bar_title(plotter, title):
+    """Synchronize the persistent VTK scalar-bar title with the active field.
+
+    Animation reuses the existing actor and lookup table instead of rebuilding
+    the scene.  PyVista therefore does not receive new ``scalar_bar_args`` for
+    every frame/field transition.  Update the actor explicitly so the visible
+    title always describes the scalar currently bound to the result mapper.
+    """
+    if plotter is None or not title:
+        return None
+    scalar_actor = _scalar_actor(plotter, title)
+    if scalar_actor is None:
+        return None
+    try:
+        scalar_actor.SetTitle(scalar_bar_title(title))
+        scalar_actor.Modified()
+    except (AttributeError, RuntimeError, TypeError):
+        return None
+
+    state = getattr(plotter, "_opencae_scalar_bar_caps", None)
+    if isinstance(state, dict):
+        state["scalar_bar"] = scalar_actor
+        state["rect"] = None
+    return scalar_actor
+
+
 def install_scalar_bar_end_caps(
     plotter,
     title,
