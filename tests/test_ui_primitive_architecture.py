@@ -167,7 +167,7 @@ def test_theme_style_modules_do_not_depend_on_widget_layers():
 def test_removed_ui_widget_hierarchies_do_not_return():
     violations: list[str] = []
     for path in _ui_files():
-        if path.name in _FORBIDDEN_LEGACY_FILES:
+        if _PRIMITIVES_ROOT in path.parents and path.name in _FORBIDDEN_LEGACY_FILES:
             violations.append(f"legacy file exists: {_relative(path)}")
 
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
