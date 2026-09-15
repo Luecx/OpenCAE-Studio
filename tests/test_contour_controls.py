@@ -178,7 +178,7 @@ def test_result_range_button_uses_bound_auto_icons_labels_and_symmetry_link():
     assert 'LabelSection("Range")' in source
     assert 'LabelSection("Color Mapping")' in source
     assert 'LabelSection("Outside Range")' in source
-    assert source.count("ResultRangeSeparator") >= 2
+    assert source.count("SeparatorResultsRange") >= 2
     assert '"Auto Frame"' not in source
     assert '"Auto Frames"' not in source
     assert "minimum_auto.toggled" not in source
