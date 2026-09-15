@@ -86,10 +86,10 @@ def load_local_section_forces(
     for element_id, rows in result.items():
         if not rows:
             continue
-        # Solver-local node labels are conventionally one-based (1, 2). Keep
-        # their ordering, but do not use those labels as zero-based array indices.
-        # Stress recovery consumes row 0 as the first beam end and row 1 as the
-        # second regardless of the textual numbering convention.
+        # FEMaster currently emits zero-based local locations, while older or
+        # foreign RES writers may choose one-based labels. Preserve only their
+        # ordering here; stress recovery consumes row 0 as the first beam end
+        # and row 1 as the second independent of the textual label convention.
         packed[element_id] = np.vstack(
             [rows[local_node] for local_node in sorted(rows)]
         ).astype(float, copy=False)
