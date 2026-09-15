@@ -29,6 +29,12 @@ def test_browser_project_solution_tabs_have_dedicated_flat_style():
     panel_source = (ROOT / "opencae/ui/tree/project_panel.py").read_text(
         encoding="utf-8"
     )
+    selector_source = (
+        ROOT / "opencae/ui/primitives/buttons/button_project_selector.py"
+    ).read_text(encoding="utf-8")
+    close_source = (
+        ROOT / "opencae/ui/primitives/buttons/button_project_menu_close.py"
+    ).read_text(encoding="utf-8")
     tab_style = (ROOT / "opencae/ui/core/styles/tabs.py").read_text(
         encoding="utf-8"
     )
@@ -41,10 +47,12 @@ def test_browser_project_solution_tabs_have_dedicated_flat_style():
 
     assert 'self.tabs.setObjectName("BrowserTabBar")' in panel_source
     assert "self.tabs.setDrawBase(False)" in panel_source
-    assert 'self.project_selector.setObjectName("ProjectSelectorButton")' in panel_source
+    assert "ButtonProjectSelector" in panel_source
+    assert 'self.setObjectName("ProjectSelectorButton")' in selector_source
     assert "self.tabs.setTabButton(" in panel_source
     assert "project_close_requested = pyqtSignal(int)" in panel_source
-    assert 'close_button.setObjectName("ProjectMenuCloseButton")' in panel_source
+    assert "ButtonProjectMenuClose" in panel_source
+    assert 'self.setObjectName("ProjectMenuCloseButton")' in close_source
     assert "close_button.setEnabled(not self._is_placeholder_project(index))" in panel_source
     assert "QWidgetAction" in panel_source
     assert "store.active_project_changed" not in panel_source
