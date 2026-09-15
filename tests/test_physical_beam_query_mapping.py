@@ -8,6 +8,7 @@ import pyvista as pv
 from opencae.model.entities.profiles import RectangleProfile
 from opencae.results.beam_physical_model import BeamOccurrence
 from opencae.results.beam_physical_representation import (
+    PHYSICAL_BEAM_CELL,
     build_beam_physical_representation_from_occurrences,
 )
 from opencae.ui.viewport.result_query import _logical_node_index, _node_ids
@@ -42,7 +43,11 @@ def test_generated_hexa_points_map_back_to_beam_end_nodes():
         source_element_ids=True,
     )
     expanded = representation.expand(source)
-    cell = expanded.get_cell(0)
+    physical_cells = np.flatnonzero(
+        np.asarray(expanded.cell_data[PHYSICAL_BEAM_CELL], dtype=bool)
+    )
+    assert len(physical_cells) == 4
+    cell = expanded.get_cell(int(physical_cells[0]))
 
     assert _logical_node_index(expanded, 2) == 0
     assert _logical_node_index(expanded, 6) == 1
