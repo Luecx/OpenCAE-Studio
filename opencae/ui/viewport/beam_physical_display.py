@@ -115,11 +115,19 @@ class BeamPhysicalDisplayController:
             source = animation.get("source_grid")
             if source is None:
                 source = self._grid(result, field)
-            animation["source_grid"] = self._expand(
+            expanded = self._expand(
                 representation,
                 source,
                 result,
                 field,
+            )
+            animation["source_grid"] = expanded
+            prepared["range"] = _expanded_range_settings(
+                self._loader,
+                result,
+                field,
+                expanded,
+                prepared.get("range"),
             )
 
             next_field = animation.get("next_field")
@@ -465,6 +473,60 @@ def beam_physical_controller(viewport) -> BeamPhysicalDisplayController:
         viewport._beam_physical_controller = controller
     controller.bind_toolbar()
     return controller
+
+
+def _expanded_range_settings(loader, result, field, grid, settings):
+    """Include generated beam-point extrema when the contour still uses defaults.
+
+    The Results ribbon stores concrete one-shot bounds rather than a persistent
+    auto-range mode. Physical-beam expansion can add visualization points with
+    stresses outside those source-grid bounds. Replace only bounds that still
+    match the loader's original field range; a user-modified minimum or maximum
+    remains authoritative.
+    """
+    current = dict(settings or {})
+    scalar = _scalar_name(field)
+    source = str(getattr(result, "source_file", "") or "")
+    if not scalar or not source or not current:
+        return current
+
+    if scalar in grid.point_data:
+        values = np.asarray(grid.point_data[scalar], dtype=float)
+    elif scalar in grid.cell_data:
+        values = np.asarray(grid.cell_data[scalar], dtype=float)
+    else:
+        return current
+    finite = values[np.isfinite(values)]
+    if not len(finite):
+        return current
+
+    try:
+        baseline = loader.scalar_range(source, field)
+    except (OSError, RuntimeError, TypeError, ValueError):
+        return current
+    if baseline is None or len(baseline) != 2:
+        return current
+
+    expanded = (float(finite.min()), float(finite.max()))
+    for name, index in (("minimum", 0), ("maximum", 1)):
+        value = current.get(name)
+        if value is None:
+            continue
+        try:
+            unchanged = bool(
+                np.isclose(
+                    float(value),
+                    float(baseline[index]),
+                    rtol=1.0e-9,
+                    atol=1.0e-12,
+                    equal_nan=False,
+                )
+            )
+        except (TypeError, ValueError):
+            unchanged = False
+        if unchanged:
+            current[name] = expanded[index]
+    return current
 
 
 def _metadata_int(field, key: str) -> int | None:
