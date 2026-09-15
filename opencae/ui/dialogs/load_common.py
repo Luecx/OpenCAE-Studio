@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QLineEdit, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.naming import is_unique
 from opencae.model.selection import RegionDefinition
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.widgets import CompactRegionSelector, ReferenceSelector
+from opencae.ui.primitives.inputs import InputFormText
 from opencae.ui.templates import (
     FieldStack,
     SectionHeading,
-    apply_primary_control_height,
     dialog_buttons,
     dialog_layout,
     field_block,
@@ -52,8 +52,7 @@ class BaseLoadDialog(ApplyDialog):
         self.resize(820, 680)
 
         self.root = dialog_layout(self)
-        self.name = QLineEdit(entity.name if entity else (default_name or f"{title}-1"))
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(entity.name if entity else (default_name or f"{title}-1"))
         self.root.addWidget(field_block("Name", self.name))
         self.root.addWidget(SectionHeading("Load Definition"))
 
