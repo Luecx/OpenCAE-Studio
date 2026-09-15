@@ -1,52 +1,135 @@
-"""Analysis-job launch and result attachment helpers."""
+"""Runs and completes Analysis-backed Jobs for JobManager.
+
+Functions in this companion module receive the JobManager instance explicitly so
+the Qt-facing class can keep its stable public methods without owning solver
+preparation, runner wiring, or result construction.
+"""
 
 from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
 
+from PyQt6.QtWidgets import QMessageBox
+
 from opencae.controllers.background_task import BackgroundTask
-from opencae.controllers.entity_task_guard import run_for_entity
-from opencae.model.entities.jobs import Job, JobStatus, ResultSet
-from opencae.model.refs import EntityRef
+from opencae.deck_formats.selection import (
+    normalized_profile_id,
+    profile_display_name,
+    resolve_profile,
+)
+from opencae.jobs import AnalysisJobRunner
+from opencae.model.core import EntityRef
+from opencae.model.entities.analysis import Analysis
+from opencae.model.entities.jobs import (
+    Job,
+    JobSourceKind,
+    JobStatus,
+    ResultSet,
+    ResultStatus,
+)
 from opencae.results import FrdLoader
-from opencae.solvers.registry import adapter_for
-from opencae.utils.time import utc_now
+
+from .job_manager_factory import create_job, job_directory, utc_now
+from .job_manager_results import persist_result
+from .project_sessions import run_for_entity
 
 
-def start_analysis(manager, job, executable, extra_arguments, directory, profile=None):
-    """Create and start the immutable solver runner for one Analysis Job."""
-    from opencae.jobs.analysis_job_runner import AnalysisJobRunner
-
+def run_analysis(manager, analysis_id: str) -> None:
+    """Validate, persist, wire, and start one Analysis-backed Job."""
     project = manager.store.project
-    current = project.try_resolve(job.id)
-    if not isinstance(current, Job) or current.analysis_ref is None:
+    analysis = project.try_resolve(analysis_id)
+    if not isinstance(analysis, Analysis):
+        manager.store.message.emit("The selected Analysis no longer exists")
         return
-    analysis = project.try_resolve(current.analysis_ref)
-    if analysis is None:
-        manager._append_output(current.id, "Analysis no longer exists\n")
+
+    errors = manager.validate_analysis(analysis.id, show=False)
+    if errors:
+        QMessageBox.warning(
+            manager.parent,
+            "Analysis validation",
+            "\n".join(f"• {item}" for item in errors),
+        )
         return
-    selected = adapter_for(current.solver)
-    snapshot = deepcopy(project)
-    runner = AnalysisJobRunner(
-        snapshot,
-        analysis.id,
-        selected,
-        executable,
-        extra_arguments,
+
+    adapter = manager.solvers.get(analysis.solver)
+    if adapter is None:
+        manager.store.message.emit(
+            f"Solver adapter '{analysis.solver}' is unavailable"
+        )
+        return
+
+    config = manager.settings.solver_config(analysis.solver)
+    profile_id = normalized_profile_id(
+        manager.settings,
+        adapter,
+        getattr(analysis, "deck_profile_id", ""),
+    )
+    deck_profile = resolve_profile(manager.settings, adapter, profile_id)
+    directory = job_directory(project, analysis.name)
+    job = create_job(
+        project,
+        analysis,
+        JobSourceKind.ANALYSIS,
+        analysis.solver,
         directory,
-        parent=manager,
-        deck_profile=profile,
     )
-    manager._runners[current.id] = runner
-    runner.output.connect(lambda text, job_id=current.id: manager._append_output(job_id, text))
+    job.settings["deck_profile_id"] = profile_id
+    job.settings["deck_profile_name"] = profile_display_name(
+        manager.settings, profile_id
+    )
+    if deck_profile is not None:
+        job.settings["deck_profile_snapshot"] = deck_profile.to_dict()
+    manager.store.add_entity(
+        f"Created job {job.name}",
+        project.id,
+        "jobs",
+        job,
+    )
+    job = manager.store.project.resolve(job.id)
+    manager.select_job(job.id)
+    manager._prepare_analysis_runtime(job.id)
+
+    runner = AnalysisJobRunner(
+        deepcopy(manager.store.project),
+        analysis.id,
+        adapter,
+        str(config.get("executable", "")),
+        str(config.get("arguments", config.get("extra_arguments", ""))),
+        directory,
+        manager,
+        deck_profile=deck_profile,
+    )
+    manager._runners[job.id] = runner
+    runner.output.connect(
+        lambda text, current=job.id: run_for_entity(
+            manager,
+            current,
+            manager._append_output,
+            current,
+            text,
+        )
+    )
     runner.progress.connect(
-        lambda value, label, job_id=current.id: manager._analysis_progress(job_id, value, label)
+        lambda value, label, current=job.id: run_for_entity(
+            manager,
+            current,
+            manager._update_progress,
+            current,
+            value,
+            label,
+        )
     )
-    output_base = runner.output_base
     runner.finished.connect(
-        lambda _base, code, job_id=current.id, adapter=selected: finish_analysis(
-            manager, job_id, adapter, output_base, code
+        lambda output_base, code, current=job.id, selected=adapter: run_for_entity(
+            manager,
+            current,
+            finish_analysis,
+            manager,
+            current,
+            selected,
+            output_base,
+            code,
         )
     )
     manager._start_job(job.id, "Starting Analysis")
@@ -89,12 +172,16 @@ def finish_analysis(manager, job_id, adapter, output_base, code) -> None:
     if completed and source is not None:
         _attach_solver_result(manager, job.id, source)
 
-    manager.progress_changed.emit(job.id, candidate.progress, candidate.progress_label)
+    manager.progress_changed.emit(
+        job.id,
+        candidate.progress,
+        candidate.progress_label,
+    )
     manager.parent.refresh_action_states()
 
 
 def _attach_solver_result(manager, job_id: str, source: Path) -> None:
-    """Read FRD metadata on a worker thread before publishing the ResultSet."""
+    """Read potentially large FRD metadata on a worker thread."""
     tasks = getattr(manager, "_result_metadata_tasks", None)
     if tasks is None:
         tasks = {}
@@ -138,36 +225,38 @@ def _attach_solver_result(manager, job_id: str, source: Path) -> None:
 
 
 def _result_metadata_failed(manager, job_id, source, error) -> None:
+    """Preserve the available result even when optional metadata indexing fails."""
     manager._append_output(job_id, f"Result metadata failed: {error}\n")
     _persist_solver_result(manager, job_id, source, [])
 
 
 def _persist_solver_result(manager, job_id: str, source: Path, fields) -> None:
+    """Create the lightweight ResultSet on Qt's GUI thread after indexing."""
     tasks = getattr(manager, "_result_metadata_tasks", None)
     if tasks is not None:
         tasks.pop(str(job_id), None)
-    project = manager.store.project
-    job = project.try_resolve(job_id)
+
+    job = manager.store.project.try_resolve(job_id)
     if not isinstance(job, Job):
         return
-    analysis = project.try_resolve(job.analysis_ref) if job.analysis_ref else None
+    analysis = manager.store.project.try_resolve(job.source_ref)
+    steps = (
+        analysis.resolved_steps(manager.store.project)
+        if isinstance(analysis, Analysis)
+        else ()
+    )
     result = ResultSet(
-        name=f"{job.name} Results",
+        name=job.name,
+        job_ref=EntityRef.of(job, "Job"),
         source_file=str(source),
-        fields=list(fields),
-        metadata={"external": False, "analysis_id": getattr(analysis, "id", None)},
+        status=ResultStatus.AVAILABLE,
+        fields=list(fields or ()),
+        metadata={
+            "result_kind": "solver",
+            "step_names": [step.name for step in steps],
+            "deck_profile_id": str(job.settings.get("deck_profile_id", "")),
+            "deck_profile_name": str(job.settings.get("deck_profile_name", "")),
+        },
     )
-    candidate = deepcopy(job)
-    candidate.result_refs = [*candidate.result_refs, EntityRef(result.id)]
-    manager.store.execute(
-        manager._project_command(
-            f"Attach {result.name}",
-            lambda editable: _attach_result(editable, candidate, result),
-        )
-    )
-    manager.results_changed.emit()
-
-
-def _attach_result(project, job, result):
-    project.results.append(result)
-    project.jobs = [job if item.id == job.id else item for item in project.jobs]
+    persist_result(manager.store, job.id, result)
+    manager.parent.refresh_action_states()
