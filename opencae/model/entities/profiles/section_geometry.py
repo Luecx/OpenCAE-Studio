@@ -318,24 +318,20 @@ def _subdivide_rect(patch: np.ndarray, segments: int = _LINEAR_SEGMENTS) -> tupl
     if count == 1:
         return (polygon,)
 
-    # _rect_bounds produces p0->p1 along y and p1->p2 along z. Splitting the
-    # longer pair gives five stations along the actual wall/arm direction while
-    # retaining one element through the thickness.
-    if edge_01 >= edge_12:
-        left0, left1 = polygon[0], polygon[3]
-        right0, right1 = polygon[1], polygon[2]
-    else:
-        left0, left1 = polygon[0], polygon[1]
-        right0, right1 = polygon[3], polygon[2]
-
     result = []
     for index in range(count):
         a = index / count
         b = (index + 1) / count
-        p0 = (1.0 - a) * left0 + a * right0
-        p1 = (1.0 - b) * left0 + b * right0
-        p2 = (1.0 - b) * left1 + b * right1
-        p3 = (1.0 - a) * left1 + a * right1
+        if edge_01 >= edge_12:
+            p0 = (1.0 - a) * polygon[0] + a * polygon[1]
+            p1 = (1.0 - b) * polygon[0] + b * polygon[1]
+            p2 = (1.0 - b) * polygon[3] + b * polygon[2]
+            p3 = (1.0 - a) * polygon[3] + a * polygon[2]
+        else:
+            p0 = (1.0 - a) * polygon[0] + a * polygon[3]
+            p1 = (1.0 - a) * polygon[1] + a * polygon[2]
+            p2 = (1.0 - b) * polygon[1] + b * polygon[2]
+            p3 = (1.0 - b) * polygon[0] + b * polygon[3]
         result.append(np.asarray((p0, p1, p2, p3), dtype=float))
     return tuple(result)
 
