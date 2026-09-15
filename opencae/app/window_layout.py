@@ -68,7 +68,10 @@ def build_viewport(window):
     window.context.store.active_part_changed.connect(window.viewport.request_refresh)
     window.context.store.active_part_changed.connect(window.beam_display.model_changed)
     window.context.store.selection_changed.connect(window.viewport.show_model_selection)
-    window.context.store.changed.connect(window.beam_display.sync_availability)
+    # Profiles, section assignments and mesh edits do not all emit scene_changed.
+    # Any authored project mutation invalidates editor physical-beam overlays;
+    # stored FRD results stay independent and are deliberately unaffected.
+    window.context.store.changed.connect(window.beam_display.model_changed)
     window.context.store.changed.connect(
         lambda *_: _sync_viewport_guidance(window)
     )
