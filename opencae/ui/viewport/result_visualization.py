@@ -473,7 +473,9 @@ def _clim(grid, scalar, settings):
         minimum, maximum = maximum, minimum
     if minimum == maximum:
         maximum = minimum + max(abs(minimum), 1.0) * 1e-12
-    return minimum, maximum
+    span = maximum - minimum
+    padding = 1.0e-6 * span
+    return minimum - padding, maximum + padding
 
 
 def _render_scalar(grid, scalar, clim):
