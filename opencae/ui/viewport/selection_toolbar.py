@@ -6,6 +6,7 @@ from PyQt6.QtCore import QSignalBlocker, Qt, pyqtSignal
 from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QWidget
 
 from opencae.ui.primitives.buttons import ButtonViewportToggle
+from opencae.ui.primitives.separators import SeparatorVertical
 from opencae.ui.templates import ViewportToolButton
 
 
@@ -51,7 +52,9 @@ class SelectionToolbar(QWidget):
                 lambda _checked=False, value=mode: self.mode_changed.emit(value)
             )
 
-        layout.addSpacing(8)
+        self.selection_display_separator = SeparatorVertical(self)
+        layout.addWidget(self.selection_display_separator)
+
         self.display_buttons = {}
         self.display_group = QButtonGroup(self)
         self.display_group.setExclusive(True)
@@ -66,6 +69,18 @@ class SelectionToolbar(QWidget):
         self.display_buttons["geometry"].setChecked(True)
 
         layout.addStretch(1)
+        self.beam_physical_button = ButtonViewportToggle(
+            "Beams",
+            tooltip="Render beam profiles as physical solids",
+            parent=self,
+        )
+        self.beam_physical_button.setEnabled(False)
+        self.beam_physical_button.toggled.connect(self.beam_physical_changed)
+        layout.addWidget(self.beam_physical_button)
+
+        self.beam_view_separator = SeparatorVertical(self)
+        layout.addWidget(self.beam_view_separator)
+
         self.projection_button = self._button("Perspective")
         self.projection_button.setToolTip("Toggle perspective / parallel projection")
         metrics = self.projection_button.fontMetrics()
@@ -77,16 +92,6 @@ class SelectionToolbar(QWidget):
         self.projection_button.clicked.connect(self._projection_clicked)
         layout.addWidget(self.projection_button)
 
-        self.beam_physical_button = ButtonViewportToggle(
-            "Beams",
-            tooltip="Render beam profiles as physical solids",
-            parent=self,
-        )
-        self.beam_physical_button.setVisible(False)
-        self.beam_physical_button.setEnabled(False)
-        self.beam_physical_button.toggled.connect(self.beam_physical_changed)
-        layout.addWidget(self.beam_physical_button)
-
         self.fit_button = self._button("Fit")
         self.fit_button.setToolTip("Center and fit the visible model")
         self.fit_button.clicked.connect(self.fit_requested)
@@ -95,17 +100,19 @@ class SelectionToolbar(QWidget):
         self.set_selection_enabled(False)
 
     def set_results_mode(self, enabled):
-        """Expose the beam representation toggle only in stored result views."""
+        """Hide model-edit controls while keeping shared view controls available."""
         self._results_mode = bool(enabled)
         for button in self.mode_buttons.values():
             button.setVisible(not enabled)
         for button in self.display_buttons.values():
             button.setVisible(not enabled)
-        self.beam_physical_button.setVisible(bool(enabled))
+        self.selection_display_separator.setVisible(not enabled)
+        self.beam_physical_button.setVisible(True)
+        self.beam_view_separator.setVisible(True)
 
     def set_beam_available(self, available: bool) -> None:
-        """Enable the physical-beam toggle when a compatible result is loaded."""
-        self.beam_physical_button.setEnabled(bool(available) and self._results_mode)
+        """Enable the physical-beam toggle whenever the active context supports it."""
+        self.beam_physical_button.setEnabled(bool(available))
 
     def set_beam_physical(self, enabled: bool) -> None:
         """Synchronize the Beam toggle without re-emitting its request."""

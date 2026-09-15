@@ -11,11 +11,12 @@ from .surface_shading import mesh_cell_colors, supports_surface_shading
 _CELL_TYPES = {(1, 2): 3, (2, 3): 5, (2, 4): 9, (3, 4): 10, (3, 5): 14, (3, 6): 13, (3, 8): 12}
 
 
-def build_grid(snapshot, instance=None):
+def build_grid(snapshot, instance=None, *, include_all_dimensions=False):
+    """Build the viewport grid, optionally retaining lower-dimensional elements."""
     cells, cell_types, element_ids = [], [], []
     next_element_id = 1
     for block in snapshot.blocks:
-        if block.dimension != snapshot.dimension:
+        if not include_all_dimensions and block.dimension != snapshot.dimension:
             continue
         vtk_type = _CELL_TYPES.get((block.dimension, block.primary_nodes))
         if vtk_type is None:
@@ -119,6 +120,33 @@ def add_mesh(plotter, snapshot, instance=None, *, hidden_elements=()):
             name=f"{prefix}generated-mesh-lines", render=False,
         )
     return actor, grid
+
+
+def add_physical_mesh(plotter, grid, *, name):
+    """Render one generated physical-beam surface without changing picker grids."""
+    if grid is None or not int(getattr(grid, "n_cells", 0) or 0):
+        return None
+    surface = _display_surface(grid)
+    shaded_surface = supports_surface_shading(surface)
+    surface.cell_data["display_rgb"] = mesh_cell_colors(surface)
+    return plotter.add_mesh(
+        surface,
+        scalars="display_rgb",
+        rgb=True,
+        show_edges=True,
+        edge_color=PALETTE["mesh_lines"],
+        line_width=1.1,
+        lighting=shaded_surface,
+        smooth_shading=shaded_surface,
+        ambient=0.88 if shaded_surface else 1.0,
+        diffuse=0.12 if shaded_surface else 0.0,
+        specular=0.0,
+        render_lines_as_tubes=False,
+        pickable=False,
+        name=str(name),
+        reset_camera=False,
+        render=False,
+    )
 
 
 def _display_surface(grid):

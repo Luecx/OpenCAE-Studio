@@ -8,6 +8,7 @@ from opencae.ui.docks.project_dock import ProjectDock
 from opencae.ui.preferences.runtime import apply_window_preferences, wire_window_preferences
 from opencae.ui.ribbon.ribbon import Ribbon
 from opencae.ui.status_unit_system import UnitSystemStatus
+from opencae.ui.viewport.beam_physical_display import beam_physical_controller
 from opencae.ui.viewport.stage_guidance import assembly_guidance
 from opencae.ui.viewport.viewport_factory import create_viewport
 
@@ -40,6 +41,7 @@ def build_viewport(window):
     """Create the central viewport and connect scoped model/display invalidations."""
     window.viewport = create_viewport(window.context.store)
     window.viewport.visibility = window.visibility
+    window.beam_display = beam_physical_controller(window.viewport)
 
     # Entity visibility can affect independently generated overlays and therefore
     # still invalidates the scene. Part topology visibility has a dedicated fast
@@ -62,13 +64,17 @@ def build_viewport(window):
 
     window.setCentralWidget(window.viewport)
     window.context.store.scene_changed.connect(window.viewport.request_refresh)
+    window.context.store.scene_changed.connect(window.beam_display.model_changed)
     window.context.store.active_part_changed.connect(window.viewport.request_refresh)
+    window.context.store.active_part_changed.connect(window.beam_display.model_changed)
     window.context.store.selection_changed.connect(window.viewport.show_model_selection)
+    window.context.store.changed.connect(window.beam_display.sync_availability)
     window.context.store.changed.connect(
         lambda *_: _sync_viewport_guidance(window)
     )
     window.viewport.selection_changed.connect(window.context.store.select)
     window.viewport.message.connect(window.context.store.message.emit)
+    window.beam_display.sync_availability()
     window.viewport.request_refresh(fit=True)
 
 
@@ -113,6 +119,7 @@ def build_docks(window):
     )
     window.ribbon.stage_changed.connect(window.project_dock.tree.set_stage_focus)
     window.ribbon.stage_changed.connect(window.viewport.set_stage)
+    window.ribbon.stage_changed.connect(window.beam_display.stage_changed)
     window.ribbon.stage_changed.connect(
         lambda stage: _sync_viewport_guidance(window, stage)
     )

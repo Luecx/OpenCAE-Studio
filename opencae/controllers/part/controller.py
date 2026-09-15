@@ -7,6 +7,11 @@ from opencae.model.geometry import (
     PartitionPlaneFeature,
     SketchFeature,
 )
+from opencae.model.selection import (
+    SelectableKind,
+    SelectionPolicy,
+    ViewportSelection,
+)
 
 from .context import PartContext
 from .geometry_settings import PartGeometrySettings
@@ -56,6 +61,47 @@ class PartController:
 
     def active_part(self):
         return self.context.active_part()
+
+    def edit_node(self):
+        """Edit selected mesh nodes or start a one-node viewport pick on demand."""
+        selection = self.context.store.selection
+        selected = (
+            tuple(
+                hit
+                for hit in selection.hits
+                if hit.kind is SelectableKind.MESH_NODE and hit.mesh_id is not None
+            )
+            if isinstance(selection, ViewportSelection)
+            else ()
+        )
+        if selected:
+            return self.mesh_editing.edit_node()
+
+        part = self.active_part()
+        if part is None:
+            self.context.store.message.emit("Create or activate a Part first")
+            return None
+        if not part.mesh.node_count:
+            self.context.store.message.emit("Create or generate mesh nodes first")
+            return None
+
+        viewport = getattr(self.context.parent, "viewport", None)
+        if viewport is None:
+            self.context.store.message.emit("Viewport node picking is unavailable")
+            return None
+
+        viewport.set_display_mode("mesh")
+        policy = SelectionPolicy.create(
+            {SelectableKind.MESH_NODE},
+            multiple=False,
+        )
+
+        def picked(hit):
+            self.context.store.select(ViewportSelection.from_hits((hit,)))
+            self.mesh_editing.edit_node()
+
+        viewport.begin_selection_session(policy, picked)
+        return None
 
     def edit_geometry_feature(self, feature: GeometryFeature):
         if isinstance(feature, SketchFeature):

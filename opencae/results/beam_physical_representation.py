@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Iterable
 
 import numpy as np
 
 from opencae.model.entities.profiles.section_geometry import section_patches
-from .beam_physical_model import beam_occurrences
+from .beam_physical_model import BeamOccurrence, beam_occurrences
 from .beam_physical_stress import (
     recover_normal_stress,
     stress_coefficients,
@@ -21,7 +21,7 @@ _BEAM_NORMAL_STRESS = "BEAM:Normal Stress"
 
 @dataclass(slots=True)
 class BeamPhysicalRepresentation:
-    """Cached beam surface topology and mappings for compatible result frames."""
+    """Cached beam surface topology and mappings for compatible source frames."""
 
     cells: np.ndarray
     celltypes: np.ndarray
@@ -47,7 +47,7 @@ class BeamPhysicalRepresentation:
         *,
         element_nodal_forces: dict[int, np.ndarray] | None = None,
     ):
-        """Replace mapped beam lines by section surfaces in one result frame."""
+        """Replace mapped beam lines by section surfaces in one source frame."""
         import pyvista as pv
 
         self._validate(source_grid)
@@ -69,8 +69,12 @@ class BeamPhysicalRepresentation:
             values = np.full(grid.n_points, np.nan, dtype=float)
             values[self.source_point_count :] = stress
             grid.point_data[_BEAM_NORMAL_STRESS] = values
-            if _is_stress_scalar(selected_scalar) and selected_scalar in grid.point_data:
-                displayed = np.asarray(grid.point_data[selected_scalar], dtype=float).copy()
+            if _is_stress_scalar(selected_scalar):
+                displayed = (
+                    np.asarray(grid.point_data[selected_scalar], dtype=float).copy()
+                    if selected_scalar in grid.point_data
+                    else np.full(grid.n_points, np.nan, dtype=float)
+                )
                 displayed[self.source_point_count :] = stress_display_values(
                     selected_scalar,
                     stress,
@@ -161,7 +165,7 @@ class BeamPhysicalRepresentation:
 
     def _validate(self, source_grid) -> None:
         if source_grid.n_points != self.source_point_count:
-            raise ValueError("Beam representation no longer matches the result mesh")
+            raise ValueError("Beam representation no longer matches the source mesh")
         if self.source_node_ids is not None and "node_id" in source_grid.point_data:
             current = np.asarray(source_grid.point_data["node_id"])
             if not np.array_equal(self.source_node_ids, current):
@@ -177,15 +181,39 @@ def build_beam_physical_representation(
     source_grid,
     progress: ProgressCallback | None = None,
 ):
-    """Build beam section surfaces and source mappings once for one result topology."""
-    occurrences = beam_occurrences(project)
+    """Build a result representation using exported solver element numbering."""
+    return build_beam_physical_representation_from_occurrences(
+        beam_occurrences(project),
+        source_grid,
+        progress=progress,
+        source_element_ids=False,
+    )
+
+
+def build_beam_physical_representation_from_occurrences(
+    occurrences: Iterable[BeamOccurrence],
+    source_grid,
+    progress: ProgressCallback | None = None,
+    *,
+    source_element_ids: bool = True,
+):
+    """Build physical beam surfaces for an explicit set of model occurrences.
+
+    ``source_element_ids`` selects whether the source grid exposes Part-local
+    element IDs (editor meshes) or exported solver IDs (stored result meshes).
+    """
+    occurrences = tuple(occurrences)
     if not occurrences:
         raise ValueError("The current model has no beam elements with assigned profiles")
     if "element_id" not in source_grid.cell_data:
-        raise ValueError("The result mesh does not expose solver element IDs")
+        raise ValueError("The source mesh does not expose element IDs")
 
     element_ids = np.asarray(source_grid.cell_data["element_id"], dtype=np.int64)
-    cell_for_solver = _solver_cell_map(element_ids)
+    cell_for_element = (
+        {int(element_id): index for index, element_id in enumerate(element_ids)}
+        if source_element_ids
+        else _solver_cell_map(element_ids)
+    )
     generated_sources_a: list[int] = []
     generated_sources_b: list[int] = []
     generated_solver_ids: list[int] = []
@@ -199,7 +227,12 @@ def build_beam_physical_representation(
     for position, occurrence in enumerate(occurrences, 1):
         if progress:
             progress(position - 1, total, f"Generating beam {position} of {total}")
-        cell_index = cell_for_solver.get(int(occurrence.solver_element_id))
+        lookup_id = (
+            occurrence.source_element_id
+            if source_element_ids
+            else occurrence.solver_element_id
+        )
+        cell_index = cell_for_element.get(int(lookup_id))
         if cell_index is None:
             continue
         point_ids = tuple(
@@ -244,7 +277,7 @@ def build_beam_physical_representation(
     if progress:
         progress(total, total, "Finalizing beam representation")
     if not generated_sources_a:
-        raise ValueError("No result beam could be mapped to an assigned profile")
+        raise ValueError("No beam could be mapped to an assigned profile")
 
     cells: list[int] = []
     celltypes: list[int] = []

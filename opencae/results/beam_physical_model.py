@@ -1,4 +1,4 @@
-"""Map exported solver beam IDs back to OpenCAE sections and profiles."""
+"""Map OpenCAE beam elements back to their sections and result identifiers."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from opencae.solvers.femaster_dsl.element_types import element_type
 
 @dataclass(frozen=True, slots=True)
 class BeamOccurrence:
-    """One exported beam occurrence with enough model data for visualization."""
+    """One beam occurrence with enough model data for physical visualization."""
 
     solver_element_id: int
     part_id: str
@@ -33,7 +33,7 @@ class BeamOccurrence:
 
 
 def beam_occurrences(project) -> tuple[BeamOccurrence, ...]:
-    """Reproduce FEMaster export numbering and return only renderable beams."""
+    """Reproduce FEMaster export numbering and return renderable assembly beams."""
     result = []
     next_solver_id = 1
     for instance in project.assembly.instances:
@@ -73,6 +73,36 @@ def beam_occurrences(project) -> tuple[BeamOccurrence, ...]:
                         )
                     )
                 next_solver_id += 1
+    return tuple(result)
+
+
+def part_beam_occurrences(project, part) -> tuple[BeamOccurrence, ...]:
+    """Return renderable beams for the Part editor using local element IDs."""
+    if part is None:
+        return ()
+    sections = _beam_sections(project, part)
+    result = []
+    for block in part.mesh.element_blocks:
+        if not block.connectivity or not isinstance(block.definition, BeamElementDefinition):
+            continue
+        for local_id, connectivity in zip(block.ids, block.connectivity, strict=True):
+            local_id = int(local_id)
+            section_profile = sections.get(local_id)
+            if section_profile is None:
+                continue
+            section, profile = section_profile
+            result.append(
+                BeamOccurrence(
+                    solver_element_id=local_id,
+                    part_id=part.id,
+                    instance_id="",
+                    source_element_id=local_id,
+                    connectivity=tuple(int(value) for value in connectivity),
+                    n1=tuple(float(value) for value in section.n1),
+                    section=section,
+                    profile=profile,
+                )
+            )
     return tuple(result)
 
 

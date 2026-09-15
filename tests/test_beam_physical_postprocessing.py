@@ -95,21 +95,8 @@ def test_section_force_recovery_interpolates_beam_end_resultants():
     np.testing.assert_allclose(recovered, (5.0, 10.0, 15.0))
 
 
-def test_expanded_beam_points_receive_translation_plus_rotation_cross_offset():
-    source = pv.UnstructuredGrid(
-        np.asarray((2, 0, 1), dtype=np.int64),
-        np.asarray((3,), dtype=np.uint8),
-        np.asarray(((0.0, 0.0, 0.0), (1.0, 0.0, 0.0))),
-    )
-    source.point_data["node_id"] = np.asarray((1, 2), dtype=np.int64)
-    source.cell_data["element_id"] = np.asarray((7,), dtype=np.int64)
-    for key in ("DISP:D1", "DISP:D2", "DISP:D3"):
-        source.point_data[key] = np.zeros(2, dtype=float)
-    source.point_data["DISP:D4"] = np.zeros(2, dtype=float)
-    source.point_data["DISP:D5"] = np.zeros(2, dtype=float)
-    source.point_data["DISP:D6"] = np.ones(2, dtype=float)
-
-    representation = BeamPhysicalRepresentation(
+def _simple_representation():
+    return BeamPhysicalRepresentation(
         cells=np.asarray((4, 2, 3, 5, 4), dtype=np.int64),
         celltypes=np.asarray((9,), dtype=np.uint8),
         cell_source=np.asarray((0,), dtype=np.int64),
@@ -128,7 +115,27 @@ def test_expanded_beam_points_receive_translation_plus_rotation_cross_offset():
         generated_solver_element_ids=np.full(4, 7, dtype=np.int64),
     )
 
-    expanded = representation.expand(source)
+
+def _simple_source_grid():
+    source = pv.UnstructuredGrid(
+        np.asarray((2, 0, 1), dtype=np.int64),
+        np.asarray((3,), dtype=np.uint8),
+        np.asarray(((0.0, 0.0, 0.0), (1.0, 0.0, 0.0))),
+    )
+    source.point_data["node_id"] = np.asarray((1, 2), dtype=np.int64)
+    source.cell_data["element_id"] = np.asarray((7,), dtype=np.int64)
+    return source
+
+
+def test_expanded_beam_points_receive_translation_plus_rotation_cross_offset():
+    source = _simple_source_grid()
+    for key in ("DISP:D1", "DISP:D2", "DISP:D3"):
+        source.point_data[key] = np.zeros(2, dtype=float)
+    source.point_data["DISP:D4"] = np.zeros(2, dtype=float)
+    source.point_data["DISP:D5"] = np.zeros(2, dtype=float)
+    source.point_data["DISP:D6"] = np.ones(2, dtype=float)
+
+    expanded = _simple_representation().expand(source)
 
     np.testing.assert_allclose(
         expanded.point_data["DISP:D1"][2:],
@@ -139,6 +146,65 @@ def test_expanded_beam_points_receive_translation_plus_rotation_cross_offset():
     np.testing.assert_allclose(
         expanded.point_data["_opencae_beam_xi"][2:],
         (0.0, 0.0, 1.0, 1.0),
+    )
+
+
+def test_selected_stress_is_recovered_onto_physical_beam_surface():
+    source = _simple_source_grid()
+    source.point_data["STRESS:SXX"] = np.zeros(2, dtype=float)
+    representation = _simple_representation()
+    representation.generated_stress_coefficients[:, 0] = 0.5
+    forces = {
+        7: np.asarray(
+            (
+                (10.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+                (30.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+            ),
+            dtype=float,
+        )
+    }
+
+    expanded = representation.expand(
+        source,
+        "STRESS:SXX",
+        element_nodal_forces=forces,
+    )
+
+    np.testing.assert_allclose(
+        expanded.point_data["STRESS:SXX"][2:],
+        (5.0, 5.0, 15.0, 15.0),
+    )
+    np.testing.assert_allclose(
+        expanded.point_data["BEAM:Normal Stress"][2:],
+        (5.0, 5.0, 15.0, 15.0),
+    )
+
+
+def test_missing_selected_stress_array_is_created_for_physical_beams():
+    source = _simple_source_grid()
+    representation = _simple_representation()
+    representation.generated_stress_coefficients[:, 0] = 0.5
+    forces = {
+        7: np.asarray(
+            (
+                (10.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+                (30.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+            ),
+            dtype=float,
+        )
+    }
+
+    expanded = representation.expand(
+        source,
+        "STRESS:SXX",
+        element_nodal_forces=forces,
+    )
+
+    assert "STRESS:SXX" in expanded.point_data
+    assert np.all(np.isnan(expanded.point_data["STRESS:SXX"][:2]))
+    np.testing.assert_allclose(
+        expanded.point_data["STRESS:SXX"][2:],
+        (5.0, 5.0, 15.0, 15.0),
     )
 
 
@@ -159,3 +225,40 @@ END FIELD
     assert forces[17].shape == (2, 6)
     np.testing.assert_allclose(forces[17][0], (10, 2, 3, 4, 5, 6))
     np.testing.assert_allclose(forces[17][1], (20, 7, 8, 9, 10, 11))
+
+
+def test_res_section_force_parser_maps_frd_step_to_res_loadcase_order(tmp_path):
+    path = tmp_path / "beam.res"
+    path.write_text(
+        """LC 10
+FIELD, NAME=LOCAL_SECTION_FORCES, TYPE=ELEMENT_NODAL, INDEX_COLS=2, VALUE_COLS=6, ROWS=2
+17 0 10 0 0 0 0 0
+17 1 20 0 0 0 0 0
+END FIELD
+LC 20
+FIELD, NAME=LOCAL_SECTION_FORCES, TYPE=ELEMENT_NODAL, INDEX_COLS=2, VALUE_COLS=6, ROWS=2
+17 0 30 0 0 0 0 0
+17 1 40 0 0 0 0 0
+END FIELD
+"""
+    )
+
+    forces = load_local_section_forces(path, step_id=2)
+
+    np.testing.assert_allclose(forces[17][:, 0], (30.0, 40.0))
+
+
+def test_res_section_force_parser_uses_single_unambiguous_loadcase(tmp_path):
+    path = tmp_path / "beam.res"
+    path.write_text(
+        """LC 7
+FIELD, NAME=LOCAL_SECTION_FORCES, TYPE=ELEMENT_NODAL, INDEX_COLS=2, VALUE_COLS=6, ROWS=2
+17 0 12 0 0 0 0 0
+17 1 24 0 0 0 0 0
+END FIELD
+"""
+    )
+
+    forces = load_local_section_forces(path, step_id=1)
+
+    np.testing.assert_allclose(forces[17][:, 0], (12.0, 24.0))
