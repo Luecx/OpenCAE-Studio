@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QLineEdit, QMessageBox
+from PyQt6.QtWidgets import QMessageBox
 
 from opencae.model.core import EntityRef
 from opencae.model.naming import is_unique
 from opencae.model.selection import RegionDefinition
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.widgets import CompactRegionSelector, ReferenceSelector
+from opencae.ui.primitives.inputs import InputFormText
 from opencae.ui.templates import (
     SectionHeading,
-    apply_primary_control_height,
     dialog_buttons,
     dialog_layout,
     field_block,
@@ -49,8 +49,7 @@ class SectionAssignmentDialog(ApplyDialog):
         self.setMinimumSize(760, 500)
 
         root = dialog_layout(self)
-        self.name = QLineEdit(getattr(assignment, "name", default_name))
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(getattr(assignment, "name", default_name))
         root.addWidget(field_block("Name", self.name))
 
         root.addWidget(SectionHeading("Assignment Definition"))
