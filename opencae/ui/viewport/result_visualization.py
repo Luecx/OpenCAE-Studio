@@ -110,9 +110,13 @@ def update_result(
     mapper = _replace_actor_input(result_actor, grid)
     if mapper is None:
         return None
-    if scalar and scalar in grid.point_data:
+    association = _scalar_association(grid, scalar)
+    if scalar and association is not None:
         try:
-            mapper.SetScalarModeToUsePointFieldData()
+            if association == "cell":
+                mapper.SetScalarModeToUseCellFieldData()
+            else:
+                mapper.SetScalarModeToUsePointFieldData()
             mapper.SelectColorArray(display_scalar)
             mapper.ScalarVisibilityOn()
         except (AttributeError, RuntimeError, TypeError):
@@ -266,10 +270,9 @@ def _animated_grid(grid, result, field, options):
         factor = min(max(float(animation.get("factor", 1.0)), -1.0), 1.0)
         animated = grid.copy(deep=True)
         scaled = set()
-        if scalar and scalar in animated.point_data:
-            animated.point_data[scalar] = np.asarray(
-                animated.point_data[scalar], dtype=float
-            ) * factor
+        store = _scalar_store(animated, scalar)
+        if scalar and store is not None:
+            store[scalar] = np.asarray(store[scalar], dtype=float) * factor
             scaled.add(scalar)
         keys = _displacement_keys(animated)
         if keys is not None:
@@ -297,15 +300,19 @@ def _animated_grid(grid, result, field, options):
     alpha = min(max(float(animation.get("alpha", 0.0)), 0.0), 1.0)
     animated = grid.copy(deep=True)
     next_scalar = _scalar_name(next_field)
+    current_store = _scalar_store(animated, scalar)
+    next_store = _scalar_store(next_grid, next_scalar)
     if (
         scalar
         and next_scalar
-        and scalar in animated.point_data
-        and next_scalar in next_grid.point_data
+        and current_store is not None
+        and next_store is not None
+        and scalar in current_store
+        and next_scalar in next_store
     ):
-        animated.point_data[scalar] = interpolate_values(
-            animated.point_data[scalar],
-            next_grid.point_data[next_scalar],
+        current_store[scalar] = interpolate_values(
+            current_store[scalar],
+            next_store[next_scalar],
             alpha,
         )
 
@@ -411,8 +418,28 @@ def _scalar_name(field):
     )
 
 
+def _scalar_association(grid, scalar):
+    if not scalar:
+        return None
+    if scalar in grid.point_data:
+        return "point"
+    if scalar in grid.cell_data:
+        return "cell"
+    return None
+
+
+def _scalar_store(grid, scalar):
+    association = _scalar_association(grid, scalar)
+    if association == "point":
+        return grid.point_data
+    if association == "cell":
+        return grid.cell_data
+    return None
+
+
 def _clim(grid, scalar, settings):
-    if not scalar or scalar not in grid.point_data:
+    store = _scalar_store(grid, scalar)
+    if store is None:
         return None
     minimum_auto = settings.get("minimum_auto", settings.get("auto", True))
     maximum_auto = settings.get("maximum_auto", settings.get("auto", True))
@@ -427,7 +454,7 @@ def _clim(grid, scalar, settings):
         minimum = float(settings["minimum"])
         maximum = float(settings["maximum"])
     else:
-        values = np.asarray(grid.point_data[scalar])
+        values = np.asarray(store[scalar])
         finite = values[np.isfinite(values)]
         if not len(finite):
             return None
@@ -458,7 +485,8 @@ def _render_scalar(grid, scalar, clim):
     the original result array untouched for queries and derive one internal
     render-only scalar array with a tiny tolerance around both bounds.
     """
-    if not scalar or scalar not in grid.point_data or clim is None:
+    store = _scalar_store(grid, scalar)
+    if store is None or clim is None:
         return scalar
     minimum, maximum = (float(value) for value in clim)
     span = maximum - minimum
@@ -471,13 +499,13 @@ def _render_scalar(grid, scalar, clim):
     if not np.isfinite(epsilon) or epsilon <= 0.0:
         return scalar
 
-    displayed = np.asarray(grid.point_data[scalar], dtype=float).copy()
+    displayed = np.asarray(store[scalar], dtype=float).copy()
     finite = np.isfinite(displayed)
     lower = finite & (displayed >= minimum - epsilon) & (displayed <= minimum + epsilon)
     upper = finite & (displayed >= maximum - epsilon) & (displayed <= maximum + epsilon)
     displayed[lower] = minimum + epsilon
     displayed[upper] = maximum - epsilon
-    grid.point_data[_DISPLAY_SCALAR] = displayed
+    store[_DISPLAY_SCALAR] = displayed
     return _DISPLAY_SCALAR
 
 

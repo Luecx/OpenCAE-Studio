@@ -406,6 +406,16 @@ class BeamPhysicalDisplayController:
         self.viewport.plotter.render()
 
     def _project(self):
+        if self.viewport.stage == "RESULTS":
+            result = getattr(self.viewport, "_active_result", None)
+            source = str(getattr(result, "source_file", "") or "")
+            if source.lower().endswith(".res"):
+                try:
+                    project = self._loader.model_project(source)
+                except (OSError, RuntimeError, TypeError, ValueError):
+                    return None
+                if project is not None:
+                    return project
         return self.viewport.store.project if self.viewport.store is not None else None
 
     def _editor_has_beams(self, project) -> bool:
@@ -433,11 +443,7 @@ class BeamPhysicalDisplayController:
         )
 
     def _project_has_beams(self, project) -> bool:
-        return any(
-            not instance.suppressed
-            and self._part_has_beams(project.try_resolve(instance.part_ref))
-            for instance in project.assembly.instances
-        )
+        return bool(beam_occurrences(project))
 
     @staticmethod
     def _assembly_stage(stage) -> bool:

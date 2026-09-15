@@ -69,17 +69,24 @@ def element_values(grid, point, field=None):
         ("Cell type", _cell_type_label(cell)),
         ("Component", component),
     ]
-    values = _component_values(grid, field, component)
-    nodes = _node_ids(grid, point_ids)
-    matrix = (
-        [[node, _value(values[index])] for node, index in zip(nodes, point_ids)]
-        if values is not None
-        else []
-    )
-    if not matrix:
-        summary.append(
-            ("Field values", "No nodal values are available for this component")
+
+    cell_values = _cell_component_values(grid, field, component)
+    if cell_values is not None:
+        summary.append(("Value", _value(cell_values[cell_id])))
+        matrix = []
+    else:
+        values = _component_values(grid, field, component)
+        nodes = _node_ids(grid, point_ids)
+        matrix = (
+            [[node, _value(values[index])] for node, index in zip(nodes, point_ids)]
+            if values is not None
+            else []
         )
+        if not matrix:
+            summary.append(
+                ("Field values", "No values are available for this component")
+            )
+
     return cell_id, QueryResult(
         summary=summary,
         summary_columns=2,
@@ -118,7 +125,7 @@ def _node_field_rows(grid, index, field):
 
 
 def _field_arrays(grid, field):
-    if field is None:
+    if field is None or str(field.metadata.get("association", "point")) == "cell":
         return []
     block = field.metadata.get("block", field.name)
     names = [
@@ -139,6 +146,13 @@ def _component_values(grid, field, component):
         return None
     key = f"{field.metadata.get('block', field.name)}:{component}"
     return np.asarray(grid.point_data[key]) if key in grid.point_data else None
+
+
+def _cell_component_values(grid, field, component):
+    if field is None:
+        return None
+    key = f"{field.metadata.get('block', field.name)}:{component}"
+    return np.asarray(grid.cell_data[key]) if key in grid.cell_data else None
 
 
 def _component(field):

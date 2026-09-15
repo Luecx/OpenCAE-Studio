@@ -6,6 +6,7 @@ from pathlib import Path
 from PyQt6.QtCore import QObject, QProcess, QTimer, pyqtSignal
 
 from opencae.controllers.background_task import BackgroundTask
+from opencae.persistence.project_io import save_project
 
 
 _PHASES = (
@@ -40,8 +41,6 @@ class AnalysisJobRunner(QObject):
         deck_profile=None,
     ):
         super().__init__(parent)
-        # The caller already supplies the immutable job snapshot.  Do not make a
-        # second potentially expensive graph copy on the GUI thread here.
         self.project = project_snapshot
         self.analysis_id = str(analysis_id)
         self.adapter = adapter
@@ -56,7 +55,6 @@ class AnalysisJobRunner(QObject):
         self._completed = False
 
     def start(self):
-        """Render/write the deck on a worker thread, then launch QProcess in Qt."""
         if self._completed or self.process is not None or self._prepare_task is not None:
             return
         self.progress.emit(0.01, "Preparing analysis")
@@ -70,7 +68,7 @@ class AnalysisJobRunner(QObject):
         task.start()
 
     def _prepare(self):
-        """Perform deck generation and file I/O outside the GUI thread."""
+        """Generate the deck and persist the immutable run snapshot off the GUI thread."""
         analysis = self.project.resolve(self.analysis_id)
         self.directory.mkdir(parents=True, exist_ok=True)
         extension = str(getattr(self.adapter, "deck_extension", ".inp"))
@@ -81,6 +79,15 @@ class AnalysisJobRunner(QObject):
             profile=self.deck_profile,
         )
         deck_path.write_text(text, encoding=_profile_encoding(self.deck_profile))
+
+        # A native FEMaster RES intentionally contains result data, not OpenCAE
+        # model semantics. Save the exact submitted model next to results.res so
+        # profiles, sections, orientations and the persisted mesh are available
+        # when that RES is opened later without the original project.
+        candidates = tuple(self.adapter.result_candidates(self.output_base))
+        if any(Path(candidate).suffix.lower() == ".res" for candidate in candidates):
+            save_project(self.project, self.output_base.with_suffix(".ocae"))
+
         command = self.adapter.build_command(
             self.executable,
             deck_path,
@@ -92,14 +99,12 @@ class AnalysisJobRunner(QObject):
         return tuple(str(value) for value in command)
 
     def _prepared(self, command) -> None:
-        """Launch the already-prepared command back on the GUI thread."""
         self._prepare_task = None
         if self._completed:
             return
         if self._stopping:
             self._finish(130)
             return
-
         process = QProcess(self)
         self.process = process
         process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
@@ -123,15 +128,12 @@ class AnalysisJobRunner(QObject):
         self._finish(1)
 
     def stop(self):
-        """Request cancellation without synchronously waiting on the child process."""
         if self._completed:
             return
         self._stopping = True
         self.progress.emit(0.0, "Stopping")
         process = self.process
         if process is None:
-            # Preparation itself cannot safely be force-terminated.  Its result
-            # callback observes _stopping and completes the Job as cancelled.
             if self._prepare_task is None:
                 self._finish(130)
             return
@@ -142,7 +144,6 @@ class AnalysisJobRunner(QObject):
         QTimer.singleShot(1500, self._kill_if_running)
 
     def _kill_if_running(self) -> None:
-        """Escalate a terminate request asynchronously after the grace period."""
         process = self.process
         if (
             self._stopping
@@ -182,7 +183,6 @@ class AnalysisJobRunner(QObject):
             self._finish(130 if self._stopping else 1)
 
     def _finish(self, code: int) -> None:
-        """Emit the terminal state exactly once."""
         if self._completed:
             return
         self._completed = True
