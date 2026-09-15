@@ -5,7 +5,11 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QGroupBox, QMessageBox, QStackedWidget, QVBoxLayout, QWidget
 
 from opencae.model.core import EntityRef
-from opencae.ui.composites.controls import ControlNumericUnit, ControlReferenceSelector
+from opencae.ui.composites.controls import (
+    ControlNumericUnit,
+    ControlReferenceSelector,
+    ControlVector3,
+)
 from opencae.ui.core.apply_dialog import ApplyDialog
 from opencae.ui.core.widgets import MatrixEditor
 from opencae.ui.primitives.inputs import InputFormInteger, InputFormText
@@ -70,7 +74,12 @@ class SectionDialog(ApplyDialog):
         self.shell_page = self._shell_page(materials, material_current, create_material)
         self.stack.addWidget(self.shell_page)
 
-        self.beam_page, self.beam_material, self.beam_profile = self._beam_page(
+        (
+            self.beam_page,
+            self.beam_material,
+            self.beam_profile,
+            self.beam_n1,
+        ) = self._beam_page(
             materials,
             profiles,
             material_current,
@@ -181,8 +190,17 @@ class SectionDialog(ApplyDialog):
                 field_block("Profile", prof),
             )
         )
+        n1 = ControlVector3(
+            getattr(self.section, "n1", (0.0, 1.0, 0.0)),
+            labels=("X", "Y", "Z"),
+        )
+        n1.setToolTip(
+            "Approximate first local beam-section axis. It is projected "
+            "orthogonal to each beam tangent when the section frame is built."
+        )
+        layout.addWidget(field_block("n1 direction", n1))
         layout.addStretch(1)
-        return page, mat, prof
+        return page, mat, prof, n1
 
     def _truss_page(self, materials, material, callback):
         page, layout = self._vertical_page()
@@ -236,6 +254,13 @@ class SectionDialog(ApplyDialog):
                 "Create or select a beam profile first.",
             )
             return False
+        if kind == "Beam" and sum(component * component for component in values["n1"]) <= 1.0e-24:
+            QMessageBox.warning(
+                self,
+                "Invalid n1 direction",
+                "Beam n1 must be a non-zero direction vector.",
+            )
+            return False
         if (
             kind == "Shell"
             and values["shell_definition"] == SHELL_TYPES[0]
@@ -265,6 +290,7 @@ class SectionDialog(ApplyDialog):
             result.update(
                 material_ref=self._ref(self.beam_material.currentValue(), "Material"),
                 profile_ref=self._ref(self.beam_profile.currentValue(), "Profile"),
+                n1=self.beam_n1.value(),
             )
         elif kind == "Truss":
             result.update(
