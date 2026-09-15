@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pyvista as pv
 
-from opencae.model.entities.profiles import GraphProfile, RectangleProfile
+from opencae.model.entities.profiles import BoxProfile, GraphProfile, RectangleProfile
 from opencae.model.entities.profiles.section_geometry import section_patches
 from opencae.results.beam_physical_representation import BeamPhysicalRepresentation
 from opencae.results.beam_physical_stress import (
@@ -15,7 +15,13 @@ from opencae.results.beam_physical_stress import (
 from opencae.results.femaster_res_section_forces import load_local_section_forces
 
 
-def test_rectangle_section_geometry_is_centered_on_profile_centroid():
+def _patch_area(patch):
+    y = np.asarray(patch)[:, 0]
+    z = np.asarray(patch)[:, 1]
+    return 0.5 * abs(float(np.sum(y * np.roll(z, -1) - z * np.roll(y, -1))))
+
+
+def test_rectangle_section_geometry_uses_four_segments_and_stays_centered():
     profile = RectangleProfile(
         name="R",
         dimensions={"width": 4.0, "height": 2.0},
@@ -23,16 +29,39 @@ def test_rectangle_section_geometry_is_centered_on_profile_centroid():
 
     patches = section_patches(profile)
 
-    assert len(patches) == 1
-    np.testing.assert_allclose(
-        patches[0],
-        np.asarray(
-            ((-2.0, -1.0), (2.0, -1.0), (2.0, 1.0), (-2.0, 1.0))
-        ),
+    assert len(patches) == 4
+    assert all(patch.shape == (4, 2) for patch in patches)
+    np.testing.assert_allclose(sum(_patch_area(patch) for patch in patches), 8.0)
+    all_points = np.vstack(patches)
+    np.testing.assert_allclose(all_points[:, 0].min(), -2.0)
+    np.testing.assert_allclose(all_points[:, 0].max(), 2.0)
+    np.testing.assert_allclose(all_points[:, 1].min(), -1.0)
+    np.testing.assert_allclose(all_points[:, 1].max(), 1.0)
+
+
+def test_box_section_has_four_corner_blocks_and_sixteen_wall_segments():
+    profile = BoxProfile(
+        name="Box",
+        dimensions={"width": 10.0, "height": 6.0, "thickness": 1.0},
     )
 
+    patches = section_patches(profile)
 
-def test_graph_profile_segments_become_thickness_patches():
+    assert len(patches) == 20
+    np.testing.assert_allclose(sum(_patch_area(patch) for patch in patches), 28.0)
+    corners = [
+        patch
+        for patch in patches
+        if np.all(np.abs(patch[:, 0]) >= 4.0 - 1.0e-12)
+        and np.all(np.abs(patch[:, 1]) >= 2.0 - 1.0e-12)
+    ]
+    assert len(corners) == 4
+    for corner in corners:
+        np.testing.assert_allclose(np.ptp(corner[:, 0]), 1.0)
+        np.testing.assert_allclose(np.ptp(corner[:, 1]), 1.0)
+
+
+def test_graph_profile_segments_become_four_thickness_patches():
     profile = GraphProfile(
         name="Graph",
         dimensions={
@@ -43,10 +72,12 @@ def test_graph_profile_segments_become_thickness_patches():
 
     patches = section_patches(profile)
 
-    assert len(patches) == 1
-    assert patches[0].shape == (4, 2)
-    np.testing.assert_allclose(np.ptp(patches[0][:, 0]), 4.0)
-    np.testing.assert_allclose(np.ptp(patches[0][:, 1]), 1.0)
+    assert len(patches) == 4
+    assert all(patch.shape == (4, 2) for patch in patches)
+    for patch in patches:
+        np.testing.assert_allclose(np.ptp(patch[:, 0]), 1.0)
+        np.testing.assert_allclose(np.ptp(patch[:, 1]), 1.0)
+    np.testing.assert_allclose(sum(_patch_area(patch) for patch in patches), 4.0)
 
 
 def test_stress_coefficients_reduce_to_axial_plus_uncoupled_bending():
