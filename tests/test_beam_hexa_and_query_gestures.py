@@ -25,39 +25,29 @@ def _polygon_area(polygon):
 
 
 def test_circle_profile_is_quadrangulated_for_hexa_extrusion():
-    profile = CircleProfile(
-        name="Circle",
-        dimensions={"diameter": 2.0},
-    )
-
+    profile = CircleProfile(name="Circle", dimensions={"diameter": 2.0})
     patches = section_patches(profile, circle_segments=24)
-
     assert len(patches) == 36
     assert all(patch.shape == (4, 2) for patch in patches)
     np.testing.assert_allclose(
-        sum(_polygon_area(patch) for patch in patches),
-        np.pi,
-        rtol=0.03,
+        sum(_polygon_area(patch) for patch in patches), np.pi, rtol=0.03
     )
 
 
-def test_box_profile_partition_has_no_overlapping_corner_material():
+def test_box_profile_has_explicit_corners_and_subdivided_walls():
     profile = BoxProfile(
         name="Box",
         dimensions={"width": 4.0, "height": 2.0, "thickness": 0.25},
     )
-
     patches = section_patches(profile)
-
     expected_area = 4.0 * 2.0 - (4.0 - 0.5) * (2.0 - 0.5)
-    assert len(patches) == 4
+    assert len(patches) == 20
     np.testing.assert_allclose(
-        sum(_polygon_area(patch) for patch in patches),
-        expected_area,
+        sum(_polygon_area(patch) for patch in patches), expected_area
     )
 
 
-def test_rectangle_beam_is_extruded_to_one_vtk_hexahedron():
+def test_rectangle_beam_is_extruded_to_four_vtk_hexahedra():
     source = pv.UnstructuredGrid(
         np.asarray((2, 0, 1), dtype=np.int64),
         np.asarray((3,), dtype=np.uint8),
@@ -65,10 +55,6 @@ def test_rectangle_beam_is_extruded_to_one_vtk_hexahedron():
     )
     source.point_data["node_id"] = np.asarray((1, 2), dtype=np.int64)
     source.cell_data["element_id"] = np.asarray((7,), dtype=np.int64)
-    profile = RectangleProfile(
-        name="R",
-        dimensions={"width": 2.0, "height": 1.0},
-    )
     occurrence = BeamOccurrence(
         solver_element_id=7,
         part_id="part",
@@ -77,19 +63,15 @@ def test_rectangle_beam_is_extruded_to_one_vtk_hexahedron():
         connectivity=(1, 2),
         n1=(0.0, 1.0, 0.0),
         section=None,
-        profile=profile,
+        profile=RectangleProfile(name="R", dimensions={"width": 2.0, "height": 1.0}),
     )
-
     representation = build_beam_physical_representation_from_occurrences(
-        (occurrence,),
-        source,
-        source_element_ids=True,
+        (occurrence,), source, source_element_ids=True
     )
     expanded = representation.expand(source)
-
-    assert expanded.n_cells == 1
-    assert int(expanded.celltypes[0]) == 12
-    assert expanded.get_cell(0).n_points == 8
+    assert expanded.n_cells == 4
+    assert np.all(np.asarray(expanded.celltypes) == 12)
+    assert all(expanded.get_cell(index).n_points == 8 for index in range(4))
 
 
 class _Point:
@@ -167,8 +149,7 @@ class _State:
         self.owner = SimpleNamespace(
             plotter=_Plotter(),
             _event_display_position=lambda _watched, event: (
-                event.position().x(),
-                event.position().y(),
+                event.position().x(), event.position().y()
             ),
         )
         self.picks = []
@@ -185,13 +166,10 @@ def test_result_query_click_is_consumed_before_camera_rotation():
     state = _State()
     gate = _ResultQueryMouseFilter(state)
     watched = state.owner.plotter
-
     assert gate.eventFilter(
         watched,
         _MouseEvent(
-            QEvent.Type.MouseButtonPress,
-            100,
-            100,
+            QEvent.Type.MouseButtonPress, 100, 100,
             button=Qt.MouseButton.LeftButton,
             buttons=Qt.MouseButton.LeftButton,
         ),
@@ -199,22 +177,17 @@ def test_result_query_click_is_consumed_before_camera_rotation():
     assert gate.eventFilter(
         watched,
         _MouseEvent(
-            QEvent.Type.MouseMove,
-            102,
-            101,
+            QEvent.Type.MouseMove, 102, 101,
             buttons=Qt.MouseButton.LeftButton,
         ),
     )
     assert gate.eventFilter(
         watched,
         _MouseEvent(
-            QEvent.Type.MouseButtonRelease,
-            102,
-            101,
+            QEvent.Type.MouseButtonRelease, 102, 101,
             button=Qt.MouseButton.LeftButton,
         ),
     )
-
     assert state.owner.plotter._Iren.presses == 0
     assert state.picks == [(102.0, 101.0)]
 
@@ -223,32 +196,22 @@ def test_result_query_drag_starts_camera_only_after_threshold():
     state = _State()
     gate = _ResultQueryMouseFilter(state)
     watched = state.owner.plotter
-
     gate.eventFilter(
         watched,
         _MouseEvent(
-            QEvent.Type.MouseButtonPress,
-            100,
-            100,
+            QEvent.Type.MouseButtonPress, 100, 100,
             button=Qt.MouseButton.LeftButton,
             buttons=Qt.MouseButton.LeftButton,
         ),
     )
     move = _MouseEvent(
-        QEvent.Type.MouseMove,
-        108,
-        100,
-        buttons=Qt.MouseButton.LeftButton,
+        QEvent.Type.MouseMove, 108, 100, buttons=Qt.MouseButton.LeftButton
     )
     assert gate.eventFilter(watched, move) is False
-
     assert state.owner.plotter._Iren.presses == 1
     assert state.owner.plotter.press_info[:2] == (100.0, 100.0)
-
     release = _MouseEvent(
-        QEvent.Type.MouseButtonRelease,
-        108,
-        100,
+        QEvent.Type.MouseButtonRelease, 108, 100,
         button=Qt.MouseButton.LeftButton,
     )
     assert gate.eventFilter(watched, release) is False
