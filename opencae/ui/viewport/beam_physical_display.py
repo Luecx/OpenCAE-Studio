@@ -63,7 +63,13 @@ class BeamPhysicalDisplayController:
 
     def model_changed(self, *_args) -> None:
         """Invalidate editor beam overlays after any authored model mutation."""
-        if self.viewport.stage != "RESULTS" and self.enabled:
+        if self.viewport.stage == "RESULTS":
+            if getattr(self.viewport, "_active_result", None) is None and self.enabled:
+                self.enabled = False
+                self.viewport.toolbar.set_beam_physical(False)
+            self.sync_availability()
+            return
+        if self.enabled:
             self._clear_editor_display(render=False)
             self.enabled = False
             self.viewport.toolbar.set_beam_physical(False)
