@@ -12,6 +12,8 @@ from opencae.model.entities.profiles import BoxProfile, CircleProfile, Rectangle
 from opencae.model.entities.profiles.section_geometry import section_patches
 from opencae.results.beam_physical_model import BeamOccurrence
 from opencae.results.beam_physical_representation import (
+    BEAM_CENTERLINE_CELL,
+    PHYSICAL_BEAM_CELL,
     build_beam_physical_representation_from_occurrences,
 )
 from opencae.ui.viewport.result_query_state import _ResultQueryMouseFilter
@@ -47,7 +49,7 @@ def test_box_profile_has_explicit_corners_and_subdivided_walls():
     )
 
 
-def test_rectangle_beam_is_extruded_to_four_vtk_hexahedra():
+def test_rectangle_beam_superset_keeps_centerline_and_adds_four_vtk_hexahedra():
     source = pv.UnstructuredGrid(
         np.asarray((2, 0, 1), dtype=np.int64),
         np.asarray((3,), dtype=np.uint8),
@@ -69,9 +71,19 @@ def test_rectangle_beam_is_extruded_to_four_vtk_hexahedra():
         (occurrence,), source, source_element_ids=True
     )
     expanded = representation.expand(source)
-    assert expanded.n_cells == 4
-    assert np.all(np.asarray(expanded.celltypes) == 12)
-    assert all(expanded.get_cell(index).n_points == 8 for index in range(4))
+
+    centerline = np.flatnonzero(
+        np.asarray(expanded.cell_data[BEAM_CENTERLINE_CELL], dtype=bool)
+    )
+    physical = np.flatnonzero(
+        np.asarray(expanded.cell_data[PHYSICAL_BEAM_CELL], dtype=bool)
+    )
+    assert expanded.n_cells == 5
+    assert len(centerline) == 1
+    assert int(expanded.celltypes[int(centerline[0])]) == int(pv.CellType.LINE)
+    assert len(physical) == 4
+    assert np.all(np.asarray(expanded.celltypes)[physical] == int(pv.CellType.HEXAHEDRON))
+    assert all(expanded.get_cell(int(index)).n_points == 8 for index in physical)
 
 
 class _Point:
