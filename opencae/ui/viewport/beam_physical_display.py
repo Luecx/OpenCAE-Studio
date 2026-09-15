@@ -1,4 +1,4 @@
-"""Own physical-beam generation for editor scenes and stored solver results."""
+"""Own physical-beam generation for editor scenes and self-contained FRD results."""
 
 from __future__ import annotations
 
@@ -10,22 +10,19 @@ from opencae.geometry.cache import CACHE
 from opencae.geometry.orphan_mesh import snapshot_from_part
 from opencae.model.entities.elements import BeamElementDefinition
 from opencae.results import FrdLoader
-from opencae.results.beam_physical_model import (
-    beam_occurrences,
-    part_beam_occurrences,
-)
+from opencae.results.beam_physical_model import beam_occurrences, part_beam_occurrences
 from opencae.results.beam_physical_representation import (
-    build_beam_physical_representation,
     build_beam_physical_representation_from_occurrences,
 )
-from opencae.results.femaster_res_section_forces import (
-    load_local_section_forces,
+from opencae.results.frd_beam_metadata import (
+    beam_occurrences_from_frd,
+    section_forces_from_frd,
 )
 from .pyvista_mesh import add_physical_mesh, build_grid
 
 
 class BeamPhysicalDisplayController:
-    """Render physical beams freshly in editors and cached in stored results."""
+    """Render physical beams freshly in editors and from embedded FRD metadata."""
 
     def __init__(self, viewport) -> None:
         self.viewport = viewport
@@ -38,7 +35,6 @@ class BeamPhysicalDisplayController:
         self._editor_actors = []
 
     def bind_toolbar(self) -> None:
-        """Connect shared viewport controls exactly once."""
         if self._bound:
             return
         self.viewport.toolbar.beam_physical_changed.connect(self.set_enabled)
@@ -46,35 +42,20 @@ class BeamPhysicalDisplayController:
         self._bound = True
 
     def sync_availability(self, *_args) -> None:
-        """Enable Beam whenever the current model/result context can contain beams."""
-        project = self._project()
-        if project is None:
-            self.viewport.toolbar.set_beam_available(False)
-            return
         if self.viewport.stage == "RESULTS":
-            result = getattr(self.viewport, "_active_result", None)
-            available = bool(
-                result is not None
-                and getattr(result, "source_file", "")
-                and self._project_has_beams(project)
+            self.viewport.toolbar.set_beam_available(
+                self._result_has_beams(getattr(self.viewport, "_active_result", None))
             )
-        else:
-            available = self._editor_has_beams(project)
-        self.viewport.toolbar.set_beam_available(available)
+            return
+        project = self._project()
+        self.viewport.toolbar.set_beam_available(
+            bool(project is not None and self._editor_has_beams(project))
+        )
 
     def result_changed(self, result) -> None:
-        """Update availability when the active stored result changes."""
-        project = self._project()
-        available = bool(
-            project is not None
-            and result is not None
-            and getattr(result, "source_file", "")
-            and self._project_has_beams(project)
-        )
-        self.viewport.toolbar.set_beam_available(available)
+        self.viewport.toolbar.set_beam_available(self._result_has_beams(result))
 
     def stage_changed(self, _stage=None) -> None:
-        """Drop transient editor surfaces when the viewport context changes."""
         self._clear_editor_display(render=False)
         self.enabled = False
         self.viewport.toolbar.set_beam_physical(False)
@@ -82,7 +63,6 @@ class BeamPhysicalDisplayController:
         self.viewport.plotter.render()
 
     def model_changed(self, *_args) -> None:
-        """Never retain stale editor surfaces after a model/active-Part change."""
         if self.viewport.stage != "RESULTS" and self.enabled:
             self._clear_editor_display(render=False)
             self.enabled = False
@@ -91,7 +71,6 @@ class BeamPhysicalDisplayController:
         self.sync_availability()
 
     def set_enabled(self, enabled: bool) -> None:
-        """Toggle physical beams in either editor or stored-result context."""
         requested = bool(enabled)
         if self.viewport.stage == "RESULTS":
             self._set_result_enabled(requested)
@@ -99,28 +78,18 @@ class BeamPhysicalDisplayController:
             self._set_editor_enabled(requested)
 
     def prepare_options(self, result, field, options=None) -> dict:
-        """Inject expanded current/next grids into the existing result pipeline."""
         prepared = dict(options or {})
         self._last_options = dict(options or {})
         if not self.enabled or result is None or self.viewport.stage != "RESULTS":
             return prepared
 
         try:
-            representation = self._ensure_representation(
-                result,
-                field,
-                show_progress=False,
-            )
+            representation = self._ensure_representation(result, field, show_progress=False)
             animation = dict(prepared.get("_animation", {}) or {})
             source = animation.get("source_grid")
             if source is None:
                 source = self._grid(result, field)
-            expanded = self._expand(
-                representation,
-                source,
-                result,
-                field,
-            )
+            expanded = self._expand(representation, source, result, field)
             animation["source_grid"] = expanded
             prepared["range"] = _expanded_range_settings(
                 self._loader,
@@ -147,7 +116,6 @@ class BeamPhysicalDisplayController:
         return prepared
 
     def reset(self) -> None:
-        """Disable the display toggle while retaining reusable result caches."""
         self._clear_editor_display(render=False)
         self.enabled = False
         self._last_options = {}
@@ -162,8 +130,6 @@ class BeamPhysicalDisplayController:
             return
         if requested:
             try:
-                # Result topology is intentionally cached. The progress dialog
-                # appears only on the first build; later toggles reuse it.
                 self._ensure_representation(result, field, show_progress=True)
             except (OSError, RuntimeError, TypeError, ValueError) as exc:
                 self._reject(str(exc))
@@ -179,8 +145,6 @@ class BeamPhysicalDisplayController:
             self.viewport.toolbar.set_beam_physical(False)
             return
         try:
-            # Editor geometry is deliberately rebuilt on every activation so it
-            # always reflects the live mesh, section assignment, profile and n1.
             grids = self._build_editor_grids(show_progress=True)
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             self._reject(str(exc))
@@ -277,11 +241,7 @@ class BeamPhysicalDisplayController:
         snapshot = CACHE.mesh(part.id) or snapshot_from_part(part)
         if snapshot is None:
             raise ValueError(f"Generate a mesh for Part '{part.name}' before showing beams")
-        grid = build_grid(
-            snapshot,
-            instance,
-            include_all_dimensions=True,
-        )
+        grid = build_grid(snapshot, instance, include_all_dimensions=True)
         if grid is None:
             raise ValueError(f"Part '{part.name}' has no renderable finite elements")
         return grid
@@ -305,15 +265,10 @@ class BeamPhysicalDisplayController:
         self.viewport.plotter.render()
 
     def _rerender_active(self) -> None:
-        """Rebuild the active result once after a representation toggle."""
         result = getattr(self.viewport, "_active_result", None)
         if result is None:
             return
         options = dict(self._last_options)
-        # The animation fast path assumes invariant topology. Switching between
-        # line beams and expanded beam surfaces changes topology, so force one
-        # ordinary rebuild. The Time Manager can resume in-place animation on
-        # its next frame with the newly established representation.
         options.pop("_animation", None)
         self.viewport.scene.show_result(
             result,
@@ -322,18 +277,20 @@ class BeamPhysicalDisplayController:
         )
 
     def _ensure_representation(self, result, field, *, show_progress: bool):
-        project = self._project()
-        if project is None:
-            raise ValueError("Physical beam rendering requires an active project")
         source = str(getattr(result, "source_file", "") or "")
+        if not source.lower().endswith(".frd"):
+            raise ValueError("Stored solver results must be an FRD file")
         identity = str(getattr(result, "id", "") or source or id(result))
-        key = (identity, source, id(project))
+        key = (identity, source)
         cached = self._representations.get(key)
         if cached is not None:
             return cached
 
+        occurrences = beam_occurrences_from_frd(source)
+        if not occurrences:
+            raise ValueError("This FRD contains no embedded OpenCAE beam metadata")
         grid = self._grid(result, field)
-        dialog = self._progress_dialog() if show_progress else None
+        dialog = self._progress_dialog(len(occurrences)) if show_progress else None
 
         def progress(current, total, label):
             if dialog is None:
@@ -344,10 +301,11 @@ class BeamPhysicalDisplayController:
             QApplication.processEvents()
 
         try:
-            representation = build_beam_physical_representation(
-                project,
+            representation = build_beam_physical_representation_from_occurrences(
+                occurrences,
                 grid,
-                progress,
+                progress=progress,
+                source_element_ids=False,
             )
             if dialog is not None:
                 dialog.setValue(dialog.maximum())
@@ -355,7 +313,6 @@ class BeamPhysicalDisplayController:
         finally:
             if dialog is not None:
                 dialog.close()
-
         self._representations[key] = representation
         return representation
 
@@ -363,18 +320,18 @@ class BeamPhysicalDisplayController:
         if "_opencae_beam_xi" in grid.point_data:
             return grid
         step_id = _metadata_int(field, "step_id")
-        forces = self._forces(result, step_id)
+        frame_id = _metadata_int(field, "frame_id")
         return representation.expand(
             grid,
             _scalar_name(field),
-            element_nodal_forces=forces,
+            element_nodal_forces=self._forces(result, step_id, frame_id),
         )
 
-    def _forces(self, result, step_id):
+    def _forces(self, result, step_id, frame_id):
         source = str(getattr(result, "source_file", "") or "")
-        key = (source, step_id)
+        key = (source, step_id, frame_id)
         if key not in self._section_forces:
-            self._section_forces[key] = load_local_section_forces(source, step_id)
+            self._section_forces[key] = section_forces_from_frd(source, step_id, frame_id)
         return self._section_forces[key]
 
     def _grid(self, result, field):
@@ -415,16 +372,17 @@ class BeamPhysicalDisplayController:
 
     def _project(self):
         if self.viewport.stage == "RESULTS":
-            result = getattr(self.viewport, "_active_result", None)
-            source = str(getattr(result, "source_file", "") or "")
-            if source.lower().endswith(".res"):
-                try:
-                    project = self._loader.model_project(source)
-                except (OSError, RuntimeError, TypeError, ValueError):
-                    return None
-                if project is not None:
-                    return project
+            return None
         return self.viewport.store.project if self.viewport.store is not None else None
+
+    def _result_has_beams(self, result) -> bool:
+        source = str(getattr(result, "source_file", "") or "")
+        if not source.lower().endswith(".frd"):
+            return False
+        try:
+            return bool(beam_occurrences_from_frd(source))
+        except (OSError, RuntimeError, TypeError, ValueError):
+            return False
 
     def _editor_has_beams(self, project) -> bool:
         if self._assembly_stage(self.viewport.stage):
@@ -450,9 +408,6 @@ class BeamPhysicalDisplayController:
             )
         )
 
-    def _project_has_beams(self, project) -> bool:
-        return bool(beam_occurrences(project))
-
     @staticmethod
     def _assembly_stage(stage) -> bool:
         return str(stage or "").upper() in {
@@ -466,7 +421,6 @@ class BeamPhysicalDisplayController:
 
 
 def beam_physical_controller(viewport) -> BeamPhysicalDisplayController:
-    """Return the one beam-display controller owned by a viewport."""
     controller = getattr(viewport, "_beam_physical_controller", None)
     if controller is None:
         controller = BeamPhysicalDisplayController(viewport)
@@ -476,14 +430,6 @@ def beam_physical_controller(viewport) -> BeamPhysicalDisplayController:
 
 
 def _expanded_range_settings(loader, result, field, grid, settings):
-    """Include generated beam-point extrema when the contour still uses defaults.
-
-    The Results ribbon stores concrete one-shot bounds rather than a persistent
-    auto-range mode. Physical-beam expansion can add visualization points with
-    stresses outside those source-grid bounds. Replace only bounds that still
-    match the loader's original field range; a user-modified minimum or maximum
-    remains authoritative.
-    """
     current = dict(settings or {})
     scalar = _scalar_name(field)
     source = str(getattr(result, "source_file", "") or "")
