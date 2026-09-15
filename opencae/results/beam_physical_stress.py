@@ -9,6 +9,12 @@ _NORMAL_ALIASES = {"N", "NX", "F1", "FX", "SF1", "AXIAL", "NORMAL"}
 _MY_ALIASES = {"MY", "M2", "SM2", "BM2"}
 _MZ_ALIASES = {"MZ", "M3", "SM3", "BM3"}
 _HINTS = ("BEAM", "SECTION", "SECT", "ELFOR", "INTERNAL", "FORCE")
+_NORMAL_STRESS_COMPONENTS = {"SXX", "XX", "S11", "SIGMAXX"}
+_ZERO_STRESS_COMPONENTS = {
+    "SYY", "SZZ", "SYZ", "SZY", "SZX", "SXZ", "SXY", "SYX",
+    "YY", "ZZ", "YZ", "ZY", "ZX", "XZ", "XY", "YX",
+    "S22", "S33", "S23", "S32", "S31", "S13", "S12", "S21",
+}
 
 
 def stress_coefficients(properties, y: float, z: float) -> tuple[float, float, float]:
@@ -21,7 +27,6 @@ def stress_coefficients(properties, y: float, z: float) -> tuple[float, float, f
     determinant = iyy * izz - iyz * iyz
     if abs(determinant) <= 1.0e-24:
         return axial, 0.0, 0.0
-    # Sign convention reduces to -My*z/Iyy + Mz*y/Izz for Iyz == 0.
     my = (iyz * y - izz * z) / determinant
     mz = (iyy * y - iyz * z) / determinant
     return axial, my, mz
@@ -86,11 +91,27 @@ def section_force_keys(grid) -> tuple[str | None, str | None, str | None] | None
 
 
 def stress_display_values(name: str | None, values: np.ndarray) -> np.ndarray:
-    """Adapt signed beam normal stress to the selected stress display component."""
-    upper = str(name or "").upper()
-    if "MISES" in upper or "MAGNITUDE" in upper or "ABS" in upper:
+    """Map recovered beam normal stress onto one displayed stress component.
+
+    Physical beam recovery currently provides only local axial/bending normal
+    stress. It therefore maps to SXX. The remaining tensor components are zero;
+    scalar magnitudes/equivalent stress use ``abs(SXX)``.
+    """
+    text = str(name or "")
+    component = _canonical(text.split(":", 1)[-1])
+    if component in _NORMAL_STRESS_COMPONENTS:
+        return np.asarray(values, dtype=float)
+    if component in _ZERO_STRESS_COMPONENTS:
+        return np.zeros_like(values, dtype=float)
+    if any(token in component for token in ("MISES", "MAGNITUDE", "ABS", "TRESCA")):
         return np.abs(values)
-    return values
+    if component in {"P1", "MAXPRINCIPAL", "PRINCIPAL1"}:
+        return np.maximum(values, 0.0)
+    if component in {"P2", "MIDPRINCIPAL", "PRINCIPAL2"}:
+        return np.zeros_like(values, dtype=float)
+    if component in {"P3", "MINPRINCIPAL", "PRINCIPAL3"}:
+        return np.minimum(values, 0.0)
+    return np.zeros_like(values, dtype=float)
 
 
 def _from_element_nodal(
