@@ -80,6 +80,9 @@ def test_sketcher_reuses_main_ribbon_metrics_and_progressive_collapse_policy():
     )
     ribbon = (ROOT / "opencae/ui/ribbon/ribbon_page.py").read_text(encoding="utf-8")
     group = (ROOT / "opencae/ui/ribbon/ribbon_group.py").read_text(encoding="utf-8")
+    button_config = (ROOT / "opencae/ui/primitives/buttons/_configure.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "ResponsiveRibbonPage" in public_dialog
     assert "RIBBON_PAGE_HEIGHT" in public_dialog
@@ -104,7 +107,7 @@ def test_sketcher_reuses_main_ribbon_metrics_and_progressive_collapse_policy():
     assert "widget.hide()" in ribbon
     assert "widget.setParent(None)" in ribbon
     assert "RIBBON_BUTTON_WIDTH" in ribbon
-    assert "RIBBON_BUTTON_HEIGHT" in (ROOT / "opencae/ui/templates/primitives.py").read_text(encoding="utf-8")
+    assert "RIBBON_BUTTON_HEIGHT" in button_config
     assert "PALETTE['ribbon_separator']" in group
     assert "QToolBar" not in dialog
 
