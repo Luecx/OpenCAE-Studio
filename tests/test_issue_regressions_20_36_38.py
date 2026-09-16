@@ -79,7 +79,8 @@ def test_new_models_imports_and_results_request_initial_framing():
     assert "viewport.request_refresh(fit=True)" in lifecycle
     assert "fit_on_load = identity != previous_identity or scene.result_actor is None" in results
     assert "if fit_on_load or camera is None:" in results
-    assert "scene.owner.plotter.reset_camera()" in results
+    assert "fit_camera(" in results
+    assert "reset_orientation=True" in results
 
 
 def test_step_dialog_uses_the_canonical_step_type_enum():
