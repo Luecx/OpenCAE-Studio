@@ -13,7 +13,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class _Plotter:
     def __init__(self, direction=(1.0, 1.0, 1.0), bounds=(-1, 1, -1, 1, -1, 1)):
-        self.camera = SimpleNamespace(direction=tuple(direction))
+        self.camera = SimpleNamespace(
+            direction=tuple(direction),
+            focal_point=(99.0, 99.0, 99.0),
+        )
         self._bounds = tuple(bounds)
         self.reset_calls = []
         self.vector_calls = []
@@ -28,7 +31,12 @@ class _Plotter:
 
     def view_vector(self, vector, *, viewup, render, bounds):
         self.vector_calls.append(
-            (tuple(float(value) for value in vector), tuple(float(value) for value in viewup), bool(render), tuple(bounds))
+            (
+                tuple(float(value) for value in vector),
+                tuple(float(value) for value in viewup),
+                bool(render),
+                tuple(bounds),
+            )
         )
 
     def reset_camera_clipping_range(self):
@@ -70,6 +78,7 @@ def test_fit_reorients_two_node_result_when_camera_is_end_on():
     fitted_direction = np.asarray(plotter.vector_calls[0][0])
     line_direction = direction
     assert abs(float(np.dot(fitted_direction, line_direction))) < 0.8
+    assert np.allclose(plotter.camera.focal_point, (0.5, 0.5, 0.5))
     assert plotter.clipping_resets == 1
     assert plotter.renders == 1
 
@@ -82,8 +91,21 @@ def test_fit_preserves_existing_side_view_for_line_result():
 
     assert len(plotter.reset_calls) == 1
     assert not plotter.vector_calls
+    assert np.allclose(plotter.camera.focal_point, (0.5, 0.5, 0.5))
     assert plotter.clipping_resets == 1
     assert plotter.renders == 0
+
+
+def test_fit_recenters_orbit_pivot_to_visible_bounds_center():
+    plotter = _Plotter(
+        direction=(0.0, 0.0, -1.0),
+        bounds=(10.0, 14.0, -6.0, 2.0, 20.0, 24.0),
+    )
+
+    assert fit_camera(plotter, render=False)
+
+    assert np.allclose(plotter.camera.focal_point, (12.0, -2.0, 22.0))
+    assert plotter.clipping_resets == 1
 
 
 def test_initial_fit_chooses_geometry_aware_view_even_when_current_view_is_safe():
@@ -99,6 +121,7 @@ def test_initial_fit_chooses_geometry_aware_view_even_when_current_view_is_safe(
 
     assert len(plotter.vector_calls) == 1
     assert not plotter.reset_calls
+    assert np.allclose(plotter.camera.focal_point, (0.0, 2.5, 0.0))
 
 
 def test_manual_scene_fit_no_longer_depends_on_specific_actor_registry():
