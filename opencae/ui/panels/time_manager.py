@@ -69,9 +69,21 @@ def frame_bracket(axis, value):
     return last, last, 0.0
 
 
-def current_frame_amplitude(phase):
-    """Run one full signed response cycle: 0 -> +1 -> 0 -> -1 -> 0."""
+def current_frame_amplitude(phase, function="Sine"):
+    """Return the current-frame response factor for one normalized timeline phase."""
     value = min(max(float(phase), 0.0), 1.0)
+    mode = str(function or "Sine").strip().casefold()
+    if mode == "half sine":
+        return sin(pi * value)
+    if mode == "triangle":
+        if value <= 0.25:
+            return 4.0 * value
+        if value <= 0.75:
+            return 2.0 - 4.0 * value
+        return 4.0 * value - 4.0
+    if mode == "ramp":
+        return value
+    # Default/full sine: 0 -> +1 -> 0 -> -1 -> 0.
     return sin(2.0 * pi * value)
 
 
@@ -126,6 +138,7 @@ class TimeManagerPanel(QWidget):
 
     FRAME_INTERVAL_MS = 16
     ACROSS_BASE_FPS = 4.0
+    WAVEFORMS = ("Sine", "Half sine", "Triangle", "Ramp")
 
     def __init__(self, results_page=None, viewport=None, parent=None):
         super().__init__(parent)
@@ -141,6 +154,10 @@ class TimeManagerPanel(QWidget):
         self._current_index = -1
         self._play_position = 0.0
         self._phase = 0.0
+        self._play_ranges = {
+            "current": (0.0, 1.0),
+            "across": (0.0, 1.0),
+        }
         self._playing = False
         self._playback_visible_index = -1
         self._playback_options = None
@@ -281,8 +298,35 @@ class TimeManagerPanel(QWidget):
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
+
+        # Current-frame waveform is a compact view option rather than another
+        # form field: only text/a small dropdown affordance sits above the plot.
+        self.function_row = QWidget(content)
+        function_layout = QHBoxLayout(self.function_row)
+        function_layout.setContentsMargins(0, 0, 10, 0)
+        function_layout.setSpacing(0)
+        function_layout.addStretch(1)
+        self.function_select = SelectForm(self.function_row)
+        self.function_select.setObjectName("TimeManagerFunctionSelect")
+        self.function_select.addItems(self.WAVEFORMS)
+        self.function_select.setCurrentText("Sine")
+        self.function_select.setMaximumWidth(118)
+        self.function_select.setToolTip("Current-frame animation function")
+        self.function_select.setStyleSheet(
+            "QComboBox#TimeManagerFunctionSelect {"
+            "background: transparent; border: none; padding: 0 15px 0 3px;"
+            "min-height: 20px; }"
+            "QComboBox#TimeManagerFunctionSelect::drop-down {"
+            "border: none; width: 14px; }"
+        )
+        self.function_select.currentTextChanged.connect(self._waveform_changed)
+        function_layout.addWidget(self.function_select)
+        self.function_row.setVisible(False)
+        content_layout.addWidget(self.function_row, 0)
+
         self.plot = TimeManagerPlot()
         self.plot.frame_selected.connect(self._select_frame)
+        self.plot.play_range_changed.connect(self._play_range_changed)
         content_layout.addWidget(self.plot, 1)
         root.addWidget(content, 1)
 
@@ -378,13 +422,31 @@ class TimeManagerPanel(QWidget):
         self._set_available(bool(compatible))
         self._update_navigation()
 
+    def _mode_key(self):
+        return "current" if self.current_frame.isChecked() else "across"
+
+    def _play_limits(self):
+        """Return playback limits in the active plot's x-coordinate system."""
+        low, high = self._play_ranges[self._mode_key()]
+        if self.current_frame.isChecked():
+            return float(low), float(high)
+        if not self._axis:
+            return 0.0, 0.0
+        first, last = float(self._axis[0]), float(self._axis[-1])
+        span = last - first
+        if span <= 1.0e-14:
+            return first, last
+        return first + low * span, first + high * span
+
     def _refresh_plot(self):
         if not self._frames:
             self.plot.set_series([], [], x_label="Frame", y_label="Value")
             return
+        play_start, play_end = self._play_limits()
         if self.current_frame.isChecked():
             phases = [index / 64.0 for index in range(65)]
-            values = [current_frame_amplitude(value) for value in phases]
+            function = self.function_select.currentText()
+            values = [current_frame_amplitude(value, function) for value in phases]
             self.plot.set_series(
                 phases,
                 values,
@@ -393,6 +455,9 @@ class TimeManagerPanel(QWidget):
                 y_label="Scale",
                 show_markers=False,
                 interactive=False,
+                play_start=play_start,
+                play_end=play_end,
+                range_editable=True,
             )
             return
         self.plot.set_series(
@@ -404,6 +469,9 @@ class TimeManagerPanel(QWidget):
             y_label="Time (s)" if self._has_time_axis else "Solver frame value",
             show_markers=True,
             interactive=True,
+            play_start=play_start,
+            play_end=play_end,
+            range_editable=True,
         )
 
     def _set_available(self, available):
@@ -420,6 +488,7 @@ class TimeManagerPanel(QWidget):
             self.step,
             self.speed_slider,
             self.speed,
+            self.function_select,
         ):
             widget.setEnabled(bool(available))
 
@@ -478,8 +547,37 @@ class TimeManagerPanel(QWidget):
             self._stop_playback(restore=True)
         self._phase = 0.0
         self._playback_options = None
+        self.function_row.setVisible(self.current_frame.isChecked())
         self._refresh_plot()
         self._update_navigation()
+
+    def _waveform_changed(self, _text=""):
+        if self._playing:
+            self._stop_playback(restore=True)
+        self._phase = self._play_ranges["current"][0]
+        self._refresh_plot()
+
+    def _play_range_changed(self, start, end):
+        """Persist plot limits as normalized fractions for stable mode/step changes."""
+        if self._playing:
+            self._stop_playback(restore=True)
+        if self.current_frame.isChecked():
+            low = min(max(float(start), 0.0), 1.0)
+            high = min(max(float(end), low), 1.0)
+            self._play_ranges["current"] = (low, high)
+            self._phase = low
+            return
+        if not self._axis:
+            return
+        first, last = float(self._axis[0]), float(self._axis[-1])
+        span = last - first
+        if span <= 1.0e-14:
+            self._play_ranges["across"] = (0.0, 1.0)
+            return
+        low = min(max((float(start) - first) / span, 0.0), 1.0)
+        high = min(max((float(end) - first) / span, low), 1.0)
+        self._play_ranges["across"] = (low, high)
+        self._play_position = float(start)
 
     def _speed_slider_changed(self, value):
         blocker = QSignalBlocker(self.speed)
@@ -496,6 +594,9 @@ class TimeManagerPanel(QWidget):
             return
         if self.across_frames.isChecked() and len(self._frames) < 2:
             return
+        start, end = self._play_limits()
+        if end <= start + 1.0e-12:
+            return
         fields = (
             [item[2] for item in self._frames]
             if self.across_frames.isChecked()
@@ -504,9 +605,13 @@ class TimeManagerPanel(QWidget):
         # Range calculation is intentionally outside the 60 Hz tick loop.
         self._playback_options = self._animation_options(fields)
         self._playing = True
-        self._phase = 0.0
-        self._play_position = self._axis[self._current_index]
-        self._playback_visible_index = self._current_index
+        if self.current_frame.isChecked():
+            self._phase = start
+        else:
+            self._play_position = start
+            left, right, alpha = frame_bracket(self._axis, start)
+            self._playback_visible_index = right if alpha >= 0.5 else left
+            self._update_current_label(self._playback_visible_index)
         self._clock.start()
         self._timer.start()
         self._refresh_plot()
@@ -521,23 +626,21 @@ class TimeManagerPanel(QWidget):
             else min(max(self._clock.restart() / 1000.0, 0.0), 0.10)
         )
         multiplier = float(self.speed.value())
+        start, end = self._play_limits()
         if self.across_frames.isChecked():
             # 1x is a practical four keyframes/second baseline. Interpolation is
             # still rendered at ~60 Hz, so the response is fast without becoming
             # a discrete frame slideshow.
             self._play_position += elapsed * multiplier * self.ACROSS_BASE_FPS
-            start = self._axis[0]
-            end = self._axis[-1]
-            if self._play_position > end + 1.0e-12:
+            finished = self._play_position > end + 1.0e-12
+            if finished:
                 if self.loop_button.isChecked():
-                    span = max(end - start, 1.0)
+                    span = max(end - start, 1.0e-12)
                     self._play_position = start + (
                         (self._play_position - start) % span
                     )
                 else:
-                    self._stop_playback(restore=False)
-                    self._select_frame(len(self._frames) - 1)
-                    return
+                    self._play_position = end
             left, right, alpha = frame_bracket(
                 self._axis,
                 self._play_position,
@@ -548,17 +651,24 @@ class TimeManagerPanel(QWidget):
                 self._update_current_label(visible)
             self.plot.set_cursor_x(self._play_position)
             self._render_interpolated(left, right, alpha)
+            if finished and not self.loop_button.isChecked():
+                self._stop_playback(restore=False)
             return
 
         self._phase += elapsed * multiplier
-        if self._phase > 1.0 + 1.0e-12:
+        finished = self._phase > end + 1.0e-12
+        if finished:
             if self.loop_button.isChecked():
-                self._phase %= 1.0
+                span = max(end - start, 1.0e-12)
+                self._phase = start + ((self._phase - start) % span)
             else:
-                self._stop_playback(restore=True)
-                return
+                self._phase = end
         self.plot.set_cursor_x(self._phase)
-        self._render_current_factor(current_frame_amplitude(self._phase))
+        self._render_current_factor(
+            current_frame_amplitude(self._phase, self.function_select.currentText())
+        )
+        if finished and not self.loop_button.isChecked():
+            self._stop_playback(restore=False)
 
     def _render_interpolated(self, left, right, alpha):
         if self.viewport is None or self._result is None:
