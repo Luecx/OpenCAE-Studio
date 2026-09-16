@@ -86,6 +86,11 @@ def run() -> int:
 
     _progress(app, startup, 68, "Preparing 3D viewport…")
     window = MainWindow(context)
+    # Some compact/overlay widgets own local QSS with explicit font sizes and do
+    # not exist during the early startup preference pass. Re-apply once after the
+    # complete widget tree has been constructed so persisted scaling also covers
+    # those local styles on first launch.
+    apply_application_preferences(app, appearance)
     window.workspace_controller = WorkspaceDockController(window)
     window._window_state = WindowStatePersistence(window)
     window._window_state.restore()
