@@ -5,16 +5,19 @@ from __future__ import annotations
 from math import isfinite
 
 from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PyQt6.QtGui import QColor, QCursor, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QToolTip, QWidget
 
 from opencae.ui.core.theme import PALETTE
 
 
 class TimeManagerPlot(QWidget):
-    """Render a compact frame/value curve without an external chart dependency."""
+    """Render a compact frame/value curve with draggable playback boundaries."""
 
     frame_selected = pyqtSignal(int)
+    play_range_changed = pyqtSignal(float, float)
+
+    HANDLE_TOLERANCE = 9.0
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -27,6 +30,10 @@ class TimeManagerPlot(QWidget):
         self._show_markers = True
         self._interactive = True
         self._screen_points = []
+        self._play_start = None
+        self._play_end = None
+        self._range_editable = True
+        self._drag_boundary = None
         self.setMouseTracking(True)
         self.setMinimumHeight(130)
         self.setObjectName("TimeManagerPlot")
@@ -42,8 +49,11 @@ class TimeManagerPlot(QWidget):
         y_label="Value",
         show_markers=True,
         interactive=True,
+        play_start=None,
+        play_end=None,
+        range_editable=True,
     ) -> None:
-        """Replace the plotted series and current-playhead state."""
+        """Replace the plotted series, playhead, and playback-boundary state."""
         pairs = [
             (float(x), float(y))
             for x, y in zip(tuple(x_values), tuple(y_values))
@@ -58,6 +68,17 @@ class TimeManagerPlot(QWidget):
         self._show_markers = bool(show_markers)
         self._interactive = bool(interactive)
         self._screen_points = []
+        self._range_editable = bool(range_editable)
+        self._drag_boundary = None
+        if self._x:
+            x_min, x_max = min(self._x), max(self._x)
+            start = x_min if play_start is None else float(play_start)
+            end = x_max if play_end is None else float(play_end)
+            self._play_start = min(max(start, x_min), x_max)
+            self._play_end = min(max(end, self._play_start), x_max)
+        else:
+            self._play_start = None
+            self._play_end = None
         self.update()
 
     def set_current_index(self, index: int) -> None:
@@ -68,6 +89,61 @@ class TimeManagerPlot(QWidget):
         self._cursor_x = None if value is None else float(value)
         self.update()
 
+    def set_play_range(self, start, end) -> None:
+        """Move both playback boundaries without replacing the plotted series."""
+        if not self._x:
+            return
+        x_min, x_max = min(self._x), max(self._x)
+        first = min(max(float(start), x_min), x_max)
+        second = min(max(float(end), first), x_max)
+        self._play_start = first
+        self._play_end = second
+        self.update()
+
+    def _plot_rect(self) -> QRectF:
+        return QRectF(self.rect()).adjusted(56.0, 8.0, -12.0, -28.0)
+
+    def _x_domain(self):
+        if not self._x:
+            return None
+        x_min, x_max = min(self._x), max(self._x)
+        if abs(x_max - x_min) <= 1.0e-14:
+            x_max = x_min + 1.0
+        return x_min, x_max
+
+    def _screen_x(self, value: float) -> float:
+        domain = self._x_domain()
+        plot = self._plot_rect()
+        if domain is None or plot.width() <= 0.0:
+            return plot.left()
+        x_min, x_max = domain
+        return plot.left() + (float(value) - x_min) / (x_max - x_min) * plot.width()
+
+    def _value_at_screen_x(self, px: float) -> float:
+        domain = self._x_domain()
+        plot = self._plot_rect()
+        if domain is None or plot.width() <= 0.0:
+            return 0.0
+        x_min, x_max = domain
+        fraction = (float(px) - plot.left()) / plot.width()
+        fraction = min(max(fraction, 0.0), 1.0)
+        return x_min + fraction * (x_max - x_min)
+
+    def _nearest_boundary(self, position):
+        if (
+            not self._range_editable
+            or self._play_start is None
+            or self._play_end is None
+        ):
+            return None
+        px = float(position.x())
+        distances = {
+            "start": abs(px - self._screen_x(self._play_start)),
+            "end": abs(px - self._screen_x(self._play_end)),
+        }
+        boundary = min(distances, key=distances.get)
+        return boundary if distances[boundary] <= self.HANDLE_TOLERANCE else None
+
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -75,7 +151,7 @@ class TimeManagerPlot(QWidget):
 
         # Use almost the complete vertical workspace. Only reserve the compact
         # tick/axis text strips that are actually needed.
-        plot = QRectF(self.rect()).adjusted(56.0, 8.0, -12.0, -28.0)
+        plot = self._plot_rect()
         if plot.width() <= 10 or plot.height() <= 10:
             return
         painter.setPen(QPen(QColor(PALETTE["border_light"]), 1.0))
@@ -87,10 +163,8 @@ class TimeManagerPlot(QWidget):
             self._screen_points = []
             return
 
-        x_min, x_max = min(self._x), max(self._x)
+        x_min, x_max = self._x_domain()
         y_min, y_max = min(self._y), max(self._y)
-        if abs(x_max - x_min) <= 1.0e-14:
-            x_max = x_min + 1.0
         if abs(y_max - y_min) <= 1.0e-14:
             y_max = y_min + max(abs(y_min), 1.0)
         if y_min >= 0.0:
@@ -162,9 +236,20 @@ class TimeManagerPlot(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)
 
+        # Playback limits are intentionally distinct from the blue playhead:
+        # dashed red lines remain visible at rest and can be dragged horizontally.
+        if self._play_start is not None and self._play_end is not None:
+            range_pen = QPen(QColor(PALETTE["danger"]), 1.5, Qt.PenStyle.DashLine)
+            painter.setPen(range_pen)
+            for value in (self._play_start, self._play_end):
+                px = self._screen_x(value)
+                painter.drawLine(QPointF(px, plot.top()), QPointF(px, plot.bottom()))
+
         if self._cursor_x is not None and x_min <= self._cursor_x <= x_max:
             px = point(self._cursor_x, y_min).x()
-            painter.setPen(QPen(QColor(PALETTE["accent_hover"]), 1.0, Qt.PenStyle.DashLine))
+            painter.setPen(
+                QPen(QColor(PALETTE["accent_hover"]), 1.0, Qt.PenStyle.DashLine)
+            )
             painter.drawLine(QPointF(px, plot.top()), QPointF(px, plot.bottom()))
 
         if self._show_markers:
@@ -172,7 +257,9 @@ class TimeManagerPlot(QWidget):
                 selected = index == self._current_index
                 radius = 6.0 if selected else 4.0
                 painter.setPen(QPen(QColor(PALETTE["text"]), 1.0))
-                painter.setBrush(QColor(PALETTE["accent"] if selected else PALETTE["panel_alt"]))
+                painter.setBrush(
+                    QColor(PALETTE["accent"] if selected else PALETTE["panel_alt"])
+                )
                 painter.drawEllipse(screen, radius, radius)
                 if selected:
                     painter.setPen(QPen(QColor(PALETTE["accent_hover"]), 2.0))
@@ -192,6 +279,12 @@ class TimeManagerPlot(QWidget):
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
+            boundary = self._nearest_boundary(event.position())
+            if boundary is not None:
+                self._drag_boundary = boundary
+                self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))
+                event.accept()
+                return
             index = self._nearest_marker(event.position())
             if index is not None:
                 self.frame_selected.emit(index)
@@ -200,8 +293,34 @@ class TimeManagerPlot(QWidget):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
+        if self._drag_boundary is not None:
+            value = self._value_at_screen_x(event.position().x())
+            if self._drag_boundary == "start":
+                value = min(value, float(self._play_end))
+                self._play_start = value
+            else:
+                value = max(value, float(self._play_start))
+                self._play_end = value
+            self.play_range_changed.emit(float(self._play_start), float(self._play_end))
+            self.update()
+            event.accept()
+            return
+
+        boundary = self._nearest_boundary(event.position())
+        self.setCursor(
+            QCursor(Qt.CursorShape.SizeHorCursor)
+            if boundary is not None
+            else QCursor(Qt.CursorShape.ArrowCursor)
+        )
         index = self._nearest_marker(event.position())
-        if index is None:
+        if boundary is not None:
+            value = self._play_start if boundary == "start" else self._play_end
+            QToolTip.showText(
+                event.globalPosition().toPoint(),
+                f"Play {boundary}: {float(value):.6g}",
+                self,
+            )
+        elif index is None:
             QToolTip.hideText()
         else:
             QToolTip.showText(
@@ -212,3 +331,11 @@ class TimeManagerPlot(QWidget):
                 self,
             )
         super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self._drag_boundary is not None:
+            self._drag_boundary = None
+            self.unsetCursor()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
