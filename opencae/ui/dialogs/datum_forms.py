@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QCheckBox
-
 from opencae.ui.core.widgets import ChevronComboBox, PickReference
+from opencae.ui.primitives.checks import CheckForm
 from opencae.ui.templates import FieldStack, NumericUnitInput, apply_primary_control_height
 
 
@@ -53,9 +52,7 @@ def choice(values):
 
 def check(text="", checked=False):
     """Return a datum checkbox with the requested initial state."""
-    control = QCheckBox(text)
-    control.setChecked(checked)
-    return control
+    return CheckForm(text, checked=checked)
 
 
 def csys_choice(systems):

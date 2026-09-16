@@ -119,7 +119,7 @@ class MainWindow(QMainWindow):
         self.actions.get(A.CREATE_ELEMENT).setEnabled(
             bool(part and part.mesh.node_count)
         )
-        self.actions.get(A.EDIT_NODE).setEnabled(len(selected_nodes) == 1)
+        self.actions.get(A.EDIT_NODE).setEnabled(bool(part and part.mesh.node_count))
         self.actions.get(A.DELETE_NODE).setEnabled(len(selected_nodes) == 1)
         self.actions.get(A.EDIT_ELEMENT).setEnabled(len(selected_elements) == 1)
         self.actions.get(A.DELETE_ELEMENT).setEnabled(len(selected_elements) == 1)
@@ -249,9 +249,6 @@ class MainWindow(QMainWindow):
         page = self.ribbon.results_page
         if page is not None:
             page.set_solution(result, field)
-            # ResultFieldButton resolves an unspecified conventional result to
-            # first step -> first frame -> first field. Mirror that exact choice
-            # in the Solution tree so opening an FRD reveals what is rendered.
             selected_field = page.choose.current_field() or field
             self.project_dock.solution_tree.select_solution(result, selected_field)
 

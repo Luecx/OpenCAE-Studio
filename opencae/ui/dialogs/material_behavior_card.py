@@ -8,12 +8,12 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from opencae.ui.core.widgets import ChevronComboBox
+from opencae.ui.primitives.buttons import ButtonMaterialBehaviorAction
 from opencae.ui.templates import apply_primary_control_height, field_block
 from .material_behavior_specs import (
     CATEGORY_ICONS,
@@ -87,8 +87,7 @@ class MaterialBehaviorCard(QFrame):
         self.status.setProperty("defined", False)
         layout.addWidget(self.status)
 
-        self.action = QToolButton()
-        self.action.setObjectName("MaterialBehaviorAction")
+        self.action = ButtonMaterialBehaviorAction(parent=header)
         self.action.clicked.connect(self._toggle_defined)
         layout.addWidget(self.action)
 

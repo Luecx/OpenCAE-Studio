@@ -462,11 +462,13 @@ class PyVistaPicker:
                         or (not is_point and mode == "auto")
                     )
                 )
+            mesh_node_pickable = (
+                self.owner.display_mode == "mesh"
+                and mode in {"auto", "point"}
+                and SelectableKind.MESH_NODE in kinds
+            )
             mesh_pickable = self.owner.display_mode == "mesh" and (
-                (
-                    mode in {"auto", "point"}
-                    and SelectableKind.MESH_NODE in kinds
-                )
+                mesh_node_pickable
                 or (
                     mode in {"auto", "element"}
                     and bool(
@@ -482,6 +484,9 @@ class PyVistaPicker:
                 scene.mesh_actor.SetPickable(mesh_pickable)
             for actor in scene.mesh_actors:
                 actor.SetPickable(mesh_pickable)
+            for actor in (scene.authored_node_actor, *scene.authored_node_actors):
+                if actor is not None:
+                    actor.SetPickable(mesh_node_pickable)
             return
 
         for actor in scene.face_actors:
@@ -501,6 +506,9 @@ class PyVistaPicker:
             scene.mesh_actor.SetPickable(False)
         for actor in scene.mesh_actors:
             actor.SetPickable(False)
+        for actor in (scene.authored_node_actor, *scene.authored_node_actors):
+            if actor is not None:
+                actor.SetPickable(False)
 
 
 def _world_to_display(renderer, point):

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLineEdit, QMessageBox
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QMessageBox
 
 from opencae.model.naming import is_unique
 from opencae.ui.core.widgets import XYZPicker
+from opencae.ui.primitives.inputs import InputFormText
 from opencae.ui.templates import (
     SectionHeading,
-    apply_primary_control_height,
     dialog_buttons,
     dialog_layout,
     field_block,
@@ -36,8 +36,7 @@ class ReferencePointDialog(QDialog):
         self.setMinimumWidth(620)
 
         root = dialog_layout(self)
-        self.name = QLineEdit(default_name)
-        apply_primary_control_height(self.name)
+        self.name = InputFormText(default_name)
         root.addWidget(field_block("Name", self.name))
 
         root.addWidget(SectionHeading("Reference Point Definition"))

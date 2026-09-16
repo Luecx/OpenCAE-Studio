@@ -3,9 +3,18 @@
 import numpy as np
 
 from opencae.results import FrdLoader
+from opencae.results.beam_physical_representation import (
+    BEAM_CENTERLINE_CELL,
+    PHYSICAL_BEAM_CELL,
+)
 from opencae.ui.core.theme import PALETTE
 from .contour_mapping import contour_plot_kwargs
-from .scalar_bar import install_scalar_bar_end_caps, scalar_bar_args
+from .scalar_bar import (
+    install_scalar_bar_end_caps,
+    scalar_bar_args,
+    update_scalar_bar_title,
+)
+from .surface_shading import supports_surface_shading
 
 _LOADER = FrdLoader()
 _SOURCE_POINT_INDEX = "_opencae_source_point_index"
@@ -22,6 +31,7 @@ def add_result(plotter, result, field=None, options=None):
     display_scalar = _render_scalar(grid, scalar, clim)
     mapping = contour_plot_kwargs(range_settings)
     show_edges = bool(options.get("mesh_lines", True))
+    shaded_result = _supports_result_shading(grid)
     actor = plotter.add_mesh(
         grid,
         scalars=display_scalar,
@@ -32,11 +42,12 @@ def add_result(plotter, result, field=None, options=None):
         above_color=mapping["above_color"],
         show_edges=False,
         edge_color=PALETTE["mesh_lines"],
-        line_width=1.0,
-        lighting=True,
-        ambient=.22,
-        diffuse=.76,
-        smooth_shading=True,
+        line_width=1.0 if shaded_result else 2.4,
+        lighting=shaded_result,
+        ambient=.22 if shaded_result else 1.0,
+        diffuse=.76 if shaded_result else 0.0,
+        smooth_shading=shaded_result,
+        render_lines_as_tubes=not shaded_result,
         scalar_bar_args=(
             scalar_bar_args(
                 scalar,
@@ -68,7 +79,7 @@ def add_result(plotter, result, field=None, options=None):
         else None
     )
     undeformed = (
-        _boundary(
+        _undeformed(
             plotter,
             original,
             "solution-undeformed",
@@ -90,12 +101,10 @@ def update_result(
     result,
     field=None,
     options=None,
+    *,
+    plotter=None,
 ):
-    """Update persistent result actors in-place for one animation frame.
-
-    Animation keeps actors, lookup tables, scalar bars and line topology alive.
-    Only the primary dataset and the points of line overlays change per tick.
-    """
+    """Update persistent result actors in-place for one animation frame."""
     if result_actor is None:
         return None
     options = options or {}
@@ -107,9 +116,13 @@ def update_result(
     mapper = _replace_actor_input(result_actor, grid)
     if mapper is None:
         return None
-    if scalar and scalar in grid.point_data:
+    association = _scalar_association(grid, scalar)
+    if scalar and association is not None:
         try:
-            mapper.SetScalarModeToUsePointFieldData()
+            if association == "cell":
+                mapper.SetScalarModeToUseCellFieldData()
+            else:
+                mapper.SetScalarModeToUsePointFieldData()
             mapper.SelectColorArray(display_scalar)
             mapper.ScalarVisibilityOn()
         except (AttributeError, RuntimeError, TypeError):
@@ -129,12 +142,14 @@ def update_result(
         except (AttributeError, RuntimeError):
             pass
 
+    if plotter is not None and scalar:
+        update_scalar_bar_title(plotter, scalar)
     if mesh_actor is not None:
         _update_line_actor(mesh_actor, grid, _mesh_edge_grid)
     if boundary_actor is not None:
         _update_line_actor(boundary_actor, grid, _boundary_grid)
-    # The undeformed reference geometry is invariant across compatible result
-    # frames. Re-extracting its boundary every 16 ms was pure animation cost.
+    # Undeformed geometry is invariant for ordinary frame animation. If the beam
+    # subset itself changes the whole scene is rebuilt rather than animated.
     del undeformed_actor, original
     return grid
 
@@ -143,10 +158,11 @@ def _result_grids(result, field, options):
     animation = dict(options.get("_animation", {}) or {})
     step_id = field.metadata.get("step_id") if field else None
     frame_id = field.metadata.get("frame_id") if field else None
-    original = animation.get("source_grid")
-    if original is None:
-        original = _LOADER.pyvista_grid(result.source_file, step_id, frame_id)
-    original = _animated_grid(original, result, field, options)
+    full = animation.get("source_grid")
+    if full is None:
+        full = _LOADER.pyvista_grid(result.source_file, step_id, frame_id)
+    full = _animated_grid(full, result, field, options)
+    original = _beam_subset(full, bool(options.get("_physical_beams", False)))
     owns_transient_copy = str(animation.get("mode", "")) in {
         "factor",
         "interpolate",
@@ -156,6 +172,37 @@ def _result_grids(result, field, options):
         options,
         copy_grid=not owns_transient_copy,
     )
+
+
+def _beam_subset(grid, physical: bool):
+    """Select line or physical beam cells from the canonical FRD superset."""
+    if PHYSICAL_BEAM_CELL not in grid.cell_data:
+        return grid
+    generated = np.asarray(grid.cell_data[PHYSICAL_BEAM_CELL], dtype=bool)
+    if len(generated) != grid.n_cells:
+        return grid
+    if physical:
+        centerline = (
+            np.asarray(grid.cell_data[BEAM_CENTERLINE_CELL], dtype=bool)
+            if BEAM_CENTERLINE_CELL in grid.cell_data
+            else np.zeros(grid.n_cells, dtype=bool)
+        )
+        keep = generated | ~centerline
+    else:
+        keep = ~generated
+    indices = np.flatnonzero(keep)
+    if len(indices) == grid.n_cells:
+        return grid
+    return grid.extract_cells(indices)
+
+
+def _supports_result_shading(grid) -> bool:
+    """Return whether a result grid has polygonal surface cells to shade."""
+    try:
+        surface = grid.extract_surface(algorithm="dataset_surface")
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        return False
+    return supports_surface_shading(surface)
 
 
 def _replace_actor_input(actor, dataset):
@@ -248,16 +295,12 @@ def _animated_grid(grid, result, field, options):
         return grid
     scalar = _scalar_name(field)
     if mode == "factor":
-        # Current-frame playback uses a full sine cycle. Negative amplitudes
-        # therefore represent the reversed response and must reach both the
-        # displayed scalar and displacement field unchanged in sign.
         factor = min(max(float(animation.get("factor", 1.0)), -1.0), 1.0)
         animated = grid.copy(deep=True)
         scaled = set()
-        if scalar and scalar in animated.point_data:
-            animated.point_data[scalar] = np.asarray(
-                animated.point_data[scalar], dtype=float
-            ) * factor
+        store = _scalar_store(animated, scalar)
+        if scalar and store is not None:
+            store[scalar] = np.asarray(store[scalar], dtype=float) * factor
             scaled.add(scalar)
         keys = _displacement_keys(animated)
         if keys is not None:
@@ -285,15 +328,19 @@ def _animated_grid(grid, result, field, options):
     alpha = min(max(float(animation.get("alpha", 0.0)), 0.0), 1.0)
     animated = grid.copy(deep=True)
     next_scalar = _scalar_name(next_field)
+    current_store = _scalar_store(animated, scalar)
+    next_store = _scalar_store(next_grid, next_scalar)
     if (
         scalar
         and next_scalar
-        and scalar in animated.point_data
-        and next_scalar in next_grid.point_data
+        and current_store is not None
+        and next_store is not None
+        and scalar in current_store
+        and next_scalar in next_store
     ):
-        animated.point_data[scalar] = interpolate_values(
-            animated.point_data[scalar],
-            next_grid.point_data[next_scalar],
+        current_store[scalar] = interpolate_values(
+            current_store[scalar],
+            next_store[next_scalar],
             alpha,
         )
 
@@ -346,15 +393,38 @@ def _mesh_edge_grid(grid):
         )
 
 
-def _mesh_edges(plotter, grid, name):
+def _line_overlay(plotter, dataset, name, color, width, opacity=1.0):
     return plotter.add_mesh(
-        _mesh_edge_grid(grid),
-        color=PALETTE["mesh_lines"],
-        line_width=1.0,
+        dataset,
+        color=color,
+        opacity=opacity,
+        line_width=width,
         lighting=False,
         name=name,
         pickable=False,
         render=False,
+    )
+
+
+def _mesh_edges(plotter, grid, name):
+    return _line_overlay(
+        plotter,
+        _mesh_edge_grid(grid),
+        name,
+        PALETTE["mesh_lines"],
+        1.0,
+    )
+
+
+def _undeformed(plotter, grid, name, color, width, opacity):
+    """Show the undeformed topology even when the result consists only of lines."""
+    return _line_overlay(
+        plotter,
+        _mesh_edge_grid(grid),
+        name,
+        color,
+        width,
+        opacity,
     )
 
 
@@ -378,34 +448,51 @@ def _boundary(
     width=1.6,
     opacity=1.0,
 ):
-    return plotter.add_mesh(
+    return _line_overlay(
+        plotter,
         _boundary_grid(grid),
-        color=color,
-        opacity=opacity,
-        line_width=width,
-        lighting=False,
-        name=name,
-        pickable=False,
-        render=False,
+        name,
+        color,
+        width,
+        opacity,
     )
 
 
 def _scalar_name(field):
-    return (
-        f"{field.metadata.get('block', field.name)}:"
-        f"{field.metadata.get('component', 'Magnitude')}"
-        if field
-        else None
+    if field is None:
+        return None
+    component = field.metadata.get(
+        "component",
+        field.metadata.get("default_component", "Magnitude"),
     )
+    return f"{field.metadata.get('block', field.name)}:{component}"
+
+
+def _scalar_association(grid, scalar):
+    if not scalar:
+        return None
+    if scalar in grid.point_data:
+        return "point"
+    if scalar in grid.cell_data:
+        return "cell"
+    return None
+
+
+def _scalar_store(grid, scalar):
+    association = _scalar_association(grid, scalar)
+    if association == "point":
+        return grid.point_data
+    if association == "cell":
+        return grid.cell_data
+    return None
 
 
 def _clim(grid, scalar, settings):
-    if not scalar or scalar not in grid.point_data:
+    store = _scalar_store(grid, scalar)
+    if store is None:
         return None
     minimum_auto = settings.get("minimum_auto", settings.get("auto", True))
     maximum_auto = settings.get("maximum_auto", settings.get("auto", True))
-    # Time Manager freezes automatic limits before playback. In that common
-    # path there is no reason to scan every scalar array on every render tick.
     if (
         not minimum_auto
         and not maximum_auto
@@ -415,7 +502,7 @@ def _clim(grid, scalar, settings):
         minimum = float(settings["minimum"])
         maximum = float(settings["maximum"])
     else:
-        values = np.asarray(grid.point_data[scalar])
+        values = np.asarray(store[scalar])
         finite = values[np.isfinite(values)]
         if not len(finite):
             return None
@@ -434,19 +521,15 @@ def _clim(grid, scalar, settings):
         minimum, maximum = maximum, minimum
     if minimum == maximum:
         maximum = minimum + max(abs(minimum), 1.0) * 1e-12
-    return minimum, maximum
+    span = maximum - minimum
+    padding = 1.0e-6 * span
+    return minimum - padding, maximum + padding
 
 
 def _render_scalar(grid, scalar, clim):
-    """Nudge values at a display bound just inside the range for robust coloring.
-
-    VTK treats values outside ``clim`` with the dedicated below/above colors.
-    Floating-point roundoff can therefore make a value that is physically equal
-    to a configured bound (notably zero) appear as an outside-range value. Keep
-    the original result array untouched for queries and derive one internal
-    render-only scalar array with a tiny tolerance around both bounds.
-    """
-    if not scalar or scalar not in grid.point_data or clim is None:
+    """Create a render-only scalar nudged just inside exact display bounds."""
+    store = _scalar_store(grid, scalar)
+    if store is None or clim is None:
         return scalar
     minimum, maximum = (float(value) for value in clim)
     span = maximum - minimum
@@ -459,13 +542,13 @@ def _render_scalar(grid, scalar, clim):
     if not np.isfinite(epsilon) or epsilon <= 0.0:
         return scalar
 
-    displayed = np.asarray(grid.point_data[scalar], dtype=float).copy()
+    displayed = np.asarray(store[scalar], dtype=float).copy()
     finite = np.isfinite(displayed)
     lower = finite & (displayed >= minimum - epsilon) & (displayed <= minimum + epsilon)
     upper = finite & (displayed >= maximum - epsilon) & (displayed <= maximum + epsilon)
     displayed[lower] = minimum + epsilon
     displayed[upper] = maximum - epsilon
-    grid.point_data[_DISPLAY_SCALAR] = displayed
+    store[_DISPLAY_SCALAR] = displayed
     return _DISPLAY_SCALAR
 
 

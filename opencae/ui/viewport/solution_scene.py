@@ -42,6 +42,7 @@ def show_result(scene, result, field=None, options=None):
                 result,
                 field,
                 options,
+                plotter=scene.owner.plotter,
             )
         except Exception as exc:
             scene.owner.message.emit(f"Could not update animation frame: {exc}")

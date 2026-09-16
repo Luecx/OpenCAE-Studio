@@ -1,10 +1,12 @@
-"""Provide selection, display, projection, and fit controls above the 3D viewport."""
+"""Provide selection, display, projection, beam, and fit controls above the viewport."""
 
 from __future__ import annotations
 
 from PyQt6.QtCore import QSignalBlocker, Qt, pyqtSignal
 from PyQt6.QtWidgets import QButtonGroup, QHBoxLayout, QWidget
 
+from opencae.ui.primitives.buttons import ButtonViewportToggle
+from opencae.ui.primitives.separators import SeparatorVertical
 from opencae.ui.templates import ViewportToolButton
 
 
@@ -15,16 +17,14 @@ class SelectionToolbar(QWidget):
     fit_requested = pyqtSignal()
     display_changed = pyqtSignal(str)
     projection_changed = pyqtSignal(bool)
+    beam_physical_changed = pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("ViewportToolbar")
-        # A stylesheet background on a plain QWidget can otherwise remain
-        # effectively transparent on some Windows style/native-child paths.
-        # Force this canonical toolbar surface to be painted by Qt on every
-        # platform. Both the main viewport and Sketcher use this same widget.
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._parallel_projection = False
+        self._results_mode = False
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 5, 8, 5)
@@ -52,7 +52,9 @@ class SelectionToolbar(QWidget):
                 lambda _checked=False, value=mode: self.mode_changed.emit(value)
             )
 
-        layout.addSpacing(8)
+        self.selection_display_separator = SeparatorVertical(self)
+        layout.addWidget(self.selection_display_separator)
+
         self.display_buttons = {}
         self.display_group = QButtonGroup(self)
         self.display_group.setExclusive(True)
@@ -67,10 +69,20 @@ class SelectionToolbar(QWidget):
         self.display_buttons["geometry"].setChecked(True)
 
         layout.addStretch(1)
+        self.beam_physical_button = ButtonViewportToggle(
+            "Beams",
+            tooltip="Render beam profiles as physical solids",
+            parent=self,
+        )
+        self.beam_physical_button.setEnabled(False)
+        self.beam_physical_button.toggled.connect(self.beam_physical_changed)
+        layout.addWidget(self.beam_physical_button)
+
+        self.beam_view_separator = SeparatorVertical(self)
+        layout.addWidget(self.beam_view_separator)
+
         self.projection_button = self._button("Perspective")
         self.projection_button.setToolTip("Toggle perspective / parallel projection")
-        # The label changes, not the control geometry.  This avoids the stale
-        # checked-border footprint that previously looked like a blue shadow.
         metrics = self.projection_button.fontMetrics()
         width = max(
             metrics.horizontalAdvance("Perspective"),
@@ -88,11 +100,25 @@ class SelectionToolbar(QWidget):
         self.set_selection_enabled(False)
 
     def set_results_mode(self, enabled):
-        """Hide topology/display controls that do not apply to stored result views."""
+        """Hide model-edit controls while keeping shared view controls available."""
+        self._results_mode = bool(enabled)
         for button in self.mode_buttons.values():
             button.setVisible(not enabled)
         for button in self.display_buttons.values():
             button.setVisible(not enabled)
+        self.selection_display_separator.setVisible(not enabled)
+        self.beam_physical_button.setVisible(True)
+        self.beam_view_separator.setVisible(True)
+
+    def set_beam_available(self, available: bool) -> None:
+        """Enable the physical-beam toggle whenever the active context supports it."""
+        self.beam_physical_button.setEnabled(bool(available))
+
+    def set_beam_physical(self, enabled: bool) -> None:
+        """Synchronize the Beam toggle without re-emitting its request."""
+        blocker = QSignalBlocker(self.beam_physical_button)
+        self.beam_physical_button.setChecked(bool(enabled))
+        del blocker
 
     def set_selection_enabled(self, enabled: bool, allowed_modes=None):
         """Enable only the mode buttons owned by the active pick session."""
@@ -146,5 +172,5 @@ class SelectionToolbar(QWidget):
         self.projection_changed.emit(requested)
 
     def _button(self, text, checkable=False):
-        """Create every viewport control through the canonical button primitive."""
+        """Create every legacy viewport control through the canonical facade."""
         return ViewportToolButton(text, checkable=checkable, parent=self)

@@ -88,12 +88,8 @@ def run_analysis(manager, analysis_id: str) -> None:
     )
     job = manager.store.project.resolve(job.id)
     manager.select_job(job.id)
-    # Seed the FEMaster streaming parser before any preparation/output events so
-    # the monitor can associate solver procedure headers with OpenCAE step names.
     manager._prepare_analysis_runtime(job.id)
 
-    # Both the model and formatter are snapshotted. Changing a custom profile
-    # while the solver is running must not alter the submitted calculation.
     runner = AnalysisJobRunner(
         deepcopy(manager.store.project),
         analysis.id,
@@ -137,14 +133,12 @@ def run_analysis(manager, analysis_id: str) -> None:
         )
     )
     manager._start_job(job.id, "Starting Analysis")
-    # A solve should immediately provide visible feedback instead of requiring a
-    # second manual "Monitor" action while the process is already running.
     manager.open_selected_monitor()
     runner.start()
 
 
 def finish_analysis(manager, job_id, adapter, output_base, code) -> None:
-    """Finalize an Analysis Job and attach solver results when available."""
+    """Finalize an Analysis Job and attach only a self-contained FRD result."""
     manager._runners.pop(job_id, None)
     job = manager.store.project.try_resolve(job_id)
     if not isinstance(job, Job):
@@ -171,11 +165,11 @@ def finish_analysis(manager, job_id, adapter, output_base, code) -> None:
         (
             path
             for path in adapter.result_candidates(Path(output_base))
-            if path.exists()
+            if path.exists() and path.suffix.lower() == ".frd"
         ),
         None,
     )
-    if completed and source and source.suffix.lower() == ".frd":
+    if completed and source is not None:
         _attach_solver_result(manager, job.id, source)
 
     manager.progress_changed.emit(
@@ -195,8 +189,6 @@ def _attach_solver_result(manager, job_id: str, source: Path) -> None:
 
     previous = tasks.pop(str(job_id), None)
     if previous is not None and previous.isRunning():
-        # A Job has one terminal result scan. This is defensive against duplicate
-        # process-finished delivery without ever blocking to wait for the old one.
         manager._append_output(
             job_id,
             "Skipped duplicate result metadata scan while one is already running\n",

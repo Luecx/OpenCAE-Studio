@@ -14,7 +14,7 @@ from .pyvista_geometry import (
     forget_actor_colors,
     surface_is_hidden,
 )
-from .pyvista_mesh import add_mesh
+from .pyvista_mesh import add_authored_nodes, add_mesh
 from .reference_point_overlay import ReferencePointOverlay
 from .region_overlay import RegionOverlay
 from .scene_camera import camera_position, restore_camera
@@ -44,6 +44,10 @@ class PyVistaScene(SceneDisplayMixin):
         self.mesh_actors = []
         self.mesh_grids = {}
         self.assembly_mesh_snapshots = {}
+        self.authored_node_actor = None
+        self.authored_node_grid = None
+        self.authored_node_actors = []
+        self.authored_node_grids = {}
         self.seed_overlay = SeedOverlay()
         self.coordinate_overlay = CoordinateSystemOverlay()
         self.orientation_overlay = OrientationOverlay()
@@ -107,7 +111,10 @@ class PyVistaScene(SceneDisplayMixin):
         self.mesh_actors.clear()
         self.mesh_grids.clear()
         self.assembly_mesh_snapshots.clear()
+        self.authored_node_actors.clear()
+        self.authored_node_grids.clear()
         self.mesh_actor = self.mesh_grid = self.mesh_snapshot = self.snapshot = None
+        self.authored_node_actor = self.authored_node_grid = None
         self.field_actor = None
         self.result_actor = None
         self.result_grid = None
@@ -140,6 +147,7 @@ class PyVistaScene(SceneDisplayMixin):
                 )
             )
             self._show_meshability_legend()
+        self._show_part_authored_nodes(part)
         self.coordinate_overlay.show_part(self.owner.plotter, part, self)
         self.orientation_overlay.show_part(
             self.owner.plotter,
@@ -184,6 +192,7 @@ class PyVistaScene(SceneDisplayMixin):
                         color_by_meshability=False,
                     )
                 )
+            self._show_instance_authored_nodes(part, instance)
         self.coordinate_overlay.show_assembly(
             self.owner.plotter,
             project,
@@ -253,6 +262,19 @@ class PyVistaScene(SceneDisplayMixin):
             self.mesh_actors.append(actor)
             self.mesh_grids[instance.id] = grid
             self.assembly_mesh_snapshots[instance.id] = snapshot
+
+    def _show_part_authored_nodes(self, part):
+        self.authored_node_actor, self.authored_node_grid = add_authored_nodes(
+            self.owner.plotter,
+            part,
+        )
+
+    def _show_instance_authored_nodes(self, part, instance):
+        actor, grid = add_authored_nodes(self.owner.plotter, part, instance)
+        if actor is None or grid is None:
+            return
+        self.authored_node_actors.append(actor)
+        self.authored_node_grids[instance.id] = grid
 
     def _merge_actors(self, actors):
         faces, edges, vertices = actors

@@ -91,7 +91,14 @@ def write_project(project, writer, context):
                 if orientation
                 else None
             )
-            write_section(section, target, orientation_name, writer, context)
+            write_section(
+                section,
+                target,
+                orientation_name,
+                writer,
+                context,
+                instance=instance,
+            )
     for constraint in project.assembly.constraints:
         write_constraint(constraint, writer, context)
     for amplitude in project.amplitudes:

@@ -27,4 +27,4 @@ def test_sketch_workspace_splitter_matches_main_window_separator_width():
 
     assert "_MAIN_SEPARATOR_WIDTH = 3" in sketch
     assert "splitter.setHandleWidth(_MAIN_SEPARATOR_WIDTH)" in sketch
-    assert "QMainWindow::separator { width: 3px;" in misc
+    assert "QMainWindow::separator {{ width: 3px;" in misc

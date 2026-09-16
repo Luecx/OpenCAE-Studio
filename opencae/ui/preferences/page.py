@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PyQt6.QtWidgets import QCheckBox, QLabel, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from opencae.ui.core.fields import FieldSpec, create_editor, editor_value
+from opencae.ui.primitives.checks import CheckForm
 from opencae.ui.templates import FieldLabel, SectionHeading, field_block
 
 
@@ -73,8 +74,10 @@ class PreferencePage(QWidget):
 
     def add_toggle(self, settings, key: str, text: str, *, default: bool):
         """Create a compact checkbox whose text explains the enabled behavior."""
-        toggle = QCheckBox(str(text))
-        toggle.setChecked(bool(_setting(settings, key, default)))
+        toggle = CheckForm(
+            str(text),
+            checked=bool(_setting(settings, key, default)),
+        )
         self.root.addWidget(toggle)
         self._readers[str(key)] = toggle.isChecked
         return toggle
