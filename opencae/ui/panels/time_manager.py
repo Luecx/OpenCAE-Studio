@@ -524,15 +524,23 @@ class TimeManagerPanel(QWidget):
             return
         target = min(max(int(index), 0), len(self._frames) - 1)
         self._stop_playback(restore=False)
+
+        # Keep the Time Manager's own selection authoritative immediately. The
+        # Results frame combo normally emits a fresh display state synchronously,
+        # but updating these fields first also covers an already-selected combo or
+        # a detached/test Results surface without leaving stale navigation state.
+        self._current_index = target
+        self._field = self._frames[target][2]
+        self._update_current_label(target)
+
         combo_index = self._frames[target][3]
         choose = getattr(self.results_page, "choose", None)
         if choose is not None and combo_index >= 0:
-            choose.frame.setCurrentIndex(combo_index)
-        else:
-            self._current_index = target
-            self._update_current_label(target)
-            self._refresh_plot()
-            self._restore_exact()
+            if choose.frame.currentIndex() != combo_index:
+                choose.frame.setCurrentIndex(combo_index)
+                return
+        self._refresh_plot()
+        self._restore_exact()
 
     def _step_selected(self, index):
         if self.results_page is None or index < 0:
@@ -652,7 +660,10 @@ class TimeManagerPanel(QWidget):
             self.plot.set_cursor_x(self._play_position)
             self._render_interpolated(left, right, alpha)
             if finished and not self.loop_button.isChecked():
-                self._stop_playback(restore=False)
+                # Commit the nearest endpoint frame through the same selection
+                # path used by manual navigation so Results, _field and button
+                # navigation all agree on the frame shown after playback stops.
+                self._select_frame(visible)
             return
 
         self._phase += elapsed * multiplier
