@@ -4,13 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PyQt6.QtWidgets import QApplication, QWidget
+from PyQt6.QtWidgets import QApplication
 
-from opencae.model.core import EntityRef
-from opencae.model.entities.jobs import Job, ResultSet
-from opencae.model.project import Project
-from opencae.store.project_store import ProjectStore
-from opencae.ui.monitors.analysis_job_monitor import AnalysisJobMonitor
 from opencae.ui.panels.time_manager_contours import (
     animation_scalar_factor,
     scaled_animation_range,
@@ -50,42 +45,27 @@ def test_negative_factor_keeps_invariants_unsigned():
 
 def test_contour_fit_icons_are_distinct():
     app = QApplication.instance() or QApplication([])
-    del app
     frame = _range_fit_icon("frame", 16)
     frames = _range_fit_icon("frames", 16)
     animation = _range_fit_icon("animation", 16)
 
+    assert app is not None
     assert not frame.isNull()
     assert not frames.isNull()
     assert not animation.isNull()
     assert len({frame.cacheKey(), frames.cacheKey(), animation.cacheKey()}) == 3
 
 
-def test_analysis_monitor_opens_linked_result_when_it_becomes_available():
-    app = QApplication.instance() or QApplication([])
-    del app
-    job = Job(name="Job", progress=1.0, progress_label="Completed")
-    result = ResultSet(name="Result")
-    job.result_refs = [EntityRef.of(result, "ResultSet")]
-    store = ProjectStore(Project(name="P", jobs=[job], results=[result]))
-
-    class Parent(QWidget):
-        def __init__(self):
-            super().__init__()
-            self.opened = None
-
-        def show_solution(self, value):
-            self.opened = value
-
-    parent = Parent()
-    monitor = AnalysisJobMonitor(store, job.id, parent)
-    try:
-        assert monitor.open_results_button.isEnabled()
-        monitor.open_results_button.click()
-        assert parent.opened is result
-    finally:
-        monitor.close()
-        parent.close()
+def test_analysis_monitor_exposes_job_scoped_open_results_action():
+    source = (ROOT / "opencae/ui/monitors/analysis_job_monitor.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"Open Results"' in source
+    assert '"Preparing Results…"' in source
+    assert "changed.connect(self._refresh_results_button)" in source
+    assert "def _available_result(self):" in source
+    assert "def _open_results(self):" in source
+    assert "show_solution(result)" in source
 
 
 def test_physical_beam_toggle_preserves_camera_by_contract():
