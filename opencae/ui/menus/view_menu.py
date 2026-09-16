@@ -2,6 +2,7 @@ from PyQt6.QtGui import QActionGroup
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from opencae.ui.actions.ids import A
+from opencae.ui.core.application_preferences import apply_application_preferences
 from opencae.ui.core.theme import (
     DEFAULT_COLOR_SCHEME,
     PALETTE,
@@ -67,6 +68,10 @@ def _select_color_scheme(window, actions, scheme: str) -> None:
     settings = getattr(getattr(window, "context", None), "settings", None)
     if settings is not None:
         settings.set_value("appearance/color_scheme", selected)
+        # apply_color_scheme() installs a fresh unscaled theme stylesheet. Re-run
+        # the application preference layer so the currently selected font scale
+        # remains authoritative after a live color-scheme switch.
+        apply_application_preferences(app, settings)
 
     refresh_icons = getattr(actions, "refresh_icons", None)
     if callable(refresh_icons):
