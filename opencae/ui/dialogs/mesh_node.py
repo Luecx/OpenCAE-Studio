@@ -126,11 +126,7 @@ class MeshNodeDialog(QDialog):
         root.addWidget(buttons)
 
     def values(self) -> dict:
-        node_id = (
-            self._target_node_id
-            if self.editing
-            else self.node_id.value()
-        )
+        node_id = self._target_node_id if self.editing else self.node_id.value()
         return {
             "node_id": node_id,
             "coordinates": self.coordinates.value(),
