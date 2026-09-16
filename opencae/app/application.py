@@ -56,6 +56,11 @@ def run() -> int:
     apply_application_preferences(app, appearance)
 
     startup = StartupWindow()
+    # StartupWindow owns local QSS with explicit font sizes. Apply once more now
+    # that the widget exists, before it becomes visible, so persisted scaling is
+    # reflected throughout the synchronous startup sequence rather than only at
+    # the end when the main window has already been constructed.
+    apply_application_preferences(app, appearance)
     startup.show()
     _progress(app, startup, 8, "Starting application…")
 
