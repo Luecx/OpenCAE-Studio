@@ -18,6 +18,7 @@ class TimeManagerPlot(QWidget):
     play_range_changed = pyqtSignal(float, float)
 
     HANDLE_TOLERANCE = 9.0
+    MIN_RANGE_PIXELS = 3.0
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -74,8 +75,7 @@ class TimeManagerPlot(QWidget):
             x_min, x_max = min(self._x), max(self._x)
             start = x_min if play_start is None else float(play_start)
             end = x_max if play_end is None else float(play_end)
-            self._play_start = min(max(start, x_min), x_max)
-            self._play_end = min(max(end, self._play_start), x_max)
+            self._play_start, self._play_end = self._bounded_play_range(start, end)
         else:
             self._play_start = None
             self._play_end = None
@@ -93,11 +93,7 @@ class TimeManagerPlot(QWidget):
         """Move both playback boundaries without replacing the plotted series."""
         if not self._x:
             return
-        x_min, x_max = min(self._x), max(self._x)
-        first = min(max(float(start), x_min), x_max)
-        second = min(max(float(end), first), x_max)
-        self._play_start = first
-        self._play_end = second
+        self._play_start, self._play_end = self._bounded_play_range(start, end)
         self.update()
 
     def _plot_rect(self) -> QRectF:
@@ -110,6 +106,37 @@ class TimeManagerPlot(QWidget):
         if abs(x_max - x_min) <= 1.0e-14:
             x_max = x_min + 1.0
         return x_min, x_max
+
+    def _minimum_range_span(self) -> float:
+        """Keep handles visibly separate so either boundary can always be grabbed."""
+        domain = self._x_domain()
+        if domain is None:
+            return 0.0
+        x_min, x_max = domain
+        span = max(x_max - x_min, 0.0)
+        if span <= 1.0e-14:
+            return 0.0
+        width = max(float(self._plot_rect().width()), 1.0)
+        return min(
+            span,
+            max(span * 1.0e-6, span * self.MIN_RANGE_PIXELS / width),
+        )
+
+    def _bounded_play_range(self, start, end):
+        """Clamp a range to the plot domain while preventing coincident handles."""
+        domain = self._x_domain()
+        if domain is None:
+            return None, None
+        x_min, x_max = domain
+        first = min(max(float(start), x_min), x_max)
+        second = min(max(float(end), first), x_max)
+        minimum = self._minimum_range_span()
+        if second - first < minimum:
+            if first + minimum <= x_max:
+                second = first + minimum
+            else:
+                first = max(x_min, second - minimum)
+        return first, second
 
     def _screen_x(self, value: float) -> float:
         domain = self._x_domain()
@@ -295,12 +322,14 @@ class TimeManagerPlot(QWidget):
     def mouseMoveEvent(self, event) -> None:
         if self._drag_boundary is not None:
             value = self._value_at_screen_x(event.position().x())
+            minimum = self._minimum_range_span()
+            domain = self._x_domain()
             if self._drag_boundary == "start":
-                value = min(value, float(self._play_end))
-                self._play_start = value
+                value = min(value, float(self._play_end) - minimum)
+                self._play_start = max(float(domain[0]), value)
             else:
-                value = max(value, float(self._play_start))
-                self._play_end = value
+                value = max(value, float(self._play_start) + minimum)
+                self._play_end = min(float(domain[1]), value)
             self.play_range_changed.emit(float(self._play_start), float(self._play_end))
             self.update()
             event.accept()
