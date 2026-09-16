@@ -106,3 +106,8 @@ def _select_color_scheme(window, actions, scheme: str) -> None:
             style.unpolish(widget)
             style.polish(widget)
             widget.update()
+
+    # refresh_theme() may have recreated local font-size declarations above.
+    # Scale those freshly rebuilt local styles after the theme refresh as well.
+    if settings is not None:
+        apply_application_preferences(app, settings)
