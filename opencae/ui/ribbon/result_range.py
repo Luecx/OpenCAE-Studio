@@ -104,7 +104,9 @@ class ResultRangeButton(ButtonResultsRibbonOptions):
             object_name="ResultAnimationEnvelopeButton",
             parent=panel,
         )
-        self.animation_envelope.clicked.connect(self.animation_envelope_requested.emit)
+        self.animation_envelope.clicked.connect(
+            lambda _checked=False: self.animation_envelope_requested.emit()
+        )
         layout.addWidget(self.animation_envelope)
 
         layout.addWidget(SeparatorResultsRange(panel))
