@@ -16,6 +16,7 @@ from opencae.results.beam_physical_representation import (
 )
 from opencae.results.frd_beam_metadata import beam_occurrences_from_frd
 from .pyvista_mesh import add_physical_mesh, build_grid
+from .scene_camera import camera_position, restore_camera
 
 
 class BeamPhysicalDisplayController:
@@ -77,11 +78,18 @@ class BeamPhysicalDisplayController:
         self.sync_availability()
 
     def set_enabled(self, enabled: bool) -> None:
-        requested = bool(enabled)
-        if self.viewport.stage == "RESULTS":
-            self._set_result_enabled(requested)
-        else:
-            self._set_editor_enabled(requested)
+        """Change only the beam representation; never change the user's camera."""
+        camera = camera_position(self.viewport.plotter)
+        try:
+            requested = bool(enabled)
+            if self.viewport.stage == "RESULTS":
+                self._set_result_enabled(requested)
+            else:
+                self._set_editor_enabled(requested)
+        finally:
+            if camera is not None:
+                restore_camera(self.viewport.plotter, camera)
+            self.viewport.plotter.render()
 
     def prepare_options(self, result, field, options=None) -> dict:
         """Attach only the desired result subset; the loader owns beam expansion."""
