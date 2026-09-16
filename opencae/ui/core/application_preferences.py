@@ -27,6 +27,22 @@ def _scaled_stylesheet(stylesheet: str, scale: int) -> str:
     return _FONT_SIZE_RE.sub(replace, str(stylesheet))
 
 
+def _apply_widget_stylesheet_scale(application, scale: int) -> None:
+    """Scale local widget QSS declarations from stable, unscaled baselines."""
+    for widget in tuple(application.allWidgets()):
+        current = str(widget.styleSheet() or "")
+        if not current and not hasattr(widget, "_opencae_base_stylesheet"):
+            continue
+        last_scaled = getattr(widget, "_opencae_scaled_stylesheet", None)
+        if current != last_scaled:
+            widget._opencae_base_stylesheet = current
+        base = str(getattr(widget, "_opencae_base_stylesheet", current) or "")
+        scaled = _scaled_stylesheet(base, scale)
+        widget._opencae_scaled_stylesheet = scaled
+        if current != scaled:
+            widget.setStyleSheet(scaled)
+
+
 def apply_application_preferences(application, settings) -> None:
     """Apply font scaling from stable unscaled font and stylesheet baselines."""
     base = getattr(application, "_opencae_base_font", None)
@@ -59,3 +75,8 @@ def apply_application_preferences(application, settings) -> None:
     application._opencae_scaled_stylesheet = scaled_stylesheet
     if current_stylesheet != scaled_stylesheet:
         application.setStyleSheet(scaled_stylesheet)
+
+    # Local widget styles (viewport overlays, ribbon labels, compact headings,
+    # etc.) can also contain explicit point/pixel sizes. Scale those from their
+    # own stable baselines so the preference is genuinely application-wide.
+    _apply_widget_stylesheet_scale(application, scale)
