@@ -1,9 +1,8 @@
 """Regression coverage for referentially safe ResultSet deletion."""
 
-from opencae.model.core.reference_binding import EntityRef
-from opencae.model.entities import JobRun
+from opencae.model.core import EntityRef
+from opencae.model.entities.jobs import Job, ResultSet
 from opencae.model.project import Project
-from opencae.results import ResultSet
 from opencae.store.multi_project_store import MultiProjectStore
 
 
@@ -13,7 +12,7 @@ def _result_ids(job):
 
 def test_delete_result_unlinks_jobs_atomically_and_undo_restores_links():
     project = Project(name="Result deletion")
-    job = JobRun(name="Solver job")
+    job = Job(name="Solver job")
     deleted = ResultSet(name="Deleted result")
     retained = ResultSet(name="Retained result")
     project.jobs.append(job)
