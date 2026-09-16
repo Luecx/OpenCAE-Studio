@@ -38,18 +38,20 @@ def fit_camera(
     reset_orientation: bool = False,
     render: bool = True,
 ) -> bool:
-    """Frame visible content robustly, including degenerate 1D/2D datasets.
+    """Frame and center visible content, including degenerate 1D/2D datasets.
 
-    Normal Fit View preserves the user's viewing direction.  A geometry-aware
+    Normal Fit View preserves the user's viewing direction. A geometry-aware
     fallback only changes orientation when a line is viewed almost end-on or a
-    planar dataset almost edge-on.  Initial-load callers may request a fresh
-    orientation explicitly.
+    planar dataset almost edge-on. Initial-load callers may request a fresh
+    orientation explicitly. The camera focal point is always reset to the center
+    of the fitted bounds so subsequent orbiting uses the visible model center.
     """
     raw_points = _finite_points(points)
     bounds = _fit_bounds(plotter, raw_points)
     if bounds is None:
         return False
 
+    center = _bounds_center(bounds)
     frame = _principal_frame(raw_points)
     direction = None
     viewup = None
@@ -70,6 +72,7 @@ def fit_camera(
             )
         else:
             plotter.reset_camera(render=False, bounds=bounds)
+        _set_focal_point(plotter, center)
         plotter.reset_camera_clipping_range()
         if render:
             plotter.render()
@@ -79,6 +82,26 @@ def fit_camera(
     except Exception:
         LOGGER.exception("Unexpected failure while fitting viewport camera")
         return False
+
+
+def _bounds_center(bounds):
+    values = np.asarray(bounds, dtype=float)
+    return tuple(float(value) for value in 0.5 * (values[::2] + values[1::2]))
+
+
+def _set_focal_point(plotter, center) -> None:
+    """Set the camera/orbit pivot explicitly instead of relying on reset semantics."""
+    camera = plotter.camera
+    try:
+        camera.focal_point = tuple(float(value) for value in center)
+        return
+    except (AttributeError, RuntimeError, TypeError, ValueError):
+        pass
+    setter = getattr(camera, "SetFocalPoint", None)
+    if callable(setter):
+        setter(*tuple(float(value) for value in center))
+        return
+    raise AttributeError("Viewport camera does not expose a focal point setter")
 
 
 def _finite_points(points):
@@ -126,7 +149,7 @@ def _fit_bounds(plotter, points=None):
     largest = float(np.max(spans))
     center = 0.5 * (minimum + maximum)
     if largest <= 1.0e-14:
-        # Point-only content still needs a finite camera volume.  Keep this
+        # Point-only content still needs a finite camera volume. Keep this
         # local rather than scaling with the absolute world-coordinate offset.
         padding = 0.5
         minimum = center - padding
