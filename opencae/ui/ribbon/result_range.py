@@ -1,11 +1,12 @@
 """Provides the result contour-range ribbon control and its compact editor flyout."""
 
-from PyQt6.QtCore import QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PyQt6.QtWidgets import QColorDialog, QHBoxLayout, QVBoxLayout, QWidget
 
 from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.theme import PALETTE
+from opencae.ui.primitives.buttons import ButtonFormAction
 from opencae.ui.primitives.buttons.button_color_swatch import ButtonColorSwatch
 from opencae.ui.primitives.buttons.button_results_range_auto import ButtonResultsRangeAuto
 from opencae.ui.primitives.buttons.button_results_range_symmetry import (
@@ -35,6 +36,7 @@ class ResultRangeButton(ButtonResultsRibbonOptions):
 
     range_changed = pyqtSignal(object)
     auto_bound_requested = pyqtSignal(str, str)
+    animation_envelope_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(
@@ -92,6 +94,20 @@ class ResultRangeButton(ButtonResultsRibbonOptions):
                 ),
             )
         )
+        self.animation_envelope = ButtonFormAction(
+            "Fit animation envelope",
+            icon=_range_fit_icon("animation", 18),
+            tooltip=(
+                "Fit both contour bounds to the values produced by the active "
+                "Time Manager animation and its playback limits"
+            ),
+            object_name="ResultAnimationEnvelopeButton",
+            parent=panel,
+        )
+        self.animation_envelope.clicked.connect(
+            lambda _checked=False: self.animation_envelope_requested.emit()
+        )
+        layout.addWidget(self.animation_envelope)
 
         layout.addWidget(SeparatorResultsRange(panel))
         layout.addWidget(LabelSection("Color Mapping"))
@@ -180,14 +196,11 @@ class ResultRangeButton(ButtonResultsRibbonOptions):
     @staticmethod
     def _auto_button(scope):
         return ButtonResultsRangeAuto(
-            make_icon(
-                IconKind.RESULT_FRAME if scope == "frame" else IconKind.RANGE,
-                16,
-            ),
+            _range_fit_icon(scope, 16),
             tooltip=(
-                "Use value from current frame"
+                "Fit this bound to the current frame"
                 if scope == "frame"
-                else "Use value across all frames in the current step"
+                else "Fit this bound across all frames in the current step"
             ),
         )
 
@@ -318,6 +331,59 @@ class ResultRangeButton(ButtonResultsRibbonOptions):
 
     def _emit(self, *_):
         self.range_changed.emit(self.values())
+
+
+def _range_fit_icon(scope, size=16):
+    """Draw distinct one-frame, all-frames, and animation-envelope fit glyphs."""
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    accent = QColor(PALETTE["accent"])
+    muted = QColor(PALETTE["muted"])
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.setPen(
+        QPen(
+            muted,
+            max(1.0, size / 14.0),
+            Qt.PenStyle.SolidLine,
+            Qt.PenCapStyle.RoundCap,
+            Qt.PenJoinStyle.RoundJoin,
+        )
+    )
+
+    if scope == "frame":
+        painter.drawRoundedRect(QRectF(size * .27, size * .16, size * .46, size * .68), 1.5, 1.5)
+        painter.setPen(QPen(accent, max(1.25, size / 12.0)))
+        painter.drawLine(QPointF(size * .18, size * .28), QPointF(size * .82, size * .28))
+        painter.drawLine(QPointF(size * .18, size * .72), QPointF(size * .82, size * .72))
+        painter.drawLine(QPointF(size * .50, size * .34), QPointF(size * .50, size * .66))
+    elif scope == "frames":
+        for x in (.25, .50, .75):
+            painter.drawRoundedRect(QRectF(size * (x - .08), size * .22, size * .16, size * .56), 1.2, 1.2)
+        painter.setPen(QPen(accent, max(1.25, size / 12.0)))
+        painter.drawLine(QPointF(size * .10, size * .18), QPointF(size * .90, size * .18))
+        painter.drawLine(QPointF(size * .10, size * .82), QPointF(size * .90, size * .82))
+        painter.drawLine(QPointF(size * .50, size * .27), QPointF(size * .50, size * .73))
+    else:
+        path = QPainterPath(QPointF(size * .10, size * .50))
+        path.cubicTo(
+            QPointF(size * .24, size * .10),
+            QPointF(size * .38, size * .10),
+            QPointF(size * .50, size * .50),
+        )
+        path.cubicTo(
+            QPointF(size * .62, size * .90),
+            QPointF(size * .76, size * .90),
+            QPointF(size * .90, size * .50),
+        )
+        painter.drawPath(path)
+        painter.setPen(QPen(accent, max(1.25, size / 12.0)))
+        painter.drawLine(QPointF(size * .14, size * .16), QPointF(size * .86, size * .16))
+        painter.drawLine(QPointF(size * .14, size * .84), QPointF(size * .86, size * .84))
+
+    painter.end()
+    return QIcon(pixmap)
 
 
 def _chain_icon(size):

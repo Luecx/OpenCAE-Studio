@@ -8,7 +8,7 @@ import numpy as np
 from opencae.optimization import build_mesh_index
 from opencae.ui.core.theme import PALETTE
 from .result_visualization import add_result, update_result
-from .scene_camera import camera_position, restore_camera
+from .scene_camera import camera_position, fit_camera, restore_camera
 
 
 def show_result(scene, result, field=None, options=None):
@@ -91,8 +91,12 @@ def show_result(scene, result, field=None, options=None):
     )
     scene._displayed_result_identity = identity
     if fit_on_load or camera is None:
-        scene.owner.plotter.view_isometric()
-        scene.owner.plotter.reset_camera()
+        fit_camera(
+            scene.owner.plotter,
+            points=getattr(scene.result_grid, "points", None),
+            reset_orientation=True,
+            render=False,
+        )
     else:
         restore_camera(scene.owner.plotter, camera)
     scene.owner.section_view.apply(
@@ -160,18 +164,23 @@ def _show_topology_result(scene, result, options, *, fit_on_load=False):
         threshold=0.0,
         options=options,
     )
+    topology_grid = None
     if topology_actors is not None:
-        actor, grid, mesh_actor, boundary_actor = topology_actors
+        actor, topology_grid, mesh_actor, boundary_actor = topology_actors
         _style_result_lines(mesh_actor, boundary_actor, None)
         scene.owner.section_view.apply(
             options.get("section", {}),
-            grid,
+            topology_grid,
             (actor, mesh_actor, boundary_actor),
         )
     scene._displayed_result_identity = _result_identity(result)
     if fit_on_load or camera is None:
-        scene.owner.plotter.view_isometric()
-        scene.owner.plotter.reset_camera()
+        fit_camera(
+            scene.owner.plotter,
+            points=getattr(topology_grid, "points", None),
+            reset_orientation=True,
+            render=False,
+        )
     else:
         restore_camera(scene.owner.plotter, camera)
     scene.owner.result_query.configure("")

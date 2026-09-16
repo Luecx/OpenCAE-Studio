@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from opencae.ui.core.icon_factory import IconKind, make_icon
 from opencae.ui.core.widgets import MonospaceOutputView
 from opencae.ui.primitives.buttons import ButtonFormAction
 from opencae.ui.primitives.labels import LabelBody, LabelMuted
@@ -38,6 +39,7 @@ class AnalysisJobMonitor(QDialog):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.job_id = str(job_id)
+        self._store = store
         self._stop_callback = stop_callback
         self._structured_runtime_seen = False
         job = store.project.try_resolve(self.job_id)
@@ -67,6 +69,15 @@ class AnalysisJobMonitor(QDialog):
         actions = QHBoxLayout()
         actions.setContentsMargins(0, 0, 0, 0)
         actions.addStretch(1)
+        self.open_results_button = ButtonFormAction(
+            "Open Results",
+            icon=make_icon(IconKind.RESULTS, 18),
+            tooltip="Open the result produced by this job",
+            parent=self,
+        )
+        self.open_results_button.setEnabled(False)
+        self.open_results_button.clicked.connect(self._open_results)
+        actions.addWidget(self.open_results_button)
         self.stop_button = ButtonFormAction(
             "Stop",
             tooltip="Terminate this solver job",
@@ -76,11 +87,16 @@ class AnalysisJobMonitor(QDialog):
         actions.addWidget(self.stop_button)
         layout.addLayout(actions)
 
+        changed = getattr(store, "changed", None)
+        if changed is not None:
+            changed.connect(self._refresh_results_button)
+
         self.set_progress(
             self.job_id,
             getattr(job, "progress", 0.0),
             getattr(job, "progress_label", "Prepared"),
         )
+        self._refresh_results_button()
 
     def _build_output_panel(self) -> QWidget:
         panel = QWidget(self)
@@ -214,6 +230,7 @@ class AnalysisJobMonitor(QDialog):
             callable(self._stop_callback)
             and label.strip().casefold() not in _TERMINAL_LABELS
         )
+        self._refresh_results_button()
 
     def set_output(self, job_id, text):
         if str(job_id) != self.job_id:
@@ -224,6 +241,45 @@ class AnalysisJobMonitor(QDialog):
         if str(job_id) != self.job_id:
             return
         self.output.append_output(text)
+
+    def _available_result(self):
+        project = self._store.project
+        job = project.try_resolve(self.job_id)
+        if job is None:
+            return None
+        return next(
+            (
+                project.try_resolve(reference)
+                for reference in tuple(getattr(job, "result_refs", ()) or ())
+                if project.try_resolve(reference) is not None
+            ),
+            None,
+        )
+
+    def _refresh_results_button(self, *_args):
+        result = self._available_result()
+        available = result is not None
+        self.open_results_button.setEnabled(available)
+        if available:
+            self.open_results_button.setText("Open Results")
+            self.open_results_button.setToolTip("Open the result produced by this job")
+            return
+        label = self.phase.text().strip().casefold()
+        if label == "completed":
+            self.open_results_button.setText("Preparing Results…")
+            self.open_results_button.setToolTip(
+                "The solver finished; OpenCAE is indexing the result metadata"
+            )
+        else:
+            self.open_results_button.setText("Open Results")
+            self.open_results_button.setToolTip("Results are not available yet")
+
+    def _open_results(self):
+        result = self._available_result()
+        parent = self.parent()
+        show_solution = getattr(parent, "show_solution", None)
+        if result is not None and callable(show_solution):
+            show_solution(result)
 
     def _stop(self):
         callback = self._stop_callback

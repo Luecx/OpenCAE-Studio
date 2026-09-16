@@ -294,16 +294,42 @@ def make_delete_command(
     parent_id: str,
     attribute: str,
     entity_id: str,
-) -> CollectionDeleteCommand:
-    """Create a reversible delete command for one owned Entity."""
+) -> ProjectCommand:
+    """Create a reversible delete command while preserving model references."""
     collection = _collection(project, parent_id, attribute)
     index = _require_index(collection, entity_id, attribute)
-    return CollectionDeleteCommand(
+    delete = CollectionDeleteCommand(
         parent_id,
         attribute,
         deepcopy(collection[index]),
         index,
     )
+
+    # ResultSets are referenced from JobRun.result_refs. Removing only the
+    # owned ResultSet would leave those EntityRefs dangling and strict project
+    # validation would correctly reject the command. Unlink every referencing
+    # job first, then delete the result as one atomic/reversible composite.
+    # CompositeCommand.undo() runs in reverse order, so the ResultSet is restored
+    # before the JobRun references are put back.
+    if parent_id == project.id and attribute == "results":
+        target_id = str(entity_id)
+        commands: list[ProjectCommand] = []
+        for job in getattr(project, "jobs", ()):
+            before = deepcopy(getattr(job, "result_refs", []))
+            after = [
+                reference
+                for reference in before
+                if str(getattr(reference, "entity_id", "")) != target_id
+            ]
+            if after != before:
+                commands.append(
+                    UpdateFieldCommand(job.id, "result_refs", before, after)
+                )
+        if commands:
+            commands.append(delete)
+            return CompositeCommand(tuple(commands))
+
+    return delete
 
 
 def entity_collection_location(project, entity_id: str) -> tuple[str, str]:

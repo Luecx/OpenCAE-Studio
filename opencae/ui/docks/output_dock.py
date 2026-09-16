@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import QDockWidget, QStackedWidget, QVBoxLayout, QWidget
 
 from opencae.ui.panels.jobs_panel import JobsPanel
 from opencae.ui.panels.log_panel import LogPanel
-from opencae.ui.panels.time_manager import TimeManagerPanel
+from opencae.ui.panels.time_manager_contours import ResultTimeManagerPanel
 
 
 class WorkspaceDock(QDockWidget):
@@ -41,7 +41,7 @@ class WorkspaceDock(QDockWidget):
 
         self.jobs = JobsPanel(store, jobs, actions)
         self.log = LogPanel()
-        self.time_manager = TimeManagerPanel(results_page, viewport)
+        self.time_manager = ResultTimeManagerPanel(results_page, viewport)
         store.message.connect(self.log.append_message)
 
         # Bias the compact Time Manager controls inward from the window edge

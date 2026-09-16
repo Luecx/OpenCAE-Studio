@@ -1,7 +1,10 @@
 """Shared scene presentation behavior for model, live and stored results."""
 
+import numpy as np
+
 from .beam_physical_display import beam_physical_controller
 from .field_visualization import add_field
+from .scene_camera import fit_camera
 from .solution_scene import show_result
 
 
@@ -57,18 +60,68 @@ class SceneDisplayMixin:
     def _context_key(self):
         return self.owner.stage, self.part_id, tuple(sorted(self.assembly_snapshots))
 
-    def fit(self):
-        """Fit the camera only when the scene currently has renderable content."""
-        if (
-            self.face_actors
-            or self.mesh_actor
-            or self.mesh_actors
-            or getattr(self, "authored_node_actor", None)
-            or getattr(self, "authored_node_actors", ())
-            or self.result_actor
+    def fit(self, *, reset_orientation=False):
+        """Frame the visible scene, including line/point-only result datasets."""
+        return fit_camera(
+            self.owner.plotter,
+            points=self._fit_points(),
+            reset_orientation=bool(reset_orientation),
+            render=True,
+        )
+
+    def _fit_points(self):
+        """Return geometry points when they represent the whole visible base scene.
+
+        CAD, topology-density overlays, and mixed CAD/mesh scenes intentionally
+        fall back to renderer bounds because their complete visible geometry is
+        not centrally owned by one grid. Result and mesh-only scenes expose their
+        points directly, which lets Fit View detect line/plane dimensionality and
+        avoid end-on/edge-on framing.
+        """
+        if bool(getattr(getattr(self, "topology_overlay", None), "_names", ())):
+            return None
+
+        result_grid = getattr(self, "result_grid", None)
+        if result_grid is not None:
+            try:
+                points = np.asarray(result_grid.points, dtype=float)
+            except (AttributeError, TypeError, ValueError):
+                points = None
+            if points is not None and len(points):
+                return points
+
+        if getattr(self, "face_actors", None):
+            return None
+
+        grids = []
+        for grid in (
+            getattr(self, "mesh_grid", None),
+            getattr(self, "authored_node_grid", None),
         ):
-            self.owner.plotter.view_isometric()
-            self.owner.plotter.reset_camera()
+            if grid is not None:
+                grids.append(grid)
+        grids.extend(
+            grid
+            for grid in getattr(self, "mesh_grids", {}).values()
+            if grid is not None
+        )
+        grids.extend(
+            grid
+            for grid in getattr(self, "authored_node_grids", {}).values()
+            if grid is not None
+        )
+
+        arrays = []
+        for grid in grids:
+            try:
+                values = np.asarray(grid.points, dtype=float)
+            except (AttributeError, TypeError, ValueError):
+                continue
+            if len(values):
+                arrays.append(values)
+        if not arrays:
+            return None
+        return arrays[0] if len(arrays) == 1 else np.vstack(arrays)
 
     def show_seed_preview(self, seeds):
         """Display temporary mesh seed markers for the active Part."""
