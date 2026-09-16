@@ -72,11 +72,15 @@ class SceneDisplayMixin:
     def _fit_points(self):
         """Return geometry points when they represent the whole visible base scene.
 
-        CAD and mixed CAD/mesh scenes intentionally fall back to renderer bounds,
-        because their tessellation points are not centrally owned here. Result
-        and mesh-only scenes expose their points directly, which lets Fit View
-        detect line/plane dimensionality and avoid end-on/edge-on framing.
+        CAD, topology-density overlays, and mixed CAD/mesh scenes intentionally
+        fall back to renderer bounds because their complete visible geometry is
+        not centrally owned by one grid. Result and mesh-only scenes expose their
+        points directly, which lets Fit View detect line/plane dimensionality and
+        avoid end-on/edge-on framing.
         """
+        if bool(getattr(getattr(self, "topology_overlay", None), "_names", ())):
+            return None
+
         result_grid = getattr(self, "result_grid", None)
         if result_grid is not None:
             try:
