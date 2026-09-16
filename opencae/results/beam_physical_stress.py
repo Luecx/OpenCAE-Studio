@@ -18,18 +18,36 @@ _ZERO_STRESS_COMPONENTS = {
 
 
 def stress_coefficients(properties, y: float, z: float) -> tuple[float, float, float]:
-    """Return coefficients for ``sigma = cN*N + cMy*My + cMz*Mz``."""
+    """Return coefficients for ``sigma11 = cN*N + cM2*M2 + cM3*M3``.
+
+    FEMaster reports beam section resultants in the local section frame
+    ``[N, V2, V3, T, M2, M3]``.  Its profile convention is
+    ``I22 = integral(z^2 dA)``, ``I33 = integral(y^2 dA)`` and
+    ``I23 = integral(y*z dA)``.  With positive tension and moments taken from
+    the positive local-1 cut face, equilibrium gives
+
+        M2 =  integral(z * sigma11 dA)
+        M3 = -integral(y * sigma11 dA)
+
+    and therefore
+
+        sigma11 = N/A
+                + M2 * (I33*z - I23*y) / D
+                + M3 * (I23*z - I22*y) / D,
+
+    where ``D = I22*I33 - I23^2``.
+    """
     area = float(properties.get("Area", 0.0) or 0.0)
-    iyy = float(properties.get("Iyy", 0.0) or 0.0)
-    izz = float(properties.get("Izz", 0.0) or 0.0)
-    iyz = float(properties.get("Iyz", 0.0) or 0.0)
+    i22 = float(properties.get("Iyy", 0.0) or 0.0)
+    i33 = float(properties.get("Izz", 0.0) or 0.0)
+    i23 = float(properties.get("Iyz", 0.0) or 0.0)
     axial = 1.0 / area if abs(area) > 1.0e-18 else 0.0
-    determinant = iyy * izz - iyz * iyz
+    determinant = i22 * i33 - i23 * i23
     if abs(determinant) <= 1.0e-24:
         return axial, 0.0, 0.0
-    my = (iyz * y - izz * z) / determinant
-    mz = (iyy * y - iyz * z) / determinant
-    return axial, my, mz
+    m2 = (i33 * z - i23 * y) / determinant
+    m3 = (i23 * z - i22 * y) / determinant
+    return axial, m2, m3
 
 
 def recover_normal_stress(

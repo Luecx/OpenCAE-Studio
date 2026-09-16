@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from math import exp, radians, sqrt, tan
 
-from PyQt6.QtCore import QEvent, QObject, Qt
+from PyQt6.QtCore import QEvent, QObject, QPointF, Qt
+from PyQt6.QtGui import QMouseEvent
 from pyvistaqt import QtInteractor
 
 from opencae.ui.core.theme import (
@@ -12,6 +13,7 @@ from opencae.ui.core.theme import (
     VIEWPORT_FONT_FAMILY,
     VIEWPORT_FONT_SIZE,
 )
+from opencae.ui.viewport.click_gesture import ClickGestureTracker
 from opencae.ui.viewport.rotation_pivot_indicator import RotationPivotIndicator
 from opencae.ui.viewport.spacenav_input import SpaceNavInput
 
@@ -154,6 +156,9 @@ class SafeQtInteractor(QtInteractor):
         super().__init__(*args, **kwargs)
         self._pan_display_position = None
         self._rotation_pivot = None
+        self._rotation_gesture = ClickGestureTracker()
+        self._pending_left_press = None
+        self._left_rotation_active = False
 
         setter = getattr(self, "setAttribute", None)
         if callable(setter):
@@ -174,6 +179,7 @@ class SafeQtInteractor(QtInteractor):
         # Keeping the old Python object would leave the orbit marker detached
         # from the renderer, which is why it disappeared after opening Results.
         self._rotation_pivot = None
+        self._reset_left_rotation()
         return result
 
     def add_axes(self, *args, **kwargs):
@@ -243,17 +249,21 @@ class SafeQtInteractor(QtInteractor):
         super().wheelEvent(event)
 
     def mousePressEvent(self, event):
-        """Reserve middle drag for true camera panning and expose the orbit pivot."""
+        """Delay left-button orbit until motion exceeds the shared click threshold."""
         if event.button() == Qt.MouseButton.MiddleButton:
             self._pan_display_position = self._display_position(event)
             event.accept()
             return
         if event.button() == Qt.MouseButton.LeftButton:
-            self._show_rotation_pivot()
+            self._rotation_gesture.press(event)
+            self._pending_left_press = self._mouse_press_snapshot(event)
+            self._left_rotation_active = False
+            event.accept()
+            return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        """Pan without changing view direction; otherwise defer to VTK trackball rotation."""
+        """Start orbit only after a real drag; keep click jitter available to picking."""
         if (
             self._pan_display_position is not None
             and event.buttons() & Qt.MouseButton.MiddleButton
@@ -265,10 +275,27 @@ class SafeQtInteractor(QtInteractor):
             event.accept()
             return
 
+        if (
+            self._pending_left_press is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            self._rotation_gesture.move(event)
+            if not self._left_rotation_active and self._rotation_gesture.dragging:
+                replay = self._replayed_left_press()
+                if replay is not None:
+                    super().mousePressEvent(replay)
+                    self._left_rotation_active = True
+                    self._show_rotation_pivot()
+            if self._left_rotation_active:
+                super().mouseMoveEvent(event)
+            else:
+                event.accept()
+            return
+
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        """End custom pan/orbit feedback while preserving all other VTK input handling."""
+        """Finish a delayed orbit or leave a stationary left click untouched for picking."""
         if (
             event.button() == Qt.MouseButton.MiddleButton
             and self._pan_display_position is not None
@@ -276,13 +303,24 @@ class SafeQtInteractor(QtInteractor):
             self._pan_display_position = None
             event.accept()
             return
+        if event.button() == Qt.MouseButton.LeftButton and self._pending_left_press is not None:
+            rotating = self._left_rotation_active
+            self._reset_left_rotation()
+            if rotating:
+                super().mouseReleaseEvent(event)
+                self._hide_rotation_pivot()
+            else:
+                # PyVistaViewport's event filter has already classified and
+                # dispatched this stationary release as a click. Do not send an
+                # unmatched release to VTK when no rotation press was replayed.
+                event.accept()
+            return
         super().mouseReleaseEvent(event)
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._hide_rotation_pivot()
 
     def leaveEvent(self, event):
         """Drop transient navigation state when a drag exits the render surface."""
         self._pan_display_position = None
+        self._reset_left_rotation()
         self._hide_rotation_pivot()
         super().leaveEvent(event)
 
@@ -431,6 +469,41 @@ class SafeQtInteractor(QtInteractor):
             * render_height
             / widget_height,
         )
+
+    @staticmethod
+    def _mouse_press_snapshot(event):
+        """Copy the Qt values needed to replay a left press after the drag threshold."""
+        try:
+            return (
+                QPointF(event.position()),
+                QPointF(event.globalPosition()),
+                event.modifiers(),
+            )
+        except (AttributeError, RuntimeError, TypeError):
+            return None
+
+    def _replayed_left_press(self):
+        """Create the VTK-facing press only once the gesture is known to be a drag."""
+        if self._pending_left_press is None:
+            return None
+        local_position, global_position, modifiers = self._pending_left_press
+        try:
+            return QMouseEvent(
+                QEvent.Type.MouseButtonPress,
+                local_position,
+                global_position,
+                Qt.MouseButton.LeftButton,
+                Qt.MouseButton.LeftButton,
+                modifiers,
+            )
+        except (TypeError, ValueError):
+            return None
+
+    def _reset_left_rotation(self) -> None:
+        """Clear delayed left-button navigation state without affecting click picking."""
+        self._rotation_gesture.reset()
+        self._pending_left_press = None
+        self._left_rotation_active = False
 
     def _ensure_rotation_pivot(self):
         """Create the VTK overlay only once the real PyVista renderer exists."""

@@ -64,15 +64,27 @@ def test_graph_profile_segments_become_four_thickness_patches():
     np.testing.assert_allclose(sum(_patch_area(patch) for patch in patches), 4.0)
 
 
-def test_stress_coefficients_reduce_to_axial_plus_uncoupled_bending():
-    axial, my, mz = stress_coefficients(
+def test_stress_coefficients_follow_femaster_uncoupled_bending_signs():
+    axial, m2, m3 = stress_coefficients(
         {"Area": 8.0, "Iyy": 2.0, "Izz": 4.0, "Iyz": 0.0},
         y=2.0,
         z=1.0,
     )
     assert axial == 1.0 / 8.0
-    assert my == -1.0 / 2.0
-    assert mz == 2.0 / 4.0
+    assert m2 == 1.0 / 2.0
+    assert m3 == -2.0 / 4.0
+
+
+def test_stress_coefficients_include_coupled_i23_bending():
+    axial, m2, m3 = stress_coefficients(
+        {"Area": 10.0, "Iyy": 5.0, "Izz": 8.0, "Iyz": 2.0},
+        y=3.0,
+        z=-1.0,
+    )
+    determinant = 5.0 * 8.0 - 2.0**2
+    assert axial == 0.1
+    np.testing.assert_allclose(m2, (8.0 * -1.0 - 2.0 * 3.0) / determinant)
+    np.testing.assert_allclose(m3, (2.0 * -1.0 - 5.0 * 3.0) / determinant)
 
 
 def test_section_force_recovery_interpolates_beam_end_resultants():

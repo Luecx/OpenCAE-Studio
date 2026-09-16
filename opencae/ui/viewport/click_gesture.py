@@ -14,6 +14,11 @@ class ClickGestureTracker:
         self._press = None
         self._dragged = False
 
+    @property
+    def dragging(self) -> bool:
+        """Return whether the active gesture has crossed the drag threshold."""
+        return bool(self._press is not None and self._dragged)
+
     def press(self, event) -> None:
         """Start tracking a left-button gesture from its global Qt position."""
         if self._button(event) != Qt.MouseButton.LeftButton:
