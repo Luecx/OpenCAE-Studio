@@ -42,7 +42,7 @@ def test_native_wayland_uses_qopenglwidget_generic_vtk_render_window():
     app = QApplication.instance() or QApplication([])
     assert QGuiApplication.platformName().startswith("wayland")
 
-    from opencae.ui.viewport.safe_qt_interactor import SafeQtInteractor
+    from opencae.ui.other.viewport.safe_qt_interactor import SafeQtInteractor
 
     viewport = SafeQtInteractor()
     try:
