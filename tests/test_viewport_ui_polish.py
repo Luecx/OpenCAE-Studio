@@ -11,12 +11,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from vtkmodules.vtkRenderingAnnotation import vtkScalarBarActor
 
-from opencae.ui.viewport.scalar_bar import (
+from opencae.ui.other.viewport.scalar_bar import (
     _cap_rectangles,
     _disable_native_range_swatches,
     scalar_bar_args,
 )
-from opencae.ui.viewport.viewport_overlay_metrics import (
+from opencae.ui.other.viewport.viewport_overlay_metrics import (
     VIEW_CUBE_SIZE,
     VIEWPORT_OVERLAY_GAP,
     VIEWPORT_OVERLAY_MARGIN,
@@ -50,7 +50,7 @@ def test_view_cube_click_does_not_propagate_to_render_parent():
 from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QWidget
-from opencae.ui.viewport.view_cube import ViewCube
+from opencae.ui.other.viewport.view_cube import ViewCube
 
 class MouseCounter(QObject):
     def __init__(self):
@@ -140,7 +140,7 @@ def test_scalar_bar_custom_caps_use_configured_outside_colors():
     _run_isolated_qt(r'''
 import numpy as np
 import pyvista as pv
-from opencae.ui.viewport.scalar_bar import install_scalar_bar_end_caps, scalar_bar_args
+from opencae.ui.other.viewport.scalar_bar import install_scalar_bar_end_caps, scalar_bar_args
 
 plotter = pv.Plotter(off_screen=True, window_size=(360, 360))
 mesh = pv.Sphere(theta_resolution=8, phi_resolution=8)
@@ -200,9 +200,9 @@ def test_result_query_panel_caps_matrix_to_available_viewport_height():
     _run_isolated_qt(r'''
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QWidget
-from opencae.ui.viewport.result_query_model import QueryResult
-from opencae.ui.viewport.result_query_panel import ResultQueryPanel
-from opencae.ui.viewport.viewport_overlay_metrics import VIEWPORT_OVERLAY_MARGIN
+from opencae.ui.other.viewport.result_query_model import QueryResult
+from opencae.ui.other.viewport.result_query_panel import ResultQueryPanel
+from opencae.ui.other.viewport.viewport_overlay_metrics import VIEWPORT_OVERLAY_MARGIN
 
 app = QApplication.instance() or QApplication([])
 parent = QWidget()
@@ -240,15 +240,15 @@ def test_two_line_ribbon_caption_fits_canonical_button_height():
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QIcon, QPixmap
 from PyQt6.QtWidgets import QApplication
-from opencae.ui.core.metrics import RIBBON_BUTTON_HEIGHT
-from opencae.ui.templates import action_button
+from opencae.ui.foundation.metrics import RIBBON_BUTTON_HEIGHT
+from opencae.ui.primitives.buttons import ribbon_button_for_action
 
 app = QApplication.instance() or QApplication([])
 action = QAction("Add Instance")
 pixmap = QPixmap(42, 42)
 pixmap.fill(Qt.GlobalColor.transparent)
 action.setIcon(QIcon(pixmap))
-button = action_button(action)
+button = ribbon_button_for_action(action)
 try:
     button.show()
     app.processEvents()
