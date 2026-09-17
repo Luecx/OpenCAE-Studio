@@ -17,14 +17,14 @@ from opencae.model.entities.profiles.calculations import (
     profile_parameters,
     profile_properties,
 )
-from opencae.ui.dialogs.profile import PROFILE_TYPES, ProfileDialog
-from opencae.ui.dialogs.profile_parameter_limits import (
+from opencae.ui.other.dialogs.profile import PROFILE_TYPES, ProfileDialog
+from opencae.ui.other.dialogs.profile_parameter_limits import (
     PROFILE_DIMENSION_MAXIMUM,
 )
-from opencae.ui.dialogs.profile_preview_drawing import fitted_profile_rect
-from opencae.ui.dialogs.profile_preview_graph import render_graph_profile
-from opencae.ui.dialogs.profile_preview_widget import ProfilePreviewWidget
-from opencae.ui.templates import FieldLabel
+from opencae.ui.other.dialogs.profile_preview_drawing import fitted_profile_rect
+from opencae.ui.other.dialogs.profile_preview_graph import render_graph_profile
+from opencae.ui.other.dialogs.profile_preview_widget import ProfilePreviewWidget
+from opencae.ui.primitives.labels import LabelForm as FieldLabel
 
 
 _QT_APPLICATION = None
