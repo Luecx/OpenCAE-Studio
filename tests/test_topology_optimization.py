@@ -232,7 +232,7 @@ def test_optimization_modules_have_headers_and_at_most_one_class():
     directories = (
         repository / "opencae/model/entities/optimization",
         repository / "opencae/optimization",
-        repository / "opencae/ui/dialogs/optimization_dialogs",
+        repository / "opencae/ui/other/dialogs/optimization_dialogs",
     )
     files = [
         path
@@ -246,15 +246,14 @@ def test_optimization_modules_have_headers_and_at_most_one_class():
             "opencae/controllers/optimization_run_controller.py",
             "opencae/controllers/optimization_selection_controller.py",
             "opencae/controllers/optimization_setup_controller.py",
-            "opencae/ui/core/named_entity_dialog.py",
-            "opencae/ui/core/widgets/automatic_manual_value_editor.py",
-            "opencae/ui/dialogs/optimization.py",
-            "opencae/ui/actions/catalog/optimization_actions.py",
-            "opencae/ui/ribbon/studies_page.py",
-            "opencae/ui/tree/studies_tree.py",
-            "opencae/ui/monitors/topology_job_monitor.py",
-            "opencae/ui/viewport/topology_overlay.py",
-            "opencae/ui/viewport/topology_presentation.py",
+            "opencae/ui/components/named_entity_dialog.py",
+            "opencae/ui/components/automatic_manual_value_editor.py",
+            "opencae/ui/other/actions/catalog/optimization_actions.py",
+            "opencae/ui/other/ribbon/studies_page.py",
+            "opencae/ui/other/tree/studies_tree.py",
+            "opencae/ui/other/monitors/topology_job_monitor.py",
+            "opencae/ui/other/viewport/topology_overlay.py",
+            "opencae/ui/other/viewport/topology_presentation.py",
         )
     )
 
