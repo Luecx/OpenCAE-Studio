@@ -8,8 +8,8 @@ import pytest
 from PyQt6.QtWidgets import QApplication
 
 from opencae.controllers.part.mesh_persistence import _derive_entity_facets
-from opencae.ui.dialogs.material_property import MaterialPropertyDialog
-from opencae.ui.monitors.topology_threshold_control import TopologyThresholdControl
+from opencae.ui.other.dialogs.material_property import MaterialPropertyDialog
+from opencae.ui.other.monitors.topology_threshold_control import TopologyThresholdControl
 
 
 ROOT = Path(__file__).resolve().parents[1]
