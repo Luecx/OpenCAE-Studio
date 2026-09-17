@@ -13,7 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 def manager():
     """Create one offscreen deck format manager and clean it up after each test."""
     qt_widgets = pytest.importorskip("PyQt6.QtWidgets")
-    from opencae.ui.deck_format_manager import DeckFormatManagerDialog
+    from opencae.ui.other.deck_format_manager import DeckFormatManagerDialog
 
     application = qt_widgets.QApplication.instance() or qt_widgets.QApplication([])
     dialog = DeckFormatManagerDialog()
@@ -42,7 +42,7 @@ def test_primary_format_groups_are_not_wrapped_in_resources(manager):
 
 def test_profile_selector_contains_read_only_builtins(manager):
     """FEMaster/Abaqus/CalculiX remain immutable profiles in one canonical selector."""
-    from opencae.ui.templates import PRIMARY_CONTROL_HEIGHT
+    from opencae.ui.foundation.metrics import PRIMARY_CONTROL_HEIGHT
 
     toolbar = manager.profile_toolbar
     assert not hasattr(toolbar, "format_combo")
@@ -103,7 +103,7 @@ def test_move_buttons_reorder_only_user_profile(manager):
 
 def test_femaster_element_tree_uses_requested_concrete_types(manager):
     """Element leaves contain the user-facing standard types without FRT/QSPT/C3D13."""
-    from opencae.ui.deck_format_manager.element_type_catalog import ELEMENT_TYPES
+    from opencae.ui.other.deck_format_manager.element_type_catalog import ELEMENT_TYPES
 
     expected_codes = (
         "T3",
@@ -440,7 +440,7 @@ def test_float_format_changes_preview_and_available_examples(manager):
 def test_template_and_preview_use_line_numbered_monospace_editors(manager):
     """Both deck panes expose the common line-numbered monospace editor."""
     from PyQt6.QtGui import QFont
-    from opencae.ui.deck_format_manager.code_editor import DeckCodeEditor
+    from opencae.ui.other.deck_format_manager.code_editor import DeckCodeEditor
 
     page = manager.template_page
     assert isinstance(page.template, DeckCodeEditor)
@@ -500,8 +500,8 @@ def test_global_format_options_only_appear_under_general_settings(manager):
 
 def test_every_navigation_leaf_has_an_explicit_template():
     """No record leaf may silently fall back to an invented keyword template."""
-    from opencae.ui.deck_format_manager.catalog import GLOBAL_PAGES, TREE_SPEC
-    from opencae.ui.deck_format_manager.template_catalog import TEMPLATE_SPECS
+    from opencae.ui.other.deck_format_manager.catalog import GLOBAL_PAGES, TREE_SPEC
+    from opencae.ui.other.deck_format_manager.template_catalog import TEMPLATE_SPECS
 
     def leaves(nodes):
         for node in nodes:
@@ -517,12 +517,12 @@ def test_every_navigation_leaf_has_an_explicit_template():
 
 def test_documented_femaster_flat_command_coverage_is_complete():
     """The editor covers every documented native command after the flattening boundary."""
-    from opencae.ui.deck_format_manager.femaster_command_index import (
+    from opencae.ui.other.deck_format_manager.femaster_command_index import (
         FEMASTER_DOCUMENTED_COMMANDS,
         OPENCAE_ADDITIONAL_COMMANDS,
         STRUCTURED_MODEL_COMMANDS,
     )
-    from opencae.ui.deck_format_manager.template_catalog import template_command_names
+    from opencae.ui.other.deck_format_manager.template_catalog import template_command_names
 
     commands = template_command_names()
     assert len(FEMASTER_DOCUMENTED_COMMANDS) == 59
