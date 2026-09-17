@@ -1,6 +1,6 @@
 import numpy as np
 from opencae.model.entities.jobs import ResultField
-from opencae.ui.viewport.result_query import element_values,node_values
+from opencae.ui.other.viewport.result_query import element_values,node_values
 
 
 class Cell:
