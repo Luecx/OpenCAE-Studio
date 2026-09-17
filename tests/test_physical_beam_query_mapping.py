@@ -11,7 +11,7 @@ from opencae.results.beam_physical_representation import (
     PHYSICAL_BEAM_CELL,
     build_beam_physical_representation_from_occurrences,
 )
-from opencae.ui.viewport.result_query import _logical_node_index, _node_ids
+from opencae.ui.other.viewport.result_query import _logical_node_index, _node_ids
 
 
 def test_generated_hexa_points_map_back_to_beam_end_nodes():
