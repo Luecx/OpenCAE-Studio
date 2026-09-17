@@ -11,14 +11,14 @@ def _source(path: str) -> str:
 
 
 def test_standard_editor_dialogs_use_a_roomier_shared_width():
-    templates = _source("opencae/ui/templates/dialogs.py")
-    forms = _source("opencae/ui/core/form_dialog.py")
-    named = _source("opencae/ui/core/named_entity_dialog.py")
-    cad = _source("opencae/ui/dialogs/import_geometry.py")
-    run = _source("opencae/ui/dialogs/run_analysis.py")
-    entity = _source("opencae/ui/dialogs/entity_editor.py")
-    reorder = _source("opencae/ui/dialogs/step_reorder.py")
-    visibility = _source("opencae/ui/dialogs/visibility.py")
+    templates = _source("opencae/ui/components/dialogs.py")
+    forms = _source("opencae/ui/components/form_dialog.py")
+    named = _source("opencae/ui/components/named_entity_dialog.py")
+    cad = _source("opencae/ui/other/dialogs/import_geometry.py")
+    run = _source("opencae/ui/other/dialogs/run_analysis.py")
+    entity = _source("opencae/ui/other/dialogs/entity_editor.py")
+    reorder = _source("opencae/ui/other/dialogs/step_reorder.py")
+    visibility = _source("opencae/ui/other/dialogs/visibility.py")
 
     assert "DEFAULT_DIALOG_WIDTH = 720" in templates
     assert "width: int = DEFAULT_DIALOG_WIDTH" in forms
@@ -32,8 +32,8 @@ def test_standard_editor_dialogs_use_a_roomier_shared_width():
 
 
 def test_analysis_monitor_places_monospace_output_left_and_runtime_details_right():
-    monitor = _source("opencae/ui/monitors/analysis_job_monitor.py")
-    output_view = _source("opencae/ui/core/widgets/monospace_output_view.py")
+    monitor = _source("opencae/ui/other/monitors/analysis_job_monitor.py")
+    output_view = _source("opencae/ui/components/monospace_output_view.py")
     manager = _source("opencae/controllers/job_manager.py")
 
     assert "QSplitter(Qt.Orientation.Horizontal" in monitor
