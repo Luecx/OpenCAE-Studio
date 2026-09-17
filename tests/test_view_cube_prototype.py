@@ -10,7 +10,7 @@ import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from opencae.ui.viewport.view_cube_polyhedron import (
+from opencae.ui.other.viewport.view_cube_polyhedron import (
     beveled_cube_faces,
     camera_view_matrix,
 )
@@ -76,8 +76,8 @@ def test_generic_orientation_keeps_all_visible_connector_faces() -> None:
     """Prevent shallow but front-facing edge strips from disappearing during orbit."""
     _run_isolated_qt(r'''
 from PyQt6.QtWidgets import QApplication
-from opencae.ui.viewport.view_cube import ViewCube
-from opencae.ui.viewport.view_cube_polyhedron import view_rotation
+from opencae.ui.other.viewport.view_cube import ViewCube
+from opencae.ui.other.viewport.view_cube_polyhedron import view_rotation
 
 app = QApplication.instance() or QApplication([])
 widget = ViewCube()
@@ -100,7 +100,7 @@ def test_view_cube_paints_opaque_non_uniform_pixels() -> None:
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QImage
 from PyQt6.QtWidgets import QApplication
-from opencae.ui.viewport.view_cube import ViewCube
+from opencae.ui.other.viewport.view_cube import ViewCube
 
 app = QApplication.instance() or QApplication([])
 widget = ViewCube()
@@ -131,8 +131,8 @@ def test_orientation_change_produces_a_different_projection() -> None:
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage
 from PyQt6.QtWidgets import QApplication
-from opencae.ui.viewport.view_cube import ViewCube
-from opencae.ui.viewport.view_cube_polyhedron import view_rotation
+from opencae.ui.other.viewport.view_cube import ViewCube
+from opencae.ui.other.viewport.view_cube_polyhedron import view_rotation
 
 app = QApplication.instance() or QApplication([])
 widget = ViewCube()
@@ -159,7 +159,7 @@ def test_view_cube_uses_stable_opaque_native_surface_composition() -> None:
     _run_isolated_qt(r'''
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
-from opencae.ui.viewport.view_cube import ViewCube
+from opencae.ui.other.viewport.view_cube import ViewCube
 
 app = QApplication.instance() or QApplication([])
 widget = ViewCube()
@@ -182,7 +182,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
-from opencae.ui.viewport.view_cube import ViewCube
+from opencae.ui.other.viewport.view_cube import ViewCube
 
 app = QApplication.instance() or QApplication([])
 widget = ViewCube()
@@ -226,8 +226,8 @@ def test_camera_controller_tracks_and_animates_face_normals() -> None:
     _run_isolated_qt(r'''
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
-from opencae.ui.viewport.view_cube import ViewCube
-from opencae.ui.viewport.view_cube_camera import ViewCubeCameraController
+from opencae.ui.other.viewport.view_cube import ViewCube
+from opencae.ui.other.viewport.view_cube_camera import ViewCubeCameraController
 
 class Camera:
     def __init__(self):
@@ -287,7 +287,7 @@ def test_canvas_places_opaque_cube_on_render_surface() -> None:
     _run_isolated_qt(r'''
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QWidget
-from opencae.ui.viewport.viewport_canvas import ViewportCanvas
+from opencae.ui.other.viewport.viewport_canvas import ViewportCanvas
 
 app = QApplication.instance() or QApplication([])
 canvas = ViewportCanvas()
