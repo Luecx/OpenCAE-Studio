@@ -23,8 +23,8 @@ from opencae.model.selection import (
     RegionScope,
     RegionSelectionItem,
 )
-from opencae.ui.viewport.boundary_geometry import region_samples
-from opencae.ui.viewport.boundary_overlay import _load_vector
+from opencae.ui.other.viewport.boundary_geometry import region_samples
+from opencae.ui.other.viewport.boundary_overlay import _load_vector
 
 
 def _definition(*operands):
