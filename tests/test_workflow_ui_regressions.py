@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 from PyQt6.QtCore import QPointF, Qt
 
-from opencae.ui.viewport.click_gesture import ClickGestureTracker
-from opencae.ui.visibility_state import VisibilityState
+from opencae.ui.other.viewport.click_gesture import ClickGestureTracker
+from opencae.ui.other.visibility_state import VisibilityState
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,7 +56,7 @@ def _ribbon_groups(relative_path):
 
 def test_executable_selector_contains_only_dropdown_and_title():
     source = (
-        ROOT / "opencae/ui/core/widgets/entity_selector_bar.py"
+        ROOT / "opencae/ui/components/entity_selector_bar.py"
     ).read_text(encoding="utf-8")
 
     assert "QVBoxLayout(self)" in source
@@ -71,7 +71,7 @@ def test_executable_selector_contains_only_dropdown_and_title():
 
 
 def test_analysis_ribbon_separates_definition_and_execution_groups():
-    assert _ribbon_groups("opencae/ui/ribbon/analysis_page.py") == [
+    assert _ribbon_groups("opencae/ui/other/ribbon/analysis_page.py") == [
         (
             "DEFINITION",
             ("ANALYSIS_NEW", "ANALYSIS_EDIT", "DELETE_SELECTED"),
@@ -89,7 +89,7 @@ def test_analysis_ribbon_separates_definition_and_execution_groups():
 
 
 def test_studies_ribbon_separates_definition_setup_and_execution_groups():
-    assert _ribbon_groups("opencae/ui/ribbon/studies_page.py") == [
+    assert _ribbon_groups("opencae/ui/other/ribbon/studies_page.py") == [
         (
             "DEFINITION",
             ("STUDY_NEW_TOPOLOGY", "STUDY_EDIT", "DELETE_SELECTED"),
@@ -113,7 +113,7 @@ def test_studies_ribbon_separates_definition_setup_and_execution_groups():
 
 
 def test_steps_ribbon_does_not_expose_selected_edit_or_delete():
-    source = (ROOT / "opencae/ui/ribbon/steps_page.py").read_text(
+    source = (ROOT / "opencae/ui/other/ribbon/steps_page.py").read_text(
         encoding="utf-8"
     )
 
@@ -124,7 +124,7 @@ def test_steps_ribbon_does_not_expose_selected_edit_or_delete():
 
 
 def test_context_menu_keeps_unavailable_actions_visible_but_disabled():
-    source = (ROOT / "opencae/ui/tree/context_menu.py").read_text(
+    source = (ROOT / "opencae/ui/other/tree/context_menu.py").read_text(
         encoding="utf-8"
     )
 
@@ -137,8 +137,8 @@ def test_context_menu_keeps_unavailable_actions_visible_but_disabled():
 def test_delete_uses_the_canonical_close_glyph():
     _run_isolated_qt(r'''
 from PyQt6.QtWidgets import QApplication
-from opencae.ui.core.icons.factory import _ICON_MAP, _x_icon, make_icon
-from opencae.ui.core.icons.kinds import IconKind
+from opencae.ui.foundation.icons.factory import _ICON_MAP, _x_icon, make_icon
+from opencae.ui.foundation.icons.kinds import IconKind
 
 app = QApplication.instance() or QApplication([])
 size = 32
@@ -158,7 +158,7 @@ from opencae.deck_formats.selection import builtin_profile_id
 from opencae.model.core import EntityRef
 from opencae.model.entities.analysis import Analysis, AnalysisStep
 from opencae.solvers.registry import available_solvers
-from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
+from opencae.ui.other.dialogs.analysis_dialog import AnalysisDialog
 
 app = QApplication.instance() or QApplication([])
 step = AnalysisStep(name="Static", step_type="Linear Static")
@@ -298,10 +298,10 @@ def test_qaction_checked_bool_cannot_become_settings_dialog_parent(monkeypatch):
 
 def test_global_settings_has_one_menu_entry_and_no_solver_duplicates():
     """Configuration is discoverable through one menu without Analysis/Solver duplicates."""
-    tools = (ROOT / "opencae/ui/menus/tools_menu.py").read_text(encoding="utf-8")
-    solver = (ROOT / "opencae/ui/menus/solver_menu.py").read_text(encoding="utf-8")
-    ribbon = (ROOT / "opencae/ui/ribbon/analysis_page.py").read_text(encoding="utf-8")
-    context = (ROOT / "opencae/ui/tree/context_menu.py").read_text(encoding="utf-8")
+    tools = (ROOT / "opencae/ui/other/menus/tools_menu.py").read_text(encoding="utf-8")
+    solver = (ROOT / "opencae/ui/other/menus/solver_menu.py").read_text(encoding="utf-8")
+    ribbon = (ROOT / "opencae/ui/other/ribbon/analysis_page.py").read_text(encoding="utf-8")
+    context = (ROOT / "opencae/ui/other/tree/context_menu.py").read_text(encoding="utf-8")
 
     assert tools.count("A.PREFERENCES") == 1
     assert "A.SOLVER_SETTINGS" not in tools
