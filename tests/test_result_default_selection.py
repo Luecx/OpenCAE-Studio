@@ -4,8 +4,8 @@ from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 
 from opencae.model.entities.jobs import ResultField, ResultSet
-from opencae.ui.ribbon.result_field_menu import ResultFieldButton
-from opencae.ui.tree.solution_tree import SolutionTree
+from opencae.ui.other.ribbon.result_field_menu import ResultFieldButton
+from opencae.ui.other.tree.solution_tree import SolutionTree
 
 
 class _Store(QObject):
