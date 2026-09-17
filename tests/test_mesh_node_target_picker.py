@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from opencae.controllers.part.mesh_editing_interactive import InteractivePartMeshEditing
 from opencae.model.entities.fem import MeshEntityOrigin, Node
-from opencae.ui.dialogs.mesh_node import MeshNodeDialog
+from opencae.ui.other.dialogs.mesh_node import MeshNodeDialog
 
 
 def _dispose(application, widget):
