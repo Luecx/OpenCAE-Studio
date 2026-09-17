@@ -6,12 +6,12 @@ from types import SimpleNamespace
 import pytest
 from PyQt6.QtWidgets import QApplication
 
-from opencae.ui.panels.time_manager_contours import (
+from opencae.ui.other.panels.time_manager_contours import (
     animation_scalar_factor,
     scaled_animation_range,
     waveform_factor_extrema,
 )
-from opencae.ui.ribbon.result_range import _range_fit_icon
+from opencae.ui.other.ribbon.result_range import _range_fit_icon
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,7 +57,7 @@ def test_contour_fit_icons_are_distinct():
 
 
 def test_analysis_monitor_exposes_job_scoped_open_results_action():
-    source = (ROOT / "opencae/ui/monitors/analysis_job_monitor.py").read_text(
+    source = (ROOT / "opencae/ui/other/monitors/analysis_job_monitor.py").read_text(
         encoding="utf-8"
     )
     assert '"Open Results"' in source
@@ -69,7 +69,7 @@ def test_analysis_monitor_exposes_job_scoped_open_results_action():
 
 
 def test_physical_beam_toggle_preserves_camera_by_contract():
-    source = (ROOT / "opencae/ui/viewport/beam_physical_display.py").read_text(
+    source = (ROOT / "opencae/ui/other/viewport/beam_physical_display.py").read_text(
         encoding="utf-8"
     )
     method = source.split("def set_enabled", 1)[1].split("def prepare_options", 1)[0]
@@ -79,7 +79,7 @@ def test_physical_beam_toggle_preserves_camera_by_contract():
 
 
 def test_contour_editor_hosts_animation_envelope_action():
-    source = (ROOT / "opencae/ui/ribbon/result_range.py").read_text(encoding="utf-8")
+    source = (ROOT / "opencae/ui/other/ribbon/result_range.py").read_text(encoding="utf-8")
     assert '"Fit animation envelope"' in source
     assert "animation_envelope_requested" in source
     assert '_range_fit_icon("frame", 16)' not in source  # scope is passed dynamically
