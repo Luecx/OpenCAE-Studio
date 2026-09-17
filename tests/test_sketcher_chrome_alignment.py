@@ -11,8 +11,8 @@ def _source(path: str) -> str:
 
 
 def test_sketch_ribbon_uses_main_ribbon_panel_surface():
-    sketch = _source("opencae/ui/sketcher/constraint_dialog.py")
-    main_ribbon = _source("opencae/ui/ribbon/ribbon.py")
+    sketch = _source("opencae/ui/other/sketcher/constraint_dialog.py")
+    main_ribbon = _source("opencae/ui/other/ribbon/ribbon.py")
 
     assert "Qt.WidgetAttribute.WA_StyledBackground" in sketch
     assert "PALETTE['panel']" in sketch
@@ -22,8 +22,8 @@ def test_sketch_ribbon_uses_main_ribbon_panel_surface():
 
 
 def test_sketch_workspace_splitter_matches_main_window_separator_width():
-    sketch = _source("opencae/ui/sketcher/constraint_dialog.py")
-    misc = _source("opencae/ui/core/styles/misc.py")
+    sketch = _source("opencae/ui/other/sketcher/constraint_dialog.py")
+    misc = _source("opencae/ui/foundation/styles/misc.py")
 
     assert "_MAIN_SEPARATOR_WIDTH = 3" in sketch
     assert "splitter.setHandleWidth(_MAIN_SEPARATOR_WIDTH)" in sketch
