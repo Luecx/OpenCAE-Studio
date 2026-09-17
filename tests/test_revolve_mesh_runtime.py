@@ -79,7 +79,7 @@ def test_revolved_solid_quality_ignores_lower_dimensional_gmsh_boundary_elements
 _PREVIEW_TEARDOWN_SMOKE = r'''
 from PyQt6.QtWidgets import QApplication, QDialog, QWidget
 
-import opencae.ui.sketcher.preview as preview_module
+import opencae.ui.other.sketcher.preview as preview_module
 
 
 class FakePlotter(QWidget):
