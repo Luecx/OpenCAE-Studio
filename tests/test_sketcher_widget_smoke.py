@@ -14,7 +14,7 @@ _SKETCH_DIALOG_SMOKE = r'''
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QWidget
 
-import opencae.ui.sketcher.dialog as dialog_module
+import opencae.ui.other.sketcher.dialog as dialog_module
 from opencae.model.entities.geometry import SketchFeature
 
 
@@ -34,16 +34,13 @@ class PreviewStub(QWidget):
 
 dialog_module.SketchFeaturePreview = PreviewStub
 
-from opencae.ui.sketcher import SketchFeatureDialog
+from opencae.ui.other.sketcher import SketchFeatureDialog
 
 app = QApplication.instance() or QApplication([])
 dialog = SketchFeatureDialog(
     SketchFeature(name="Runtime Sketch", mode="Extrusion", depth=5.0)
 )
 try:
-    # Layout regressions only show up after Qt has actually polished and shown
-    # the widgets.  Construction-time parent checks are not enough: a toolbar
-    # can exist while being compressed to zero pixels by a splitter/layout.
     dialog.show()
     app.processEvents()
 
@@ -54,8 +51,6 @@ try:
     assert dialog.canvas.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     assert dialog.canvas.frameShape().name == "NoFrame"
 
-    # The slim command bar is a real visible strip between the ribbon and the
-    # drafting stack.  It must never be collapsed or covered by the canvas.
     bar = dialog.viewport_toolbar
     host = bar.parentWidget()
     assert bar.objectName() == "ViewportToolbar"
@@ -79,17 +74,8 @@ try:
     assert footer.height() == 0
 
     for tool in (
-        "Select",
-        "Point",
-        "Line",
-        "Polyline",
-        "Rectangle",
-        "Circle",
-        "Center Arc",
-        "3-Point Arc",
-        "Ellipse",
-        "Spline",
-        "Slot",
+        "Select", "Point", "Line", "Polyline", "Rectangle", "Circle",
+        "Center Arc", "3-Point Arc", "Ellipse", "Spline", "Slot",
     ):
         action = dialog._tool_actions[tool]
         assert not action.icon().isNull(), tool
@@ -100,19 +86,9 @@ try:
         if action.property("constraintKind")
     }
     assert {
-        "Coincident",
-        "Horizontal",
-        "Vertical",
-        "Parallel",
-        "Perpendicular",
-        "Tangent",
-        "Equal",
-        "Concentric",
-        "Midpoint",
-        "Collinear",
-        "Point on object",
-        "Symmetry",
-        "Fixed",
+        "Coincident", "Horizontal", "Vertical", "Parallel", "Perpendicular",
+        "Tangent", "Equal", "Concentric", "Midpoint", "Collinear",
+        "Point on object", "Symmetry", "Fixed",
     } <= constraint_kinds
 
     dimension_kinds = {
@@ -120,12 +96,7 @@ try:
         for action in dialog._dimension_actions.values()
     }
     assert {
-        "Distance",
-        "DistanceX",
-        "DistanceY",
-        "Angle",
-        "Radius",
-        "Diameter",
+        "Distance", "DistanceX", "DistanceY", "Angle", "Radius", "Diameter",
     } <= dimension_kinds
     assert dialog.dimension_action.menu() is not None
     assert not dialog.dimension_action.icon().isNull()
@@ -134,11 +105,7 @@ try:
 
     titles = tuple(spec.title for spec in dialog.ribbon._specs)
     assert titles == (
-        "SELECTION",
-        "PRIMITIVES",
-        "CONSTRAINTS",
-        "DIMENSIONS",
-        "CONSTRUCTION/GRID",
+        "SELECTION", "PRIMITIVES", "CONSTRAINTS", "DIMENSIONS", "CONSTRUCTION/GRID",
     )
     expanded_width = dialog.ribbon._required_width(frozenset()) + 20
     assert dialog.ribbon._target_collapsed_groups(expanded_width) == frozenset()
@@ -146,17 +113,12 @@ try:
     assert "CONSTRAINTS" in first
     assert dialog.ribbon._target_collapsed_groups(1) == frozenset(titles)
 
-    # Rebuilding the responsive ribbon must synchronously detach old groups;
-    # otherwise deleteLater() can leave the previous buttons painted on top of
-    # the collapsed state during resize.
     old_groups = tuple(dialog.ribbon._group_widgets)
     dialog.ribbon._refresh_responsive_layout(1)
     assert dialog.ribbon._collapsed_titles == frozenset(titles)
     assert all(group.parent() is None for group in old_groups)
     assert len(dialog.ribbon._group_widgets) == 5
 
-    # Commit/cancel, solver status, view mode and Fit all live in the one slim
-    # viewport bar; the legacy footer is intentionally absent.
     assert dialog.status_label.parent() is bar
     assert dialog.buttons.parent() is bar
     assert dialog.view_sketch.parent() is bar
@@ -176,7 +138,7 @@ finally:
 _SKETCH_ICON_SMOKE = r'''
 from PyQt6.QtWidgets import QApplication
 
-from opencae.ui.core.icon_factory import IconKind, make_icon
+from opencae.ui.foundation.icons import IconKind, make_icon
 
 app = QApplication.instance() or QApplication([])
 kinds = (
@@ -225,7 +187,6 @@ assert all(not make_icon(kind, 42).isNull() for kind in kinds)
 
 def _run_isolated_qt(script: str) -> None:
     """Run one Qt smoke probe without inheriting native VTK/Qt process state."""
-
     env = dict(os.environ)
     env["QT_QPA_PLATFORM"] = "offscreen"
     env["PYVISTA_OFF_SCREEN"] = "true"
