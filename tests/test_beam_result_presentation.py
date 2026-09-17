@@ -10,9 +10,9 @@ from opencae.results.beam_physical_representation import (
     PHYSICAL_BEAM_CELL,
 )
 from opencae.results.beam_physical_stress import stress_display_values
-from opencae.ui.viewport.result_visualization import _beam_subset, _mesh_edge_grid
-from opencae.ui.viewport.scalar_bar import update_scalar_bar_title
-from opencae.ui.viewport.section_view import section_cut_surface
+from opencae.ui.other.viewport.result_visualization import _beam_subset, _mesh_edge_grid
+from opencae.ui.other.viewport.scalar_bar import update_scalar_bar_title
+from opencae.ui.other.viewport.section_view import section_cut_surface
 
 
 def _superset_grid():
