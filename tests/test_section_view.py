@@ -1,7 +1,7 @@
 import numpy as np
 import pyvista as pv
 
-from opencae.ui.viewport.section_view import SectionViewController, section_cut_surface
+from opencae.ui.other.viewport.section_view import SectionViewController, section_cut_surface
 
 
 class _Signal:
@@ -70,8 +70,6 @@ def test_moved_section_keeps_selected_point_scalar_with_direct_vtk_binding():
         mapper.update()
         mapped = pv.wrap(mapper.GetInput())
 
-        # Direct VTK binding selects the displayed field on the mapper without
-        # mutating the dataset's own active-scalars metadata.
         assert mapper.scalar_map_mode == "point_field"
         assert mapper.array_name == "Stress"
         assert "Stress" in mapped.point_data
@@ -96,7 +94,6 @@ def test_moved_section_rebinds_cell_scalar_association():
 
 
 def test_section_cap_actor_is_visible_unclipped_two_sided_surface():
-    """The generated result cut must survive the actual actor/render pipeline."""
     grid = _hexahedron()
     plotter = pv.Plotter(off_screen=True, window_size=(320, 320))
     plotter.set_background("black")
@@ -128,13 +125,11 @@ def test_section_cap_actor_is_visible_unclipped_two_sided_surface():
         clipping_planes = mapper.GetClippingPlanes()
         assert clipping_planes is None or clipping_planes.GetNumberOfItems() == 0
         prop = cap.GetProperty()
-        assert prop.GetRepresentation() == 2  # VTK_SURFACE
+        assert prop.GetRepresentation() == 2
         assert not prop.GetFrontfaceCulling()
         assert not prop.GetBackfaceCulling()
         assert not prop.GetLighting()
 
-        # Exercise VTK rendering rather than stopping at geometry assertions.
-        # Hide the clipped shell so every non-background pixel comes from the cap.
         source.SetVisibility(False)
         plotter.camera_position = [
             (2.5, 0.5, 0.5),
