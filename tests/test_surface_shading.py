@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pyvista as pv
 
-from opencae.ui.viewport.result_visualization import _supports_result_shading
-from opencae.ui.viewport.surface_shading import (
+from opencae.ui.other.viewport.result_visualization import _supports_result_shading
+from opencae.ui.other.viewport.surface_shading import (
     mesh_cell_colors,
     supports_surface_shading,
 )
