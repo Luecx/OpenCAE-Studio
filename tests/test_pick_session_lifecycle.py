@@ -16,7 +16,7 @@ from opencae.model.selection import (
     SelectionPolicy,
     ViewportHit,
 )
-from opencae.ui.viewport.context_pick import ContextPickManager
+from opencae.ui.other.viewport.context_pick import ContextPickManager
 
 
 class _Messages:
@@ -127,12 +127,12 @@ def test_control_point_rejects_named_regions_and_accepts_direct_points():
 
 def test_region_widget_defers_resolution_and_dialogs_keep_previews():
     root = Path(__file__).resolve().parents[1]
-    widget = (root / "opencae/ui/core/widgets/region_selection.py").read_text()
-    compact = (root / "opencae/ui/core/widgets/compact_region_selector.py").read_text()
-    constraint = (root / "opencae/ui/dialogs/constraint.py").read_text()
+    widget = (root / "opencae/ui/components/region_selection.py").read_text()
+    compact = (root / "opencae/ui/components/compact_region_selector.py").read_text()
+    constraint = (root / "opencae/ui/other/dialogs/constraint.py").read_text()
     assembly_constraints = (root / "opencae/controllers/assembly_controller_constraints.py").read_text()
     sections = (root / "opencae/controllers/part/regions.py").read_text()
-    section_dialog = (root / "opencae/ui/dialogs/section_assignment.py").read_text()
+    section_dialog = (root / "opencae/ui/other/dialogs/section_assignment.py").read_text()
 
     assert "RegionResolver" not in widget
     assert "RegionDefinition.from_values(value)" in widget
