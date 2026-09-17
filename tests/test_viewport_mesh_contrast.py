@@ -3,7 +3,7 @@
 from colorsys import rgb_to_hsv
 from pathlib import Path
 
-from opencae.ui.core.theme import color_scheme_names, palette_for
+from opencae.ui.foundation.theme import color_scheme_names, palette_for
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,9 +47,9 @@ def test_irregular_meshability_color_remains_visibly_purple():
 
 
 def test_results_are_rebuilt_when_the_color_scheme_changes():
-    source = (ROOT / "opencae/ui/menus/view_menu.py").read_text(encoding="utf-8")
-    scene = (ROOT / "opencae/ui/viewport/solution_scene.py").read_text(encoding="utf-8")
-    mesh = (ROOT / "opencae/ui/viewport/pyvista_mesh.py").read_text(encoding="utf-8")
+    source = (ROOT / "opencae/ui/other/menus/view_menu.py").read_text(encoding="utf-8")
+    scene = (ROOT / "opencae/ui/other/viewport/solution_scene.py").read_text(encoding="utf-8")
+    mesh = (ROOT / "opencae/ui/other/viewport/pyvista_mesh.py").read_text(encoding="utf-8")
 
     assert "page._emit()" in source
     assert 'PALETTE["mesh_lines"]' in scene
