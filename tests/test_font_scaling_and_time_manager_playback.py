@@ -7,8 +7,8 @@ import sys
 
 import numpy as np
 
-from opencae.ui.core.application_preferences import _scaled_stylesheet
-from opencae.ui.panels.time_manager import current_frame_amplitude
+from opencae.ui.foundation.application_preferences import _scaled_stylesheet
+from opencae.ui.other.panels.time_manager import current_frame_amplitude
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,10 +40,10 @@ def test_current_frame_waveform_presets_have_expected_shapes():
 
 
 def test_time_manager_exposes_drag_play_limits_and_single_frame_function_menu():
-    panel_source = (ROOT / "opencae/ui/panels/time_manager.py").read_text(
+    panel_source = (ROOT / "opencae/ui/other/panels/time_manager.py").read_text(
         encoding="utf-8"
     )
-    plot_source = (ROOT / "opencae/ui/panels/time_manager_plot.py").read_text(
+    plot_source = (ROOT / "opencae/ui/other/panels/time_manager_plot.py").read_text(
         encoding="utf-8"
     )
 
@@ -72,8 +72,8 @@ from types import SimpleNamespace
 
 from PyQt6.QtWidgets import QApplication
 
-from opencae.ui.panels.time_manager import TimeManagerPanel
-from opencae.ui.panels.time_manager_plot import TimeManagerPlot
+from opencae.ui.other.panels.time_manager import TimeManagerPanel
+from opencae.ui.other.panels.time_manager_plot import TimeManagerPlot
 
 app = QApplication.instance() or QApplication([])
 
@@ -144,9 +144,9 @@ finally:
 def test_persisted_font_scale_is_reapplied_after_widget_and_theme_construction():
     app_source = (ROOT / "opencae/app/application.py").read_text(encoding="utf-8")
     preference_source = (
-        ROOT / "opencae/ui/core/application_preferences.py"
+        ROOT / "opencae/ui/foundation/application_preferences.py"
     ).read_text(encoding="utf-8")
-    view_source = (ROOT / "opencae/ui/menus/view_menu.py").read_text(encoding="utf-8")
+    view_source = (ROOT / "opencae/ui/other/menus/view_menu.py").read_text(encoding="utf-8")
 
     startup_index = app_source.index("startup = StartupWindow()")
     splash_apply = app_source.index(
