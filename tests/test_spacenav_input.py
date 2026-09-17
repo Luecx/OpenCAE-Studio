@@ -1,6 +1,6 @@
 import ctypes
 
-from opencae.ui.viewport import spacenav_input
+from opencae.ui.other.viewport import spacenav_input
 
 
 def test_spacenav_bridge_is_optional_when_native_library_is_missing(monkeypatch):
