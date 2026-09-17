@@ -22,7 +22,7 @@ from opencae.optimization import (
 )
 from opencae.optimization.iteration import read_topology_fields
 from opencae.optimization.oc import optimality_criteria_update
-from opencae.ui.viewport.topology_overlay import visible_density_indices
+from opencae.ui.other.viewport.topology_overlay import visible_density_indices
 
 
 def _write_topology_res(path: Path, density_values):
