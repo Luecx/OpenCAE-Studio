@@ -1,4 +1,4 @@
-"""Reusable UI compositions built exclusively from canonical primitives."""
+"""Reusable composed UI controls shared by concrete OpenCAE features."""
 
 from .collapsed_action_group import CollapsedActionGroupButton
 from .automatic_manual_value_editor import AutomaticManualValueEditor
