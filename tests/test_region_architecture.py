@@ -95,7 +95,7 @@ def test_reverse_reference_index_scans_region_definitions(project_factory):
 
 def test_context_picker_reselects_mesh_point_mode_for_mixed_policy():
     from opencae.model.selection import SelectableKind, SelectionPolicy
-    from opencae.ui.viewport.context_pick import ContextPickManager
+    from opencae.ui.other.viewport.context_pick import ContextPickManager
 
     class Message:
         def emit(self, _value): pass
@@ -296,7 +296,7 @@ def test_viewport_selection_rejects_untyped_legacy_values():
 def test_reference_point_only_policy_uses_point_picker_in_mesh_display():
     from types import SimpleNamespace
     from opencae.model.selection import RegionProjection, RegionRequirement, SelectableKind, SelectionPolicy
-    from opencae.ui.viewport.context_pick import ContextPickManager
+    from opencae.ui.other.viewport.context_pick import ContextPickManager
 
     class Owner:
         selection_mode = "auto"
