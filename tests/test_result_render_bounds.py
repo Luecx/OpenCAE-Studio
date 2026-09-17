@@ -3,7 +3,7 @@
 import numpy as np
 import pyvista as pv
 
-from opencae.ui.viewport.result_visualization import _render_scalar
+from opencae.ui.other.viewport.result_visualization import _render_scalar
 
 
 def test_render_scalar_tolerates_roundoff_at_range_bounds():
