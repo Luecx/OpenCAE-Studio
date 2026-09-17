@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from opencae.ui.viewport.scene_camera import _fit_bounds, _principal_frame, fit_camera
+from opencae.ui.other.viewport.scene_camera import _fit_bounds, _principal_frame, fit_camera
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -125,7 +125,7 @@ def test_initial_fit_chooses_geometry_aware_view_even_when_current_view_is_safe(
 
 
 def test_manual_scene_fit_no_longer_depends_on_specific_actor_registry():
-    source = (ROOT / "opencae/ui/viewport/scene_display.py").read_text(encoding="utf-8")
+    source = (ROOT / "opencae/ui/other/viewport/scene_display.py").read_text(encoding="utf-8")
     fit_body = source.split("def fit(self, *, reset_orientation=False):", 1)[1].split(
         "def _fit_points", 1
     )[0]
