@@ -37,15 +37,15 @@ def test_analysis_monitor_places_monospace_output_left_and_runtime_details_right
     manager = _source("opencae/controllers/job_manager.py")
 
     assert "QSplitter(Qt.Orientation.Horizontal" in monitor
-    assert 'SectionHeading("Solver Output")' in monitor
+    assert 'LabelSection("Solver Output")' in monitor
     assert "self.output = MonospaceOutputView" in monitor
-    assert 'SectionHeading("Runtime Details")' in monitor
+    assert 'LabelSection("Runtime Details")' in monitor
     assert '("step", "Step")' in monitor
     assert '("procedure", "Procedure")' in monitor
     assert '("frame", "Frame")' in monitor
     assert '("iteration", "Iteration")' in monitor
     assert '("time_frequency", "Time / Frequency")' in monitor
-    assert 'SectionHeading("Step / Post Checks")' in monitor
+    assert 'LabelSection("Step / Post Checks")' in monitor
     assert "self.post_checks.setColumnCount(3)" in monitor
     assert "def set_runtime_state(" in monitor
     assert "def set_runtime_details(" in monitor
