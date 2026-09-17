@@ -66,7 +66,7 @@ def _load():
     previous = sys.modules.get("pyvistaqt")
     sys.modules["pyvistaqt"] = fake
     try:
-        path = Path(__file__).parents[1] / "opencae/ui/viewport/safe_qt_interactor.py"
+        path = Path(__file__).parents[1] / "opencae/ui/other/viewport/safe_qt_interactor.py"
         spec = importlib.util.spec_from_file_location("safe_qt_interactor_test", path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
