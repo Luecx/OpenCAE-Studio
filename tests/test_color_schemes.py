@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from opencae.ui.core.theme import (
+from opencae.ui.foundation.theme import (
     PALETTE,
     color_scheme_label,
     color_scheme_names,
@@ -101,8 +101,8 @@ def test_startup_applies_persisted_scheme_before_widgets_are_created():
 
 
 def test_view_menu_exposes_and_persists_live_color_scheme_switching():
-    source = _source("opencae/ui/menus/view_menu.py")
-    registry = _source("opencae/ui/actions/registry.py")
+    source = _source("opencae/ui/other/menus/view_menu.py")
+    registry = _source("opencae/ui/other/actions/registry.py")
 
     assert 'menu.addMenu("Color Scheme")' in source
     assert 'settings.set_value("appearance/color_scheme", selected)' in source
@@ -113,11 +113,11 @@ def test_view_menu_exposes_and_persists_live_color_scheme_switching():
 
 
 def test_browser_search_and_viewport_popups_use_dedicated_theme_tokens():
-    browser = _source("opencae/ui/tree/project_panel.py")
-    notice = _source("opencae/ui/viewport/viewport_notice.py")
-    query = _source("opencae/ui/viewport/result_query_panel.py")
-    selection = _source("opencae/ui/viewport/result_selection_panel.py")
-    vtk_box = _source("opencae/ui/viewport/viewport_text_box.py")
+    browser = _source("opencae/ui/other/tree/project_panel.py")
+    notice = _source("opencae/ui/other/viewport/viewport_notice.py")
+    query = _source("opencae/ui/other/viewport/result_query_panel.py")
+    selection = _source("opencae/ui/other/viewport/result_selection_panel.py")
+    vtk_box = _source("opencae/ui/other/viewport/viewport_text_box.py")
 
     assert 'self.filter.setObjectName("BrowserSearch")' in browser
     assert _uses_palette_token(browser, "search")
@@ -127,9 +127,9 @@ def test_browser_search_and_viewport_popups_use_dedicated_theme_tokens():
 
 
 def test_ribbon_separators_share_one_token_and_refresh_path():
-    page = _source("opencae/ui/ribbon/ribbon_page.py")
-    group = _source("opencae/ui/ribbon/ribbon_group.py")
-    result_group = _source("opencae/ui/ribbon/result_group.py")
+    page = _source("opencae/ui/other/ribbon/ribbon_page.py")
+    group = _source("opencae/ui/other/ribbon/ribbon_group.py")
+    result_group = _source("opencae/ui/other/ribbon/result_group.py")
 
     assert _uses_palette_token(page, "ribbon_separator")
     assert _uses_palette_token(group, "ribbon_separator")
@@ -140,28 +140,28 @@ def test_ribbon_separators_share_one_token_and_refresh_path():
 
 def test_key_viewport_chrome_uses_semantic_palette_tokens():
     files = {
-        "opencae/ui/viewport/pyvista_geometry.py": (
+        "opencae/ui/other/viewport/pyvista_geometry.py": (
             "cad_face",
             "cad_edge",
             "selection_3d",
         ),
-        "opencae/ui/viewport/pyvista_mesh.py": ("mesh_lines",),
-        "opencae/ui/viewport/surface_shading.py": ("mesh_surface",),
-        "opencae/ui/viewport/datum_overlay.py": (
+        "opencae/ui/other/viewport/pyvista_mesh.py": ("mesh_lines",),
+        "opencae/ui/other/viewport/surface_shading.py": ("mesh_surface",),
+        "opencae/ui/other/viewport/datum_overlay.py": (
             "datum",
             "datum_vector",
             "datum_plane",
         ),
-        "opencae/ui/viewport/reference_point_overlay.py": (
+        "opencae/ui/other/viewport/reference_point_overlay.py": (
             "reference_point",
             "overlay_text",
         ),
-        "opencae/ui/viewport/datum_reference_overlay.py": (
+        "opencae/ui/other/viewport/datum_reference_overlay.py": (
             "query_marker",
             "overlay_bg",
         ),
-        "opencae/ui/viewport/result_query_state.py": ("query_marker",),
-        "opencae/ui/viewport/view_cube.py": (
+        "opencae/ui/other/viewport/result_query_state.py": ("query_marker",),
+        "opencae/ui/other/viewport/view_cube.py": (
             "viewport",
             "cad_face",
             "viewport_text",
@@ -175,14 +175,14 @@ def test_key_viewport_chrome_uses_semantic_palette_tokens():
 
 def test_previous_dark_only_chrome_literals_are_removed_from_migrated_components():
     checks = {
-        "opencae/ui/core/styles/menus.py": "#66717c",
-        "opencae/ui/core/styles/materials.py": "#173526",
-        "opencae/ui/core/styles/fields.py": "#53606d",
-        "opencae/ui/viewport/pyvista_mesh.py": "#182129",
-        "opencae/ui/viewport/field_visualization.py": "#10161c",
-        "opencae/ui/viewport/reference_point_overlay.py": "#62d6a6",
-        "opencae/ui/viewport/datum_reference_overlay.py": "#3a321f",
-        "opencae/ui/viewport/result_query_state.py": "#f2b84b",
+        "opencae/ui/foundation/styles/menus.py": "#66717c",
+        "opencae/ui/foundation/styles/materials.py": "#173526",
+        "opencae/ui/foundation/styles/fields.py": "#53606d",
+        "opencae/ui/other/viewport/pyvista_mesh.py": "#182129",
+        "opencae/ui/other/viewport/field_visualization.py": "#10161c",
+        "opencae/ui/other/viewport/reference_point_overlay.py": "#62d6a6",
+        "opencae/ui/other/viewport/datum_reference_overlay.py": "#3a321f",
+        "opencae/ui/other/viewport/result_query_state.py": "#f2b84b",
     }
     for path, literal in checks.items():
         assert literal not in _source(path), (path, literal)
