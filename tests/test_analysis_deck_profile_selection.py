@@ -17,8 +17,8 @@ from opencae.model.core import EntityRef
 from opencae.model.entities.analysis import Analysis, AnalysisStep
 from opencae.persistence.project_codec import project_from_dict, project_to_dict
 from opencae.solvers.registry import available_solvers
-from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
-from opencae.ui.dialogs.run_analysis import RunAnalysisDialog
+from opencae.ui.other.dialogs.analysis_dialog import AnalysisDialog
+from opencae.ui.other.dialogs.run_analysis import RunAnalysisDialog
 
 
 class _Settings:
