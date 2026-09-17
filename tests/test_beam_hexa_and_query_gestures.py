@@ -16,7 +16,7 @@ from opencae.results.beam_physical_representation import (
     PHYSICAL_BEAM_CELL,
     build_beam_physical_representation_from_occurrences,
 )
-from opencae.ui.viewport.result_query_state import _ResultQueryMouseFilter
+from opencae.ui.other.viewport.result_query_state import _ResultQueryMouseFilter
 
 
 def _polygon_area(polygon):
