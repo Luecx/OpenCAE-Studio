@@ -7,9 +7,9 @@ from copy import deepcopy
 from opencae.deck_formats import DeckProfile
 from opencae.model.entities.resources.material_behaviors import DensityBehavior
 from opencae.solvers.femaster import FEMasterAdapter
-from opencae.ui.deck_format_manager.global_settings import DEFAULT_GLOBAL_SETTINGS
-from opencae.ui.deck_format_manager.profile_state import build_profile
-from opencae.ui.deck_format_manager.tree_catalog import TREE_SPEC
+from opencae.ui.other.deck_format_manager.global_settings import DEFAULT_GLOBAL_SETTINGS
+from opencae.ui.other.deck_format_manager.profile_state import build_profile
+from opencae.ui.other.deck_format_manager.tree_catalog import TREE_SPEC
 
 
 def _order(nodes=TREE_SPEC):
