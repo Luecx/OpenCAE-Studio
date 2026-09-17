@@ -7,10 +7,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_results_ribbon_uses_flat_surface_with_subtle_active_toggle_lift():
-    group_source = (ROOT / "opencae/ui/ribbon/result_group.py").read_text(
+    group_source = (ROOT / "opencae/ui/other/ribbon/result_group.py").read_text(
         encoding="utf-8"
     )
-    button_style = (ROOT / "opencae/ui/core/styles/buttons.py").read_text(
+    button_style = (ROOT / "opencae/ui/foundation/styles/buttons.py").read_text(
         encoding="utf-8"
     )
 
@@ -26,7 +26,7 @@ def test_results_ribbon_uses_flat_surface_with_subtle_active_toggle_lift():
 
 
 def test_browser_project_solution_tabs_have_dedicated_flat_style():
-    panel_source = (ROOT / "opencae/ui/tree/project_panel.py").read_text(
+    panel_source = (ROOT / "opencae/ui/other/tree/project_panel.py").read_text(
         encoding="utf-8"
     )
     selector_source = (
@@ -35,7 +35,7 @@ def test_browser_project_solution_tabs_have_dedicated_flat_style():
     close_source = (
         ROOT / "opencae/ui/primitives/buttons/button_project_menu_close.py"
     ).read_text(encoding="utf-8")
-    tab_style = (ROOT / "opencae/ui/core/styles/tabs.py").read_text(
+    tab_style = (ROOT / "opencae/ui/foundation/styles/tabs.py").read_text(
         encoding="utf-8"
     )
     layout_source = (ROOT / "opencae/app/window_layout.py").read_text(
@@ -77,10 +77,10 @@ def test_browser_project_solution_tabs_have_dedicated_flat_style():
 
 
 def test_jobs_table_opts_into_shared_flat_table_surface():
-    panel_source = (ROOT / "opencae/ui/panels/jobs_panel.py").read_text(
+    panel_source = (ROOT / "opencae/ui/other/panels/jobs_panel.py").read_text(
         encoding="utf-8"
     )
-    view_style = (ROOT / "opencae/ui/core/styles/views.py").read_text(
+    view_style = (ROOT / "opencae/ui/foundation/styles/views.py").read_text(
         encoding="utf-8"
     )
 
