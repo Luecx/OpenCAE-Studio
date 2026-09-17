@@ -5,7 +5,7 @@ from __future__ import annotations
 from math import isclose, radians, tan
 from pathlib import Path
 
-from opencae.ui.viewport.safe_qt_interactor import (
+from opencae.ui.other.viewport.safe_qt_interactor import (
     _pan_camera,
     _set_parallel_projection,
 )
@@ -128,13 +128,13 @@ def test_projection_toggle_preserves_apparent_scale_in_both_directions():
 
 
 def test_rotation_pivot_is_rendered_inside_vtk_not_as_qt_child_overlay():
-    pivot = (ROOT / "opencae/ui/viewport/rotation_pivot_indicator.py").read_text(
+    pivot = (ROOT / "opencae/ui/other/viewport/rotation_pivot_indicator.py").read_text(
         encoding="utf-8"
     )
-    interactor = (ROOT / "opencae/ui/viewport/safe_qt_interactor.py").read_text(
+    interactor = (ROOT / "opencae/ui/other/viewport/safe_qt_interactor.py").read_text(
         encoding="utf-8"
     )
-    canvas = (ROOT / "opencae/ui/viewport/viewport_canvas.py").read_text(
+    canvas = (ROOT / "opencae/ui/other/viewport/viewport_canvas.py").read_text(
         encoding="utf-8"
     )
 
