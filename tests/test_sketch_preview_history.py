@@ -2,7 +2,7 @@
 
 from opencae.model.entities.geometry import SketchFeature
 from opencae.model.entities.parts import Part
-from opencae.ui.sketcher.preview import build_preview_part
+from opencae.ui.other.sketcher.preview import build_preview_part
 
 
 def test_preview_candidate_appends_new_feature_without_mutating_base_part():
