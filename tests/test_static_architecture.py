@@ -20,6 +20,66 @@ def test_removed_duplicate_legacy_modules_stay_removed():
         assert not (ROOT / relative).exists()
 
 
+def test_simplified_ui_has_no_legacy_top_level_packages():
+    legacy = (
+        "actions",
+        "assets",
+        "composites",
+        "core",
+        "deck_format_manager",
+        "dialogs",
+        "docks",
+        "menus",
+        "monitors",
+        "panels",
+        "preferences",
+        "ribbon",
+        "sketcher",
+        "templates",
+        "tree",
+        "viewport",
+    )
+    for name in legacy:
+        assert not (ROOT / "ui" / name).exists(), name
+
+
+def test_productive_ui_imports_do_not_use_removed_package_paths():
+    legacy_prefixes = (
+        "opencae.ui.actions",
+        "opencae.ui.composites",
+        "opencae.ui.core",
+        "opencae.ui.deck_format_manager",
+        "opencae.ui.dialogs",
+        "opencae.ui.docks",
+        "opencae.ui.menus",
+        "opencae.ui.monitors",
+        "opencae.ui.panels",
+        "opencae.ui.preferences",
+        "opencae.ui.ribbon",
+        "opencae.ui.sketcher",
+        "opencae.ui.templates",
+        "opencae.ui.tree",
+        "opencae.ui.viewport",
+    )
+    offenders = []
+    for path in ROOT.rglob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            module = None
+            if isinstance(node, ast.ImportFrom):
+                module = node.module
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith(legacy_prefixes):
+                        offenders.append((str(path.relative_to(ROOT)), node.lineno, alias.name))
+            if module and module.startswith(legacy_prefixes):
+                offenders.append((str(path.relative_to(ROOT)), node.lineno, module))
+    assert offenders == []
+
+
 def test_productive_consumers_do_not_import_legacy_target_types():
     modules = [
         ROOT / "model/entities/loads",
@@ -36,7 +96,8 @@ def test_productive_consumers_do_not_import_legacy_target_types():
         paths.extend(module.rglob("*.py") if module.is_dir() else [module])
     for path in paths:
         text = path.read_text(encoding="utf-8")
-        if any(value in text for value in forbidden): offenders.append(str(path.relative_to(ROOT)))
+        if any(value in text for value in forbidden):
+            offenders.append(str(path.relative_to(ROOT)))
     assert offenders == []
 
 
@@ -65,26 +126,60 @@ def test_direct_constructor_keywords_match_declared_signatures():
     classes = {}
     trees = {}
     for path in ROOT.rglob("*.py"):
-        try: tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        except SyntaxError: continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except SyntaxError:
+            continue
         trees[path] = tree
         for node in tree.body:
             if isinstance(node, ast.ClassDef):
-                init = next((item for item in node.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__"), None)
+                init = next(
+                    (
+                        item
+                        for item in node.body
+                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and item.name == "__init__"
+                    ),
+                    None,
+                )
                 if init:
-                    positional = [arg.arg for arg in (*init.args.posonlyargs, *init.args.args) if arg.arg != "self"]
+                    positional = [
+                        arg.arg
+                        for arg in (*init.args.posonlyargs, *init.args.args)
+                        if arg.arg != "self"
+                    ]
                     keywords = [arg.arg for arg in init.args.kwonlyargs]
-                    classes[node.name] = (set(positional + keywords), init.args.kwarg is not None, path)
+                    classes[node.name] = (
+                        set(positional + keywords),
+                        init.args.kwarg is not None,
+                        path,
+                    )
     offenders = []
     for path, tree in trees.items():
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name): continue
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
             signature = classes.get(node.func.id)
-            if not signature: continue
+            if not signature:
+                continue
             accepted, variadic, declared = signature
-            if variadic: continue
-            invalid = sorted(keyword.arg for keyword in node.keywords if keyword.arg and keyword.arg not in accepted)
-            if invalid: offenders.append((str(path.relative_to(ROOT)), node.lineno, node.func.id, invalid, str(declared.relative_to(ROOT))))
+            if variadic:
+                continue
+            invalid = sorted(
+                keyword.arg
+                for keyword in node.keywords
+                if keyword.arg and keyword.arg not in accepted
+            )
+            if invalid:
+                offenders.append(
+                    (
+                        str(path.relative_to(ROOT)),
+                        node.lineno,
+                        node.func.id,
+                        invalid,
+                        str(declared.relative_to(ROOT)),
+                    )
+                )
     assert offenders == []
 
 
@@ -102,34 +197,40 @@ def test_controllers_use_explicit_commands_not_project_snapshots():
 
 def test_typed_viewport_selection_replaces_free_form_pick_dictionaries():
     paths = [
-        ROOT / "ui/viewport/point_selection_state.py",
-        ROOT / "ui/viewport/element_selection_state.py",
-        ROOT / "ui/viewport/cell_selection.py",
-        ROOT / "ui/viewport/pyvista_picker.py",
-        ROOT / "ui/viewport/reference_point_overlay.py",
-        ROOT / "ui/viewport/datum_overlay.py",
+        ROOT / "ui/other/viewport/point_selection_state.py",
+        ROOT / "ui/other/viewport/element_selection_state.py",
+        ROOT / "ui/other/viewport/cell_selection.py",
+        ROOT / "ui/other/viewport/pyvista_picker.py",
+        ROOT / "ui/other/viewport/reference_point_overlay.py",
+        ROOT / "ui/other/viewport/datum_overlay.py",
         ROOT / "controllers/region_selection.py",
     ]
     offenders = []
     for path in paths:
         text = path.read_text(encoding="utf-8")
-        if '"mesh_entity"' in text or "{'kind':" in text or '{"kind":' in text or '"kind": "rp"' in text or '"kind": "datum_' in text:
+        if (
+            '"mesh_entity"' in text
+            or "{'kind':" in text
+            or '{"kind":' in text
+            or '"kind": "rp"' in text
+            or '"kind": "datum_' in text
+        ):
             offenders.append(str(path.relative_to(ROOT)))
     assert offenders == []
 
 
 def test_constraint_requirements_have_one_authoritative_definition():
     controller = (ROOT / "controllers/assembly_controller_constraints.py").read_text(encoding="utf-8")
-    dialog = (ROOT / "ui/dialogs/constraint.py").read_text(encoding="utf-8")
+    dialog = (ROOT / "ui/other/dialogs/constraint.py").read_text(encoding="utf-8")
     assert "constraint_selection_policy" in controller
     assert "constraint_region_requirement" in dialog
     assert "RegionRequirement(RegionProjection.SINGLE_CONTROL_NODE" not in controller
 
 
 def test_reference_selector_uses_explicit_callback_protocol():
-    text = (ROOT / "ui/core/widgets/reference_selector.py").read_text(encoding="utf-8")
+    text = (ROOT / "ui/components/controls/control_reference_selector.py").read_text(encoding="utf-8")
     assert "inspect.signature" not in text
-    assert "callback(self.window(), self._apply_created)" in text
+    assert "self._create_callback(self.window(), self._apply_created)" in text
 
 
 def test_femaster_load_emitter_dispatches_by_concrete_class():
@@ -140,13 +241,13 @@ def test_femaster_load_emitter_dispatches_by_concrete_class():
 
 def test_geometry_history_uses_generic_regions_not_region_members():
     feature = (ROOT / "model/entities/geometry/feature.py").read_text(encoding="utf-8")
-    dialog = (ROOT / "ui/dialogs/partition.py").read_text(encoding="utf-8")
+    dialog = (ROOT / "ui/other/dialogs/partition.py").read_text(encoding="utf-8")
     controller = (ROOT / "controllers/part/partitions.py").read_text(encoding="utf-8")
     assert "RegionDefinition" in feature and "references:" not in feature
     assert "CompactRegionSelector" in dialog and "SelectionMembersWidget" not in dialog
     assert "begin_region_pick" in controller and "selected_labels" not in controller
     assert not (ROOT / "model/core/region_member.py").exists()
-    assert not (ROOT / "ui/core/widgets/selection_members.py").exists()
+    assert not (ROOT / "ui/components/selection_members.py").exists()
 
 
 def test_whole_project_json_patch_implementation_is_removed():
@@ -154,15 +255,16 @@ def test_whole_project_json_patch_implementation_is_removed():
 
 
 def test_viewport_factory_does_not_hide_runtime_construction_bugs():
-    text = (ROOT / "ui/viewport/viewport_factory.py").read_text(encoding="utf-8")
+    text = (ROOT / "ui/other/viewport/viewport_factory.py").read_text(encoding="utf-8")
     assert "except Exception" not in text
     assert "except (ImportError, ModuleNotFoundError)" in text
 
 
 def test_viewport_overlays_do_not_silently_swallow_exceptions():
     offenders = []
-    for path in (ROOT / "ui/viewport").glob("*.py"):
-        if path.name == "safe_operations.py": continue
+    for path in (ROOT / "ui/other/viewport").glob("*.py"):
+        if path.name == "safe_operations.py":
+            continue
         text = path.read_text(encoding="utf-8")
         if "except Exception: pass" in text or "except Exception:\n            pass" in text:
             offenders.append(path.name)
@@ -170,7 +272,7 @@ def test_viewport_overlays_do_not_silently_swallow_exceptions():
 
 
 def test_partition_dialog_resolves_current_part_by_id():
-    text = (ROOT / "ui/dialogs/partition.py").read_text(encoding="utf-8")
+    text = (ROOT / "ui/other/dialogs/partition.py").read_text(encoding="utf-8")
     assert "self.part_id = part.id" in text
     assert "self.project.try_resolve(self.part_id)" in text
     assert "self.part = part" not in text
@@ -184,13 +286,17 @@ def test_known_geometry_features_use_explicit_fields_not_parameter_switches():
         ROOT / "geometry/partition_edge.py",
         ROOT / "geometry/history.py",
     ]
-    offenders = [str(path.relative_to(ROOT)) for path in paths if "parameters.get" in path.read_text(encoding="utf-8")]
+    offenders = [
+        str(path.relative_to(ROOT))
+        for path in paths
+        if "parameters.get" in path.read_text(encoding="utf-8")
+    ]
     assert offenders == []
 
 
 def test_viewport_scene_uses_instance_ids_without_name_fallbacks():
-    reference = (ROOT / "ui/viewport/assembly_context.py").read_text(encoding="utf-8")
-    scene = (ROOT / "ui/viewport/pyvista_scene.py").read_text(encoding="utf-8")
+    reference = (ROOT / "ui/other/viewport/assembly_context.py").read_text(encoding="utf-8")
+    scene = (ROOT / "ui/other/viewport/pyvista_scene.py").read_text(encoding="utf-8")
     assert "instance_name" not in reference
     assert "item.name == instance_key" not in scene
     assert "assembly_snapshots.get(instance_key)" in scene
@@ -220,7 +326,7 @@ def test_runtime_surface_resolution_does_not_guess_facets_from_node_subsets():
 
 def test_runtime_picker_does_not_accept_legacy_selection_dictionaries():
     hit = (ROOT / "model/selection/hit.py").read_text(encoding="utf-8")
-    context = (ROOT / "ui/viewport/context_pick.py").read_text(encoding="utf-8")
+    context = (ROOT / "ui/other/viewport/context_pick.py").read_text(encoding="utf-8")
     controller = (ROOT / "controllers/region_selection.py").read_text(encoding="utf-8")
     assert "from_legacy" not in hit
     assert "isinstance(value, dict)" not in context
@@ -228,7 +334,7 @@ def test_runtime_picker_does_not_accept_legacy_selection_dictionaries():
 
 
 def test_point_picker_filters_hidden_and_policy_incompatible_candidates():
-    text = (ROOT / "ui/viewport/point_selection_state.py").read_text(encoding="utf-8")
+    text = (ROOT / "ui/other/viewport/point_selection_state.py").read_text(encoding="utf-8")
     assert 'self.owner.display_mode != "mesh"' in text
     assert "context.accepts(SelectableKind.MESH_NODE)" in text
     assert "context.accepts(hit.kind)" in text
@@ -249,7 +355,7 @@ def test_section_assignment_has_no_legacy_single_region_property():
 
 def test_known_best_effort_paths_log_instead_of_silent_pass():
     paths = [
-        ROOT / "ui/tree/solution_tree.py",
+        ROOT / "ui/other/tree/solution_tree.py",
         ROOT / "geometry/gmsh_session.py",
         ROOT / "geometry/mesh_controls.py",
         ROOT / "geometry/entity_names.py",
@@ -262,7 +368,7 @@ def test_known_best_effort_paths_log_instead_of_silent_pass():
 
 
 def test_cell_remove_event_is_forwarded_to_region_selection():
-    text = (ROOT / "ui/viewport/cell_selection.py").read_text(encoding="utf-8")
+    text = (ROOT / "ui/other/viewport/cell_selection.py").read_text(encoding="utf-8")
     assert "changed = [_cell_hit" in text
     assert "hit.with_operation(operation) for hit in changed" in text
 
@@ -276,22 +382,22 @@ def test_partition_edit_uses_one_id_lookup_without_stale_object_indexing():
 
 def test_region_consumers_use_compact_selector_and_keep_detailed_editor_extended():
     consumers = [
-        ROOT / "ui/dialogs/constraint.py",
-        ROOT / "ui/dialogs/section_assignment.py",
-        ROOT / "ui/dialogs/load_common.py",
-        ROOT / "ui/dialogs/support.py",
-        ROOT / "ui/dialogs/edge_seed.py",
-        ROOT / "ui/dialogs/mesh_control.py",
-        ROOT / "ui/dialogs/element_control_target.py",
-        ROOT / "ui/dialogs/partition.py",
+        ROOT / "ui/other/dialogs/constraint.py",
+        ROOT / "ui/other/dialogs/section_assignment.py",
+        ROOT / "ui/other/dialogs/load_common.py",
+        ROOT / "ui/other/dialogs/support.py",
+        ROOT / "ui/other/dialogs/edge_seed.py",
+        ROOT / "ui/other/dialogs/mesh_control.py",
+        ROOT / "ui/other/dialogs/element_control_target.py",
+        ROOT / "ui/other/dialogs/partition.py",
     ]
     for path in consumers:
         text = path.read_text(encoding="utf-8")
         assert "CompactRegionSelector" in text
         assert "RegionSelectionWidget" not in text
-    compact = (ROOT / "ui/core/widgets/compact_region_selector.py").read_text(encoding="utf-8")
-    extended = (ROOT / "ui/core/widgets/extended_region_dialog.py").read_text(encoding="utf-8")
-    detailed = (ROOT / "ui/core/widgets/region_selection.py").read_text(encoding="utf-8")
+    compact = (ROOT / "ui/components/compact_region_selector.py").read_text(encoding="utf-8")
+    extended = (ROOT / "ui/components/extended_region_dialog.py").read_text(encoding="utf-8")
+    detailed = (ROOT / "ui/components/region_selection.py").read_text(encoding="utf-8")
     assert "ExtendedRegionDialog" in compact
     assert "pick_callback=None" in extended
     assert "QTableWidget" not in compact
@@ -299,7 +405,7 @@ def test_region_consumers_use_compact_selector_and_keep_detailed_editor_extended
 
 
 def test_compact_region_selector_owns_one_checkable_pick_button_and_deferred_value():
-    text = (ROOT / "ui/core/widgets/compact_region_selector.py").read_text(encoding="utf-8")
+    text = (ROOT / "ui/components/compact_region_selector.py").read_text(encoding="utf-8")
     assert 'self.pick_button.setCheckable(True)' in text
     assert '"Finish selecting this region"' in text
     assert "self.picking_changed.emit(bool(active))" in text
