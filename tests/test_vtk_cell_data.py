@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from opencae.ui.viewport.vtk_cell_data import cell_array
+from opencae.ui.other.viewport.vtk_cell_data import cell_array
 
 
 class _Array:
