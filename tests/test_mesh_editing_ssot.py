@@ -16,9 +16,9 @@ from opencae.model.entities.mesh import (
 )
 from opencae.model.selection import RegionProjection, RegionRequirement, RegionResolver
 from opencae.persistence.project_codec import project_from_dict, project_to_dict
-from opencae.ui.dialogs.mesh_bulk import MeshElementBulkDialog, MeshNodeBulkDialog
-from opencae.ui.dialogs.mesh_element import MeshElementDialog
-from opencae.ui.dialogs.mesh_node import MeshNodeDialog
+from opencae.ui.other.dialogs.mesh_bulk import MeshElementBulkDialog, MeshNodeBulkDialog
+from opencae.ui.other.dialogs.mesh_element import MeshElementDialog
+from opencae.ui.other.dialogs.mesh_node import MeshNodeDialog
 
 
 def _dispose_widgets(application, *widgets):
