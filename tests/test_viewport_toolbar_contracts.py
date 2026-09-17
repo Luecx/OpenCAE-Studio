@@ -11,10 +11,11 @@ def _source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_selection_toolbar_uses_one_canonical_button_class():
-    """Keep selection, display, projection, and fit controls geometrically aligned."""
+def test_selection_toolbar_uses_canonical_viewport_button_primitives():
+    """Keep selection, display, projection, and fit controls on shared primitives."""
     source = _source("opencae/ui/other/viewport/selection_toolbar.py")
-    assert "ViewportToolButton(" in source
+    assert "ButtonViewportAction" in source
+    assert "ButtonViewportToggle" in source
     assert "QToolButton(" not in source
     assert "ProjectionToggle" not in source
 
