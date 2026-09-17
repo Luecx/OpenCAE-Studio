@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from opencae.ui.core.theme import PALETTE
+from opencae.ui.foundation.theme import PALETTE
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +21,7 @@ def test_viewport_palette_uses_lighter_solid_surface_and_visible_mesh_lines():
 
 
 def test_safe_interactor_no_longer_promotes_viewport_to_gradient():
-    source = (ROOT / "opencae/ui/viewport/safe_qt_interactor.py").read_text(
+    source = (ROOT / "opencae/ui/other/viewport/safe_qt_interactor.py").read_text(
         encoding="utf-8"
     )
     assert "def set_background" not in source
@@ -30,7 +30,7 @@ def test_safe_interactor_no_longer_promotes_viewport_to_gradient():
 
 
 def test_viewport_canvas_has_no_artificial_horizon_overlay():
-    source = (ROOT / "opencae/ui/viewport/viewport_canvas.py").read_text(
+    source = (ROOT / "opencae/ui/other/viewport/viewport_canvas.py").read_text(
         encoding="utf-8"
     )
     assert "ViewportHorizon" not in source
@@ -39,10 +39,10 @@ def test_viewport_canvas_has_no_artificial_horizon_overlay():
 
 
 def test_result_mesh_lines_use_theme_contrast_color():
-    source = (ROOT / "opencae/ui/viewport/result_visualization.py").read_text(
+    source = (ROOT / "opencae/ui/other/viewport/result_visualization.py").read_text(
         encoding="utf-8"
     )
-    topology_source = (ROOT / "opencae/ui/viewport/topology_presentation.py").read_text(
+    topology_source = (ROOT / "opencae/ui/other/viewport/topology_presentation.py").read_text(
         encoding="utf-8"
     )
     assert 'color=PALETTE["mesh_lines"]' in source
@@ -52,7 +52,7 @@ def test_result_mesh_lines_use_theme_contrast_color():
 
 
 def test_view_cube_opaque_fill_matches_exact_viewport_surface():
-    source = (ROOT / "opencae/ui/viewport/view_cube.py").read_text(
+    source = (ROOT / "opencae/ui/other/viewport/view_cube.py").read_text(
         encoding="utf-8"
     )
     assert 'QColor(PALETTE["viewport"])' in source
