@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from opencae.ui.core.file_dialogs import (
+from opencae.ui.components.file_dialogs import (
     _LAST_DIRECTORY_KEY,
     _initial_path,
     _remember_directory,
