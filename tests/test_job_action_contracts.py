@@ -15,7 +15,7 @@ def test_job_manager_exposes_action_handlers():
 
 
 def test_job_action_catalog_uses_public_job_manager_methods():
-    from opencae.ui.actions.catalog import job_actions
+    from opencae.ui.other.actions.catalog import job_actions
 
     calls = []
     jobs = SimpleNamespace(
