@@ -10,7 +10,7 @@ from opencae.geometry.snapshots import (
     SurfacePatch,
     VertexPatch,
 )
-from opencae.ui.viewport.geometry_render_cache import GeometryRenderCache
+from opencae.ui.other.viewport.geometry_render_cache import GeometryRenderCache
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,7 +76,7 @@ def test_geometry_render_cache_replaces_stale_part_fingerprint():
 def test_scene_refresh_leaves_final_render_to_viewport_batch():
     """Full scene refresh must not render before pending overlays are restored."""
     source = (
-        ROOT / "opencae/ui/viewport/pyvista_scene.py"
+        ROOT / "opencae/ui/other/viewport/pyvista_scene.py"
     ).read_text(encoding="utf-8")
     refresh = source[source.index("    def refresh("):source.index("    def clear(")]
 
@@ -86,7 +86,7 @@ def test_scene_refresh_leaves_final_render_to_viewport_batch():
 def test_result_query_does_not_install_left_clicking_pyvista_picker():
     """Result queries must pass through the shared camera-drag click gate."""
     source = (
-        ROOT / "opencae/ui/viewport/result_query_state.py"
+        ROOT / "opencae/ui/other/viewport/result_query_state.py"
     ).read_text(encoding="utf-8")
 
     assert "enable_surface_point_picking" not in source
@@ -97,7 +97,7 @@ def test_result_query_does_not_install_left_clicking_pyvista_picker():
 def test_jobs_panel_contains_no_solver_output_view():
     """The bottom Jobs surface is a Job list; solver text belongs to monitors."""
     source = (
-        ROOT / "opencae/ui/panels/jobs_panel.py"
+        ROOT / "opencae/ui/other/panels/jobs_panel.py"
     ).read_text(encoding="utf-8")
 
     assert "MonospaceOutputView" not in source
