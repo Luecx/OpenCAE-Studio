@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from opencae.ui.viewport.result_visualization import _clim
+from opencae.ui.other.viewport.result_visualization import _clim
 
 
 def _grid(values):
