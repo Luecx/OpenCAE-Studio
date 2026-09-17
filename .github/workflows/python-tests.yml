@@ -8,6 +8,7 @@ on:
       - refactor/**
       - ui/**
       - workflow/**
+      - FEG/**
   pull_request:
 
 jobs:
