@@ -2,7 +2,7 @@
 
 from PyQt6.QtWidgets import QSizePolicy, QWidget
 
-from opencae.ui.core.metrics import PRIMARY_CONTROL_HEIGHT
+from opencae.ui.foundation.metrics import PRIMARY_CONTROL_HEIGHT
 
 
 def apply_primary_input_geometry(widget: QWidget) -> QWidget:

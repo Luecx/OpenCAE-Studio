@@ -1,7 +1,7 @@
 """Owns interactive geometry-settings edits for the active Part."""
 
 from opencae.model.entities.mesh import MeshValidity
-from opencae.ui.dialogs.geometry_settings import GeometrySettingsDialog
+from opencae.ui.other.dialogs.geometry_settings import GeometrySettingsDialog
 
 from ..dialog_runner import get_values
 

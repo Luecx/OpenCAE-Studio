@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from opencae.model.naming import next_name
 from opencae.model.regions import CoordinateSystem, ReferencePoint
-from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
-from opencae.ui.dialogs.coordinate_system import CoordinateSystemDialog
-from opencae.ui.dialogs.reference_point import ReferencePointDialog
+from opencae.ui.components.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.other.dialogs.coordinate_system import CoordinateSystemDialog
+from opencae.ui.other.dialogs.reference_point import ReferencePointDialog
 
 
 def create_coordinate_system(controller) -> None:

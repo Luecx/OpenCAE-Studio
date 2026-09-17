@@ -13,7 +13,7 @@ from opencae.model.entities.optimization import (
     TopologyOptimization,
     TopologySymmetry,
 )
-from opencae.ui.core.theme import PALETTE
+from opencae.ui.foundation.theme import PALETTE
 
 
 class OptimizationSelectionMixin:

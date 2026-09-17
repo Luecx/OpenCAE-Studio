@@ -6,8 +6,8 @@ from opencae.geometry.cache import CACHE
 from opencae.geometry.errors import GeometryError
 from opencae.geometry.orphan_mesh import snapshot_from_part
 from opencae.model.selection import SelectableKind, SelectionPolicy
-from opencae.ui.core.dialog_lifecycle import activate_dialog, show_modeless_dialog
-from opencae.ui.dialogs.visibility import VisibilityDialog
+from opencae.ui.components.dialog_lifecycle import activate_dialog, show_modeless_dialog
+from opencae.ui.other.dialogs.visibility import VisibilityDialog
 
 
 _KIND = {

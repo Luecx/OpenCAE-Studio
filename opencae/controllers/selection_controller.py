@@ -17,7 +17,7 @@ from opencae.store.commands import (
     make_delete_command,
     make_replace_command,
 )
-from opencae.ui.dialogs.entity_editor import EntityEditorDialog
+from opencae.ui.other.dialogs.entity_editor import EntityEditorDialog
 
 
 class SelectionController:

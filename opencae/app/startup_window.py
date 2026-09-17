@@ -5,7 +5,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QProgressBar, QVBoxLayout, QWidget
 
-from opencae.ui.core.theme import PALETTE
+from opencae.ui.foundation.theme import PALETTE
 
 
 class StartupWindow(QWidget):

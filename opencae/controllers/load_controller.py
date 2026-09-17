@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.components.dialog_lifecycle import show_modeless_dialog
 from PyQt6.QtWidgets import QDialog, QInputDialog
 
 from opencae.model.core import EntityRef
@@ -14,9 +14,9 @@ from opencae.model.regions import create_region
 from opencae.model.selection import (
     RegionProjection, region_definition_error,
 )
-from opencae.ui.dialogs.amplitude import AmplitudeDialog
-from opencae.ui.dialogs.load import LoadDialog
-from opencae.ui.dialogs.support import SupportDialog
+from opencae.ui.other.dialogs.amplitude import AmplitudeDialog
+from opencae.ui.other.dialogs.load import LoadDialog
+from opencae.ui.other.dialogs.support import SupportDialog
 from .region_selection import begin_region_pick, region_options
 
 

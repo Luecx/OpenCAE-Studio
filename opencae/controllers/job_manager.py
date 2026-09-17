@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import QMessageBox
 from opencae.jobs.femaster_output_parser import FEMasterOutputParser
 from opencae.model.entities.jobs import Job, JobSourceKind, JobStatus
 from opencae.results import FrdLoader
-from opencae.ui.monitors import AnalysisJobMonitor, TopologyJobMonitor
+from opencae.ui.other.monitors import AnalysisJobMonitor, TopologyJobMonitor
 
 from .job_manager_analysis import run_analysis as run_analysis_workflow
 from .job_manager_factory import utc_now

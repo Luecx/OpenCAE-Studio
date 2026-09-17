@@ -2,7 +2,7 @@
 
 from PyQt6.QtWidgets import QSizePolicy, QWidget
 
-from opencae.ui.core.theme import PALETTE
+from opencae.ui.foundation.theme import PALETTE
 
 
 class SeparatorResultsRange(QWidget):

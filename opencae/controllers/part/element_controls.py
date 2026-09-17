@@ -18,7 +18,7 @@ from opencae.model.selection import (
     SelectionPolicy,
     definition_from_local_labels,
 )
-from opencae.ui.dialogs.element_control import ElementControlDialog
+from opencae.ui.other.dialogs.element_control import ElementControlDialog
 from ..element_control_session import ElementControlSession
 from ..region_selection import begin_region_pick, region_options
 

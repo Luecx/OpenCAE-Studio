@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from opencae.model.datums import create_datum
 from opencae.model.naming import next_name
-from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
-from opencae.ui.dialogs.datum_plane import DatumPlaneDialog
-from opencae.ui.dialogs.datum_point import DatumPointDialog
-from opencae.ui.dialogs.datum_vector import DatumVectorDialog
+from opencae.ui.components.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.other.dialogs.datum_plane import DatumPlaneDialog
+from opencae.ui.other.dialogs.datum_point import DatumPointDialog
+from opencae.ui.other.dialogs.datum_vector import DatumVectorDialog
 
 
 class PartDatums:

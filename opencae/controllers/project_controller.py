@@ -11,11 +11,11 @@ from opencae.model.project import Project
 from opencae.persistence.project_io import load_project, save_project
 from opencae.results import FrdLoader
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand
-from opencae.ui.core.application_preferences import apply_application_preferences
-from opencae.ui.core.file_dialogs import open_file, save_file
-from opencae.ui.dialogs.preferences import PreferencesDialog
-from opencae.ui.dialogs.project_settings import ProjectSettingsDialog
-from opencae.ui.preferences.runtime import apply_window_preferences
+from opencae.ui.foundation.application_preferences import apply_application_preferences
+from opencae.ui.components.file_dialogs import open_file, save_file
+from opencae.ui.other.dialogs.preferences import PreferencesDialog
+from opencae.ui.other.dialogs.project_settings import ProjectSettingsDialog
+from opencae.ui.other.preferences.runtime import apply_window_preferences
 
 from .dialog_runner import get_values
 

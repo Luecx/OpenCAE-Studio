@@ -6,9 +6,9 @@ from opencae.model.assembly import Instance
 from opencae.model.core import EntityRef
 from opencae.model.naming import next_name
 from opencae.store.commands import UpdateFieldCommand
-from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
-from opencae.ui.dialogs.instance import InstanceDialog
-from opencae.ui.dialogs.transform_instance import TransformInstanceDialog
+from opencae.ui.components.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.other.dialogs.instance import InstanceDialog
+from opencae.ui.other.dialogs.transform_instance import TransformInstanceDialog
 
 from .dialog_runner import get_values
 

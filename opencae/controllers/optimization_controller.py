@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from opencae.model.entities.optimization import TopologyOptimization
-from opencae.ui.viewport.topology_overlay import TopologyDensityOverlay
+from opencae.ui.other.viewport.topology_overlay import TopologyDensityOverlay
 
 from .optimization_run_controller import OptimizationRunMixin
 from .optimization_selection_controller import OptimizationSelectionMixin

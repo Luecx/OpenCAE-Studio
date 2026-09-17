@@ -6,8 +6,8 @@ from PyQt6.QtCore import QPoint, QPointF, QTimer, Qt
 from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QComboBox, QWidget
 
-from opencae.ui.core.metrics import COMBO_POPUP_EXTRA_HEIGHT, COMBO_POPUP_ROW_HEIGHT
-from opencae.ui.core.theme import PALETTE
+from opencae.ui.foundation.metrics import COMBO_POPUP_EXTRA_HEIGHT, COMBO_POPUP_ROW_HEIGHT
+from opencae.ui.foundation.theme import PALETTE
 from opencae.ui.primitives.inputs.geometry import apply_primary_input_geometry
 
 

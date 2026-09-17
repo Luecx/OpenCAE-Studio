@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QTimer
 
-from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.components.dialog_lifecycle import show_modeless_dialog
 
 
 class ElementControlSession:

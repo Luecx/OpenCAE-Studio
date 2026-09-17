@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
-from opencae.ui.core.theme import PALETTE
+from opencae.ui.components.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.foundation.theme import PALETTE
 
 from opencae.model.entities.mesh import MeshValidity
 from opencae.model.mesh import DefaultSeed, EdgeSeed
@@ -15,8 +15,8 @@ from opencae.model.selection import (
     region_definition_error,
 )
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand, make_add_command, make_replace_command
-from opencae.ui.dialogs.default_seed import DefaultSeedDialog
-from opencae.ui.dialogs.edge_seed import EdgeSeedDialog
+from opencae.ui.other.dialogs.default_seed import DefaultSeedDialog
+from opencae.ui.other.dialogs.edge_seed import EdgeSeedDialog
 from ..region_selection import begin_region_pick, region_options
 
 

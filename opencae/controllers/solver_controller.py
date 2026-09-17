@@ -8,9 +8,9 @@ from PyQt6.QtWidgets import QMessageBox
 
 from opencae.deck_formats.selection import resolve_profile
 from opencae.model.entities.analysis import Analysis
-from opencae.ui.core.file_dialogs import save_file
-from opencae.ui.deck_format_manager import DeckFormatManagerDialog
-from opencae.ui.dialogs.deck_preview import DeckPreviewDialog
+from opencae.ui.components.file_dialogs import save_file
+from opencae.ui.other.deck_format_manager import DeckFormatManagerDialog
+from opencae.ui.other.dialogs.deck_preview import DeckPreviewDialog
 
 
 class SolverController:

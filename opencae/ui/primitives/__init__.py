@@ -1,7 +1,7 @@
 """Canonical low-level OpenCAE UI primitives.
 
 Primitives are flat concrete widgets named by visual context and behavior.
-Higher-level composites, dialogs, ribbons, and workspaces compose these classes
+Higher-level components, dialogs, ribbons, and workspaces compose these classes
 instead of inheriting from a shared widget hierarchy.
 """
 
@@ -31,10 +31,14 @@ from .labels import (
 from .radios import RadioForm
 from .selects import SelectForm
 from .sliders import SliderHorizontal
+from .label_role import LabelRole
+from .label_spec import LabelSpec
 
 __all__ = [name for name in globals() if name.startswith(("Button", "Input", "Label"))]
 __all__ += [
     "CheckForm",
+    "LabelRole",
+    "LabelSpec",
     "RadioForm",
     "SelectForm",
     "SliderHorizontal",

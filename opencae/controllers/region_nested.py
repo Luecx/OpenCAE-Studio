@@ -1,4 +1,4 @@
-from opencae.ui.core.dialog_lifecycle import activate_dialog, show_modeless_dialog
+from opencae.ui.components.dialog_lifecycle import activate_dialog, show_modeless_dialog
 
 
 def open_nested_region(context, dialog, owner, commit):

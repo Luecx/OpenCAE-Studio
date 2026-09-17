@@ -1,0 +1,260 @@
+"""Provides the Assembly constraint editor using shared labelled-field components."""
+
+from __future__ import annotations
+
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import QMessageBox
+
+from opencae.model.entities.constraints import (
+    CONNECTOR_TYPES,
+    ConstraintType,
+    constraint_region_requirement,
+    direct_control_point_error,
+)
+from opencae.model.naming import is_unique
+from opencae.ui.components.controls import ControlNumericUnit
+from opencae.ui.components.groups import GroupCheckGrid
+from opencae.ui.components.apply_dialog import ApplyDialog
+from opencae.ui.components import CompactRegionSelector
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.inputs import InputFormText
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.primitives.labels import LabelSection
+from opencae.ui.components.layouts import dialog_layout
+from opencae.ui.components.dialogs import dialog_buttons
+from opencae.ui.components.form_field import FormField
+from opencae.ui.components.field_row import FieldRow
+from .constraint_dialog_layout import (
+    master_definition,
+    region_labels,
+    section_container,
+    slave_definition,
+)
+
+
+class ConstraintDialog(ApplyDialog):
+    """Create or edit Assembly constraints while preserving viewport-pick previews."""
+
+    preview_changed = pyqtSignal(object, object)
+
+    def __init__(
+        self,
+        project,
+        options=(),
+        pick_callback=None,
+        save_callback=None,
+        parent=None,
+        default_name="Constraint-1",
+        existing_names=(),
+        initial_type=ConstraintType.KINEMATIC,
+        constraint=None,
+        validator=None,
+        units=None,
+    ):
+        super().__init__(parent)
+        self.project = project
+        self.existing_names = tuple(existing_names)
+        self.constraint = constraint
+        self.validator = validator
+        self.pick_callback = pick_callback
+        self.save_callback = save_callback
+        self.units = units or getattr(getattr(parent, "controllers", None), "units", None)
+
+        self.setWindowTitle("Edit Constraint" if constraint else "Create Constraint")
+        self.setMinimumSize(760, 560)
+        root = dialog_layout(self)
+
+        self.name = InputFormText(getattr(constraint, "name", default_name))
+        self.kind = SelectForm()
+        for value in ConstraintType:
+            self.kind.addItem(value.value, value.value)
+        current_kind = str(getattr(constraint, "constraint_type", initial_type))
+        self.kind.setCurrentIndex(max(0, self.kind.findData(current_kind)))
+        root.addWidget(
+            FieldRow(
+                FormField("Name", self.name),
+                FormField("Type", self.kind),
+            )
+        )
+
+        root.addWidget(LabelSection("Constraint Regions"))
+        self.master = CompactRegionSelector(
+            project,
+            master_definition(constraint),
+            options,
+            lambda owner, done, finished: self._pick(
+                "master", owner, done, finished
+            ),
+            lambda owner, definition: self._save("master", owner, definition),
+        )
+        self.slave = CompactRegionSelector(
+            project,
+            slave_definition(constraint),
+            options,
+            lambda owner, done, finished: self._pick(
+                "slave", owner, done, finished
+            ),
+            lambda owner, definition: self._save("slave", owner, definition),
+        )
+        self.master_field = FormField("Master / control", self.master)
+        self.slave_field = FormField("Slave / body", self.slave)
+        root.addWidget(self.master_field)
+        root.addWidget(self.slave_field)
+
+        components = tuple(getattr(constraint, "components", (1, 1, 1, 1, 1, 1)))
+        self.component_section = section_container(root, "Degrees of Freedom")
+        self.components = GroupCheckGrid(
+            ("U1", "U2", "U3", "R1", "R2", "R3"),
+            components,
+            columns=3,
+        )
+        self.component_section.layout().addWidget(self.components)
+
+        self.tie_section = section_container(root, "Tie Options")
+        self.adjust = CheckForm(
+            "Adjust slave nodes to the master surface",
+            checked=bool(getattr(constraint, "adjust", False)),
+        )
+        distance_unit = self.units.symbol("length") if self.units is not None else ""
+        self.distance = ControlNumericUnit(
+            float(getattr(constraint, "distance", 0.0) or 0.0),
+            distance_unit,
+            minimum=0.0,
+            maximum=1e30,
+            decimals=12,
+        )
+        self.tie_section.layout().addWidget(
+            FieldRow(
+                FormField("Adjustment", self.adjust),
+                FormField("Tie distance", self.distance),
+            )
+        )
+
+        self.connector_section = section_container(root, "Connector Options")
+        self.connector_type = SelectForm()
+        for value in CONNECTOR_TYPES:
+            self.connector_type.addItem(value.title(), value)
+        current_connector = str(getattr(constraint, "connector_type", "BEAM")).upper()
+        connector_index = self.connector_type.findData(current_connector)
+        self.connector_type.setCurrentIndex(max(0, connector_index))
+        self.connector_section.layout().addWidget(
+            FormField("Connector type", self.connector_type)
+        )
+
+        root.addStretch(1)
+
+        buttons = dialog_buttons(include_apply=True)
+        self.bind_buttons(buttons, True)
+        root.addWidget(buttons)
+
+        self.kind.currentIndexChanged.connect(self._update_type)
+        self.master.value_changed.connect(lambda _value: self._emit_preview())
+        self.slave.value_changed.connect(lambda _value: self._emit_preview())
+        self._update_type()
+
+    def _pick(self, role, owner, done, finished):
+        if self.pick_callback:
+            return self.pick_callback(
+                self.constraint_type(), role, owner, done, finished
+            )
+        return None
+
+    def _save(self, role, owner, definition):
+        if self.save_callback:
+            return self.save_callback(
+                self.constraint_type(), role, owner, definition
+            )
+        return None
+
+    def constraint_type(self):
+        return ConstraintType.coerce(self.kind.currentData())
+
+    def _update_type(self) -> None:
+        self.master.finish_pick()
+        self.slave.finish_pick()
+        kind = self.constraint_type()
+        tie = kind == ConstraintType.TIE
+        connector = kind == ConstraintType.CONNECTOR
+        coupling = kind in {ConstraintType.KINEMATIC, ConstraintType.DISTRIBUTING}
+        self.master.set_requirement(constraint_region_requirement(kind, "master"))
+        self.slave.set_requirement(constraint_region_requirement(kind, "slave"))
+        master_label, slave_label = region_labels(kind)
+        self.master_field.set_label(master_label)
+        self.slave_field.set_label(slave_label)
+        self.component_section.setVisible(coupling)
+        self.tie_section.setVisible(tie)
+        self.connector_section.setVisible(connector)
+        self.master.set_extended_visible(tie or connector)
+        self.slave.set_extended_visible(True)
+        if (coupling or kind == ConstraintType.RIGID_BODY) and not self.master.definition().empty:
+            if direct_control_point_error(self.master.definition()):
+                self.master.clear()
+        self._emit_preview()
+
+    def _emit_preview(self) -> None:
+        self.preview_changed.emit(self.master.definition(), self.slave.definition())
+
+    def preview_definitions(self):
+        return self.master.definition(), self.slave.definition()
+
+    def values(self) -> dict:
+        kind = self.constraint_type()
+        values = {"name": self.name.text().strip(), "constraint_type": kind}
+        if kind in {ConstraintType.KINEMATIC, ConstraintType.DISTRIBUTING}:
+            values.update(
+                control_point=self.master.definition(),
+                slave=self.slave.definition(),
+                components=tuple(int(value) for value in self.components.values()),
+            )
+        elif kind == ConstraintType.TIE:
+            values.update(
+                master=self.master.definition(),
+                slave=self.slave.definition(),
+                adjust=self.adjust.isChecked(),
+                distance=self.distance.value(),
+            )
+        elif kind == ConstraintType.RIGID_BODY:
+            values.update(reference=self.master.definition(), body=self.slave.definition())
+        elif kind == ConstraintType.CONNECTOR:
+            values.update(
+                master=self.master.definition(),
+                slave=self.slave.definition(),
+                connector_type=str(self.connector_type.currentData() or "BEAM"),
+            )
+        else:
+            values.update(master=self.master.definition(), slave=self.slave.definition())
+        return values
+
+    def validate(self) -> bool:
+        allowed = [
+            item
+            for item in self.existing_names
+            if not self.constraint or item.casefold() != self.constraint.name.casefold()
+        ]
+        if not is_unique(self.name.text().strip(), allowed):
+            QMessageBox.warning(
+                self,
+                "Duplicate name",
+                f"A constraint named '{self.name.text().strip()}' already exists.",
+            )
+            return False
+        if self.master.definition().empty or self.slave.definition().empty:
+            QMessageBox.warning(
+                self,
+                "Missing target",
+                "Select both constraint regions.",
+            )
+            return False
+        if self.validator:
+            error = self.validator(self.values())
+            if error:
+                QMessageBox.warning(self, "Invalid constraint regions", error)
+                return False
+        return True
+
+    def prepare_new(self, default_name, existing_names) -> None:
+        self.constraint = None
+        self.existing_names = tuple(existing_names)
+        self.name.setText(default_name)
+        self.master.clear()
+        self.slave.clear()

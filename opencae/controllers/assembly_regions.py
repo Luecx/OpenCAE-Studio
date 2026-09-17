@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
-from opencae.ui.core.theme import PALETTE
+from opencae.ui.components.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.foundation.theme import PALETTE
 from opencae.model.naming import next_name
 from opencae.model.regions import create_region
 from opencae.model.selection import RegionProjection, region_definition_error
-from opencae.ui.dialogs.element_set import ElementSetDialog
-from opencae.ui.dialogs.node_set import NodeSetDialog
-from opencae.ui.dialogs.surface import SurfaceDialog
+from opencae.ui.other.dialogs.element_set import ElementSetDialog
+from opencae.ui.other.dialogs.node_set import NodeSetDialog
+from opencae.ui.other.dialogs.surface import SurfaceDialog
 from .region_selection import begin_region_pick, policy_for_projection, region_options
 
 

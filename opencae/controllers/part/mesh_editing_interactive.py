@@ -5,8 +5,8 @@ from __future__ import annotations
 from opencae.model.entities.fem import MeshEntityOrigin, Node
 from opencae.model.selection import SelectableKind, SelectionPolicy
 from opencae.store.mesh_commands import MoveNodeCommand
-from opencae.ui.dialogs.mesh_node import MeshNodeDialog
-from opencae.ui.viewport.mesh_edit_preview import show_position_preview
+from opencae.ui.other.dialogs.mesh_node import MeshNodeDialog
+from opencae.ui.other.viewport.mesh_edit_preview import show_position_preview
 
 from .mesh_editing import PartMeshEditing as _BasePartMeshEditing
 

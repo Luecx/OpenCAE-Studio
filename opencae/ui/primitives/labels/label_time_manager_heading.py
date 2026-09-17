@@ -3,7 +3,7 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QWidget
 
-from opencae.ui.core.theme import PALETTE
+from opencae.ui.foundation.theme import PALETTE
 
 
 class LabelTimeManagerHeading(QLabel):

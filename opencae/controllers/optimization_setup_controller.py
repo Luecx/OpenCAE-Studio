@@ -23,8 +23,8 @@ from opencae.model.entities.optimization import (
 )
 from opencae.model.selection import RegionProjection, SelectableKind
 from opencae.optimization import validate_topology_optimization
-from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
-from opencae.ui.dialogs.optimization import (
+from opencae.ui.components.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.other.dialogs.optimization_dialogs import (
     OptimizationConstraintDialog,
     OptimizationObjectiveDialog,
     OptimizationResponseDialog,

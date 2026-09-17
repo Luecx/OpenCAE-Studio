@@ -10,7 +10,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtWidgets import QToolButton
 
-from opencae.ui.core.metrics import (
+from opencae.ui.foundation.metrics import (
     INLINE_ACTION_SIZE,
     PRIMARY_CONTROL_HEIGHT,
     RESULTS_RIBBON_BUTTON_HEIGHT,

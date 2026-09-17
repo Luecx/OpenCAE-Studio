@@ -44,8 +44,8 @@ def run() -> int:
     # lightweight splash. Every widget therefore starts from the same theme and
     # font scale, and the stylesheet can inherit the platform font cleanly.
     from opencae.store.app_settings import AppSettings
-    from opencae.ui.core.application_preferences import apply_application_preferences
-    from opencae.ui.core.theme import DEFAULT_COLOR_SCHEME, apply_color_scheme
+    from opencae.ui.foundation.application_preferences import apply_application_preferences
+    from opencae.ui.foundation.theme import DEFAULT_COLOR_SCHEME, apply_color_scheme
 
     appearance = AppSettings()
     scheme = apply_color_scheme(
@@ -64,7 +64,7 @@ def run() -> int:
     startup.show()
     _progress(app, startup, 8, "Starting application…")
 
-    from opencae.ui.core.dialog_form_polisher import DialogFormPolisher
+    from opencae.ui.foundation.dialog_form_polisher import DialogFormPolisher
 
     app.setWindowIcon(application_icon())
     app._dialog_form_polisher = DialogFormPolisher(app)
@@ -85,7 +85,7 @@ def run() -> int:
 
     # MainWindow transitively imports the viewport stack and therefore PyVista/
     # VTK. The startup window is already painted while those imports complete.
-    from opencae.ui.docks.workspace_controller import WorkspaceDockController
+    from opencae.ui.other.docks.workspace_controller import WorkspaceDockController
     from .main_window import MainWindow
     from .window_state import WindowStatePersistence
 

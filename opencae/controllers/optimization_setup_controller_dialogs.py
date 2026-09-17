@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import QMessageBox
 
-from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.components.dialog_lifecycle import show_modeless_dialog
 
 
 def show_setup_dialog(controller, dialog, accepted) -> None:

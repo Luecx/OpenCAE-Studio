@@ -3,14 +3,14 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QSizePolicy, QToolBar
 
-from opencae.ui.docks.output_dock import WorkspaceDock
-from opencae.ui.docks.project_dock import ProjectDock
-from opencae.ui.preferences.runtime import apply_window_preferences, wire_window_preferences
-from opencae.ui.ribbon.ribbon import Ribbon
-from opencae.ui.status_unit_system import UnitSystemStatus
-from opencae.ui.viewport.beam_physical_display import beam_physical_controller
-from opencae.ui.viewport.stage_guidance import assembly_guidance
-from opencae.ui.viewport.viewport_factory import create_viewport
+from opencae.ui.other.docks.output_dock import WorkspaceDock
+from opencae.ui.other.docks.project_dock import ProjectDock
+from opencae.ui.other.preferences.runtime import apply_window_preferences, wire_window_preferences
+from opencae.ui.other.ribbon.ribbon import Ribbon
+from opencae.ui.other.status_unit_system import UnitSystemStatus
+from opencae.ui.other.viewport.beam_physical_display import beam_physical_controller
+from opencae.ui.other.viewport.stage_guidance import assembly_guidance
+from opencae.ui.other.viewport.viewport_factory import create_viewport
 
 
 def build_ribbon(window):

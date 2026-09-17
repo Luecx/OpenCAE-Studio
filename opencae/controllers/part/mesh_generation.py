@@ -14,8 +14,8 @@ from opencae.model.mesh import (
     requires_remesh_decision,
 )
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand
-from opencae.ui.dialogs.edit_elements import EditElementsDialog
-from opencae.ui.dialogs.remesh_policy import RemeshPolicyDialog
+from opencae.ui.other.dialogs.edit_elements import EditElementsDialog
+from opencae.ui.other.dialogs.remesh_policy import RemeshPolicyDialog
 
 from .mesh_persistence import apply_mesh_snapshot
 from ..dialog_runner import get_values

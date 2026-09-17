@@ -6,11 +6,11 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QMainWindow, QMessageBox
 
 from opencae.controllers.controller_hub import ControllerHub
-from opencae.ui.actions.catalog import register_actions
-from opencae.ui.actions.registry import ActionRegistry
-from opencae.ui.dialogs.about import AboutDialog
-from opencae.ui.menus.menu_bar import build_menus
-from opencae.ui.visibility_state import VisibilityState
+from opencae.ui.other.actions.catalog import register_actions
+from opencae.ui.other.actions.registry import ActionRegistry
+from opencae.ui.other.dialogs.about import AboutDialog
+from opencae.ui.other.menus.menu_bar import build_menus
+from opencae.ui.other.visibility_state import VisibilityState
 from . import window_layout
 
 
@@ -67,7 +67,7 @@ class MainWindow(QMainWindow):
     def refresh_action_states(self, *_):
         from opencae.model.entities.resources import Material
         from opencae.model.selection import SelectableKind, ViewportSelection
-        from opencae.ui.actions.ids import A
+        from opencae.ui.other.actions.ids import A
 
         part = self.context.store.active_part()
         can_mesh = bool(part and part.geometry and part.mesh.seeds)
@@ -287,12 +287,12 @@ class MainWindow(QMainWindow):
         self.context.store.message.emit(f"Deleted result {stored.name}")
 
     def show_documentation(self):
-        from opencae.ui.dialogs.help_dialogs import DocumentationDialog
+        from opencae.ui.other.dialogs.help_dialogs import DocumentationDialog
 
         DocumentationDialog(self).exec()
 
     def show_shortcuts(self):
-        from opencae.ui.dialogs.help_dialogs import KeyboardShortcutsDialog
+        from opencae.ui.other.dialogs.help_dialogs import KeyboardShortcutsDialog
 
         KeyboardShortcutsDialog(self.actions, self).exec()
 

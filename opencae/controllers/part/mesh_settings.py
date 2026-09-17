@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from opencae.model.entities.mesh import MeshValidity
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand
-from opencae.ui.dialogs.mesh_settings import MeshSettingsDialog
+from opencae.ui.other.dialogs.mesh_settings import MeshSettingsDialog
 
 from ..dialog_runner import get_values
 

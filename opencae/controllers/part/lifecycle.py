@@ -23,11 +23,11 @@ from opencae.model.selection import (
 )
 from opencae.store.commands import CompositeCommand, UpdateFieldCommand
 from opencae.store.owned_collection_insert import OwnedCollectionInsertCommand
-from opencae.ui.core.file_dialogs import open_file
-from opencae.ui.dialogs.import_geometry import ImportGeometryDialog
-from opencae.ui.dialogs.import_mesh_report import ImportMeshReportDialog
-from opencae.ui.dialogs.new_part import NewPartDialog
-from opencae.ui.sketcher import SketchFeatureDialog
+from opencae.ui.components.file_dialogs import open_file
+from opencae.ui.other.dialogs.import_geometry import ImportGeometryDialog
+from opencae.ui.other.dialogs.import_mesh_report import ImportMeshReportDialog
+from opencae.ui.other.dialogs.new_part import NewPartDialog
+from opencae.ui.other.sketcher import SketchFeatureDialog
 
 from .mesh_persistence import apply_mesh_snapshot
 from ..dialog_runner import get_values

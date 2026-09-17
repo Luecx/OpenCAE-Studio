@@ -4,7 +4,7 @@ from PyQt6.QtCore import QSize
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QToolButton, QWidget
 
-from opencae.ui.core.metrics import PRIMARY_CONTROL_HEIGHT
+from opencae.ui.foundation.metrics import PRIMARY_CONTROL_HEIGHT
 
 
 class ButtonResultsRangeAuto(QToolButton):

@@ -13,8 +13,8 @@ from opencae.model.entities.constraints import (
 from opencae.model.naming import next_name
 from opencae.model.regions import create_region
 from opencae.model.selection import region_definition_error
-from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
-from opencae.ui.dialogs.constraint import ConstraintDialog
+from opencae.ui.components.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.other.dialogs.constraint import ConstraintDialog
 
 from .region_selection import begin_region_pick, region_options
 

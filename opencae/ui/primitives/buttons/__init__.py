@@ -1,6 +1,8 @@
 """Flat concrete button primitives used throughout OpenCAE."""
 
 from .button_browser_tree_action import ButtonBrowserTreeAction
+from .button_role import ButtonRole
+from .button_spec import ButtonSpec
 from .button_color_swatch import ButtonColorSwatch
 from .button_field_action import ButtonFieldAction
 from .button_field_toggle import ButtonFieldToggle
@@ -33,6 +35,8 @@ from .ribbon_action_factory import ribbon_button_for_action
 
 __all__ = [
     "ButtonBrowserTreeAction",
+    "ButtonRole",
+    "ButtonSpec",
     "ButtonColorSwatch",
     "ButtonFieldAction",
     "ButtonFieldToggle",

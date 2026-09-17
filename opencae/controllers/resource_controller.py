@@ -8,11 +8,11 @@ from opencae.model.entities.fields import FieldDefinition
 from opencae.model.naming import next_name
 from opencae.model.selection import RegionProjection
 from opencae.model.resources import Material, create_profile, create_section
-from opencae.ui.dialogs.field_definition import FieldDefinitionDialog
-from opencae.ui.dialogs.material import MaterialDialog
-from opencae.ui.dialogs.material_property import MaterialPropertyDialog
-from opencae.ui.dialogs.profile import ProfileDialog
-from opencae.ui.dialogs.section import SectionDialog
+from opencae.ui.other.dialogs.field_definition import FieldDefinitionDialog
+from opencae.ui.other.dialogs.material import MaterialDialog
+from opencae.ui.other.dialogs.material_property import MaterialPropertyDialog
+from opencae.ui.other.dialogs.profile import ProfileDialog
+from opencae.ui.other.dialogs.section import SectionDialog
 
 
 class ResourceController:

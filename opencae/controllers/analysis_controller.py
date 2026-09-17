@@ -11,11 +11,11 @@ from opencae.model.entities.analysis import Analysis, AnalysisStep, StepType
 from opencae.model.naming import next_name_from_names
 from opencae.solvers.registry import available_solvers
 from opencae.store.commands import UpdateFieldCommand
-from opencae.ui.dialogs.analysis_dialog import AnalysisDialog
-from opencae.ui.dialogs.run_analysis import RunAnalysisDialog
-from opencae.ui.dialogs.step import StepDialog
-from opencae.ui.dialogs.step_collectors import StepCollectorsDialog
-from opencae.ui.dialogs.step_reorder import StepReorderDialog
+from opencae.ui.other.dialogs.analysis_dialog import AnalysisDialog
+from opencae.ui.other.dialogs.run_analysis import RunAnalysisDialog
+from opencae.ui.other.dialogs.step import StepDialog
+from opencae.ui.other.dialogs.step_collectors import StepCollectorsDialog
+from opencae.ui.other.dialogs.step_reorder import StepReorderDialog
 
 
 class AnalysisController:

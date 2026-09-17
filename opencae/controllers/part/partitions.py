@@ -19,9 +19,9 @@ from opencae.model.selection import (
     SelectableKind,
     SelectionPolicy,
 )
-from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
-from opencae.ui.dialogs.datum_plane import DatumPlaneDialog
-from opencae.ui.dialogs.partition import PartitionDialog
+from opencae.ui.components.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.other.dialogs.datum_plane import DatumPlaneDialog
+from opencae.ui.other.dialogs.partition import PartitionDialog
 
 from ..region_selection import begin_region_pick, region_options
 

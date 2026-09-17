@@ -8,7 +8,7 @@ from opencae.model.entities.mesh import MeshValidity
 from opencae.model.entities.parts import PartSourceKind
 from opencae.model.geometry import SketchFeature
 from opencae.model.naming import next_name
-from opencae.ui.sketcher import SketchFeatureDialog
+from opencae.ui.other.sketcher import SketchFeatureDialog
 
 
 class PartSketching:

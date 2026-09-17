@@ -11,8 +11,8 @@ from opencae.model.selection import (
 from opencae.store.commands import (
     CompositeCommand, UpdateFieldCommand, make_add_command, make_replace_command,
 )
-from opencae.ui.dialogs.mesh_control import MeshControlDialog
-from opencae.ui.dialogs.mesh_settings import MeshSettingsDialog
+from opencae.ui.other.dialogs.mesh_control import MeshControlDialog
+from opencae.ui.other.dialogs.mesh_settings import MeshSettingsDialog
 from ..dialog_runner import get_values
 from ..region_selection import begin_region_pick, region_options
 

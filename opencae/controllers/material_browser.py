@@ -9,7 +9,7 @@ from opencae.model.entities.resources.material_library import (
     material_preset_rows,
 )
 from opencae.model.naming import name_exists, next_name
-from opencae.ui.dialogs.material_browser import MaterialBrowserDialog
+from opencae.ui.other.dialogs.material_browser import MaterialBrowserDialog
 
 
 def add_material_from_browser(controller):
