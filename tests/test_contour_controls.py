@@ -13,10 +13,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from opencae.ui.ribbon.result_deformation import ResultDeformationButton
-from opencae.ui.ribbon.result_range import ResultRangeButton
-from opencae.ui.ribbon.result_section import ResultSectionButton
-from opencae.ui.viewport.contour_mapping import (
+from opencae.ui.other.ribbon.result_deformation import ResultDeformationButton
+from opencae.ui.other.ribbon.result_range import ResultRangeButton
+from opencae.ui.other.ribbon.result_section import ResultSectionButton
+from opencae.ui.other.viewport.contour_mapping import (
     CONTINUOUS_COLOR_COUNT,
     DEFAULT_CONTOUR_LEVELS,
     DEFAULT_OUTSIDE_COLOR,
@@ -24,7 +24,7 @@ from opencae.ui.viewport.contour_mapping import (
     MIN_CONTOUR_LEVELS,
     contour_plot_kwargs,
 )
-from opencae.ui.viewport.coordinate_system_overlay import (
+from opencae.ui.other.viewport.coordinate_system_overlay import (
     CoordinateSystemOverlay,
     _ring_geometry,
 )
@@ -123,8 +123,6 @@ def test_result_range_button_uses_bound_auto_icons_labels_and_symmetry_link():
         )
 
         button.set_data_range(-3.0, 12.0)
-        # Remembering frame data must not silently overwrite a concrete/manual
-        # range. A bound icon is a one-shot calculation action.
         assert button.values()["minimum"] == 0.0
         assert button.values()["maximum"] == 0.0
         button.apply_data_range()
@@ -135,8 +133,6 @@ def test_result_range_button_uses_bound_auto_icons_labels_and_symmetry_link():
         assert values["maximum_auto"] is False
         assert values["symmetric"] is False
 
-        # Bound-specific calculations leave the opposite side untouched while
-        # uncoupled.
         button.set_bound("minimum", -4.0)
         assert button.minimum.value() == -4.0
         assert button.maximum.value() == 12.0
@@ -144,8 +140,6 @@ def test_result_range_button_uses_bound_auto_icons_labels_and_symmetry_link():
         assert button.minimum.value() == -4.0
         assert button.maximum.value() == 9.0
 
-        # Linking first normalizes the envelope, then either editor mirrors the
-        # opposite bound with the same magnitude and inverse sign.
         button.symmetric.setChecked(True)
         assert button.minimum.value() == -9.0
         assert button.maximum.value() == 9.0
@@ -174,7 +168,7 @@ def test_result_range_button_uses_bound_auto_icons_labels_and_symmetry_link():
         button.deleteLater()
         app.processEvents()
 
-    source = (ROOT / "opencae/ui/ribbon/result_range.py").read_text(encoding="utf-8")
+    source = (ROOT / "opencae/ui/other/ribbon/result_range.py").read_text(encoding="utf-8")
     assert 'LabelSection("Range")' in source
     assert 'LabelSection("Color Mapping")' in source
     assert 'LabelSection("Outside Range")' in source
@@ -209,8 +203,6 @@ def test_deformation_and_section_buttons_open_instant_popups_with_radio_state():
         assert "current frame" in deformation.auto_frame.toolTip().lower()
         assert "all frames" in deformation.auto_frames.toolTip().lower()
 
-        # Very large physical displacements can produce tiny automatic display
-        # factors. They must survive the editor instead of rounding to zero.
         assert deformation.scale.editor.decimals() >= 12
         deformation.set_scale(1.23456789e-9)
         assert deformation.values()[1] > 0.0
@@ -220,14 +212,14 @@ def test_deformation_and_section_buttons_open_instant_popups_with_radio_state():
         section.deleteLater()
         app.processEvents()
 
-    section_source = (ROOT / "opencae/ui/ribbon/result_section.py").read_text(encoding="utf-8")
+    section_source = (ROOT / "opencae/ui/other/ribbon/result_section.py").read_text(encoding="utf-8")
     assert "Align normal" not in section_source
     assert "_set_axis" not in section_source
     assert 'LabelSection("Plane")' in section_source
 
 
 def test_radio_buttons_use_application_theme_indicator():
-    source = (ROOT / "opencae/ui/core/styles/fields.py").read_text(encoding="utf-8")
+    source = (ROOT / "opencae/ui/foundation/styles/fields.py").read_text(encoding="utf-8")
     assert "QRadioButton::indicator" in source
     assert "border-radius: 9px" in source
     assert "qradialgradient" in source
@@ -264,7 +256,7 @@ def test_coordinate_overlay_observes_camera_for_screen_space_rescaling():
 
 
 def test_ribbon_dropdown_style_has_arrow_without_split_button_border():
-    source = (ROOT / "opencae/ui/core/styles/buttons.py").read_text(encoding="utf-8")
+    source = (ROOT / "opencae/ui/foundation/styles/buttons.py").read_text(encoding="utf-8")
     assert 'QToolButton[ribbonButton="true"]::menu-button' in source
     assert "border: none;" in source
     assert 'QToolButton[ribbonButton="true"]::menu-indicator' in source
