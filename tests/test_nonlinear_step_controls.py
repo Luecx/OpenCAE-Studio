@@ -8,9 +8,9 @@ from PyQt6.QtWidgets import QApplication
 from opencae.model.core import DeckWriter
 from opencae.model.entities.analysis import AnalysisStep
 from opencae.solvers.femaster_dsl.emitters.loadcase import write_step
-from opencae.ui.deck_format_manager.template_catalog import TEMPLATE_SPECS
-from opencae.ui.deck_format_manager.tree_catalog import TREE_SPEC
-from opencae.ui.dialogs.step import StepDialog
+from opencae.ui.other.deck_format_manager.template_catalog import TEMPLATE_SPECS
+from opencae.ui.other.deck_format_manager.tree_catalog import TREE_SPEC
+from opencae.ui.other.dialogs.step import StepDialog
 
 
 class _Context:
