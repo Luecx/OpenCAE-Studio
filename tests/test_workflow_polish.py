@@ -10,7 +10,7 @@ import sys
 import pytest
 
 from opencae.model.entities.resources.material_library import material_from_preset
-from opencae.ui.viewport.stage_guidance import assembly_guidance
+from opencae.ui.other.viewport.stage_guidance import assembly_guidance
 from opencae.units.system import UnitSystem
 
 
@@ -125,7 +125,7 @@ def test_seed_part_dialog_has_apply_ok_and_cancel():
     """Seed Part supports preview-style Apply plus conventional OK/Cancel."""
     _run_isolated_qt(r'''
 from PyQt6.QtWidgets import QApplication, QDialogButtonBox
-from opencae.ui.dialogs.default_seed import DefaultSeedDialog
+from opencae.ui.other.dialogs.default_seed import DefaultSeedDialog
 
 app = QApplication.instance() or QApplication([])
 dialog = DefaultSeedDialog()
