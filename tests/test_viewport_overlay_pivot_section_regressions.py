@@ -39,8 +39,8 @@ def test_viewport_canvas_matches_renderer_background_behind_rounded_overlays():
     """Rounded Qt panel corners expose the same color used by the VTK renderer."""
     _run_isolated_qt(r'''
 from PyQt6.QtWidgets import QApplication
-from opencae.ui.core.theme import PALETTE
-from opencae.ui.viewport.viewport_canvas import ViewportCanvas
+from opencae.ui.foundation.theme import PALETTE
+from opencae.ui.other.viewport.viewport_canvas import ViewportCanvas
 
 app = QApplication.instance() or QApplication([])
 canvas = ViewportCanvas()
@@ -54,13 +54,13 @@ finally:
     app.processEvents()
 ''')
     assert "def refresh_theme(self)" in _source(
-        "opencae/ui/viewport/viewport_canvas.py"
+        "opencae/ui/other/viewport/viewport_canvas.py"
     )
 
 
 def test_scene_clear_invalidates_removed_vtk_rotation_pivot():
     """Results/base-scene rebuilds must recreate the transient pivot actor."""
-    source = _source("opencae/ui/viewport/safe_qt_interactor.py")
+    source = _source("opencae/ui/other/viewport/safe_qt_interactor.py")
     clear_start = source.index("    def clear(self, *args, **kwargs):")
     next_method = source.index("    def refresh_theme(self)", clear_start)
     implementation = source[clear_start:next_method]
@@ -76,7 +76,7 @@ def test_automatic_section_origin_stays_automatic_after_viewport_reports_center(
     """Resolved center coordinates must not silently become a manual cut origin."""
     _run_isolated_qt(r'''
 from PyQt6.QtWidgets import QApplication
-from opencae.ui.ribbon.result_section import ResultSectionButton
+from opencae.ui.other.ribbon.result_section import ResultSectionButton
 
 app = QApplication.instance() or QApplication([])
 section = ResultSectionButton()
@@ -110,7 +110,7 @@ finally:
 
 
 def test_section_controller_tracks_auto_origin_and_manual_plane_drags():
-    source = _source("opencae/ui/viewport/section_view.py")
+    source = _source("opencae/ui/other/viewport/section_view.py")
 
     assert '"origin_auto": True' in source
     assert 'incoming.get("origin_auto", incoming_origin is None)' in source
@@ -120,7 +120,7 @@ def test_section_controller_tracks_auto_origin_and_manual_plane_drags():
 
 
 def test_preferences_no_longer_expose_a_second_theme_selector():
-    source = _source("opencae/ui/preferences/general_page.py")
+    source = _source("opencae/ui/other/preferences/general_page.py")
 
     assert 'settings.value("ui/theme"' not in source
     assert "self.theme" not in source
