@@ -6,7 +6,7 @@ import subprocess
 import sys
 from unittest.mock import MagicMock
 
-from opencae.ui.viewport.viewport_text_box import apply_viewport_text_box
+from opencae.ui.other.viewport.viewport_text_box import apply_viewport_text_box
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,7 +21,7 @@ def test_convergence_plot_renders_objective_and_constraint_history():
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QApplication
 from opencae.model.entities.optimization import OptimizationIteration
-from opencae.ui.monitors.topology_convergence_plot import TopologyConvergencePlot
+from opencae.ui.other.monitors.topology_convergence_plot import TopologyConvergencePlot
 
 app = QApplication.instance() or QApplication([])
 plot = TopologyConvergencePlot()
