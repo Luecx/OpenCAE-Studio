@@ -2,29 +2,26 @@
 
 from PyQt6.QtWidgets import QApplication, QLineEdit, QSpinBox
 
-from opencae.ui.core.file_path import FilePathEditor
-from opencae.ui.core.theme import stylesheet
-from opencae.ui.core.widgets import (
-    ChevronComboBox,
-    CompactRegionSelector,
-    ComponentsWidget,
-    ReferenceSelector,
+from opencae.ui.components import CompactRegionSelector, ComponentsWidget, FormField
+from opencae.ui.components.controls import (
+    ControlFilePath,
+    ControlNumericUnit,
+    ControlReadOnlyValue,
+    ControlReferenceSelector,
 )
-from opencae.ui.templates import (
+from opencae.ui.components.groups import GroupCheckGrid
+from opencae.ui.foundation.metrics import (
     COMBO_POPUP_EXTRA_HEIGHT,
     COMBO_POPUP_ROW_HEIGHT,
     INLINE_ACTION_SIZE,
     PRIMARY_CONTROL_HEIGHT,
-    CheckGrid,
-    CheckList,
-    FieldLabel,
-    NumericUnitInput,
-    ReadOnlyValue,
-    SectionHeading,
-    VerticalSeparator,
-    apply_primary_control_height,
-    field_block,
 )
+from opencae.ui.foundation.theme import stylesheet
+from opencae.ui.primitives.inputs.geometry import apply_primary_input_geometry
+from opencae.ui.primitives.labels import LabelForm, LabelSection
+from opencae.ui.primitives.lists import ListCheck
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.primitives.separators import SeparatorVertical
 
 
 def test_primary_dialog_controls_share_exact_height():
@@ -33,12 +30,12 @@ def test_primary_dialog_controls_share_exact_height():
     previous_stylesheet = app.styleSheet()
     app.setStyleSheet(stylesheet())
 
-    line = apply_primary_control_height(QLineEdit("Name"))
-    combo = apply_primary_control_height(ChevronComboBox())
+    line = apply_primary_input_geometry(QLineEdit("Name"))
+    combo = SelectForm()
     combo.addItem("Option")
-    integer = apply_primary_control_height(QSpinBox())
-    numeric = NumericUnitInput(210000.0, "MPa")
-    readonly = ReadOnlyValue("210000", "MPa")
+    integer = apply_primary_input_geometry(QSpinBox())
+    numeric = ControlNumericUnit(210000.0, "MPa")
+    readonly = ControlReadOnlyValue("210000", "MPa")
 
     widgets = (line, combo, integer, numeric, readonly)
     for widget in widgets:
@@ -64,7 +61,7 @@ def test_primary_dialog_controls_share_exact_height():
 def test_reference_selector_actions_match_primary_control_height():
     """Keep reference combo and inline create/pick actions exactly aligned."""
     app = QApplication.instance() or QApplication([])
-    selector = ReferenceSelector(
+    selector = ControlReferenceSelector(
         (("Steel", "steel"),),
         "steel",
         create_callback=lambda *_args: None,
@@ -107,7 +104,7 @@ def test_compact_region_selector_uses_same_height_actions():
 def test_file_path_editor_uses_primary_geometry_for_both_cells():
     """Keep the browse action exactly aligned with the editable path field."""
     app = QApplication.instance() or QApplication([])
-    editor = FilePathEditor("model.dat")
+    editor = ControlFilePath("model.dat")
     editor.show()
     app.processEvents()
     try:
@@ -150,7 +147,7 @@ def test_combo_popup_uses_tall_rows_and_bottom_reserve():
     app = QApplication.instance() or QApplication([])
     previous_stylesheet = app.styleSheet()
     app.setStyleSheet(stylesheet())
-    combo = ChevronComboBox()
+    combo = SelectForm()
     combo.addItems([f"Option {index}" for index in range(6)])
     combo.show()
     app.processEvents()
@@ -172,14 +169,14 @@ def test_combo_popup_uses_tall_rows_and_bottom_reserve():
         app.processEvents()
 
 
-def test_field_block_places_canonical_label_above_control_and_can_relabel():
+def test_form_field_places_canonical_label_above_control_and_can_relabel():
     """Protect the shared vertical hierarchy used by dynamic constraint fields."""
     app = QApplication.instance() or QApplication([])
-    control = apply_primary_control_height(QLineEdit("Value"))
-    block = field_block("Name", control)
+    control = apply_primary_input_geometry(QLineEdit("Value"))
+    block = FormField("Name", control)
     layout = block.layout()
     assert layout is not None
-    assert isinstance(layout.itemAt(0).widget(), FieldLabel)
+    assert isinstance(layout.itemAt(0).widget(), LabelForm)
     assert layout.itemAt(0).widget().text() == "Name"
     assert layout.itemAt(1).widget() is control
     block.set_label("Control point")
@@ -188,11 +185,11 @@ def test_field_block_places_canonical_label_above_control_and_can_relabel():
     app.processEvents()
 
 
-def test_check_templates_preserve_declared_values():
+def test_check_components_preserve_declared_values():
     """Keep finite checkbox groups and checked entity lists independent of dialogs."""
     app = QApplication.instance() or QApplication([])
-    grid = CheckGrid(("U1", "U2", "U3"), (True, False, True))
-    listing = CheckList((("A", "a"), ("B", "b")), ("b",))
+    grid = GroupCheckGrid(("U1", "U2", "U3"), (True, False, True))
+    listing = ListCheck((("A", "a"), ("B", "b")), ("b",))
     assert grid.values() == (True, False, True)
     assert listing.selected_values() == ["b"]
     grid.deleteLater()
@@ -202,8 +199,8 @@ def test_check_templates_preserve_declared_values():
 
 def test_editor_presentation_components_have_semantic_object_names():
     """Keep reusable headings and separators independent of individual dialogs."""
-    heading = SectionHeading("Profile Properties")
-    separator = VerticalSeparator()
+    heading = LabelSection("Profile Properties")
+    separator = SeparatorVertical()
     assert heading.objectName() == "EditorSectionHeading"
     assert separator.objectName() == "EditorVerticalSeparator"
     heading.deleteLater()
