@@ -29,9 +29,7 @@ def test_sketcher_has_themed_grid_revolve_axis_and_complete_constraint_toolbar()
     canvas = (ROOT / "opencae/ui/other/sketcher/canvas.py").read_text(encoding="utf-8")
     editor_canvas = (ROOT / "opencae/ui/other/sketcher/editor_canvas.py").read_text(encoding="utf-8")
     dialog = (ROOT / "opencae/ui/other/sketcher/dialog.py").read_text(encoding="utf-8")
-    extended = (ROOT / "opencae/ui/other/sketcher/constraint_dialog.py").read_text(
-        encoding="utf-8"
-    )
+    extended = (ROOT / "opencae/ui/other/sketcher/constraint_dialog.py").read_text(encoding="utf-8")
     assert '_theme("axis_x"' in editor_canvas
     assert '_theme("axis_y"' in editor_canvas
     assert "Qt.PenStyle.DashDotLine" in editor_canvas
@@ -42,31 +40,13 @@ def test_sketcher_has_themed_grid_revolve_axis_and_complete_constraint_toolbar()
     assert "QFrame.Shape.NoFrame" in editor_canvas
     assert "1.0e-9 <= target" in editor_canvas
     assert "_ensure_navigation_space" in editor_canvas
-    for tool in (
-        "Line",
-        "Rectangle",
-        "Circle",
-        "Center Arc",
-        "Ellipse",
-        "Spline",
-        "Slot",
-    ):
+    for tool in ("Line", "Rectangle", "Circle", "Center Arc", "Ellipse", "Spline", "Slot"):
         assert f'"{tool}"' in canvas or f'"{tool}"' in dialog
     constraint_source = dialog + extended
     for constraint in (
-        "Coincident",
-        "Horizontal",
-        "Vertical",
-        "Parallel",
-        "Perpendicular",
-        "Tangent",
-        "Equal",
-        "Concentric",
-        "Midpoint",
-        "Collinear",
-        "Point on object",
-        "Symmetry",
-        "Fixed",
+        "Coincident", "Horizontal", "Vertical", "Parallel", "Perpendicular",
+        "Tangent", "Equal", "Concentric", "Midpoint", "Collinear",
+        "Point on object", "Symmetry", "Fixed",
     ):
         assert f'"{constraint}"' in constraint_source
     for dimension in ("DistanceX", "DistanceY", "Angle", "Radius", "Diameter"):
@@ -75,14 +55,10 @@ def test_sketcher_has_themed_grid_revolve_axis_and_complete_constraint_toolbar()
 
 def test_sketcher_reuses_main_ribbon_metrics_and_progressive_collapse_policy():
     dialog = (ROOT / "opencae/ui/other/sketcher/dialog.py").read_text(encoding="utf-8")
-    public_dialog = (ROOT / "opencae/ui/other/sketcher/constraint_dialog.py").read_text(
-        encoding="utf-8"
-    )
+    public_dialog = (ROOT / "opencae/ui/other/sketcher/constraint_dialog.py").read_text(encoding="utf-8")
     ribbon = (ROOT / "opencae/ui/other/ribbon/ribbon_page.py").read_text(encoding="utf-8")
     group = (ROOT / "opencae/ui/other/ribbon/ribbon_group.py").read_text(encoding="utf-8")
-    button_config = (ROOT / "opencae/ui/primitives/buttons/_configure.py").read_text(
-        encoding="utf-8"
-    )
+    button_config = (ROOT / "opencae/ui/primitives/buttons/_configure.py").read_text(encoding="utf-8")
 
     assert "ResponsiveRibbonPage" in public_dialog
     assert "RIBBON_PAGE_HEIGHT" in public_dialog
@@ -91,15 +67,12 @@ def test_sketcher_reuses_main_ribbon_metrics_and_progressive_collapse_policy():
     assert 'RibbonGroupSpec(\n                "CONSTRAINTS"' in public_dialog
     assert 'RibbonGroupSpec(\n                "DIMENSIONS"' in public_dialog
     assert 'RibbonGroupSpec(\n                "CONSTRUCTION/GRID"' in public_dialog
-    assert '"primitive.select"' in public_dialog
-    assert '"primitive.undo"' in public_dialog
-    assert '"primitive.redo"' in public_dialog
-    assert '"dimension.distance"' in public_dialog
-    assert '"dimension.horizontal"' in public_dialog
-    assert '"dimension.vertical"' in public_dialog
-    assert '"dimension.angle"' in public_dialog
-    assert '"dimension.radius"' in public_dialog
-    assert '"dimension.diameter"' in public_dialog
+    for action_id in (
+        "primitive.select", "primitive.undo", "primitive.redo",
+        "dimension.distance", "dimension.horizontal", "dimension.vertical",
+        "dimension.angle", "dimension.radius", "dimension.diameter",
+    ):
+        assert f'"{action_id}"' in public_dialog
     assert "_SketchResponsiveRibbonPage(" not in public_dialog
     assert "candidates.sort(" in ribbon
     assert "-self._group_width(item[1], False)" in ribbon
@@ -113,20 +86,14 @@ def test_sketcher_reuses_main_ribbon_metrics_and_progressive_collapse_policy():
 
 
 def test_sketch_workspace_mode_switch_uses_one_canonical_viewport_command_bar():
-    dialog = (ROOT / "opencae/ui/other/sketcher/constraint_dialog.py").read_text(
-        encoding="utf-8"
-    )
-    main_toolbar = (ROOT / "opencae/ui/other/viewport/selection_toolbar.py").read_text(
-        encoding="utf-8"
-    )
-    # Structure matters here, not local variable spelling.  The runtime smoke
-    # test verifies actual post-show geometry; this source contract protects the
-    # canonical main-window toolbar primitive and non-compressible layout.
+    dialog = (ROOT / "opencae/ui/other/sketcher/constraint_dialog.py").read_text(encoding="utf-8")
+    main_toolbar = (ROOT / "opencae/ui/other/viewport/selection_toolbar.py").read_text(encoding="utf-8")
     assert 'self.viewport_toolbar.setObjectName("ViewportToolbar")' in dialog
-    assert "ViewportToolButton(" in dialog
-    assert '"Sketch", checkable=True, parent=self.viewport_toolbar' in dialog
-    assert '"3D Preview", checkable=True, parent=self.viewport_toolbar' in dialog
-    assert 'ViewportToolButton("Fit", parent=self.viewport_toolbar)' in dialog
+    assert "ButtonViewportToggle" in dialog
+    assert "ButtonViewportAction" in dialog
+    assert 'ButtonViewportToggle("Sketch", parent=self.viewport_toolbar)' in dialog
+    assert 'ButtonViewportToggle(\n            "3D Preview", parent=self.viewport_toolbar\n        )' in dialog
+    assert 'ButtonViewportAction("Fit", parent=self.viewport_toolbar)' in dialog
     assert 'self.status_label = QLabel("Ready", self.viewport_toolbar)' in dialog
     assert "setFixedHeight(_VIEWPORT_BAR_HEIGHT)" in dialog
     assert "QSizePolicy.Policy.Fixed" in dialog
@@ -143,12 +110,8 @@ def test_sketch_workspace_mode_switch_uses_one_canonical_viewport_command_bar():
 
 def test_dimension_and_grid_are_normal_ribbon_buttons_and_construction_edits_selection():
     dialog = (ROOT / "opencae/ui/other/sketcher/dialog.py").read_text(encoding="utf-8")
-    public_dialog = (ROOT / "opencae/ui/other/sketcher/constraint_dialog.py").read_text(
-        encoding="utf-8"
-    )
-    editor_canvas = (ROOT / "opencae/ui/other/sketcher/editor_canvas.py").read_text(
-        encoding="utf-8"
-    )
+    public_dialog = (ROOT / "opencae/ui/other/sketcher/constraint_dialog.py").read_text(encoding="utf-8")
+    editor_canvas = (ROOT / "opencae/ui/other/sketcher/editor_canvas.py").read_text(encoding="utf-8")
     assert '"constraint.dimension", "Dimension", IconKind.SKETCH_DIMENSION' in dialog
     assert '"DIMENSIONS"' in public_dialog
     assert 'self._ribbon_actions.pop("constraint.dimension", None)' in public_dialog
@@ -163,41 +126,19 @@ def test_dimension_and_grid_are_normal_ribbon_buttons_and_construction_edits_sel
 def test_sketch_toolbar_uses_distinct_central_semantic_vector_icons():
     kinds = (ROOT / "opencae/ui/foundation/icons/kinds.py").read_text(encoding="utf-8")
     factory = (ROOT / "opencae/ui/foundation/icons/factory.py").read_text(encoding="utf-8")
-    renderer = (ROOT / "opencae/ui/foundation/icons/sketch_renderer.py").read_text(
-        encoding="utf-8"
-    )
+    renderer = (ROOT / "opencae/ui/foundation/icons/sketch_renderer.py").read_text(encoding="utf-8")
     dialog = (ROOT / "opencae/ui/other/sketcher/dialog.py").read_text(encoding="utf-8")
     required = (
-        "SKETCH_SELECT",
-        "SKETCH_POINT",
-        "SKETCH_LINE",
-        "SKETCH_POLYLINE",
-        "SKETCH_RECTANGLE",
-        "SKETCH_CIRCLE",
-        "SKETCH_ARC_CENTER",
-        "SKETCH_ARC_3POINT",
-        "SKETCH_ELLIPSE",
-        "SKETCH_SPLINE",
-        "SKETCH_SLOT",
-        "SKETCH_PRIMITIVES_MORE",
-        "SKETCH_CONSTRUCTION",
-        "SKETCH_GRID",
-        "SKETCH_SNAP",
-        "SKETCH_CONSTRAINT_COINCIDENT",
-        "SKETCH_CONSTRAINT_HORIZONTAL",
-        "SKETCH_CONSTRAINT_VERTICAL",
-        "SKETCH_CONSTRAINT_PARALLEL",
-        "SKETCH_CONSTRAINT_PERPENDICULAR",
-        "SKETCH_CONSTRAINT_TANGENT",
-        "SKETCH_CONSTRAINT_EQUAL",
-        "SKETCH_CONSTRAINT_FIXED",
-        "SKETCH_CONSTRAINT_MORE",
-        "SKETCH_DIMENSION",
-        "SKETCH_DIMENSION_DISTANCE",
-        "SKETCH_DIMENSION_HORIZONTAL",
-        "SKETCH_DIMENSION_VERTICAL",
-        "SKETCH_DIMENSION_ANGLE",
-        "SKETCH_DIMENSION_RADIUS",
+        "SKETCH_SELECT", "SKETCH_POINT", "SKETCH_LINE", "SKETCH_POLYLINE",
+        "SKETCH_RECTANGLE", "SKETCH_CIRCLE", "SKETCH_ARC_CENTER",
+        "SKETCH_ARC_3POINT", "SKETCH_ELLIPSE", "SKETCH_SPLINE", "SKETCH_SLOT",
+        "SKETCH_PRIMITIVES_MORE", "SKETCH_CONSTRUCTION", "SKETCH_GRID", "SKETCH_SNAP",
+        "SKETCH_CONSTRAINT_COINCIDENT", "SKETCH_CONSTRAINT_HORIZONTAL",
+        "SKETCH_CONSTRAINT_VERTICAL", "SKETCH_CONSTRAINT_PARALLEL",
+        "SKETCH_CONSTRAINT_PERPENDICULAR", "SKETCH_CONSTRAINT_TANGENT",
+        "SKETCH_CONSTRAINT_EQUAL", "SKETCH_CONSTRAINT_FIXED", "SKETCH_CONSTRAINT_MORE",
+        "SKETCH_DIMENSION", "SKETCH_DIMENSION_DISTANCE", "SKETCH_DIMENSION_HORIZONTAL",
+        "SKETCH_DIMENSION_VERTICAL", "SKETCH_DIMENSION_ANGLE", "SKETCH_DIMENSION_RADIUS",
         "SKETCH_DIMENSION_DIAMETER",
     )
     for kind in required:
@@ -226,12 +167,9 @@ def test_sketch_curve_creation_rejects_invalid_ellipse_and_arc_render_is_null_sa
 
 
 def test_persistent_sketch_graph_uses_objects_and_finite_domains_not_string_refs():
-    model = (ROOT / "opencae/model/entities/geometry/sketch.py").read_text(
-        encoding="utf-8"
-    )
+    model = (ROOT / "opencae/model/entities/geometry/sketch.py").read_text(encoding="utf-8")
     solver = (ROOT / "opencae/sketch/solver.py").read_text(encoding="utf-8")
     codec = (ROOT / "opencae/model/core/model_codec.py").read_text(encoding="utf-8")
-
     assert "start: SketchPoint" in model
     assert "end: SketchPoint" in model
     assert "center: SketchPoint" in model
@@ -250,12 +188,8 @@ def test_persistent_sketch_graph_uses_objects_and_finite_domains_not_string_refs
 
 
 def test_sketcher_styling_is_part_of_central_theme_pipeline():
-    modules = (ROOT / "opencae/ui/foundation/styles/__init__.py").read_text(
-        encoding="utf-8"
-    )
-    sketch_style = (ROOT / "opencae/ui/foundation/styles/sketcher.py").read_text(
-        encoding="utf-8"
-    )
+    modules = (ROOT / "opencae/ui/foundation/styles/__init__.py").read_text(encoding="utf-8")
+    sketch_style = (ROOT / "opencae/ui/foundation/styles/sketcher.py").read_text(encoding="utf-8")
     dialog = (ROOT / "opencae/ui/other/sketcher/dialog.py").read_text(encoding="utf-8")
     assert "sketcher," in modules
     assert "QDialog#SketchFeatureDialog" in sketch_style
