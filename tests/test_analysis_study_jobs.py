@@ -93,7 +93,7 @@ def test_results_are_bound_to_the_job_that_created_them():
 
 
 def test_workflow_stages_remove_solve_and_optimization():
-    source = (ROOT / "opencae/ui/ribbon/stage_bar.py").read_text(
+    source = (ROOT / "opencae/ui/other/ribbon/stage_bar.py").read_text(
         encoding="utf-8"
     )
     module = ast.parse(source)
@@ -116,7 +116,7 @@ def test_workflow_stages_remove_solve_and_optimization():
 
 
 def test_tree_context_menus_reuse_ribbon_actions_and_delete():
-    source = (ROOT / "opencae/ui/tree/context_menu.py").read_text(
+    source = (ROOT / "opencae/ui/other/tree/context_menu.py").read_text(
         encoding="utf-8"
     )
     expected = (
@@ -150,14 +150,14 @@ def test_new_workflow_modules_keep_one_class_per_file():
         "opencae/controllers/job_manager.py",
         "opencae/jobs/analysis_job_runner.py",
         "opencae/model/entities/studies/study.py",
-        "opencae/ui/core/widgets/entity_selector_bar.py",
-        "opencae/ui/core/widgets/monospace_output_view.py",
-        "opencae/ui/dialogs/analysis_dialog.py",
-        "opencae/ui/monitors/analysis_job_monitor.py",
-        "opencae/ui/monitors/topology_job_monitor.py",
-        "opencae/ui/panels/jobs_panel.py",
-        "opencae/ui/ribbon/analysis_page.py",
-        "opencae/ui/ribbon/studies_page.py",
+        "opencae/ui/components/entity_selector_bar.py",
+        "opencae/ui/components/monospace_output_view.py",
+        "opencae/ui/other/dialogs/analysis_dialog.py",
+        "opencae/ui/other/monitors/analysis_job_monitor.py",
+        "opencae/ui/other/monitors/topology_job_monitor.py",
+        "opencae/ui/other/panels/jobs_panel.py",
+        "opencae/ui/other/ribbon/analysis_page.py",
+        "opencae/ui/other/ribbon/studies_page.py",
     )
     for relative in files:
         path = ROOT / relative
