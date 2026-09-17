@@ -4,13 +4,11 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QApplication, QDialog
 
-from opencae.ui.core.widgets import ChevronComboBox
-from opencae.ui.templates import (
-    PRIMARY_CONTROL_HEIGHT,
-    FieldStack,
-    Vector3Input,
-    scaffold_dialog,
-)
+from opencae.ui.components import FieldStack
+from opencae.ui.components.controls import ControlVector3
+from opencae.ui.components.dialogs import scaffold_dialog
+from opencae.ui.foundation.metrics import PRIMARY_CONTROL_HEIGHT
+from opencae.ui.primitives.selects import SelectForm
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,8 +34,8 @@ def test_dialog_scaffold_uses_label_above_field_stack():
 def test_canonical_combo_and_vector_inputs_share_primary_geometry():
     """Keep finite-choice and three-component controls interchangeable in field rows."""
     app = QApplication.instance() or QApplication([])
-    combo = ChevronComboBox()
-    vector = Vector3Input((1.0, 2.0, 3.0))
+    combo = SelectForm()
+    vector = ControlVector3((1.0, 2.0, 3.0))
     try:
         assert combo.minimumWidth() == 0
         assert combo.minimumHeight() == PRIMARY_CONTROL_HEIGHT
@@ -59,29 +57,29 @@ def test_canonical_combo_and_vector_inputs_share_primary_geometry():
 def test_migrated_editor_sources_do_not_reintroduce_legacy_form_layouts():
     """Protect the final dialog pass from local left-label form regressions."""
     migrated = (
-        "opencae/ui/dialogs/material_property.py",
-        "opencae/ui/dialogs/optimization_dialogs/topology_controls_dialog.py",
-        "opencae/ui/dialogs/optimization_dialogs/topology_filter_dialog.py",
-        "opencae/ui/dialogs/optimization_dialogs/topology_optimization_dialog.py",
-        "opencae/ui/dialogs/optimization_dialogs/topology_symmetry_dialog.py",
-        "opencae/ui/ribbon/result_range.py",
-        "opencae/ui/ribbon/result_section.py",
+        "opencae/ui/other/dialogs/material_property.py",
+        "opencae/ui/other/dialogs/optimization_dialogs/topology_controls_dialog.py",
+        "opencae/ui/other/dialogs/optimization_dialogs/topology_filter_dialog.py",
+        "opencae/ui/other/dialogs/optimization_dialogs/topology_optimization_dialog.py",
+        "opencae/ui/other/dialogs/optimization_dialogs/topology_symmetry_dialog.py",
+        "opencae/ui/other/ribbon/result_range.py",
+        "opencae/ui/other/ribbon/result_section.py",
     )
     for relative in migrated:
         source = _source(relative)
         assert "QFormLayout" not in source, relative
         assert "setMinimumWidth(316)" not in source, relative
 
-    material_property = _source("opencae/ui/dialogs/material_property.py")
+    material_property = _source("opencae/ui/other/dialogs/material_property.py")
     assert "QDoubleSpinBox" not in material_property
     assert ".setSuffix(" not in material_property
 
-    result_section = _source("opencae/ui/ribbon/result_section.py")
+    result_section = _source("opencae/ui/other/ribbon/result_section.py")
     assert "_Vector3Editor" not in result_section
 
 
 def test_primary_editor_dialogs_use_the_canonical_root_layout():
-    """Keep outer dialog margins and spacing in the template layer only."""
+    """Keep outer dialog margins and spacing in the component layer only."""
     dialogs = (
         "step.py",
         "section.py",
@@ -92,7 +90,7 @@ def test_primary_editor_dialogs_use_the_canonical_root_layout():
         "constraint.py",
     )
     for name in dialogs:
-        source = _source(f"opencae/ui/dialogs/{name}")
+        source = _source(f"opencae/ui/other/dialogs/{name}")
         assert "root = dialog_layout(self)" in source, name
         assert "root.setContentsMargins(24, 20, 24, 18)" not in source, name
         assert "root.setSpacing(16)" not in source, name
@@ -100,9 +98,9 @@ def test_primary_editor_dialogs_use_the_canonical_root_layout():
 
 def test_central_field_implementations_do_not_restore_fixed_316px_widths():
     """Let dialog layouts determine width instead of forcing the obsolete field constant."""
-    fields = _source("opencae/ui/core/fields.py")
-    style = _source("opencae/ui/core/styles/fields.py")
-    combo = _source("opencae/ui/core/widgets/chevron_combo.py")
+    fields = _source("opencae/ui/components/fields.py")
+    style = _source("opencae/ui/foundation/styles/fields.py")
+    combo = _source("opencae/ui/primitives/selects/select_form.py")
     assert "FIELD_WIDTH = 316" not in fields
     assert "min-width: 316px" not in style
     assert "setMinimumWidth(316)" not in combo
