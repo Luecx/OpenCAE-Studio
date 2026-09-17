@@ -11,16 +11,16 @@ def _source(path: str) -> str:
 
 
 def test_solver_selector_allows_extensionless_unix_executables():
-    source = _source("opencae/ui/dialogs/solver_row.py")
+    source = _source("opencae/ui/other/dialogs/solver_row.py")
     assert '"Executable files (*.exe);;All files (*)"' in source
     assert 'All files (*.*)' not in source
 
 
 def test_standard_dialogs_and_reported_editors_have_real_minimum_geometry():
-    layouts = _source("opencae/ui/templates/layouts.py")
-    materials = _source("opencae/ui/dialogs/material_browser.py")
-    loads = _source("opencae/ui/dialogs/load_common.py")
-    steps = _source("opencae/ui/dialogs/step.py")
+    layouts = _source("opencae/ui/components/layouts.py")
+    materials = _source("opencae/ui/other/dialogs/material_browser.py")
+    loads = _source("opencae/ui/other/dialogs/load_common.py")
+    steps = _source("opencae/ui/other/dialogs/step.py")
 
     assert "QLayout.SizeConstraint.SetMinimumSize" in layouts
     assert "self.setMinimumSize(720, 420)" in materials
@@ -34,7 +34,7 @@ def test_standard_dialogs_and_reported_editors_have_real_minimum_geometry():
 def test_analysis_start_opens_live_monitor_with_job_scoped_stop():
     workflow = _source("opencae/controllers/job_manager_analysis.py")
     manager = _source("opencae/controllers/job_manager.py")
-    monitor = _source("opencae/ui/monitors/analysis_job_monitor.py")
+    monitor = _source("opencae/ui/other/monitors/analysis_job_monitor.py")
 
     assert workflow.index("manager.open_selected_monitor()") < workflow.index("runner.start()")
     assert "def stop_job(self, job_id)" in manager
@@ -61,7 +61,7 @@ def test_job_runtime_guard_ignores_detached_nonpersistent_backreferences():
 
 
 def test_cad_face_highlight_cannot_expose_render_tessellation_as_mesh():
-    geometry = _source("opencae/ui/viewport/pyvista_geometry.py")
+    geometry = _source("opencae/ui/other/viewport/pyvista_geometry.py")
 
     assert "prop.SetEdgeVisibility(False)" in geometry
     assert 'getattr(prop, "SetEdgeOpacity", None)' in geometry
@@ -71,7 +71,7 @@ def test_cad_face_highlight_cannot_expose_render_tessellation_as_mesh():
 def test_new_models_imports_and_results_request_initial_framing():
     project = _source("opencae/controllers/project_controller.py")
     lifecycle = _source("opencae/controllers/part/lifecycle.py")
-    results = _source("opencae/ui/viewport/solution_scene.py")
+    results = _source("opencae/ui/other/viewport/solution_scene.py")
 
     assert "self._fit_loaded_content()" in project
     assert "viewport.request_refresh(fit=True)" in project
@@ -85,13 +85,13 @@ def test_new_models_imports_and_results_request_initial_framing():
 
 def test_step_dialog_uses_the_canonical_step_type_enum():
     """Guard the UI against reintroducing a second set of procedure literals."""
-    source = _source("opencae/ui/dialogs/step.py")
+    source = _source("opencae/ui/other/dialogs/step.py")
     assert "StepType.NONLINEAR_STATIC" in source
     assert 'step.step_type == "Nonlinear Static"' not in source
 
 
 def test_reopened_topology_result_frames_when_overlay_was_cleared():
-    results = _source("opencae/ui/viewport/solution_scene.py")
+    results = _source("opencae/ui/other/viewport/solution_scene.py")
 
     assert 'topology_visible = bool(getattr(scene.topology_overlay, "_names", ()))' in results
     assert "fit_on_load=identity != previous_identity or not topology_visible" in results
