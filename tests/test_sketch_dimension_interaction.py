@@ -11,11 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_ribbon_toggle_style_and_collapsed_menus_have_one_interaction_layer():
-    buttons = (ROOT / "opencae/ui/core/styles/buttons.py").read_text(encoding="utf-8")
-    collapsed = (ROOT / "opencae/ui/composites/collapsed_action_group.py").read_text(
+    buttons = (ROOT / "opencae/ui/foundation/styles/buttons.py").read_text(encoding="utf-8")
+    collapsed = (ROOT / "opencae/ui/components/collapsed_action_group.py").read_text(
         encoding="utf-8"
     )
-    dialog = (ROOT / "opencae/ui/sketcher/constraint_dialog.py").read_text(
+    dialog = (ROOT / "opencae/ui/other/sketcher/constraint_dialog.py").read_text(
         encoding="utf-8"
     )
 
@@ -38,7 +38,7 @@ from opencae.model.entities.geometry import (
     SketchDefinition,
     SketchFeature,
 )
-from opencae.ui.sketcher.editor_canvas import SketchEditorCanvas
+from opencae.ui.other.sketcher.editor_canvas import SketchEditorCanvas
 
 app = QApplication.instance() or QApplication([])
 sketch = SketchDefinition()
