@@ -7,11 +7,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_lower_workspace_status_tabs_and_contents_share_one_surface_color():
-    misc = (ROOT / "opencae/ui/core/styles/misc.py").read_text(encoding="utf-8")
-    docks = (ROOT / "opencae/ui/core/styles/docks.py").read_text(encoding="utf-8")
-    output = (ROOT / "opencae/ui/docks/output_dock.py").read_text(encoding="utf-8")
+    misc = (ROOT / "opencae/ui/foundation/styles/misc.py").read_text(encoding="utf-8")
+    docks = (ROOT / "opencae/ui/foundation/styles/docks.py").read_text(encoding="utf-8")
+    output = (ROOT / "opencae/ui/other/docks/output_dock.py").read_text(encoding="utf-8")
     layout = (ROOT / "opencae/app/window_layout.py").read_text(encoding="utf-8")
-    controller = (ROOT / "opencae/ui/docks/workspace_controller.py").read_text(encoding="utf-8")
+    controller = (ROOT / "opencae/ui/other/docks/workspace_controller.py").read_text(encoding="utf-8")
 
     assert 'QToolButton[workspaceStatusTab="true"]' in misc
     assert "background: {p['panel']};" in misc
