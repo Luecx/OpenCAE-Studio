@@ -6,13 +6,13 @@ from types import SimpleNamespace
 import numpy as np
 import pyvista as pv
 
-from opencae.ui.panels.time_manager import (
+from opencae.ui.other.panels.time_manager import (
     current_frame_amplitude,
     frame_axis,
     frame_bracket,
 )
-from opencae.ui.viewport import result_visualization
-from opencae.ui.viewport.result_visualization import interpolate_values
+from opencae.ui.other.viewport import result_visualization
+from opencae.ui.other.viewport.result_visualization import interpolate_values
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -178,7 +178,7 @@ def test_animation_can_use_prebuilt_frame_grids_without_loader_work():
 
 
 def test_animation_path_updates_existing_result_actor_without_scene_clear():
-    source = (ROOT / "opencae/ui/viewport/solution_scene.py").read_text(encoding="utf-8")
+    source = (ROOT / "opencae/ui/other/viewport/solution_scene.py").read_text(encoding="utf-8")
     animation_path = source.split(
         'animation = dict(options.get("_animation", {}) or {})', 1
     )[1].split("camera = camera_position", 1)[0]
@@ -187,19 +187,13 @@ def test_animation_path_updates_existing_result_actor_without_scene_clear():
 
 
 def test_time_manager_uses_full_width_controls_and_compact_plot():
-    # This is a real Qt widget smoke test, but it intentionally runs in a fresh
-    # process. The full suite exercises several VTK/QOpenGLWidget contexts before
-    # reaching this test; reusing that native process state made Qt occasionally
-    # terminate inside widget construction even though TimeManagerPanel passes in
-    # isolation and in the application. A subprocess keeps the test active while
-    # making its native lifetime deterministic.
     import os
     import subprocess
     import sys
 
     script = r'''
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QRadioButton, QToolButton
-from opencae.ui.panels.time_manager import TimeManagerPanel, _playback_icon
+from opencae.ui.other.panels.time_manager import TimeManagerPanel, _playback_icon
 
 app = QApplication.instance() or QApplication([])
 panel = TimeManagerPanel()
@@ -254,8 +248,8 @@ finally:
     )
     assert result.returncode == 0, result.stdout
 
-    source = (ROOT / "opencae/ui/panels/time_manager.py").read_text(encoding="utf-8")
-    plot_source = (ROOT / "opencae/ui/panels/time_manager_plot.py").read_text(encoding="utf-8")
+    source = (ROOT / "opencae/ui/other/panels/time_manager.py").read_text(encoding="utf-8")
+    plot_source = (ROOT / "opencae/ui/other/panels/time_manager_plot.py").read_text(encoding="utf-8")
     assert "QStyle.StandardPixmap" not in source
     assert "_playback_icon" in source
     assert "frame_summary_changed" in source
@@ -270,14 +264,14 @@ finally:
 
 
 def test_lower_workspaces_share_one_movable_dock_and_status_navigation():
-    dock_source = (ROOT / "opencae/ui/docks/output_dock.py").read_text(encoding="utf-8")
+    dock_source = (ROOT / "opencae/ui/other/docks/output_dock.py").read_text(encoding="utf-8")
     layout_source = (ROOT / "opencae/app/window_layout.py").read_text(encoding="utf-8")
-    controller_source = (ROOT / "opencae/ui/docks/workspace_controller.py").read_text(encoding="utf-8")
-    status_source = (ROOT / "opencae/ui/docks/workspace_status_tabs.py").read_text(encoding="utf-8")
-    menu_source = (ROOT / "opencae/ui/menus/view_menu.py").read_text(encoding="utf-8")
-    dock_style = (ROOT / "opencae/ui/core/styles/docks.py").read_text(encoding="utf-8")
-    misc_style = (ROOT / "opencae/ui/core/styles/misc.py").read_text(encoding="utf-8")
-    button_style = (ROOT / "opencae/ui/core/styles/buttons.py").read_text(encoding="utf-8")
+    controller_source = (ROOT / "opencae/ui/other/docks/workspace_controller.py").read_text(encoding="utf-8")
+    status_source = (ROOT / "opencae/ui/other/docks/workspace_status_tabs.py").read_text(encoding="utf-8")
+    menu_source = (ROOT / "opencae/ui/other/menus/view_menu.py").read_text(encoding="utf-8")
+    dock_style = (ROOT / "opencae/ui/foundation/styles/docks.py").read_text(encoding="utf-8")
+    misc_style = (ROOT / "opencae/ui/foundation/styles/misc.py").read_text(encoding="utf-8")
+    button_style = (ROOT / "opencae/ui/foundation/styles/buttons.py").read_text(encoding="utf-8")
 
     assert "class WorkspaceDock(QDockWidget)" in dock_source
     assert "QStackedWidget" in dock_source
