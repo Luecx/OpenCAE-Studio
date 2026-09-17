@@ -31,12 +31,15 @@ This file defines repository-wide implementation rules for OpenCAE Studio. It ap
 - Constructors and mutation boundaries should reject impossible combinations early.
 - Migration code may accept legacy strings, but normal runtime code should operate on canonical typed states.
 
-## 4. UI templates are centralized
+## 4. UI composition is centralized
 
-- Reusable visual construction belongs under `opencae/ui/templates` or a focused reusable widget module.
-- Do not duplicate margins, spacing, title-label setup, standard button boxes, form-row construction, table setup, or ribbon-button construction in individual dialogs.
-- Build larger UI hierarchically from shared primitives: primitive -> control/group -> form/panel -> dialog/ribbon/page.
-- `opencae/ui/core` may provide compatibility facades, but new code should prefer the canonical template layer.
+- Dependency-light theme, metrics, styles, icons, assets, and application-wide visual preferences belong under `opencae/ui/foundation`.
+- Canonical atomic widgets belong under `opencae/ui/primitives`.
+- Reusable composed controls, form helpers, layouts, and small multi-widget interactions belong under `opencae/ui/components`.
+- Concrete OpenCAE application surfaces and workflows belong under `opencae/ui/other`, including dialogs, ribbon pages, viewport features, menus, docks, trees, monitors, and similar feature-specific UI.
+- Do not duplicate margins, spacing, title-label setup, standard button boxes, form-row construction, table setup, or ribbon-button construction in individual feature modules when a reusable primitive or component exists.
+- Build larger UI hierarchically: foundation/primitives -> components -> concrete application feature.
+- Do not recreate removed legacy top-level packages such as `opencae/ui/core`, `opencae/ui/templates`, `opencae/ui/dialogs`, or `opencae/ui/viewport` as compatibility facades. Migrate callers to the canonical package instead.
 - UI modules should collect/emit values and coordinate interaction. Domain validation and model construction should live outside widgets when practical.
 
 ## 5. Documentation and comments
