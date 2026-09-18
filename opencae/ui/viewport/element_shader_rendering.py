@@ -29,6 +29,24 @@ class ElementShaderSpec:
     node_count: int
     basis: str
     order: int
+    # Local permutation from the legacy VTK/solver connectivity into the
+    # ordering expected by the CellGrid basis. Empty means identity.
+    basis_order: tuple[int, ...] = ()
+
+
+_HEX20_BASIS_ORDER = (
+    0, 1, 2, 3, 4, 5, 6, 7,
+    8, 9, 10, 11,
+    16, 17, 18, 19,
+    12, 13, 14, 15,
+)
+
+_WEDGE15_BASIS_ORDER = (
+    0, 1, 2, 3, 4, 5,
+    6, 7, 8,
+    12, 13, 14,
+    9, 10, 11,
+)
 
 
 ELEMENT_SHADERS = {
@@ -42,10 +60,16 @@ ELEMENT_SHADERS = {
     10: ElementShaderSpec(10, "TET4", "vtkDGTet", "tetrahedron", 3, 4, 4, "C", 1),
     24: ElementShaderSpec(24, "TET10", "vtkDGTet", "tetrahedron", 3, 4, 10, "C", 2),
     12: ElementShaderSpec(12, "HEX8", "vtkDGHex", "hexahedron", 3, 8, 8, "C", 1),
-    25: ElementShaderSpec(25, "HEX20", "vtkDGHex", "hexahedron", 3, 8, 20, "I", 2),
+    25: ElementShaderSpec(
+        25, "HEX20", "vtkDGHex", "hexahedron", 3, 8, 20, "I", 2,
+        _HEX20_BASIS_ORDER,
+    ),
     29: ElementShaderSpec(29, "HEX27", "vtkDGHex", "hexahedron", 3, 8, 27, "C", 2),
     13: ElementShaderSpec(13, "WEDGE6", "vtkDGWdg", "wedge", 3, 6, 6, "C", 1),
-    26: ElementShaderSpec(26, "WEDGE15", "vtkDGWdg", "wedge", 3, 6, 15, "I", 2),
+    26: ElementShaderSpec(
+        26, "WEDGE15", "vtkDGWdg", "wedge", 3, 6, 15, "I", 2,
+        _WEDGE15_BASIS_ORDER,
+    ),
     32: ElementShaderSpec(32, "WEDGE18", "vtkDGWdg", "wedge", 3, 6, 18, "C", 2),
     14: ElementShaderSpec(14, "PYRAMID5", "vtkDGPyr", "pyramid", 3, 5, 5, "C", 1),
     27: ElementShaderSpec(27, "PYRAMID13", "vtkDGPyr", "pyramid", 3, 5, 13, "I", 2),
@@ -305,10 +329,20 @@ def _build_batch(grid, cell_types, specs, scalar_name, association):
             ids[:, : spec.corner_count],
             spec.corner_count,
         )
+        # The canonical result grid deliberately retains VTK/solver local
+        # ordering because queries, sections, and the legacy fallback mapper
+        # consume it. Reorder only at the GPU-basis boundary. In particular,
+        # VTK_QUADRATIC_HEXAHEDRON uses bottom/top/vertical mid-edge ordering,
+        # while CellGrid HexI2 uses bottom/vertical/top (Exodus/IOSS).
+        basis_ids = (
+            ids[:, np.asarray(spec.basis_order, dtype=np.int64)]
+            if spec.basis_order
+            else ids
+        )
         _overwrite_array(
             _group(source, spec.dg_type),
             "shape-connectivity",
-            ids,
+            basis_ids,
             spec.node_count,
         )
         if cell_values is not None:
