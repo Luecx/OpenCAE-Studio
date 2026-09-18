@@ -24,6 +24,7 @@ from .surface_shading import supports_surface_shading
 _LOADER = FrdLoader()
 _SOURCE_POINT_INDEX = "_opencae_source_point_index"
 _DISPLAY_SCALAR = "_opencae_display_scalar"
+_FRD_VTK_ORDERED = "_opencae_frd_vtk_ordered"
 
 # CalculiX/CGX FRD uses a different high-order edge-node ordering than VTK.
 # FEMaster writes exactly this FRD convention in FrdWriter::write_elements().
@@ -209,54 +210,66 @@ def _result_grids(result, field, options):
 
 
 def _vtk_ordered_frd_grid(grid):
-    """Return FRD quadratic solids in canonical VTK local node ordering.
+    """Normalize FRD quadratic solids to canonical VTK local node ordering once.
 
-    FEMaster follows the CalculiX/CGX FRD convention for type 4 (HEX20) and
-    type 5 (WEDGE15). Those formats place vertical midside nodes before the
-    upper-face midside nodes, while VTK_QUADRATIC_HEXAHEDRON/WEDGE expect the
-    VTK local edge order. The FRD loader intentionally remains format-focused;
-    normalize only the displayed result grid at the rendering boundary.
+    FEMaster writes CalculiX/CGX FRD type 4/5 connectivity. PyVista cells with
+    VTK_QUADRATIC_HEXAHEDRON/WEDGE ids must instead use VTK's local edge-node
+    order. Normalize the render-source grid in place and mark it so animation
+    caches never repeat the O(n_cells) connectivity pass.
     """
     if grid is None or not getattr(grid, "n_cells", 0):
         return grid
     try:
+        if _FRD_VTK_ORDERED in grid.field_data:
+            marker = np.asarray(grid.field_data[_FRD_VTK_ORDERED]).reshape(-1)
+            if len(marker) and int(marker[0]) == 1:
+                return grid
+    except (AttributeError, KeyError, TypeError, ValueError):
+        pass
+
+    try:
         cell_types = np.asarray(grid.celltypes, dtype=np.int64)
     except (AttributeError, TypeError, ValueError):
         return grid
-    if not np.any((cell_types == 25) | (cell_types == 26)):
-        return grid
 
-    normalized = grid.copy(deep=True)
+    needs_hex = np.any(cell_types == 25)
+    needs_wedge = np.any(cell_types == 26)
+    if needs_hex or needs_wedge:
+        try:
+            from vtkmodules.util.numpy_support import vtk_to_numpy
+
+            cells = grid.GetCells()
+            offsets = np.asarray(
+                vtk_to_numpy(cells.GetOffsetsArray()),
+                dtype=np.int64,
+            )
+            connectivity = vtk_to_numpy(cells.GetConnectivityArray())
+        except (AttributeError, ImportError, TypeError, ValueError):
+            return grid
+
+        for cell_index, vtk_type in enumerate(cell_types):
+            if vtk_type == 25:
+                order = _FRD_HEX20_TO_VTK
+            elif vtk_type == 26:
+                order = _FRD_WEDGE15_TO_VTK
+            else:
+                continue
+            begin = int(offsets[cell_index])
+            end = int(offsets[cell_index + 1])
+            if end - begin != len(order):
+                continue
+            local = np.asarray(connectivity[begin:end], dtype=np.int64).copy()
+            connectivity[begin:end] = local[order]
+
+        cells.GetConnectivityArray().Modified()
+        cells.Modified()
+        grid.Modified()
+
     try:
-        from vtkmodules.util.numpy_support import vtk_to_numpy
-
-        cells = normalized.GetCells()
-        offsets = np.asarray(
-            vtk_to_numpy(cells.GetOffsetsArray()),
-            dtype=np.int64,
-        )
-        connectivity = vtk_to_numpy(cells.GetConnectivityArray())
-    except (AttributeError, ImportError, TypeError, ValueError):
-        return grid
-
-    for cell_index, vtk_type in enumerate(cell_types):
-        if vtk_type == 25:
-            order = _FRD_HEX20_TO_VTK
-        elif vtk_type == 26:
-            order = _FRD_WEDGE15_TO_VTK
-        else:
-            continue
-        begin = int(offsets[cell_index])
-        end = int(offsets[cell_index + 1])
-        if end - begin != len(order):
-            continue
-        local = np.asarray(connectivity[begin:end], dtype=np.int64).copy()
-        connectivity[begin:end] = local[order]
-
-    cells.GetConnectivityArray().Modified()
-    cells.Modified()
-    normalized.Modified()
-    return normalized
+        grid.field_data[_FRD_VTK_ORDERED] = np.asarray([1], dtype=np.uint8)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        pass
+    return grid
 
 
 def _beam_subset(grid, physical: bool):
