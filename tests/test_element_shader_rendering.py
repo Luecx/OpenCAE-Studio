@@ -66,16 +66,20 @@ def test_hex20_builds_quadratic_hgrad_shader_surface():
     document = shaders._template_document(batch.specs, "S", "point")
     shape = document["attributes"][0]["cell-info"]["vtkDGHex"]
     scalar = document["attributes"][1]["cell-info"]["vtkDGHex"]
-    assert (shape["function-space"], shape["basis"], shape["order"]) == (
+    assert (shape["dof-sharing"], shape["function-space"], shape["basis"], shape["order"]) == (
+        "CG",
         "HGRAD",
         "I",
         2,
     )
-    assert (scalar["function-space"], scalar["basis"], scalar["order"]) == (
+    assert (scalar["dof-sharing"], scalar["function-space"], scalar["basis"], scalar["order"]) == (
+        "CG",
         "HGRAD",
         "I",
         2,
     )
+    assert shaders._group(batch.source, "vtkDGHex").GetScalars() is not None
+    assert shaders._group(batch.source, "vtkDGHex").GetScalars().GetNumberOfComponents() == 20
 
 
 
