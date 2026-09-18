@@ -681,7 +681,7 @@ def _hgrad_info(spec, value_name):
             "values": ["points", value_name],
         },
         "basis": spec.basis,
-        "dof-sharing": "points",
+        "dof-sharing": "CG",
         "function-space": "HGRAD",
         "order": spec.order,
     }
