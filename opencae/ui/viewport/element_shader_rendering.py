@@ -204,11 +204,10 @@ class _ShaderBatch:
 class ElementShaderState:
     """Own immutable topology plus mutable coordinate/result GPU arrays."""
 
-    def __init__(self, dataset, batches, scalar_name, association):
+    def __init__(self, dataset, batches, color):
         self.dataset = dataset
         self.batches = tuple(batches)
-        self.scalar_name = scalar_name
-        self.association = association
+        self.color = color
         self._topology = None
 
     def remember_topology(self, grid):
@@ -228,55 +227,53 @@ class ElementShaderState:
             and np.array_equal(types, _cell_types(grid))
         )
 
-    def update_values(self, grid, scalar_name=None) -> bool:
-        scalar_name = self.scalar_name if scalar_name is None else scalar_name
-        if (
-            scalar_name != self.scalar_name
-            or _scalar_association(grid, scalar_name) != self.association
-        ):
-            return False
-        if not self.topology_matches(grid):
+    def update_values(self, grid, color=None) -> bool:
+        color = self.color if color is None else _coerce_color_field(grid, color)
+        if color != self.color or not self.topology_matches(grid):
             return False
 
         from vtkmodules.util.numpy_support import vtk_to_numpy
 
         points = vtk_to_numpy(grid.GetPoints().GetData())
-        point_values = None
-        cell_values = None
-        if scalar_name and self.association == "point":
-            point_values = vtk_to_numpy(grid.GetPointData().GetArray(scalar_name))
-        elif scalar_name and self.association == "cell":
-            cell_values = vtk_to_numpy(grid.GetCellData().GetArray(scalar_name))
+        values = _color_values(grid, color)
+        if color is not None and values is None:
+            return False
 
         for batch in self.batches:
             _overwrite_array(_group(batch.source, "points"), "coords", points, 3)
-            if point_values is not None:
-                _overwrite_array(_group(batch.source, "points"), scalar_name, point_values, 1)
-            elif cell_values is not None:
+            if color is not None and color.association == "point":
+                _overwrite_array(
+                    _group(batch.source, "points"),
+                    color.name,
+                    values,
+                    color.components,
+                )
+            elif color is not None and color.association == "cell":
                 for spec in batch.specs:
-                    values = cell_values[batch.cell_indices[spec.vtk_cell_type]]
-                    _overwrite_array(_group(batch.source, spec.dg_type), scalar_name, values, 1)
+                    selected = values[batch.cell_indices[spec.vtk_cell_type]]
+                    _overwrite_array(
+                        _group(batch.source, spec.dg_type),
+                        color.name,
+                        selected,
+                        color.components,
+                    )
             batch.source.Modified()
             batch.surface.Modified()
         self.dataset.Modified()
         return True
 
 
-def install_element_shader_mapper(actor, grid, scalar_name=None, clim=None):
-    """Replace an actor's legacy dataset mapper with the FE CellGrid GPU mapper.
-
-    The actor and its PyVista-created property/scalar bar remain unchanged. This
-    makes the shader path a rendering-only substitution; all higher-level result
-    state continues to use the canonical UnstructuredGrid.
-    """
-    state = build_element_shader_state(grid, scalar_name)
+def install_element_shader_mapper(actor, grid, color=None, clim=None):
+    """Replace an actor's legacy dataset mapper with the FE CellGrid GPU mapper."""
+    color = _coerce_color_field(grid, color)
+    state = build_element_shader_state(grid, color)
     if state is None:
         return None
     try:
         legacy = actor.GetMapper()
     except (AttributeError, RuntimeError):
         return None
-    mapper = _new_mapper(state, legacy, scalar_name, clim)
+    mapper = _new_mapper(state, legacy, color, clim)
     if mapper is None:
         return None
     actor.SetMapper(mapper)
@@ -288,24 +285,26 @@ def is_element_shader_actor(actor) -> bool:
     return getattr(actor, "_opencae_element_shader_state", None) is not None
 
 
-def update_element_shader_mapper(actor, grid, scalar_name=None, clim=None):
+def update_element_shader_mapper(actor, grid, color=None, clim=None):
     """Update coordinates/results in-place, rebuilding only when schema changes."""
     state = getattr(actor, "_opencae_element_shader_state", None)
     if state is None:
         return None
+    color = _coerce_color_field(grid, color)
     mapper = actor.GetMapper()
-    if not state.update_values(grid, scalar_name):
-        replacement = build_element_shader_state(grid, scalar_name)
+    if not state.update_values(grid, color):
+        replacement = build_element_shader_state(grid, color)
         if replacement is None:
             return None
         mapper.SetInputDataObject(replacement.dataset)
         actor._opencae_element_shader_state = replacement
-    _configure_scalar_mapper(mapper, scalar_name, clim)
+        state = replacement
+    _configure_scalar_mapper(mapper, state.color, clim)
     mapper.Modified()
     return mapper
 
 
-def _new_mapper(state, legacy_mapper, scalar_name, clim):
+def _new_mapper(state, legacy_mapper, color, clim):
     _register_cellgrid()
     from vtkmodules.vtkRenderingCore import vtkCompositeCellGridMapper
 
@@ -314,41 +313,40 @@ def _new_mapper(state, legacy_mapper, scalar_name, clim):
     try:
         lookup = legacy_mapper.GetLookupTable()
         if lookup is not None:
-            # Reuse the exact LUT object already owned by PyVista's scalar bar.
-            # CellGrid's render responder only honors an explicit display range
-            # through the LUT when UseLookupTableScalarRange is enabled.
             mapper.SetLookupTable(lookup)
         mapper.SetUseLookupTableScalarRange(True)
         mapper.SetScalarRange(*legacy_mapper.GetScalarRange())
     except (AttributeError, RuntimeError, TypeError, ValueError):
         pass
-    _configure_scalar_mapper(mapper, scalar_name, clim)
+    _configure_scalar_mapper(mapper, color, clim)
     return mapper
 
 
-def _configure_scalar_mapper(mapper, scalar_name, clim):
-    if not scalar_name:
+def _configure_scalar_mapper(mapper, color, clim):
+    if color is None:
         mapper.ScalarVisibilityOff()
         return
     mapper.ScalarVisibilityOn()
-    # vtkDGRenderResponder ignores mapper.GetScalarRange() when this flag is
-    # false and derives the range from the CellAttribute instead. Keep the
-    # shader normalization and the visible scalar bar on the same shared LUT.
     mapper.SetUseLookupTableScalarRange(True)
-    # A CellGrid field is a cell attribute even when its HGRAD degrees of
-    # freedom are shared nodal values. The responder evaluates that attribute
-    # with the element-specific basis inside the GPU shader.
     mapper.SetScalarModeToUseCellFieldData()
-    mapper.SetArrayName(str(scalar_name))
+    mapper.SetArrayName(str(color.name))
     mapper.SetArrayComponent(0)
+    lookup = mapper.GetLookupTable()
+    if lookup is not None:
+        try:
+            if color.magnitude:
+                lookup.SetVectorModeToMagnitude()
+            else:
+                lookup.SetVectorModeToComponent()
+                lookup.SetVectorComponent(0)
+        except (AttributeError, RuntimeError, TypeError):
+            pass
     if clim is not None:
         scalar_range = tuple(float(value) for value in clim)
         mapper.SetScalarRange(*scalar_range)
-        lookup = mapper.GetLookupTable()
         if lookup is not None:
             lookup.SetRange(*scalar_range)
             lookup.Modified()
-
 
 def build_element_shader_state(grid, scalar_name=None):
     """Build batched element shaders for one fixed-topology result grid.
