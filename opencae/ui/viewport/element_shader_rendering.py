@@ -323,17 +323,11 @@ def _build_batch(grid, cell_types, specs, scalar_name, association):
         ]
         cell_indices[spec.vtk_cell_type] = indices
         batch_connectivity[spec.vtk_cell_type] = ids
-        _overwrite_array(
-            _group(source, spec.dg_type),
-            "cell-connectivity",
-            ids[:, : spec.corner_count],
-            spec.corner_count,
-        )
-        # The canonical result grid deliberately retains VTK/solver local
-        # ordering because queries, sections, and the legacy fallback mapper
-        # consume it. Reorder only at the GPU-basis boundary. In particular,
-        # VTK_QUADRATIC_HEXAHEDRON uses bottom/top/vertical mid-edge ordering,
-        # while CellGrid HexI2 uses bottom/vertical/top (Exodus/IOSS).
+        # CellGrid expects the DG cell connectivity itself in basis order.
+        # This mirrors vtkUnstructuredGridToCellGrid exactly: for HEX20 the
+        # single 20-wide conn array is both the cell source and the HGRAD
+        # connectivity. Using a separate 8-corner source breaks higher-order
+        # side/face extraction.
         basis_ids = (
             ids[:, np.asarray(spec.basis_order, dtype=np.int64)]
             if spec.basis_order
@@ -341,7 +335,7 @@ def _build_batch(grid, cell_types, specs, scalar_name, association):
         )
         _overwrite_array(
             _group(source, spec.dg_type),
-            "shape-connectivity",
+            "cell-connectivity",
             basis_ids,
             spec.node_count,
         )
@@ -601,17 +595,10 @@ def _template_document(specs, scalar_name, association):
     for spec in specs:
         type_arrays = [
             {
-                "components": spec.corner_count,
-                "data": list(range(spec.corner_count)),
-                "default_scalars": True,
-                "name": "cell-connectivity",
-                "tuples": 1,
-                "type": "vtktypeint64",
-            },
-            {
                 "components": spec.node_count,
                 "data": list(range(spec.node_count)),
-                "name": "shape-connectivity",
+                "default_scalars": True,
+                "name": "cell-connectivity",
                 "tuples": 1,
                 "type": "vtktypeint64",
             },
@@ -690,7 +677,7 @@ def _template_document(specs, scalar_name, association):
 def _hgrad_info(spec, value_name):
     return {
         "arrays": {
-            "connectivity": [spec.dg_type, "shape-connectivity"],
+            "connectivity": [spec.dg_type, "cell-connectivity"],
             "values": ["points", value_name],
         },
         "basis": spec.basis,
