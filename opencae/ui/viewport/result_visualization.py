@@ -228,18 +228,14 @@ def _vtk_ordered_frd_grid(grid):
 
     normalized = grid.copy(deep=True)
     try:
+        from vtkmodules.util.numpy_support import vtk_to_numpy
+
         cells = normalized.GetCells()
         offsets = np.asarray(
-            __import__(
-                "vtkmodules.util.numpy_support",
-                fromlist=["vtk_to_numpy"],
-            ).vtk_to_numpy(cells.GetOffsetsArray()),
+            vtk_to_numpy(cells.GetOffsetsArray()),
             dtype=np.int64,
         )
-        connectivity = __import__(
-            "vtkmodules.util.numpy_support",
-            fromlist=["vtk_to_numpy"],
-        ).vtk_to_numpy(cells.GetConnectivityArray())
+        connectivity = vtk_to_numpy(cells.GetConnectivityArray())
     except (AttributeError, ImportError, TypeError, ValueError):
         return grid
 
