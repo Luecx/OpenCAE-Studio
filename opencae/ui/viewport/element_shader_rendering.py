@@ -198,8 +198,11 @@ def _new_mapper(state, legacy_mapper, scalar_name, clim):
     try:
         lookup = legacy_mapper.GetLookupTable()
         if lookup is not None:
+            # Reuse the exact LUT object already owned by PyVista's scalar bar.
+            # CellGrid's render responder only honors an explicit display range
+            # through the LUT when UseLookupTableScalarRange is enabled.
             mapper.SetLookupTable(lookup)
-        mapper.SetUseLookupTableScalarRange(legacy_mapper.GetUseLookupTableScalarRange())
+        mapper.SetUseLookupTableScalarRange(True)
         mapper.SetScalarRange(*legacy_mapper.GetScalarRange())
     except (AttributeError, RuntimeError, TypeError, ValueError):
         pass
@@ -212,6 +215,10 @@ def _configure_scalar_mapper(mapper, scalar_name, clim):
         mapper.ScalarVisibilityOff()
         return
     mapper.ScalarVisibilityOn()
+    # vtkDGRenderResponder ignores mapper.GetScalarRange() when this flag is
+    # false and derives the range from the CellAttribute instead. Keep the
+    # shader normalization and the visible scalar bar on the same shared LUT.
+    mapper.SetUseLookupTableScalarRange(True)
     # A CellGrid field is a cell attribute even when its HGRAD degrees of
     # freedom are shared nodal values. The responder evaluates that attribute
     # with the element-specific basis inside the GPU shader.
