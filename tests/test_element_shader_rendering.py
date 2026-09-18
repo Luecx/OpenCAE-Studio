@@ -9,6 +9,7 @@ from vtkmodules.vtkRenderingCore import (
 )
 
 from opencae.ui.viewport import element_shader_rendering as shaders
+from opencae.ui.viewport import result_visualization as result_view
 
 
 def _grid(cells, point_count, scalar="S"):
@@ -84,7 +85,7 @@ def test_hex20_reorders_vtk_connectivity_for_cellgrid_i2_basis():
 
     batch = state.batches[0]
     connectivity = vtk_to_numpy(
-        shaders._group(batch.source, "vtkDGHex").GetArray("shape-connectivity")
+        shaders._group(batch.source, "vtkDGHex").GetArray("cell-connectivity")
     ).reshape(-1, 20)
     assert connectivity.tolist() == [[
         0, 1, 2, 3, 4, 5, 6, 7,
@@ -100,7 +101,7 @@ def test_wedge15_reorders_top_and_vertical_mid_edge_nodes_for_i2_basis():
 
     batch = state.batches[0]
     connectivity = vtk_to_numpy(
-        shaders._group(batch.source, "vtkDGWdg").GetArray("shape-connectivity")
+        shaders._group(batch.source, "vtkDGWdg").GetArray("cell-connectivity")
     ).reshape(-1, 15)
     assert connectivity.tolist() == [[
         0, 1, 2, 3, 4, 5,
@@ -108,6 +109,67 @@ def test_wedge15_reorders_top_and_vertical_mid_edge_nodes_for_i2_basis():
         12, 13, 14,
         9, 10, 11,
     ]]
+
+
+def test_frd_hex20_normalizes_to_vtk_then_matches_official_cellgrid():
+    import pyvista as pv
+    from vtkmodules.vtkFiltersCellGrid import vtkUnstructuredGridToCellGrid
+
+    # FEMaster's FRD writer emits CalculiX/CGX type-4 connectivity in this
+    # order, while the declared VTK_QUADRATIC_HEXAHEDRON cell expects 0..19.
+    frd_order = [
+        0, 1, 2, 3, 4, 5, 6, 7,
+        8, 9, 10, 11,
+        16, 17, 18, 19,
+        12, 13, 14, 15,
+    ]
+    frd_grid = pv.wrap(_grid([(25, frd_order)], 20))
+    vtk_grid = result_view._vtk_ordered_frd_grid(frd_grid)
+
+    offsets = vtk_to_numpy(vtk_grid.GetCells().GetOffsetsArray())
+    ids = vtk_to_numpy(vtk_grid.GetCells().GetConnectivityArray())
+    local = ids[int(offsets[0]):int(offsets[1])]
+    assert local.tolist() == list(range(20))
+
+    ours = shaders.build_element_shader_state(vtk_grid, "S")
+    ours_conn = vtk_to_numpy(
+        shaders._group(ours.batches[0].source, "vtkDGHex").GetScalars()
+    ).reshape(-1, 20)
+
+    converter = vtkUnstructuredGridToCellGrid()
+    converter.SetInputDataObject(0, vtk_grid)
+    converter.Update()
+    pdc = converter.GetOutputDataObject(0)
+    official = pdc.GetPartitionedDataSet(0).GetPartitionAsDataObject(0)
+    official_conn = vtk_to_numpy(
+        official.GetAttributes("vtkDGHex").GetScalars()
+    ).reshape(-1, 20)
+
+    assert ours_conn.tolist() == official_conn.tolist()
+    assert ours_conn.tolist() == [[
+        0, 1, 2, 3, 4, 5, 6, 7,
+        8, 9, 10, 11,
+        16, 17, 18, 19,
+        12, 13, 14, 15,
+    ]]
+
+
+def test_frd_wedge15_normalizes_back_to_vtk_order():
+    import pyvista as pv
+
+    frd_order = [
+        0, 1, 2, 3, 4, 5,
+        6, 7, 8,
+        12, 13, 14,
+        9, 10, 11,
+    ]
+    frd_grid = pv.wrap(_grid([(26, frd_order)], 15))
+    vtk_grid = result_view._vtk_ordered_frd_grid(frd_grid)
+
+    offsets = vtk_to_numpy(vtk_grid.GetCells().GetOffsetsArray())
+    ids = vtk_to_numpy(vtk_grid.GetCells().GetConnectivityArray())
+    local = ids[int(offsets[0]):int(offsets[1])]
+    assert local.tolist() == list(range(15))
 
 def test_mixed_hex_orders_use_separate_shader_batches_and_remove_interface():
     # HEX8 top face [4,5,6,7] is HEX20 bottom face [4,5,6,7]. The different
