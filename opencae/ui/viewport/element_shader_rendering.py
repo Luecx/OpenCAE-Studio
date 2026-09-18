@@ -348,12 +348,8 @@ def _configure_scalar_mapper(mapper, color, clim):
             lookup.SetRange(*scalar_range)
             lookup.Modified()
 
-def build_element_shader_state(grid, scalar_name=None):
-    """Build batched element shaders for one fixed-topology result grid.
-
-    Returns None when any cell type is unsupported so callers can fall back
-    to the existing VTK dataset mapper without changing result semantics.
-    """
+def build_element_shader_state(grid, color=None):
+    """Build batched element shaders for one fixed-topology result grid."""
     _register_cellgrid()
     if (
         grid is None
@@ -361,25 +357,23 @@ def build_element_shader_state(grid, scalar_name=None):
         or grid.GetNumberOfPoints() <= 0
     ):
         return None
+    color = _coerce_color_field(grid, color)
     cell_types = _cell_types(grid)
     unique = tuple(int(value) for value in np.unique(cell_types))
     if any(cell_type not in ELEMENT_SHADERS for cell_type in unique):
         return None
     specs = tuple(ELEMENT_SHADERS[cell_type] for cell_type in unique)
-    association = _scalar_association(grid, scalar_name)
-    if scalar_name and association is None:
+    if color is not None and _color_values(grid, color) is None:
         return None
 
     partitions = _partition_specs(specs)
     batches = [
-        _build_batch(grid, cell_types, group, scalar_name, association)
+        _build_batch(grid, cell_types, group, color)
         for group in partitions
     ]
     if any(batch is None for batch in batches):
         return None
 
-    # CellGrid removes shared faces inside each partition. Remove the remaining
-    # duplicates between partitions (e.g. a HEX8 next to a HEX20) as well.
     _remove_cross_partition_internal_faces(batches)
 
     from vtkmodules.vtkCommonDataModel import vtkPartitionedDataSetCollection
@@ -388,10 +382,9 @@ def build_element_shader_state(grid, scalar_name=None):
     dataset.SetNumberOfPartitionedDataSets(len(batches))
     for index, batch in enumerate(batches):
         dataset.GetPartitionedDataSet(index).SetPartition(0, batch.surface)
-    state = ElementShaderState(dataset, batches, scalar_name, association)
+    state = ElementShaderState(dataset, batches, color)
     state.remember_topology(grid)
     return state
-
 
 def _partition_specs(specs):
     """Keep at most one interpolation order for each DG topology per CellGrid."""
@@ -406,14 +399,18 @@ def _partition_specs(specs):
     return tuple(tuple(partition) for partition in partitions)
 
 
-def _build_batch(grid, cell_types, specs, scalar_name, association):
+def _build_batch(grid, cell_types, specs, color):
     from vtkmodules.vtkCommonDataModel import vtkCellGrid
     from vtkmodules.util.numpy_support import vtk_to_numpy
 
+    color_name = color.name if color is not None else ""
+    association = color.association if color is not None else ""
+    components = color.components if color is not None else 0
     template = _template(
         tuple(spec.vtk_cell_type for spec in specs),
-        scalar_name or "",
-        association or "",
+        color_name,
+        association,
+        components,
     )
     source = vtkCellGrid()
     source.DeepCopy(template)
@@ -421,18 +418,19 @@ def _build_batch(grid, cell_types, specs, scalar_name, association):
     point_group = _group(source, "points")
     _overwrite_array(point_group, "coords", points, 3)
     point_group.SetVectors(point_group.GetArray("coords"))
-    if scalar_name and association == "point":
-        values = vtk_to_numpy(grid.GetPointData().GetArray(scalar_name))
-        _overwrite_array(_group(source, "points"), scalar_name, values, 1)
+
+    color_values = _color_values(grid, color)
+    if color is not None and color.association == "point":
+        _overwrite_array(
+            point_group,
+            color.name,
+            color_values,
+            color.components,
+        )
 
     offsets, connectivity = _connectivity(grid)
     cell_indices = {}
     batch_connectivity = {}
-    cell_values = (
-        vtk_to_numpy(grid.GetCellData().GetArray(scalar_name))
-        if scalar_name and association == "cell"
-        else None
-    )
     for spec in specs:
         indices = np.flatnonzero(cell_types == spec.vtk_cell_type).astype(
             np.int64,
@@ -446,11 +444,6 @@ def _build_batch(grid, cell_types, specs, scalar_name, association):
         ]
         cell_indices[spec.vtk_cell_type] = indices
         batch_connectivity[spec.vtk_cell_type] = ids
-        # CellGrid expects the DG cell connectivity itself in basis order.
-        # This mirrors vtkUnstructuredGridToCellGrid exactly: for HEX20 the
-        # single 20-wide conn array is both the cell source and the HGRAD
-        # connectivity. Using a separate 8-corner source breaks higher-order
-        # side/face extraction.
         basis_ids = (
             ids[:, np.asarray(spec.basis_order, dtype=np.int64)]
             if spec.basis_order
@@ -463,16 +456,14 @@ def _build_batch(grid, cell_types, specs, scalar_name, association):
             basis_ids,
             spec.node_count,
         )
-        # vtkDGCell's canonical cell source is the group's active scalar array.
-        # DeepCopy does not reliably preserve the active-array association across
-        # VTK versions, so bind it explicitly just like the official transcriber.
         cell_group.SetScalars(cell_group.GetArray("cell-connectivity"))
-        if cell_values is not None:
+        if color is not None and color.association == "cell":
+            selected = color_values[indices]
             _overwrite_array(
-                _group(source, spec.dg_type),
-                scalar_name,
-                cell_values[indices],
-                1,
+                cell_group,
+                color.name,
+                selected,
+                color.components,
             )
     source.Modified()
     surface = _surface_cellgrid(source)
@@ -483,7 +474,6 @@ def _build_batch(grid, cell_types, specs, scalar_name, association):
         cell_indices,
         batch_connectivity,
     )
-
 
 def _surface_cellgrid(source):
     from vtkmodules.vtkCommonDataModel import vtkCellGrid, vtkCellGridSidesQuery
@@ -655,12 +645,13 @@ def _register_cellgrid():
 
 
 @lru_cache(maxsize=64)
-def _template(cell_types, scalar_name, association):
+def _template(cell_types, color_name, association, components):
     specs = tuple(ELEMENT_SHADERS[int(cell_type)] for cell_type in cell_types)
     document = _template_document(
         specs,
-        scalar_name or None,
+        color_name or None,
         association or None,
+        int(components or 0),
     )
     payload = json.dumps(
         document,
@@ -695,7 +686,7 @@ def _template(cell_types, scalar_name, association):
             pass
 
 
-def _template_document(specs, scalar_name, association):
+def _template_document(specs, color_name, association, components=1):
     point_arrays = [
         {
             "components": 3,
@@ -706,19 +697,19 @@ def _template_document(specs, scalar_name, association):
             "type": "double",
         }
     ]
-    if scalar_name and association == "point":
+    if color_name and association == "point":
         point_arrays.append(
             {
-                "components": 1,
-                "data": [0.0],
-                "name": scalar_name,
+                "components": components,
+                "data": [0.0] * components,
+                "name": color_name,
                 "tuples": 1,
                 "type": "double",
             }
         )
     arrays = {"points": point_arrays}
     shape_info = {}
-    scalar_info = {}
+    color_info = {}
     cell_types = []
     for spec in specs:
         type_arrays = [
@@ -731,21 +722,21 @@ def _template_document(specs, scalar_name, association):
                 "type": "vtktypeint64",
             },
         ]
-        if scalar_name and association == "cell":
+        if color_name and association == "cell":
             type_arrays.append(
                 {
-                    "components": 1,
-                    "data": [0.0],
-                    "name": scalar_name,
+                    "components": components,
+                    "data": [0.0] * components,
+                    "name": color_name,
                     "tuples": 1,
                     "type": "double",
                 }
             )
         arrays[spec.dg_type] = type_arrays
         shape_info[spec.dg_type] = _hgrad_info(spec, "coords")
-        if scalar_name:
-            scalar_info[spec.dg_type] = (
-                _hgrad_info(spec, scalar_name)
+        if color_name:
+            color_info[spec.dg_type] = (
+                _hgrad_info(spec, color_name)
                 if association == "point"
                 else {
                     "arrays": {
@@ -753,7 +744,7 @@ def _template_document(specs, scalar_name, association):
                             spec.dg_type,
                             "cell-connectivity",
                         ],
-                        "values": [spec.dg_type, scalar_name],
+                        "values": [spec.dg_type, color_name],
                     },
                     "basis": "C",
                     "function-space": "constant",
@@ -781,13 +772,13 @@ def _template_document(specs, scalar_name, association):
             "space": "ℝ³",
         }
     ]
-    if scalar_name:
+    if color_name:
         attributes.append(
             {
-                "cell-info": scalar_info,
-                "components": 1,
-                "name": scalar_name,
-                "space": "ℝ",
+                "cell-info": color_info,
+                "components": components,
+                "name": color_name,
+                "space": "ℝ" if components == 1 else "ℝ³",
             }
         )
     return {
@@ -800,7 +791,6 @@ def _template_document(specs, scalar_name, association):
         "schema-name": "dg leaf",
         "schema-version": 0,
     }
-
 
 def _hgrad_info(spec, value_name):
     return {
