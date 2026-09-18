@@ -19,6 +19,29 @@ _REGISTERED = False
 
 
 @dataclass(frozen=True)
+class ColorFieldSpec:
+    """Describe values CellGrid interpolates before color reduction.
+
+    source_names identify scalar arrays on the canonical result grid. They
+    are packed into one multi-component HGRAD attribute. transform is
+    restricted to linear transforms so it commutes with FE interpolation.
+    When magnitude is true, VTK reduces the interpolated tuple to its L2
+    norm in the fragment shader.
+    """
+
+    name: str
+    association: str
+    source_names: tuple[str, ...]
+    transform: str = "identity"
+    magnitude: bool = False
+
+    @property
+    def components(self) -> int:
+        if self.transform == "mises":
+            return 6
+        return len(self.source_names)
+
+@dataclass(frozen=True)
 class ElementShaderSpec:
     vtk_cell_type: int
     name: str
@@ -74,6 +97,99 @@ ELEMENT_SHADERS = {
     14: ElementShaderSpec(14, "PYRAMID5", "vtkDGPyr", "pyramid", 3, 5, 5, "C", 1),
     27: ElementShaderSpec(27, "PYRAMID13", "vtkDGPyr", "pyramid", 3, 5, 13, "I", 2),
 }
+
+
+def color_field(
+    grid,
+    name,
+    source_names=None,
+    *,
+    transform="identity",
+    magnitude=False,
+):
+    """Return a validated render-field description or None.
+
+    The common path accepts a single scalar name. Derived fields pass their raw
+    component arrays instead, so CellGrid interpolates the components before
+    taking a norm.
+    """
+    if not name:
+        return None
+    names = tuple(source_names or (str(name),))
+    if not names:
+        return None
+    association = None
+    for source in names:
+        current = _scalar_association(grid, source)
+        if current is None:
+            return None
+        if association is None:
+            association = current
+        elif current != association:
+            return None
+    field = ColorFieldSpec(
+        str(name),
+        str(association),
+        tuple(str(source) for source in names),
+        str(transform),
+        bool(magnitude),
+    )
+    if field.components <= 0:
+        return None
+    return field
+
+
+def _coerce_color_field(grid, value):
+    if value is None:
+        return None
+    if isinstance(value, ColorFieldSpec):
+        for source in value.source_names:
+            if _scalar_association(grid, source) != value.association:
+                return None
+        return value
+    return color_field(grid, str(value))
+
+
+def _color_values(grid, field):
+    if field is None:
+        return None
+    data = (
+        grid.GetPointData()
+        if field.association == "point"
+        else grid.GetCellData()
+    )
+    from vtkmodules.util.numpy_support import vtk_to_numpy
+
+    columns = []
+    for source in field.source_names:
+        array = data.GetArray(source)
+        if array is None:
+            return None
+        values = np.asarray(vtk_to_numpy(array), dtype=float)
+        if values.ndim != 1:
+            values = values.reshape(values.shape[0], -1)
+            if values.shape[1] != 1:
+                return None
+            values = values[:, 0]
+        columns.append(values)
+    packed = np.column_stack(columns)
+    if field.transform == "identity":
+        return packed
+    if field.transform == "mises":
+        if packed.shape[1] != 6:
+            return None
+        sxx, syy, szz, sxy, syz, szx = packed.T
+        inv_sqrt2 = 1.0 / np.sqrt(2.0)
+        sqrt3 = np.sqrt(3.0)
+        return np.column_stack((
+            (sxx - syy) * inv_sqrt2,
+            (syy - szz) * inv_sqrt2,
+            (szz - sxx) * inv_sqrt2,
+            sqrt3 * sxy,
+            sqrt3 * syz,
+            sqrt3 * szx,
+        ))
+    return None
 
 
 @dataclass
