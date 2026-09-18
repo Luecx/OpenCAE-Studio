@@ -717,7 +717,7 @@ def _clim(grid, scalar, settings, *, nonnegative=False):
             return None
         data_minimum, data_maximum = float(finite.min()), float(finite.max())
         minimum = (
-            data_minimum
+            (0.0 if nonnegative else data_minimum)
             if minimum_auto
             else float(settings.get("minimum", data_minimum))
         )
