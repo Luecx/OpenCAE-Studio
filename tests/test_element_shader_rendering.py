@@ -194,6 +194,125 @@ def test_mixed_hex_orders_use_separate_shader_batches_and_remove_interface():
     assert counts == {"HEX8": 5, "HEX20": 5}
 
 
+def _add_point_array(grid, name, values):
+    array = numpy_to_vtk(np.asarray(values, dtype=float), deep=True)
+    array.SetName(name)
+    grid.GetPointData().AddArray(array)
+
+
+def test_stress_magnitude_interpolates_six_components_before_l2_reduction():
+    grid = _grid([(25, range(20))], 20, scalar=None)
+    names = (
+        "STRESS:SXX", "STRESS:SYY", "STRESS:SZZ",
+        "STRESS:SXY", "STRESS:SYZ", "STRESS:SZX",
+    )
+    columns = []
+    for index, name in enumerate(names):
+        values = np.linspace(index + 1.0, index + 3.0, 20)
+        columns.append(values)
+        _add_point_array(grid, name, values)
+    nodal_magnitude = np.linalg.norm(np.column_stack(columns), axis=1)
+    _add_point_array(grid, "STRESS:Magnitude", nodal_magnitude)
+
+    field = shaders.color_field(
+        grid,
+        "STRESS:Magnitude",
+        names,
+        magnitude=True,
+    )
+    state = shaders.build_element_shader_state(grid, field)
+
+    assert field.components == 6
+    values = vtk_to_numpy(
+        shaders._group(state.batches[0].source, "points").GetArray("STRESS:Magnitude")
+    ).reshape(-1, 6)
+    np.testing.assert_allclose(values, np.column_stack(columns))
+
+
+def test_mises_transform_norm_equals_mises_of_stress_tensor():
+    grid = _grid([(25, range(20))], 20, scalar=None)
+    names = (
+        "STRESS:SXX", "STRESS:SYY", "STRESS:SZZ",
+        "STRESS:SXY", "STRESS:SYZ", "STRESS:SZX",
+    )
+    raw = np.column_stack((
+        np.linspace(100.0, 160.0, 20),
+        np.linspace(20.0, 40.0, 20),
+        np.linspace(-10.0, 15.0, 20),
+        np.linspace(5.0, 9.0, 20),
+        np.linspace(-3.0, 2.0, 20),
+        np.linspace(7.0, 11.0, 20),
+    ))
+    for index, name in enumerate(names):
+        _add_point_array(grid, name, raw[:, index])
+
+    field = shaders.color_field(
+        grid,
+        "STRESS:Mises",
+        names,
+        transform="mises",
+        magnitude=True,
+    )
+    transformed = shaders._color_values(grid, field)
+    rendered = np.linalg.norm(transformed, axis=1)
+    sxx, syy, szz, sxy, syz, szx = raw.T
+    expected = np.sqrt(
+        0.5 * ((sxx - syy) ** 2 + (syy - szz) ** 2 + (szz - sxx) ** 2)
+        + 3.0 * (sxy ** 2 + syz ** 2 + szx ** 2)
+    )
+    np.testing.assert_allclose(rendered, expected)
+    assert np.all(rendered >= 0.0)
+
+
+def test_derived_color_mapper_uses_vector_magnitude_mode():
+    grid = _grid([(25, range(20))], 20, scalar=None)
+    names = ("DISP:D1", "DISP:D2", "DISP:D3")
+    for index, name in enumerate(names):
+        _add_point_array(grid, name, np.linspace(0.0, index + 1.0, 20))
+    field = shaders.color_field(grid, "DISP:Magnitude", names, magnitude=True)
+
+    legacy = vtkDataSetMapper()
+    legacy.SetInputData(grid)
+    lookup = vtkLookupTable()
+    lookup.SetRange(0.0, 2.0)
+    legacy.SetLookupTable(lookup)
+    actor = vtkActor()
+    actor.SetMapper(legacy)
+
+    mapper = shaders.install_element_shader_mapper(actor, grid, field, (0.0, 2.0))
+
+    assert mapper is not None
+    assert mapper.GetArrayName() == "DISP:Magnitude"
+    assert mapper.GetLookupTable().GetVectorMode() == 0
+
+
+def test_result_field_selection_uses_raw_stress_components_for_magnitude():
+    from types import SimpleNamespace
+
+    grid = _grid([(25, range(20))], 20, scalar=None)
+    names = (
+        "STRESS:SXX", "STRESS:SYY", "STRESS:SZZ",
+        "STRESS:SXY", "STRESS:SYZ", "STRESS:SZX",
+    )
+    for index, name in enumerate(names):
+        _add_point_array(grid, name, np.full(20, float(index + 1)))
+    _add_point_array(grid, "STRESS:Magnitude", np.ones(20))
+    _add_point_array(grid, "_opencae_display_scalar", np.ones(20))
+    field = SimpleNamespace(name="STRESS", metadata={"component": "Magnitude"})
+
+    spec = result_view._shader_color_field(
+        grid, field, "STRESS:Magnitude", "_opencae_display_scalar"
+    )
+
+    assert spec.name == "STRESS:Magnitude"
+    assert spec.source_names == names
+    assert spec.magnitude
+    assert spec.transform == "identity"
+    clim = result_view._clim(
+        grid, "STRESS:Magnitude", {}, nonnegative=True
+    )
+    assert clim[0] >= 0.0
+
 def test_mapper_swap_preserves_lookup_table_and_updates_gpu_arrays_in_place():
     grid = _grid([(25, range(20))], 20)
     legacy = vtkDataSetMapper()
