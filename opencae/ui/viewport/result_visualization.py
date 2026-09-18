@@ -25,6 +25,23 @@ _LOADER = FrdLoader()
 _SOURCE_POINT_INDEX = "_opencae_source_point_index"
 _DISPLAY_SCALAR = "_opencae_display_scalar"
 
+# CalculiX/CGX FRD uses a different high-order edge-node ordering than VTK.
+# FEMaster writes exactly this FRD convention in FrdWriter::write_elements().
+# These permutations are self-inverse, so applying them to FRD connectivity
+# restores the canonical VTK_QUADRATIC_* ordering expected by PyVista/VTK.
+_FRD_HEX20_TO_VTK = np.asarray((
+    0, 1, 2, 3, 4, 5, 6, 7,
+    8, 9, 10, 11,
+    16, 17, 18, 19,
+    12, 13, 14, 15,
+), dtype=np.int64)
+_FRD_WEDGE15_TO_VTK = np.asarray((
+    0, 1, 2, 3, 4, 5,
+    6, 7, 8,
+    12, 13, 14,
+    9, 10, 11,
+), dtype=np.int64)
+
 
 def add_result(plotter, result, field=None, options=None):
     """Add the primary pickable result actor plus non-pickable visual overlays."""
@@ -177,6 +194,7 @@ def _result_grids(result, field, options):
     full = animation.get("source_grid")
     if full is None:
         full = _LOADER.pyvista_grid(result.source_file, step_id, frame_id)
+    full = _vtk_ordered_frd_grid(full)
     full = _animated_grid(full, result, field, options)
     original = _beam_subset(full, bool(options.get("_physical_beams", False)))
     owns_transient_copy = str(animation.get("mode", "")) in {
@@ -188,6 +206,61 @@ def _result_grids(result, field, options):
         options,
         copy_grid=not owns_transient_copy,
     )
+
+
+def _vtk_ordered_frd_grid(grid):
+    """Return FRD quadratic solids in canonical VTK local node ordering.
+
+    FEMaster follows the CalculiX/CGX FRD convention for type 4 (HEX20) and
+    type 5 (WEDGE15). Those formats place vertical midside nodes before the
+    upper-face midside nodes, while VTK_QUADRATIC_HEXAHEDRON/WEDGE expect the
+    VTK local edge order. The FRD loader intentionally remains format-focused;
+    normalize only the displayed result grid at the rendering boundary.
+    """
+    if grid is None or not getattr(grid, "n_cells", 0):
+        return grid
+    try:
+        cell_types = np.asarray(grid.celltypes, dtype=np.int64)
+    except (AttributeError, TypeError, ValueError):
+        return grid
+    if not np.any((cell_types == 25) | (cell_types == 26)):
+        return grid
+
+    normalized = grid.copy(deep=True)
+    try:
+        cells = normalized.GetCells()
+        offsets = np.asarray(
+            __import__(
+                "vtkmodules.util.numpy_support",
+                fromlist=["vtk_to_numpy"],
+            ).vtk_to_numpy(cells.GetOffsetsArray()),
+            dtype=np.int64,
+        )
+        connectivity = __import__(
+            "vtkmodules.util.numpy_support",
+            fromlist=["vtk_to_numpy"],
+        ).vtk_to_numpy(cells.GetConnectivityArray())
+    except (AttributeError, ImportError, TypeError, ValueError):
+        return grid
+
+    for cell_index, vtk_type in enumerate(cell_types):
+        if vtk_type == 25:
+            order = _FRD_HEX20_TO_VTK
+        elif vtk_type == 26:
+            order = _FRD_WEDGE15_TO_VTK
+        else:
+            continue
+        begin = int(offsets[cell_index])
+        end = int(offsets[cell_index + 1])
+        if end - begin != len(order):
+            continue
+        local = np.asarray(connectivity[begin:end], dtype=np.int64).copy()
+        connectivity[begin:end] = local[order]
+
+    cells.GetConnectivityArray().Modified()
+    cells.Modified()
+    normalized.Modified()
+    return normalized
 
 
 def _beam_subset(grid, physical: bool):
