@@ -297,7 +297,9 @@ def _build_batch(grid, cell_types, specs, scalar_name, association):
     source = vtkCellGrid()
     source.DeepCopy(template)
     points = vtk_to_numpy(grid.GetPoints().GetData())
-    _overwrite_array(_group(source, "points"), "coords", points, 3)
+    point_group = _group(source, "points")
+    _overwrite_array(point_group, "coords", points, 3)
+    point_group.SetVectors(point_group.GetArray("coords"))
     if scalar_name and association == "point":
         values = vtk_to_numpy(grid.GetPointData().GetArray(scalar_name))
         _overwrite_array(_group(source, "points"), scalar_name, values, 1)
@@ -333,12 +335,17 @@ def _build_batch(grid, cell_types, specs, scalar_name, association):
             if spec.basis_order
             else ids
         )
+        cell_group = _group(source, spec.dg_type)
         _overwrite_array(
-            _group(source, spec.dg_type),
+            cell_group,
             "cell-connectivity",
             basis_ids,
             spec.node_count,
         )
+        # vtkDGCell's canonical cell source is the group's active scalar array.
+        # DeepCopy does not reliably preserve the active-array association across
+        # VTK versions, so bind it explicitly just like the official transcriber.
+        cell_group.SetScalars(cell_group.GetArray("cell-connectivity"))
         if cell_values is not None:
             _overwrite_array(
                 _group(source, spec.dg_type),
