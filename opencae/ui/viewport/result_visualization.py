@@ -9,6 +9,11 @@ from opencae.results.beam_physical_representation import (
 )
 from opencae.ui.core.theme import PALETTE
 from .contour_mapping import contour_plot_kwargs
+from .element_shader_rendering import (
+    install_element_shader_mapper,
+    is_element_shader_actor,
+    update_element_shader_mapper,
+)
 from .scalar_bar import (
     install_scalar_bar_end_caps,
     scalar_bar_args,
@@ -61,6 +66,7 @@ def add_result(plotter, result, field=None, options=None):
         pickable=True,
         render=False,
     )
+    install_element_shader_mapper(actor, grid, display_scalar, clim)
     if scalar:
         install_scalar_bar_end_caps(
             plotter,
@@ -113,34 +119,44 @@ def update_result(
     clim = _clim(grid, scalar, options.get("range", {}))
     display_scalar = _render_scalar(grid, scalar, clim)
 
-    mapper = _replace_actor_input(result_actor, grid)
-    if mapper is None:
-        return None
-    association = _scalar_association(grid, scalar)
-    if scalar and association is not None:
-        try:
-            if association == "cell":
-                mapper.SetScalarModeToUseCellFieldData()
-            else:
-                mapper.SetScalarModeToUsePointFieldData()
-            mapper.SelectColorArray(display_scalar)
-            mapper.ScalarVisibilityOn()
-        except (AttributeError, RuntimeError, TypeError):
-            pass
-        if clim is not None:
+    if is_element_shader_actor(result_actor):
+        mapper = update_element_shader_mapper(
+            result_actor,
+            grid,
+            display_scalar,
+            clim,
+        )
+        if mapper is None:
+            return None
+    else:
+        mapper = _replace_actor_input(result_actor, grid)
+        if mapper is None:
+            return None
+        association = _scalar_association(grid, scalar)
+        if scalar and association is not None:
             try:
-                mapper.SetScalarRange(*clim)
-                lookup = mapper.GetLookupTable()
-                if lookup is not None:
-                    lookup.SetRange(*clim)
-                    lookup.Modified()
+                if association == "cell":
+                    mapper.SetScalarModeToUseCellFieldData()
+                else:
+                    mapper.SetScalarModeToUsePointFieldData()
+                mapper.SelectColorArray(display_scalar)
+                mapper.ScalarVisibilityOn()
             except (AttributeError, RuntimeError, TypeError):
                 pass
-    else:
-        try:
-            mapper.ScalarVisibilityOff()
-        except (AttributeError, RuntimeError):
-            pass
+            if clim is not None:
+                try:
+                    mapper.SetScalarRange(*clim)
+                    lookup = mapper.GetLookupTable()
+                    if lookup is not None:
+                        lookup.SetRange(*clim)
+                        lookup.Modified()
+                except (AttributeError, RuntimeError, TypeError):
+                    pass
+        else:
+            try:
+                mapper.ScalarVisibilityOff()
+            except (AttributeError, RuntimeError):
+                pass
 
     if plotter is not None and scalar:
         update_scalar_bar_title(plotter, scalar)
