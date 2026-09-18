@@ -399,7 +399,7 @@ def auto_deformation_scale(result, field=None, target_fraction=0.10):
 
 
 def _animated_grid(grid, result, field, options):
-    """Return a transient frame with only displayed scalars/displacements animated."""
+    """Return a transient frame with displayed primitive and derived data animated."""
     animation = dict(options.get("_animation", {}) or {})
     mode = str(animation.get("mode", ""))
     if not mode or field is None:
@@ -413,6 +413,14 @@ def _animated_grid(grid, result, field, options):
         if scalar and store is not None:
             store[scalar] = np.asarray(store[scalar], dtype=float) * factor
             scaled.add(scalar)
+
+        for key in _derived_shader_source_keys(animated, field):
+            if key not in scaled:
+                animated.point_data[key] = np.asarray(
+                    animated.point_data[key], dtype=float
+                ) * factor
+                scaled.add(key)
+
         keys = _displacement_keys(animated)
         if keys is not None:
             for key in keys:
@@ -455,17 +463,28 @@ def _animated_grid(grid, result, field, options):
             alpha,
         )
 
+    derived_keys = _derived_shader_source_keys(animated, field)
+    next_derived_keys = _derived_shader_source_keys(next_grid, next_field)
+    if len(derived_keys) == len(next_derived_keys):
+        for key, next_key in zip(derived_keys, next_derived_keys):
+            animated.point_data[key] = interpolate_values(
+                animated.point_data[key],
+                next_grid.point_data[next_key],
+                alpha,
+            )
+
     keys = _displacement_keys(animated)
     next_keys = _displacement_keys(next_grid)
     if keys is not None and next_keys is not None:
         for key, next_key in zip(keys, next_keys):
+            if key in derived_keys:
+                continue
             animated.point_data[key] = interpolate_values(
                 animated.point_data[key],
                 next_grid.point_data[next_key],
                 alpha,
             )
     return animated
-
 
 def _compatible_frames(first, second):
     if first.n_points != second.n_points or first.n_cells != second.n_cells:
