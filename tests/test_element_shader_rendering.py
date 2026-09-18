@@ -77,6 +77,38 @@ def test_hex20_builds_quadratic_hgrad_shader_surface():
     )
 
 
+
+def test_hex20_reorders_vtk_connectivity_for_cellgrid_i2_basis():
+    grid = _grid([(25, range(20))], 20)
+    state = shaders.build_element_shader_state(grid, "S")
+
+    batch = state.batches[0]
+    connectivity = vtk_to_numpy(
+        shaders._group(batch.source, "vtkDGHex").GetArray("shape-connectivity")
+    ).reshape(-1, 20)
+    assert connectivity.tolist() == [[
+        0, 1, 2, 3, 4, 5, 6, 7,
+        8, 9, 10, 11,
+        16, 17, 18, 19,
+        12, 13, 14, 15,
+    ]]
+
+
+def test_wedge15_reorders_top_and_vertical_mid_edge_nodes_for_i2_basis():
+    grid = _grid([(26, range(15))], 15)
+    state = shaders.build_element_shader_state(grid, "S")
+
+    batch = state.batches[0]
+    connectivity = vtk_to_numpy(
+        shaders._group(batch.source, "vtkDGWdg").GetArray("shape-connectivity")
+    ).reshape(-1, 15)
+    assert connectivity.tolist() == [[
+        0, 1, 2, 3, 4, 5,
+        6, 7, 8,
+        12, 13, 14,
+        9, 10, 11,
+    ]]
+
 def test_mixed_hex_orders_use_separate_shader_batches_and_remove_interface():
     # HEX8 top face [4,5,6,7] is HEX20 bottom face [4,5,6,7]. The different
     # interpolation orders require separate CellGrid batches, but the shared
