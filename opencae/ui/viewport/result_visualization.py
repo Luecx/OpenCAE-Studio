@@ -10,6 +10,7 @@ from opencae.results.beam_physical_representation import (
 from opencae.ui.core.theme import PALETTE
 from .contour_mapping import contour_plot_kwargs
 from .element_shader_rendering import (
+    color_field,
     install_element_shader_mapper,
     is_element_shader_actor,
     update_element_shader_mapper,
@@ -50,8 +51,14 @@ def add_result(plotter, result, field=None, options=None):
     original, grid = _result_grids(result, field, options)
     scalar = _scalar_name(field)
     range_settings = options.get("range", {})
-    clim = _clim(grid, scalar, range_settings)
+    clim = _clim(
+        grid,
+        scalar,
+        range_settings,
+        nonnegative=_is_nonnegative_field(field),
+    )
     display_scalar = _render_scalar(grid, scalar, clim)
+    shader_color = _shader_color_field(grid, field, scalar, display_scalar)
     mapping = contour_plot_kwargs(range_settings)
     show_edges = bool(options.get("mesh_lines", True))
     shaded_result = _supports_result_shading(grid)
@@ -84,7 +91,7 @@ def add_result(plotter, result, field=None, options=None):
         pickable=True,
         render=False,
     )
-    install_element_shader_mapper(actor, grid, display_scalar, clim)
+    install_element_shader_mapper(actor, grid, shader_color, clim)
     if scalar:
         install_scalar_bar_end_caps(
             plotter,
@@ -134,14 +141,20 @@ def update_result(
     options = options or {}
     original, grid = _result_grids(result, field, options)
     scalar = _scalar_name(field)
-    clim = _clim(grid, scalar, options.get("range", {}))
+    clim = _clim(
+        grid,
+        scalar,
+        options.get("range", {}),
+        nonnegative=_is_nonnegative_field(field),
+    )
     display_scalar = _render_scalar(grid, scalar, clim)
+    shader_color = _shader_color_field(grid, field, scalar, display_scalar)
 
     if is_element_shader_actor(result_actor):
         mapper = update_element_shader_mapper(
             result_actor,
             grid,
-            display_scalar,
+            shader_color,
             clim,
         )
         if mapper is None:
@@ -556,6 +569,85 @@ def _boundary(
     )
 
 
+def _field_component(field):
+    if field is None:
+        return ""
+    return str(
+        field.metadata.get(
+            "component",
+            field.metadata.get("default_component", "Magnitude"),
+        )
+    )
+
+
+def _stress_component_keys(grid, block):
+    prefix = f"{block}:"
+    groups = (
+        ("SXX",),
+        ("SYY",),
+        ("SZZ",),
+        ("SXY",),
+        ("SYZ",),
+        ("SZX", "SXZ"),
+    )
+    keys = []
+    for aliases in groups:
+        key = next(
+            (prefix + name for name in aliases if prefix + name in grid.point_data),
+            None,
+        )
+        if key is None:
+            return None
+        keys.append(key)
+    return tuple(keys)
+
+
+def _derived_shader_source_keys(grid, field):
+    if field is None:
+        return ()
+    component = _field_component(field).strip().casefold()
+    block = str(field.metadata.get("block", field.name))
+    if component == "magnitude":
+        if block.upper().startswith("DISP"):
+            return tuple(_displacement_keys(grid) or ())
+        stress = _stress_component_keys(grid, block)
+        if stress is not None:
+            return stress
+    if component == "mises":
+        return tuple(_stress_component_keys(grid, block) or ())
+    return ()
+
+
+def _shader_color_field(grid, field, scalar, display_scalar):
+    if not scalar:
+        return None
+    component = _field_component(field).strip().casefold()
+    block = str(field.metadata.get("block", field.name)) if field is not None else ""
+    if component == "magnitude":
+        if block.upper().startswith("DISP"):
+            keys = _displacement_keys(grid)
+            if keys is not None:
+                return color_field(grid, scalar, keys, magnitude=True)
+        stress = _stress_component_keys(grid, block)
+        if stress is not None:
+            return color_field(grid, scalar, stress, magnitude=True)
+    if component == "mises":
+        stress = _stress_component_keys(grid, block)
+        if stress is not None:
+            return color_field(
+                grid,
+                scalar,
+                stress,
+                transform="mises",
+                magnitude=True,
+            )
+    return color_field(grid, display_scalar)
+
+
+def _is_nonnegative_field(field):
+    component = _field_component(field).strip().casefold()
+    return component in {"magnitude", "mises", "tresca"}
+
 def _scalar_name(field):
     if field is None:
         return None
@@ -585,7 +677,7 @@ def _scalar_store(grid, scalar):
     return None
 
 
-def _clim(grid, scalar, settings):
+def _clim(grid, scalar, settings, *, nonnegative=False):
     store = _scalar_store(grid, scalar)
     if store is None:
         return None
@@ -621,7 +713,11 @@ def _clim(grid, scalar, settings):
         maximum = minimum + max(abs(minimum), 1.0) * 1e-12
     span = maximum - minimum
     padding = 1.0e-6 * span
-    return minimum - padding, maximum + padding
+    lower = minimum - padding
+    upper = maximum + padding
+    if nonnegative:
+        lower = max(0.0, lower)
+    return lower, upper
 
 
 def _render_scalar(grid, scalar, clim):
