@@ -8,6 +8,7 @@ import numpy as np
 from PyQt6.QtCore import QEvent, QObject, Qt
 
 from opencae.ui.core.theme import PALETTE
+from .element_shader_rendering import is_element_shader_actor
 from .result_query import element_values, node_values
 from .safe_operations import disable_picking, remove_actor
 
@@ -214,27 +215,86 @@ class ResultQueryState:
         if not self.handles_direct_click():
             return False
         try:
-            from vtkmodules.vtkRenderingCore import vtkCellPicker
+            actor = self.owner.scene.result_actor
+            if is_element_shader_actor(actor):
+                point = self._pick_grid(cursor)
+                if point is None:
+                    return False
+            else:
+                from vtkmodules.vtkRenderingCore import vtkCellPicker
 
-            picker = vtkCellPicker()
-            picker.SetTolerance(0.0005)
-            picker.PickFromListOn()
-            picker.AddPickList(self.owner.scene.result_actor)
-            hit = bool(
-                picker.Pick(
-                    float(cursor[0]),
-                    float(cursor[1]),
-                    0.0,
-                    self.owner.plotter.renderer,
+                picker = vtkCellPicker()
+                picker.SetTolerance(0.0005)
+                picker.PickFromListOn()
+                picker.AddPickList(actor)
+                hit = bool(
+                    picker.Pick(
+                        float(cursor[0]),
+                        float(cursor[1]),
+                        0.0,
+                        self.owner.plotter.renderer,
+                    )
                 )
-            )
-            if not hit:
-                return False
-            point = tuple(float(value) for value in picker.GetPickPosition())
+                if not hit:
+                    return False
+                point = tuple(float(value) for value in picker.GetPickPosition())
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError):
             return False
         self._picked(point)
         return True
+
+    def _pick_grid(self, cursor):
+        """Intersect a display-coordinate ray with the canonical result grid.
+
+        CellGrid uses hardware selection rather than vtkCellPicker. Query only
+        needs the picked world position, so intersect the same deformed FE grid
+        that backs the renderer and keep all existing node/element query logic.
+        """
+        grid = self.owner.scene.result_grid
+        renderer = self.owner.plotter.renderer
+        if grid is None or renderer is None:
+            return None
+
+        endpoints = []
+        for depth in (0.0, 1.0):
+            renderer.SetDisplayPoint(
+                float(cursor[0]),
+                float(cursor[1]),
+                depth,
+            )
+            renderer.DisplayToWorld()
+            world = renderer.GetWorldPoint()
+            weight = float(world[3])
+            if abs(weight) <= 1.0e-14:
+                return None
+            endpoints.append(
+                tuple(float(world[index]) / weight for index in range(3))
+            )
+
+        from vtkmodules.vtkCommonCore import reference
+        from vtkmodules.vtkCommonDataModel import vtkStaticCellLocator
+
+        locator = vtkStaticCellLocator()
+        locator.SetDataSet(grid)
+        locator.BuildLocator()
+        diagonal = float(np.linalg.norm(np.asarray(grid.length, dtype=float)))
+        tolerance = max(diagonal, 1.0) * 1.0e-10
+        distance = reference(0.0)
+        sub_id = reference(0)
+        cell_id = reference(0)
+        point = [0.0, 0.0, 0.0]
+        pcoords = [0.0, 0.0, 0.0]
+        hit = locator.IntersectWithLine(
+            endpoints[0],
+            endpoints[1],
+            tolerance,
+            distance,
+            point,
+            pcoords,
+            sub_id,
+            cell_id,
+        )
+        return tuple(float(value) for value in point) if hit else None
 
     def clear(self):
         """Clear the current result-query marker and overlay text."""
