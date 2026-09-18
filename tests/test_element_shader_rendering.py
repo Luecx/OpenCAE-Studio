@@ -215,8 +215,10 @@ def test_mapper_swap_preserves_lookup_table_and_updates_gpu_arrays_in_place():
     assert isinstance(mapper, vtkCompositeCellGridMapper)
     assert actor.GetMapper() is mapper
     assert mapper.GetLookupTable() is lookup
+    assert mapper.GetUseLookupTableScalarRange()
     assert mapper.GetArrayName() == "S"
     assert mapper.GetScalarRange() == (-2.0, 2.0)
+    assert mapper.GetLookupTable().GetRange() == (-2.0, 2.0)
 
     points = vtk_to_numpy(grid.GetPoints().GetData())
     points[:, 0] += 7.0
@@ -243,7 +245,9 @@ def test_mapper_swap_preserves_lookup_table_and_updates_gpu_arrays_in_place():
     assert updated is mapper
     assert np.allclose(gpu_points.reshape(-1, 3), points)
     assert np.allclose(gpu_values.reshape(-1), values)
+    assert mapper.GetUseLookupTableScalarRange()
     assert mapper.GetScalarRange() == (-4.0, 4.0)
+    assert mapper.GetLookupTable().GetRange() == (-4.0, 4.0)
 
 
 def test_unsupported_legacy_cell_falls_back_without_building_cellgrid():
