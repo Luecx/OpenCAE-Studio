@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from opencae.model.entities.optimization import TopologyOptimization
+from opencae.model.entities.studies import Study, MeshConvergenceStudy
+from opencae.ui.dialogs.mesh_convergence import MeshConvergenceDialog, ConvergenceReportDialog
 from opencae.ui.viewport.topology_overlay import TopologyDensityOverlay
 
 from .optimization_run_controller import OptimizationRunMixin
@@ -39,14 +41,14 @@ class OptimizationController(
 
     def set_active_study(self, study_id):
         value = self.store.project.try_resolve(str(study_id or ""))
-        self.active_study_id = value.id if isinstance(value, TopologyOptimization) else ""
+        self.active_study_id = value.id if isinstance(value, Study) else ""
         if value is not None:
             self.store.select(value)
         self.parent.refresh_action_states()
 
     def _repair_active_study(self, *_):
         current = self.store.project.try_resolve(self.active_study_id)
-        if not isinstance(current, TopologyOptimization):
+        if not isinstance(current, Study):
             self.active_study_id = (
                 self.store.project.studies[0].id
                 if self.store.project.studies
@@ -54,8 +56,36 @@ class OptimizationController(
             )
 
     def edit_active_study(self):
+        study = self.store.project.try_resolve(self.active_study_id)
+        if isinstance(study, MeshConvergenceStudy):
+            return self.new_mesh_convergence(study)
         study = self._optimization()
         if study is None:
             return self._need_optimization()
         self.store.select(study)
         self.new_topology()
+
+    def new_mesh_convergence(self, current=None):
+        """Create or edit a persistent mesh-convergence study."""
+        if current is None:
+            candidate = self.store.project.try_resolve(self.active_study_id)
+            selected = self.store.selection
+            current = selected if isinstance(selected, MeshConvergenceStudy) else None
+        dialog = MeshConvergenceDialog(self.store.project, current, self.parent)
+        if not dialog.exec():
+            return
+        study = dialog.study()
+        project = self.store.project
+        if current is None:
+            self.store.add_entity(f"Created Study {study.name}", project.id, "studies", study)
+        else:
+            self.store.replace_entity(f"Edited Study {study.name}", project.id, "studies", study)
+        self.active_study_id = study.id
+        self.store.select(self.store.project.resolve(study.id))
+
+    def convergence_report(self):
+        study = self.store.project.try_resolve(self.active_study_id)
+        if not isinstance(study, MeshConvergenceStudy):
+            self.store.message.emit("Select a Mesh Convergence Study first")
+            return
+        ConvergenceReportDialog(study, self.parent).exec()
