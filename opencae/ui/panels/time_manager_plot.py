@@ -53,6 +53,7 @@ class TimeManagerPlot(QWidget):
         play_start=None,
         play_end=None,
         range_editable=True,
+        show_play_range=True,
     ) -> None:
         """Replace the plotted series, playhead, and playback-boundary state."""
         pairs = [
@@ -71,7 +72,7 @@ class TimeManagerPlot(QWidget):
         self._screen_points = []
         self._range_editable = bool(range_editable)
         self._drag_boundary = None
-        if self._x:
+        if self._x and show_play_range:
             x_min, x_max = min(self._x), max(self._x)
             start = x_min if play_start is None else float(play_start)
             end = x_max if play_end is None else float(play_end)
