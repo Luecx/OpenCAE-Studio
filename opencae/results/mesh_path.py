@@ -6,6 +6,8 @@ Dijkstra's shortest Euclidean edge path; element interiors are never shortcuts.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
+from json import dumps
 from heapq import heappop, heappush
 from math import dist, isfinite
 from pathlib import Path
@@ -22,6 +24,7 @@ class MeshPath:
     waypoints: tuple[int, ...]
     node_ids: tuple[int, ...]
     distances: tuple[float, ...]
+    mesh_signature: str = ""
 
     def as_dict(self) -> dict:
         return {
@@ -29,6 +32,7 @@ class MeshPath:
             "waypoints": list(self.waypoints),
             "node_ids": list(self.node_ids),
             "distances": list(self.distances),
+            "mesh_signature": self.mesh_signature,
         }
 
     @classmethod
@@ -38,6 +42,7 @@ class MeshPath:
             waypoints=tuple(int(x) for x in value["waypoints"]),
             node_ids=tuple(int(x) for x in value["node_ids"]),
             distances=tuple(float(x) for x in value["distances"]),
+            mesh_signature=str(value.get("mesh_signature", "")),
         )
 
 
@@ -81,9 +86,9 @@ def mesh_graph(data, loader=None):
     }
     adjacency = {node: {} for node in coordinates}
     for cell_index in range(grid.n_cells):
-        if "_opencae_physical_beam_cell" in grid.cell_data:
+        if "_opencae_physical_beam" in grid.cell_data:
             # Physical beam display polygons do not define original FE edges.
-            if int(grid.cell_data["_opencae_physical_beam_cell"][cell_index]):
+            if int(grid.cell_data["_opencae_physical_beam"][cell_index]):
                 continue
         cell = grid.GetCell(cell_index)
         for a, b in _pairs(cell):
