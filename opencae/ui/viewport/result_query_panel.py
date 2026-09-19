@@ -75,9 +75,10 @@ class ResultQueryPanel(QFrame):
 
     def show_prompt(self, mode):
         """Prompt for the next node/element click using a normal result field."""
-        noun = "node" if mode == "node" else "element"
+        noun = "element" if mode == "element" else "node"
+        title = "Select Path Waypoints" if mode == "path" else f"Query {noun.title()}"
         self.show_result(
-            f"Query {noun.title()}",
+            title,
             QueryResult(summary=[("Selection", f"Click a {noun} in the mesh")]),
         )
 
