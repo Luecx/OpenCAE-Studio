@@ -203,3 +203,47 @@ def test_modeless_dialog_uses_canonical_picker_and_saves_original_positions():
         dialog.close()
         parent.close()
         app.processEvents()
+
+
+def test_mesh_node_click_reaches_canonical_point_state_without_pyvista_callback(monkeypatch):
+    from vtkmodules import vtkRenderingCore
+
+    class Actor:
+        def GetVisibility(self):
+            return True
+        def GetPickable(self):
+            return True
+
+    actors = [Actor()]
+    class Picker:
+        def SetTolerance(self, value):
+            assert 0 < value <= .03
+        def PickFromListOn(self):
+            pass
+        def AddPickList(self, actor):
+            assert actor in actors
+        def Pick(self, x, y, z, renderer):
+            assert (x, y, z) == (150., 88., 0.)
+            return True
+        def GetPickPosition(self):
+            return (5., 1., 0.)
+
+    monkeypatch.setattr(vtkRenderingCore, "vtkPointPicker", Picker)
+    owner = SimpleNamespace(
+        stage="STUDIES", display_mode="mesh", selection_mode="point",
+        context_pick=SimpleNamespace(
+            active=True, accepts=lambda kind: kind is SelectableKind.MESH_NODE
+        ),
+        scene=SimpleNamespace(
+            mesh_actor=actors[0], mesh_actors=[],
+            authored_node_actor=None, authored_node_actors=[],
+        ),
+        plotter=SimpleNamespace(renderer=object()),
+    )
+    picker = PyVistaPicker.__new__(PyVistaPicker)
+    picker.owner = owner
+    picked = []
+    picker.points = SimpleNamespace(picked=picked.append)
+    assert picker.handles_direct_click()
+    assert picker.pick_display_position((150., 88.))
+    assert picked == [(5., 1., 0.)]
