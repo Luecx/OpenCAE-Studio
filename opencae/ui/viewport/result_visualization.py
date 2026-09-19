@@ -9,6 +9,12 @@ from opencae.results.beam_physical_representation import (
 )
 from opencae.ui.core.theme import PALETTE
 from .contour_mapping import contour_plot_kwargs
+from .element_shader_rendering import (
+    color_field,
+    install_element_shader_mapper,
+    is_element_shader_actor,
+    update_element_shader_mapper,
+)
 from .scalar_bar import (
     install_scalar_bar_end_caps,
     scalar_bar_args,
@@ -19,6 +25,24 @@ from .surface_shading import supports_surface_shading
 _LOADER = FrdLoader()
 _SOURCE_POINT_INDEX = "_opencae_source_point_index"
 _DISPLAY_SCALAR = "_opencae_display_scalar"
+_FRD_VTK_ORDERED = "_opencae_frd_vtk_ordered"
+
+# CalculiX/CGX FRD uses a different high-order edge-node ordering than VTK.
+# FEMaster writes exactly this FRD convention in FrdWriter::write_elements().
+# These permutations are self-inverse, so applying them to FRD connectivity
+# restores the canonical VTK_QUADRATIC_* ordering expected by PyVista/VTK.
+_FRD_HEX20_TO_VTK = np.asarray((
+    0, 1, 2, 3, 4, 5, 6, 7,
+    8, 9, 10, 11,
+    16, 17, 18, 19,
+    12, 13, 14, 15,
+), dtype=np.int64)
+_FRD_WEDGE15_TO_VTK = np.asarray((
+    0, 1, 2, 3, 4, 5,
+    6, 7, 8,
+    12, 13, 14,
+    9, 10, 11,
+), dtype=np.int64)
 
 
 def add_result(plotter, result, field=None, options=None):
@@ -27,8 +51,19 @@ def add_result(plotter, result, field=None, options=None):
     original, grid = _result_grids(result, field, options)
     scalar = _scalar_name(field)
     range_settings = options.get("range", {})
-    clim = _clim(grid, scalar, range_settings)
+    clim = _clim(
+        grid,
+        scalar,
+        range_settings,
+        nonnegative=_is_nonnegative_field(field),
+    )
     display_scalar = _render_scalar(grid, scalar, clim)
+    use_shape_functions = _use_shape_functions(options)
+    shader_color = (
+        _shader_color_field(grid, field, scalar, display_scalar)
+        if use_shape_functions
+        else None
+    )
     mapping = contour_plot_kwargs(range_settings)
     show_edges = bool(options.get("mesh_lines", True))
     shaded_result = _supports_result_shading(grid)
@@ -61,6 +96,13 @@ def add_result(plotter, result, field=None, options=None):
         pickable=True,
         render=False,
     )
+    # Classic retains PyVista's existing triangulated VTK mapper. Only the
+    # opt-in shape-function path replaces it with CellGrid's GPU FE interpolator.
+    actor._opencae_render_interpolation = (
+        "shape_functions" if use_shape_functions else "classic"
+    )
+    if use_shape_functions:
+        install_element_shader_mapper(actor, grid, shader_color, clim)
     if scalar:
         install_scalar_bar_end_caps(
             plotter,
@@ -110,37 +152,66 @@ def update_result(
     options = options or {}
     original, grid = _result_grids(result, field, options)
     scalar = _scalar_name(field)
-    clim = _clim(grid, scalar, options.get("range", {}))
+    clim = _clim(
+        grid,
+        scalar,
+        options.get("range", {}),
+        nonnegative=_is_nonnegative_field(field),
+    )
     display_scalar = _render_scalar(grid, scalar, clim)
-
-    mapper = _replace_actor_input(result_actor, grid)
-    if mapper is None:
+    use_shape_functions = _use_shape_functions(options)
+    requested_mode = "shape_functions" if use_shape_functions else "classic"
+    if getattr(
+        result_actor, "_opencae_render_interpolation", requested_mode
+    ) != requested_mode:
+        # The animation fast path cannot change mapper implementations in
+        # place. Let solution_scene rebuild the actor while preserving camera,
+        # contour settings, selection and timeline state.
         return None
-    association = _scalar_association(grid, scalar)
-    if scalar and association is not None:
-        try:
-            if association == "cell":
-                mapper.SetScalarModeToUseCellFieldData()
-            else:
-                mapper.SetScalarModeToUsePointFieldData()
-            mapper.SelectColorArray(display_scalar)
-            mapper.ScalarVisibilityOn()
-        except (AttributeError, RuntimeError, TypeError):
-            pass
-        if clim is not None:
+    shader_color = (
+        _shader_color_field(grid, field, scalar, display_scalar)
+        if use_shape_functions
+        else None
+    )
+
+    if use_shape_functions and is_element_shader_actor(result_actor):
+        mapper = update_element_shader_mapper(
+            result_actor,
+            grid,
+            shader_color,
+            clim,
+        )
+        if mapper is None:
+            return None
+    else:
+        mapper = _replace_actor_input(result_actor, grid)
+        if mapper is None:
+            return None
+        association = _scalar_association(grid, scalar)
+        if scalar and association is not None:
             try:
-                mapper.SetScalarRange(*clim)
-                lookup = mapper.GetLookupTable()
-                if lookup is not None:
-                    lookup.SetRange(*clim)
-                    lookup.Modified()
+                if association == "cell":
+                    mapper.SetScalarModeToUseCellFieldData()
+                else:
+                    mapper.SetScalarModeToUsePointFieldData()
+                mapper.SelectColorArray(display_scalar)
+                mapper.ScalarVisibilityOn()
             except (AttributeError, RuntimeError, TypeError):
                 pass
-    else:
-        try:
-            mapper.ScalarVisibilityOff()
-        except (AttributeError, RuntimeError):
-            pass
+            if clim is not None:
+                try:
+                    mapper.SetScalarRange(*clim)
+                    lookup = mapper.GetLookupTable()
+                    if lookup is not None:
+                        lookup.SetRange(*clim)
+                        lookup.Modified()
+                except (AttributeError, RuntimeError, TypeError):
+                    pass
+        else:
+            try:
+                mapper.ScalarVisibilityOff()
+            except (AttributeError, RuntimeError):
+                pass
 
     if plotter is not None and scalar:
         update_scalar_bar_title(plotter, scalar)
@@ -154,6 +225,14 @@ def update_result(
     return grid
 
 
+def _use_shape_functions(options) -> bool:
+    """One contour setting selects the complete result-rendering pipeline."""
+    return (
+        str((options or {}).get("range", {}).get("interpolation", "shape_functions"))
+        == "shape_functions"
+    )
+
+
 def _result_grids(result, field, options):
     animation = dict(options.get("_animation", {}) or {})
     step_id = field.metadata.get("step_id") if field else None
@@ -161,6 +240,7 @@ def _result_grids(result, field, options):
     full = animation.get("source_grid")
     if full is None:
         full = _LOADER.pyvista_grid(result.source_file, step_id, frame_id)
+    full = _vtk_ordered_frd_grid(full)
     full = _animated_grid(full, result, field, options)
     original = _beam_subset(full, bool(options.get("_physical_beams", False)))
     owns_transient_copy = str(animation.get("mode", "")) in {
@@ -172,6 +252,69 @@ def _result_grids(result, field, options):
         options,
         copy_grid=not owns_transient_copy,
     )
+
+
+def _vtk_ordered_frd_grid(grid):
+    """Normalize FRD quadratic solids to canonical VTK local node ordering once.
+
+    FEMaster writes CalculiX/CGX FRD type 4/5 connectivity. PyVista cells with
+    VTK_QUADRATIC_HEXAHEDRON/WEDGE ids must instead use VTK's local edge-node
+    order. Normalize the render-source grid in place and mark it so animation
+    caches never repeat the O(n_cells) connectivity pass.
+    """
+    if grid is None or not getattr(grid, "n_cells", 0):
+        return grid
+    try:
+        if _FRD_VTK_ORDERED in grid.field_data:
+            marker = np.asarray(grid.field_data[_FRD_VTK_ORDERED]).reshape(-1)
+            if len(marker) and int(marker[0]) == 1:
+                return grid
+    except (AttributeError, KeyError, TypeError, ValueError):
+        pass
+
+    try:
+        cell_types = np.asarray(grid.celltypes, dtype=np.int64)
+    except (AttributeError, TypeError, ValueError):
+        return grid
+
+    needs_hex = np.any(cell_types == 25)
+    needs_wedge = np.any(cell_types == 26)
+    if needs_hex or needs_wedge:
+        try:
+            from vtkmodules.util.numpy_support import vtk_to_numpy
+
+            cells = grid.GetCells()
+            offsets = np.asarray(
+                vtk_to_numpy(cells.GetOffsetsArray()),
+                dtype=np.int64,
+            )
+            connectivity = vtk_to_numpy(cells.GetConnectivityArray())
+        except (AttributeError, ImportError, TypeError, ValueError):
+            return grid
+
+        for cell_index, vtk_type in enumerate(cell_types):
+            if vtk_type == 25:
+                order = _FRD_HEX20_TO_VTK
+            elif vtk_type == 26:
+                order = _FRD_WEDGE15_TO_VTK
+            else:
+                continue
+            begin = int(offsets[cell_index])
+            end = int(offsets[cell_index + 1])
+            if end - begin != len(order):
+                continue
+            local = np.asarray(connectivity[begin:end], dtype=np.int64).copy()
+            connectivity[begin:end] = local[order]
+
+        cells.GetConnectivityArray().Modified()
+        cells.Modified()
+        grid.Modified()
+
+    try:
+        grid.field_data[_FRD_VTK_ORDERED] = np.asarray([1], dtype=np.uint8)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        pass
+    return grid
 
 
 def _beam_subset(grid, physical: bool):
@@ -288,7 +431,7 @@ def auto_deformation_scale(result, field=None, target_fraction=0.10):
 
 
 def _animated_grid(grid, result, field, options):
-    """Return a transient frame with only displayed scalars/displacements animated."""
+    """Return a transient frame with displayed primitive and derived data animated."""
     animation = dict(options.get("_animation", {}) or {})
     mode = str(animation.get("mode", ""))
     if not mode or field is None:
@@ -302,6 +445,14 @@ def _animated_grid(grid, result, field, options):
         if scalar and store is not None:
             store[scalar] = np.asarray(store[scalar], dtype=float) * factor
             scaled.add(scalar)
+
+        for key in _derived_shader_source_keys(animated, field):
+            if key not in scaled:
+                animated.point_data[key] = np.asarray(
+                    animated.point_data[key], dtype=float
+                ) * factor
+                scaled.add(key)
+
         keys = _displacement_keys(animated)
         if keys is not None:
             for key in keys:
@@ -344,17 +495,28 @@ def _animated_grid(grid, result, field, options):
             alpha,
         )
 
+    derived_keys = _derived_shader_source_keys(animated, field)
+    next_derived_keys = _derived_shader_source_keys(next_grid, next_field)
+    if len(derived_keys) == len(next_derived_keys):
+        for key, next_key in zip(derived_keys, next_derived_keys):
+            animated.point_data[key] = interpolate_values(
+                animated.point_data[key],
+                next_grid.point_data[next_key],
+                alpha,
+            )
+
     keys = _displacement_keys(animated)
     next_keys = _displacement_keys(next_grid)
     if keys is not None and next_keys is not None:
         for key, next_key in zip(keys, next_keys):
+            if key in derived_keys:
+                continue
             animated.point_data[key] = interpolate_values(
                 animated.point_data[key],
                 next_grid.point_data[next_key],
                 alpha,
             )
     return animated
-
 
 def _compatible_frames(first, second):
     if first.n_points != second.n_points or first.n_cells != second.n_cells:
@@ -458,6 +620,85 @@ def _boundary(
     )
 
 
+def _field_component(field):
+    if field is None:
+        return ""
+    return str(
+        field.metadata.get(
+            "component",
+            field.metadata.get("default_component", "Magnitude"),
+        )
+    )
+
+
+def _stress_component_keys(grid, block):
+    prefix = f"{block}:"
+    groups = (
+        ("SXX",),
+        ("SYY",),
+        ("SZZ",),
+        ("SXY",),
+        ("SYZ",),
+        ("SZX", "SXZ"),
+    )
+    keys = []
+    for aliases in groups:
+        key = next(
+            (prefix + name for name in aliases if prefix + name in grid.point_data),
+            None,
+        )
+        if key is None:
+            return None
+        keys.append(key)
+    return tuple(keys)
+
+
+def _derived_shader_source_keys(grid, field):
+    if field is None:
+        return ()
+    component = _field_component(field).strip().casefold()
+    block = str(field.metadata.get("block", field.name))
+    if component == "magnitude":
+        if block.upper().startswith("DISP"):
+            return tuple(_displacement_keys(grid) or ())
+        stress = _stress_component_keys(grid, block)
+        if stress is not None:
+            return stress
+    if component == "mises":
+        return tuple(_stress_component_keys(grid, block) or ())
+    return ()
+
+
+def _shader_color_field(grid, field, scalar, display_scalar):
+    if not scalar:
+        return None
+    component = _field_component(field).strip().casefold()
+    block = str(field.metadata.get("block", field.name)) if field is not None else ""
+    if component == "magnitude":
+        if block.upper().startswith("DISP"):
+            keys = _displacement_keys(grid)
+            if keys is not None:
+                return color_field(grid, scalar, keys, magnitude=True)
+        stress = _stress_component_keys(grid, block)
+        if stress is not None:
+            return color_field(grid, scalar, stress, magnitude=True)
+    if component == "mises":
+        stress = _stress_component_keys(grid, block)
+        if stress is not None:
+            return color_field(
+                grid,
+                scalar,
+                stress,
+                transform="mises",
+                magnitude=True,
+            )
+    return color_field(grid, display_scalar)
+
+
+def _is_nonnegative_field(field):
+    component = _field_component(field).strip().casefold()
+    return component in {"magnitude", "mises", "tresca"}
+
 def _scalar_name(field):
     if field is None:
         return None
@@ -487,7 +728,7 @@ def _scalar_store(grid, scalar):
     return None
 
 
-def _clim(grid, scalar, settings):
+def _clim(grid, scalar, settings, *, nonnegative=False):
     store = _scalar_store(grid, scalar)
     if store is None:
         return None
@@ -508,7 +749,7 @@ def _clim(grid, scalar, settings):
             return None
         data_minimum, data_maximum = float(finite.min()), float(finite.max())
         minimum = (
-            data_minimum
+            (0.0 if nonnegative else data_minimum)
             if minimum_auto
             else float(settings.get("minimum", data_minimum))
         )
@@ -523,7 +764,11 @@ def _clim(grid, scalar, settings):
         maximum = minimum + max(abs(minimum), 1.0) * 1e-12
     span = maximum - minimum
     padding = 1.0e-6 * span
-    return minimum - padding, maximum + padding
+    lower = minimum - padding
+    upper = maximum + padding
+    if nonnegative:
+        lower = max(0.0, lower)
+    return lower, upper
 
 
 def _render_scalar(grid, scalar, clim):

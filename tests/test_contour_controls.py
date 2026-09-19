@@ -70,6 +70,15 @@ def test_result_range_button_uses_bound_auto_icons_labels_and_symmetry_link():
     button = ResultRangeButton()
     try:
         assert isinstance(button.continuous, QCheckBox)
+        assert isinstance(button.shape_function_interpolation, QCheckBox)
+        assert button.values()["interpolation"] == "shape_functions"
+        observed = []
+        button.range_changed.connect(observed.append)
+        button.shape_function_interpolation.setChecked(False)
+        assert button.values()["interpolation"] == "classic"
+        assert observed[-1]["interpolation"] == "classic"
+        button.shape_function_interpolation.setChecked(True)
+        assert observed[-1]["interpolation"] == "shape_functions"
         assert isinstance(button.outside_colors, QCheckBox)
         assert button.levels.maximum() == 52
 
@@ -105,7 +114,7 @@ def test_result_range_button_uses_bound_auto_icons_labels_and_symmetry_link():
         assert "Below range" in labels
         assert "Above range" in labels
         separators = button.findChildren(QWidget, "ResultRangeSeparator")
-        assert len(separators) == 2
+        assert len(separators) == 3
 
         assert button.below_color.text() == ""
         assert button.above_color.text() == ""
