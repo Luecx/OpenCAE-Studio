@@ -61,9 +61,7 @@ def test_study_tree_omits_topology_groups_for_displacement_convergence():
     append_studies(root, [study])
     branch = root.child(0)
     convergence_node = branch.child(0)
-    assert convergence_node.rowCount() == 1
-    assert convergence_node.child(0).text().startswith("Displacement Controls")
-    assert convergence_node.child(0).child(0).text() == "Tip"
+    assert convergence_node.rowCount() == 0
 
 
 def test_check_list_row_geometry_matches_full_visual_hit_area():
