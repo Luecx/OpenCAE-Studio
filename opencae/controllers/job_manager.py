@@ -161,7 +161,7 @@ class JobManager(QObject):
 
     def validate_study(self, study_id, *, show: bool = True) -> list[str]:
         """Validate one executable Study and optionally show diagnostics."""
-        errors = study_errors(self.store.project, study_id)
+        errors = study_errors(self.store.project, study_id, self.settings, self.solvers)
         if show:
             self._show_validation("Study", errors)
         return errors
