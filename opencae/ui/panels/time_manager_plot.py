@@ -213,12 +213,21 @@ class TimeManagerPlot(QWidget):
 
         x_min, x_max = self._x_domain()
         y_min, y_max = min(self._y), max(self._y)
-        if abs(y_max - y_min) <= 1.0e-14:
-            y_max = y_min + max(abs(y_min), 1.0)
-        if y_min >= 0.0:
-            y_min = 0.0
-        y_span = y_max - y_min
-        y_max += 0.04 * y_span
+        if self._point_value_labels:
+            # For convergence plots, preserve changes around a non-zero
+            # displacement baseline instead of flattening them against zero.
+            span = y_max - y_min
+            if span <= max(abs(y_min), abs(y_max)) * 1.0e-12:
+                span = max(abs(y_min), abs(y_max)) * 0.04 or 1.0
+            y_min -= 0.15 * span
+            y_max += 0.20 * span
+        else:
+            if abs(y_max - y_min) <= 1.0e-14:
+                y_max = y_min + max(abs(y_min), 1.0)
+            if y_min >= 0.0:
+                y_min = 0.0
+            y_span = y_max - y_min
+            y_max += 0.04 * y_span
 
         def point(x, y):
             px = plot.left() + (self._axis_position(x) - x_min) / (x_max - x_min) * plot.width()
@@ -237,7 +246,7 @@ class TimeManagerPlot(QWidget):
             painter.drawText(
                 QRectF(2.0, y - 8.0, plot.left() - 8.0, 16.0),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                f"{value:.3g}",
+                f"{value:.6g}" if self._point_value_labels else f"{value:.3g}",
             )
             painter.setPen(grid_pen)
 
