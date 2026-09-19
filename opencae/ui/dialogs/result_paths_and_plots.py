@@ -32,7 +32,7 @@ class PathEditorDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Mesh Paths")
         self.resize(540, 300)
-        self.result, self.store, self.loader = result, store, loader
+        self.target_result, self.store, self.loader = result, store, loader
         self._paths = list(stored_paths(result))
         self._coordinates = self._adjacency = None
         root = QVBoxLayout(self)
@@ -101,20 +101,20 @@ class PathEditorDialog(QDialog):
         self.existing.setCurrentIndex(0)
 
     def _persist(self):
-        metadata = deepcopy(dict(self.result.metadata or {}))
+        metadata = deepcopy(dict(self.target_result.metadata or {}))
         metadata["mesh_paths"] = [item.as_dict() for item in self._paths]
-        candidate = deepcopy(self.result)
+        candidate = deepcopy(self.target_result)
         candidate.metadata = metadata
         if (self.store is not None
-                and self.store.project.try_resolve(self.result.id) is not None):
+                and self.store.project.try_resolve(self.target_result.id) is not None):
             self.store.replace_entity(
-                f"Updated paths for {self.result.name}",
+                f"Updated paths for {self.target_result.name}",
                 self.store.project.id, "results", candidate,
             )
-            self.result = self.store.project.resolve(candidate.id)
+            self.target_result = self.store.project.resolve(candidate.id)
         else:
             # External FRD files not attached to a Project have session paths.
-            self.result.metadata = metadata
+            self.target_result.metadata = metadata
 
     def _save(self):
         try:
@@ -123,7 +123,7 @@ class PathEditorDialog(QDialog):
                             if token.strip())
             if self._coordinates is None:
                 self._coordinates, self._adjacency = mesh_graph(
-                    self.result.source_file, self.loader
+                    self.target_result.source_file, self.loader
                 )
             path = create_mesh_path(
                 self.name.text(), anchors, self._coordinates, self._adjacency
