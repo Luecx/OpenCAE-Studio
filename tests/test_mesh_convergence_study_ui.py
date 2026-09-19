@@ -139,3 +139,66 @@ def test_multi_metric_assessment_keeps_each_control_independent():
     results = convergence.assess_all_metrics(samples, .01)
     assert "within tolerance" in results["tip"]
     assert "Diagnostic only" in results["root"]
+
+
+def test_modeless_metric_editor_picks_multiple_nodes_and_saves_positions(monkeypatch):
+    """A study dialog must support repeated viewport picks without losing nodes."""
+    from PyQt6.QtWidgets import QApplication, QWidget
+    from opencae.model.core import EntityRef
+    from opencae.model.entities.analysis import Analysis
+    from opencae.model.selection import SelectionOperation, ViewportHit
+    from opencae.ui.dialogs.mesh_convergence import MeshConvergenceDialog
+
+    app = QApplication.instance() or QApplication([])
+    project = Project(name="CAD")
+    analysis = Analysis(name="Static", solver="FEMaster")
+    project.analyses.append(analysis)
+    project.rebuild_index(strict=True)
+    parent = QWidget()
+
+    class _Viewport:
+        def __init__(self):
+            self.callback = None
+            self.finished = None
+            self.mode = ""
+
+        def set_display_mode(self, mode):
+            self.mode = mode
+
+        def begin_selection_session(self, policy, callback, finished=None):
+            assert policy.accepted_kinds == frozenset({SelectableKind.MESH_NODE})
+            self.callback, self.finished = callback, finished
+
+        def cancel_context_pick(self):
+            if self.finished:
+                callback, self.finished = self.finished, None
+                callback()
+
+    parent.viewport = _Viewport()
+    dialog = MeshConvergenceDialog(project, parent=parent)
+    try:
+        dialog._add_metric("displacement_control")
+        dialog._begin_node_pick()
+        assert parent.viewport.mode == "mesh"
+        for node, point in ((11, (1., 2., 3.)), (12, (4., 5., 6.))):
+            parent.viewport.callback(ViewportHit(
+                kind=SelectableKind.MESH_NODE,
+                mesh_id=node,
+                world_position=point,
+                selection_operation=SelectionOperation.REPLACE,
+            ))
+        dialog._stop_pick()
+        assert dialog.metric_nodes.count() == 2
+        assert dialog._commit_metric()
+        study = dialog.values()
+        assert study.analysis_ref.entity_id == analysis.id
+        assert study.metrics[0]["nodes"] == [
+            {"node_id": 11, "instance_id": "", "instance_name": "Part",
+             "position": [1., 2., 3.]},
+            {"node_id": 12, "instance_id": "", "instance_name": "Part",
+             "position": [4., 5., 6.]},
+        ]
+    finally:
+        dialog.close()
+        parent.close()
+        app.processEvents()
