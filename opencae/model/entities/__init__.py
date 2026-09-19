@@ -17,4 +17,5 @@ from .project import Project
 from .regions import *
 from .resources import *
 from .sections import *
+from .studies import *
 from .supports import *
