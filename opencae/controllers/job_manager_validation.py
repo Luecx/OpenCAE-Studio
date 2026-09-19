@@ -64,8 +64,8 @@ def study_errors(project, study_id, settings=None, solvers=None) -> list[str]:
             errors.append("Choose a valid Analysis")
         if study.step_id < 1:
             errors.append("Step ID must be positive")
-        if not study.metrics:
-            errors.append("Add a Displacement Control")
+        if not study.metrics or len(study.metrics) != 1:
+            errors.append("Choose exactly one displacement metric")
         valid_components = {"Magnitude", "D1", "D2", "D3", "D4", "D5", "D6"}
         ids, names = set(), set()
         for control in study.metrics:
@@ -82,11 +82,10 @@ def study_errors(project, study_id, settings=None, solvers=None) -> list[str]:
             for node in control.get("nodes", ()):
                 if len(node.get("position", ())) != 3:
                     errors.append("Selected nodes must have original X, Y, Z positions")
-        scales = study.mesh_scales
-        if len(scales) < 3 or any(scale <= 0 for scale in scales) or any(
-            a <= b for a, b in zip(scales, scales[1:])
-        ):
-            errors.append("Specify at least three strictly decreasing positive mesh scales")
+        if not 0 < study.mesh_scaling_factor < 1:
+            errors.append("Mesh scaling factor must lie between 0 and 1")
+        if not 3 <= study.max_iterations <= 100:
+            errors.append("Maximum iterations must be between 3 and 100")
         if not 0 < study.relative_tolerance < 1:
             errors.append("Tolerance must be between 0 and 1")
         for part in project.parts:
