@@ -163,6 +163,10 @@ def test_modeless_dialog_uses_canonical_picker_and_saves_original_positions():
 
         def set_display_mode(self, mode):
             self.mode = mode
+        def show_region_preview(self, channel, definition, **style):
+            self.preview = definition
+        def clear_region_preview(self, channel):
+            self.preview = None
 
         def begin_selection_session(self, policy, callback, finished=None):
             assert policy.accepted_kinds == frozenset({SelectableKind.MESH_NODE})
@@ -176,9 +180,7 @@ def test_modeless_dialog_uses_canonical_picker_and_saves_original_positions():
     parent.viewport = Viewport()
     dialog = MeshConvergenceDialog(project, parent=parent)
     try:
-        assert dialog.editor.isHidden()
-        dialog._add()
-        assert not dialog.editor.isHidden()
+        assert dialog.metric.currentData() == "displacement_control"
         dialog.nodes.pick_button.setChecked(True)
         assert parent.viewport.mode == "mesh"
         for node, point in ((11, (1., 2., 3.)), (12, (4., 5., 6.))):
@@ -196,9 +198,7 @@ def test_modeless_dialog_uses_canonical_picker_and_saves_original_positions():
         assert [item["position"] for item in saved.metrics[0]["nodes"]] == [
             [1., 2., 3.], [4., 5., 6.],
         ]
-        dialog._remove()
-        assert dialog.editor.isHidden()
-        assert dialog.metric_list.count() == 0
+        assert parent.viewport.preview is not None
     finally:
         dialog.close()
         parent.close()
