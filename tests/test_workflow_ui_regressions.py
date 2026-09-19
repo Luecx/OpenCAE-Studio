@@ -107,7 +107,7 @@ def test_studies_ribbon_separates_definition_setup_and_execution_groups():
         ),
         (
             "STUDY",
-            ("STUDY_VALIDATE", "STUDY_RUN", "STUDY_CONVERGENCE_REPORT"),
+            ("STUDY_VALIDATE", "STUDY_RUN"),
         ),
     ]
 
