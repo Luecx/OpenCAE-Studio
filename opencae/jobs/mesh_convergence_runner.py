@@ -150,9 +150,16 @@ class MeshConvergenceRunner(QObject):
                 f"No FRD result produced at level {self._level + 1}"
             ))
             return
+        def measure():
+            loader = FrdLoader()
+            sample = evaluate_all_metrics(result_file, self.study, loader)
+            # Parse field metadata off the Qt thread while the FRD is cached.
+            sample["_result_fields"] = loader.fields(result_file)
+            return sample
+
         task = BackgroundTask(
-            lambda: evaluate_all_metrics(result_file, self.study, FrdLoader()),
-            on_result=self._measured, on_error=self._failed, parent=self,
+            measure, on_result=self._measured,
+            on_error=self._failed, parent=self,
         )
         self._sample_task = task
         task.start()
