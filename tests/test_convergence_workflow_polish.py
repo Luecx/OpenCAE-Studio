@@ -169,19 +169,33 @@ def test_live_monitor_adds_curves_and_opens_real_solver_results():
     store = Store()
     monitor = MeshConvergenceJobMonitor(store, job.id, parent)
     try:
-        assert monitor.tabs.count() == 0
+        assert monitor.series.count() == 0
         for level, displacement in enumerate((3.0, 3.2), start=1):
             monitor.sample_added(job.id, dict(
-                level=level, elements=100*level,
+                level=level, nodes=50*level, elements=100*level,
                 metrics={"tip::node:7": dict(
                     value=displacement, field="DISP",
                     component="Magnitude", metric_name="Tip displacement",
                 )},
             ))
-        assert monitor.tabs.count() == 1
+        assert monitor.series.count() == 1
+        assert monitor.plot._x == [100., 200.]
+        assert monitor.plot._y == [3., 3.2]
         assert monitor._measurements["tip::node:7"] == [
-            (100.0, 3.0), (200.0, 3.2),
+            {"level":1, "nodes":50, "elements":100, "value":3.0,
+             "field":"DISP", "component":"Magnitude"},
+            {"level":2, "nodes":100, "elements":200, "value":3.2,
+             "field":"DISP", "component":"Magnitude"},
         ]
+        monitor.x_axis.setCurrentIndex(monitor.x_axis.findData("nodes"))
+        assert monitor.plot._x == [50., 100.]
+        monitor.x_axis.setCurrentIndex(monitor.x_axis.findData("level"))
+        assert monitor.plot._x == [1., 2.]
+        monitor.log_x.setChecked(True)
+        assert monitor.plot._x_scale == "log"
+        assert monitor.plot._x == [1., 2.]
+        assert monitor.plot._point_value_labels
+        assert "3.2" in monitor.readout.text()
         level_result = ResultSet(
             name="Refinement level 2",
             job_ref=EntityRef.of(job, "Job"),
