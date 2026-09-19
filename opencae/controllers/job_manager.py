@@ -19,7 +19,7 @@ from opencae.jobs.femaster_output_parser import FEMasterOutputParser
 from opencae.model.entities.jobs import Job, JobSourceKind, JobStatus
 from opencae.model.entities.studies import MeshConvergenceStudy
 from opencae.results import FrdLoader
-from opencae.ui.monitors import AnalysisJobMonitor, TopologyJobMonitor
+from opencae.ui.monitors import AnalysisJobMonitor, TopologyJobMonitor, MeshConvergenceJobMonitor
 
 from .job_manager_analysis import run_analysis as run_analysis_workflow
 from .job_manager_factory import utc_now
@@ -52,6 +52,7 @@ class JobManager(QObject):
     progress_changed = pyqtSignal(str, float, str)
     analysis_runtime_changed = pyqtSignal(str, object, object)
     topology_frame = pyqtSignal(str, object, object, object, object)
+    convergence_sample = pyqtSignal(str, object)
 
     def __init__(self, store, parent, settings, solvers):
         """Bind the manager to the live project store and runtime services."""
@@ -219,8 +220,17 @@ class JobManager(QObject):
 
         monitor_store = project_store_for_entity(self.store, job.id)
         study_source = monitor_store.project.try_resolve(job.source_ref)
-        if (job.source_kind is JobSourceKind.STUDY
-                and not isinstance(study_source, MeshConvergenceStudy)):
+        if isinstance(study_source, MeshConvergenceStudy):
+            stop_callback = (
+                (lambda current=job.id: self.stop_job(current))
+                if job.id in self._runners else None
+            )
+            monitor = MeshConvergenceJobMonitor(
+                monitor_store, job.id, self.parent,
+                stop_callback=stop_callback,
+            )
+            self.convergence_sample.connect(monitor.sample_added)
+        elif job.source_kind is JobSourceKind.STUDY:
             monitor = TopologyJobMonitor(monitor_store, job.id, self.parent)
             self.topology_frame.connect(monitor.show_frame)
         else:
@@ -270,13 +280,15 @@ class JobManager(QObject):
         job = self.selected_job()
         if job is None:
             return
+        available = [
+            value for reference in job.result_refs
+            if (value := self.store.project.try_resolve(reference)) is not None
+        ]
+        # Convergence runs have many individually browsable ResultSets. A legacy
+        # summary may coexist, but is not itself a renderable FE result.
         result = next(
-            (
-                self.store.project.try_resolve(reference)
-                for reference in job.result_refs
-                if self.store.project.try_resolve(reference) is not None
-            ),
-            None,
+            (value for value in reversed(available) if value.source_file),
+            available[-1] if available else None,
         )
         if result is None:
             self.store.message.emit("The selected Job has no available Results")
