@@ -293,7 +293,8 @@ class TimeManagerPlot(QWidget):
                 px = self._screen_x(value)
                 painter.drawLine(QPointF(px, plot.top()), QPointF(px, plot.bottom()))
 
-        if self._cursor_x is not None and x_min <= self._cursor_x <= x_max:
+        if (self._cursor_x is not None and (self._x_scale != "log" or self._cursor_x > 0)
+                and x_min <= self._axis_position(self._cursor_x) <= x_max):
             px = point(self._cursor_x, y_min).x()
             painter.setPen(
                 QPen(QColor(PALETTE["accent_hover"]), 1.0, Qt.PenStyle.DashLine)
@@ -313,6 +314,27 @@ class TimeManagerPlot(QWidget):
                     painter.setPen(QPen(QColor(PALETTE["accent_hover"]), 2.0))
                     painter.setBrush(Qt.BrushStyle.NoBrush)
                     painter.drawEllipse(screen, radius + 3.0, radius + 3.0)
+
+        if self._point_value_labels:
+            # Label every point while there is room; thin long histories to
+            # avoid unreadable overlaps. Hover still exposes every exact value.
+            label_width = 80.
+            stride = max(1, int(len(screen_points) * label_width / max(plot.width(), 1.)))
+            indices = set(range(0, len(screen_points), stride))
+            indices.add(len(screen_points) - 1)
+            for index in sorted(indices):
+                screen = screen_points[index]
+                label = f"{self._y[index]:.6g}"
+                width = max(60., float(painter.fontMetrics().horizontalAdvance(label) + 12))
+                left = min(max(screen.x() - width / 2., plot.left()), plot.right() - width)
+                top = screen.y() - 25. if index % 2 == 0 else screen.y() + 10.
+                top = min(max(top, plot.top() + 17.), plot.bottom() - 15.)
+                painter.setPen(QColor(PALETTE["text"]))
+                painter.drawText(
+                    QRectF(left, top, width, 15.),
+                    Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+                    label,
+                )
 
     def _nearest_marker(self, position, tolerance=10.0):
         if not (self._interactive or self._point_value_labels) or not self._screen_points:
@@ -373,13 +395,15 @@ class TimeManagerPlot(QWidget):
         elif index is None:
             QToolTip.hideText()
         else:
-            QToolTip.showText(
-                event.globalPosition().toPoint(),
+            description = (
+                f"{self._x_label}: {self._x[index]:.9g}\n"
+                f"{self._y_label}: {self._y[index]:.9g}"
+                if self._point_value_labels else
                 f"Frame: {index + 1}\n"
                 f"{self._x_label}: {self._x[index]:.6g}\n"
-                f"{self._y_label}: {self._y[index]:.6g}",
-                self,
+                f"{self._y_label}: {self._y[index]:.6g}"
             )
+            QToolTip.showText(event.globalPosition().toPoint(), description, self)
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
