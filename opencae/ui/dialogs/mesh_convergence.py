@@ -212,7 +212,33 @@ class MeshConvergenceDialog(QDialog):
         ))
         self._refresh_metrics(len(self._metrics)-1)
 
+    def _save_editor_draft(self):
+        """Preserve edits, including picked nodes, when switching controls."""
+        index = self._editing_metric
+        if index < 0 or index >= len(self._metrics):
+            return
+        current = self._metrics[index]
+        current["name"] = self.metric_name.text().strip()
+        current["kind"] = self.metric_kind.currentData()
+        current["component"] = self.metric_component.currentText().strip()
+        current["field_name"] = (
+            "DISP" if current["kind"] == "displacement_control"
+            else self.metric_field.text().strip()
+        )
+        current["metric"] = (
+            "probe" if current["kind"] == "displacement_control"
+            else current["kind"]
+        )
+        current["nodes"] = deepcopy(self._picked_nodes)
+        # Preserve text until final validation; do not lose edits on tab change.
+        try:
+            current["probe_position"] = list(_coordinates(self.metric_position.text()))
+        except (ValueError, TypeError):
+            current["probe_position"] = list(current.get("probe_position", (0, 0, 0)))
+
     def _select_metric(self, index):
+        if index != self._editing_metric:
+            self._save_editor_draft()
         self._stop_pick()
         self._editing_metric = index
         if index < 0 or index >= len(self._metrics):
@@ -261,8 +287,8 @@ class MeshConvergenceDialog(QDialog):
         def received(hit):
             if hit.kind is not SelectableKind.MESH_NODE or hit.mesh_id is None or hit.world_position is None:
                 return
-            if hit.selection_operation is SelectionOperation.REPLACE:
-                self._picked_nodes.clear()
+            # A normal click must append another monitoring node. Only the
+            # explicit Remove button or Ctrl-click removes a selected node.
             key = (str(hit.instance_id or ""), int(hit.mesh_id))
             self._picked_nodes = [
                 item for item in self._picked_nodes
