@@ -66,6 +66,14 @@ def css(p):
         padding: 5px 8px;
     }}
 
+    /* The convergence monitor is one uninterrupted window surface: the
+       plot is custom-painted in the window token, and its output console
+       must use that same token instead of the global QPlainTextEdit panel. */
+    QDialog#MeshConvergenceJobMonitor QPlainTextEdit#MeshConvergenceOutput {{
+        background: {p['window']};
+        border: none;
+    }}
+
     QListWidget#EditorCheckList {{
         background: {p['window']};
         border: 1px solid {p['border_light']};
