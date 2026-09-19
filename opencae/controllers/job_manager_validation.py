@@ -12,7 +12,6 @@ from opencae.model.entities.analysis import Analysis
 from opencae.model.entities.optimization import TopologyOptimization
 from opencae.model.entities.studies import MeshConvergenceStudy
 from opencae.model.entities.mesh import DefaultSeed
-from opencae.results.mesh_convergence import METRICS
 from opencae.model.validation import validate_project
 from opencae.optimization import validate_topology_optimization
 
@@ -63,17 +62,33 @@ def study_errors(project, study_id, settings=None, solvers=None) -> list[str]:
         analysis = project.try_resolve(study.analysis_ref)
         if not isinstance(analysis, Analysis):
             errors.append("Choose a valid Analysis")
-        if not study.field_name or not study.component or study.step_id < 1:
-            errors.append("Specify a valid FRD field, component and Step ID")
-        if study.metric not in METRICS:
-            errors.append("Choose a supported convergence metric")
+        if study.step_id < 1:
+            errors.append("Step ID must be positive")
+        if not study.metrics:
+            errors.append("Add a Displacement Control")
+        valid_components = {"Magnitude", "D1", "D2", "D3", "D4", "D5", "D6"}
+        ids, names = set(), set()
+        for control in study.metrics:
+            if control.get("kind") != "displacement_control":
+                errors.append("Only Displacement Controls are supported")
+            if control.get("component") not in valid_components:
+                errors.append("Displacement component must be D1–D6 or Magnitude")
+            if not control.get("name") or control.get("name") in names:
+                errors.append("Displacement Control names must be unique and nonempty")
+            if not control.get("id") or control.get("id") in ids:
+                errors.append("Displacement Control IDs must be unique and nonempty")
+            ids.add(control.get("id"))
+            names.add(control.get("name"))
+            for node in control.get("nodes", ()):
+                if len(node.get("position", ())) != 3:
+                    errors.append("Selected nodes must have original X, Y, Z positions")
         scales = study.mesh_scales
         if len(scales) < 3 or any(scale <= 0 for scale in scales) or any(
             a <= b for a, b in zip(scales, scales[1:])
         ):
             errors.append("Specify at least three strictly decreasing positive mesh scales")
-        if not 0 < study.relative_tolerance < 1 or study.exclude_radius < 0:
-            errors.append("Tolerance must be between 0 and 1; exclusion radius nonnegative")
+        if not 0 < study.relative_tolerance < 1:
+            errors.append("Tolerance must be between 0 and 1")
         for part in project.parts:
             if part.mesh.element_count and not part.geometry:
                 errors.append(f"Orphan-mesh Part {part.name} cannot be remeshed")
