@@ -15,6 +15,7 @@ from opencae.model.core import EntityRef
 from opencae.model.entities.studies import MeshConvergenceStudy
 from opencae.model.selection import (
     MeshNodeOperand, RegionDefinition, RegionSelectionItem,
+    RegionProjection, RegionRequirement,
     SelectableKind, SelectionOperation, SelectionPolicy,
 )
 from opencae.results.mesh_convergence import assess_convergence, assess_all_metrics
@@ -37,7 +38,7 @@ def _nodes_from_definition(definition):
     for item in definition.items:
         operand = item.operand
         if not isinstance(operand, MeshNodeOperand):
-            continue
+            raise ValueError("Only individual mesh nodes are valid in a Displacement Control")
         if item.picked_position is None:
             raise ValueError("Selected node has no original spatial position")
         values.append({
@@ -130,7 +131,12 @@ class MeshConvergenceDialog(QDialog):
         editor_layout.addWidget(field_block("Component", self.component))
         self.nodes = CompactRegionSelector(
             project, pick_callback=self._pick_nodes,
-            options=(), show_extended=False, parent=self.editor,
+            options=(), show_extended=True,
+            extended_title="Displacement Control — Monitor nodes",
+            requirement=RegionRequirement(
+                RegionProjection.NODES, allowed_dimensions=(0,), min_count=0,
+            ),
+            allow_part_local=True, parent=self.editor,
         )
         editor_layout.addWidget(field_block("Monitor nodes", self.nodes))
         self.hint = QLabel(
