@@ -247,3 +247,53 @@ def test_shared_plot_supports_logarithmic_x_without_modifying_raw_series():
         plot.close()
         plot.deleteLater()
         app.processEvents()
+
+
+def test_convergence_plot_and_console_match_dialog_window_surface():
+    """The convergence monitor must not paint the Time Manager's brighter panel."""
+    from PyQt6.QtGui import QColor, QImage
+    from opencae.ui.core.theme import PALETTE, palette_for
+    from opencae.ui.core.styles.views import css as view_styles
+    from opencae.ui.panels.time_manager_plot import TimeManagerPlot
+    from opencae.ui.monitors.mesh_convergence_job_monitor import MeshConvergenceJobMonitor
+
+    app = QApplication.instance() or QApplication([])
+    project = Project(name="Convergence surfaces")
+    study = MeshConvergenceStudy(name="Study")
+    job = Job(
+        name="Study Job", source_ref=EntityRef.of(study, "Study"),
+        source_kind=JobSourceKind.STUDY,
+    )
+    project.studies.append(study)
+    project.jobs.append(job)
+    project.rebuild_index(strict=True)
+
+    class Store:
+        def __init__(self):
+            self.project = project
+            self.changed = _Signal()
+
+    monitor = MeshConvergenceJobMonitor(Store(), job.id)
+    try:
+        assert monitor.objectName() == "MeshConvergenceJobMonitor"
+        assert not monitor.plot_surface.autoFillBackground()
+        assert monitor.plot._background_role == "window"
+        assert monitor.output.objectName() == "MeshConvergenceOutput"
+        assert TimeManagerPlot()._background_role == "panel"
+        monitor.plot.resize(560, 300)
+        image = QImage(560, 300, QImage.Format.Format_ARGB32)
+        image.fill(QColor("transparent"))
+        monitor.plot.render(image)
+        assert image.pixelColor(0, 0).name() == QColor(PALETTE["window"]).name()
+        for scheme in ("dark", "light", "gray"):
+            palette = palette_for(scheme)
+            style = view_styles(palette)
+            assert (
+                "QDialog#MeshConvergenceJobMonitor "
+                "QPlainTextEdit#MeshConvergenceOutput"
+            ) in style
+            assert f"background: {palette['window']};" in style
+    finally:
+        monitor.close()
+        monitor.deleteLater()
+        app.processEvents()
