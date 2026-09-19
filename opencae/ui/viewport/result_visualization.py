@@ -58,7 +58,12 @@ def add_result(plotter, result, field=None, options=None):
         nonnegative=_is_nonnegative_field(field),
     )
     display_scalar = _render_scalar(grid, scalar, clim)
-    shader_color = _shader_color_field(grid, field, scalar, display_scalar)
+    use_shape_functions = _use_shape_functions(options)
+    shader_color = (
+        _shader_color_field(grid, field, scalar, display_scalar)
+        if use_shape_functions
+        else None
+    )
     mapping = contour_plot_kwargs(range_settings)
     show_edges = bool(options.get("mesh_lines", True))
     shaded_result = _supports_result_shading(grid)
@@ -91,7 +96,13 @@ def add_result(plotter, result, field=None, options=None):
         pickable=True,
         render=False,
     )
-    install_element_shader_mapper(actor, grid, shader_color, clim)
+    # Classic retains PyVista's existing triangulated VTK mapper. Only the
+    # opt-in shape-function path replaces it with CellGrid's GPU FE interpolator.
+    actor._opencae_render_interpolation = (
+        "shape_functions" if use_shape_functions else "classic"
+    )
+    if use_shape_functions:
+        install_element_shader_mapper(actor, grid, shader_color, clim)
     if scalar:
         install_scalar_bar_end_caps(
             plotter,
@@ -148,9 +159,22 @@ def update_result(
         nonnegative=_is_nonnegative_field(field),
     )
     display_scalar = _render_scalar(grid, scalar, clim)
-    shader_color = _shader_color_field(grid, field, scalar, display_scalar)
+    use_shape_functions = _use_shape_functions(options)
+    requested_mode = "shape_functions" if use_shape_functions else "classic"
+    if getattr(
+        result_actor, "_opencae_render_interpolation", requested_mode
+    ) != requested_mode:
+        # The animation fast path cannot change mapper implementations in
+        # place. Let solution_scene rebuild the actor while preserving camera,
+        # contour settings, selection and timeline state.
+        return None
+    shader_color = (
+        _shader_color_field(grid, field, scalar, display_scalar)
+        if use_shape_functions
+        else None
+    )
 
-    if is_element_shader_actor(result_actor):
+    if use_shape_functions and is_element_shader_actor(result_actor):
         mapper = update_element_shader_mapper(
             result_actor,
             grid,
@@ -199,6 +223,14 @@ def update_result(
     # subset itself changes the whole scene is rebuilt rather than animated.
     del undeformed_actor, original
     return grid
+
+
+def _use_shape_functions(options) -> bool:
+    """One contour setting selects the complete result-rendering pipeline."""
+    return (
+        str((options or {}).get("range", {}).get("interpolation", "shape_functions"))
+        == "shape_functions"
+    )
 
 
 def _result_grids(result, field, options):
