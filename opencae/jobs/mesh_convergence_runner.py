@@ -8,7 +8,6 @@ from __future__ import annotations
 from copy import deepcopy
 from math import ceil
 from pathlib import Path
-from uuid import uuid4
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -36,14 +35,14 @@ def _refine_project(project, scale):
         if not part.mesh.seeds:
             raise ValueError(f"Part {part.name} has no mesh seeds")
         candidate = deepcopy(part)
-        # Avoid cache collisions with the live application's Part ID.
-        candidate.id = str(uuid4())
+        # Retain Part identity: region, edge-seed and element-control targets
+        # reference the real Part ID. Opt out of live cache instead.
         for seed in candidate.mesh.seeds:
             if seed.seed_type == "Default" or seed.method.casefold() == "size":
                 seed.size *= float(scale)
             elif seed.divisions:
                 seed.divisions = max(1, int(ceil(seed.divisions / float(scale))))
-        result = GeometryService().generate_mesh(candidate)
+        result = GeometryService().generate_mesh(candidate, cache=False)
         apply_mesh_snapshot(candidate, result)
         apply_all_controls(candidate)
         part.mesh = candidate.mesh
