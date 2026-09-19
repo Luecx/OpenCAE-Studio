@@ -213,3 +213,37 @@ def test_live_monitor_adds_curves_and_opens_real_solver_results():
         monitor.close()
         parent.close()
         app.processEvents()
+
+
+def test_shared_plot_supports_logarithmic_x_without_modifying_raw_series():
+    from opencae.ui.panels.time_manager_plot import TimeManagerPlot
+
+    app = QApplication.instance() or QApplication([])
+    plot = TimeManagerPlot()
+    plot.resize(720, 330)
+    try:
+        plot.set_series(
+            [1, 10, 100], [1e-6, 1.1e-6, 1.2e-6],
+            x_label="Nodes", y_label="DISP: Magnitude",
+            x_scale="log", point_value_labels=True,
+            show_markers=True, interactive=False, show_play_range=False,
+        )
+        assert plot._x == [1., 10., 100.]
+        assert plot._x_domain() == (0., 2.)
+        assert abs(plot._screen_x(10) - (
+            plot._screen_x(1) + plot._screen_x(100)
+        ) / 2) < 1e-8
+        assert abs(plot._value_at_screen_x(plot._screen_x(10)) - 10) < 1e-9
+        assert plot._point_value_labels
+        assert plot._nearest_marker is not None
+        plot.set_series(
+            [1, 2, 3], [2, 3, 4],
+            x_scale="linear", interactive=False, show_play_range=False,
+        )
+        assert plot._x_domain() == (1., 3.)
+        assert not plot._point_value_labels
+        assert plot._plot_rect().left() == 56.
+    finally:
+        plot.close()
+        plot.deleteLater()
+        app.processEvents()
