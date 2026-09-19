@@ -153,6 +153,10 @@ def test_modeless_metric_editor_picks_multiple_nodes_and_saves_positions(monkeyp
     project = Project(name="CAD")
     analysis = Analysis(name="Static", solver="FEMaster")
     project.analyses.append(analysis)
+    from opencae.model.entities.parts import Part
+    part = Part(name="Original CAD mesh")
+    part.mesh.node_count = 2
+    project.parts.append(part)
     project.rebuild_index(strict=True)
     parent = QWidget()
 
