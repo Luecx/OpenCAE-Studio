@@ -1,6 +1,8 @@
 """Active Study selector, setup actions and execution ribbon page."""
 
 from opencae.ui.actions.ids import A
+from opencae.model.entities.optimization import TopologyOptimization
+from opencae.model.entities.studies import MeshConvergenceStudy
 from opencae.ui.core.widgets import EntitySelectorBar
 
 from .ribbon_page import ResponsiveRibbonPage
@@ -55,6 +57,41 @@ class StudiesPage(ResponsiveRibbonPage):
             parent=parent,
         )
         self.selector_bar = selector_bar
+        self._all_specs = specs
+        self._selected_kind = None
+        self.set_study_type(store.project.try_resolve(controllers.studies.active_study_id))
+
+    def set_study_type(self, study):
+        """Only Topology studies expose Responses/Objectives/Constraints setup."""
+        kind = (
+            "topology" if isinstance(study, TopologyOptimization)
+            else "convergence" if isinstance(study, MeshConvergenceStudy)
+            else "none"
+        )
+        if kind == self._selected_kind:
+            return
+        self._selected_kind = kind
+        if kind == "topology":
+            self._specs = (
+                self._all_specs[0],
+                self._all_specs[1],
+                RibbonGroupSpec("STUDY", (
+                    A.STUDY_VALIDATE, A.STUDY_RUN,
+                )),
+            )
+        elif kind == "convergence":
+            self._specs = (
+                self._all_specs[0],
+                RibbonGroupSpec("STUDY", (
+                    A.STUDY_VALIDATE, A.STUDY_RUN,
+                    A.STUDY_CONVERGENCE_REPORT,
+                )),
+            )
+        else:
+            self._specs = (self._all_specs[0],)
+        self._collapsed_titles = frozenset()
+        self._render_groups(self._collapsed_titles)
+        self._refresh_responsive_layout()
 
 
 def create(actions, store, controllers):
