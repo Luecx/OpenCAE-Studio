@@ -1,14 +1,12 @@
 """Theme-aligned live convergence monitor using the shared Time Manager plot."""
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import (
-    QDialog, QFrame, QHBoxLayout, QLabel, QProgressBar, QSplitter,
+    QDialog, QHBoxLayout, QLabel, QProgressBar, QSplitter,
     QVBoxLayout, QWidget,
 )
 
 from opencae.model.entities.studies import MeshConvergenceStudy
-from opencae.ui.core.theme import PALETTE
 from opencae.ui.core.widgets import MonospaceOutputView
 from opencae.ui.panels.time_manager_plot import TimeManagerPlot
 from opencae.ui.primitives.buttons import ButtonFormAction
@@ -29,6 +27,7 @@ class MeshConvergenceJobMonitor(QDialog):
 
     def __init__(self, store, job_id, parent=None, *, stop_callback=None):
         super().__init__(parent)
+        self.setObjectName("MeshConvergenceJobMonitor")
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.store, self.job_id = store, str(job_id)
         self._stop_callback = stop_callback
@@ -49,11 +48,9 @@ class MeshConvergenceJobMonitor(QDialog):
         root.addWidget(self.progress)
 
         split = QSplitter(Qt.Orientation.Vertical)
-        self.plot_surface = QFrame()
-        surface_palette = self.plot_surface.palette()
-        surface_palette.setColor(QPalette.ColorRole.Window, QColor(PALETTE["panel"]))
-        self.plot_surface.setPalette(surface_palette)
-        self.plot_surface.setAutoFillBackground(True)
+        # Transparent layout surface: use the dialog's window background
+        # instead of the brighter panel color used by docked Time Manager.
+        self.plot_surface = QWidget()
         plot_layout = QVBoxLayout(self.plot_surface)
         plot_layout.setContentsMargins(12, 10, 12, 8)
         plot_layout.setSpacing(8)
@@ -75,7 +72,7 @@ class MeshConvergenceJobMonitor(QDialog):
         )
         options.addWidget(self.log_x, 0, Qt.AlignmentFlag.AlignBottom)
         plot_layout.addLayout(options)
-        self.plot = TimeManagerPlot(self.plot_surface)
+        self.plot = TimeManagerPlot(self.plot_surface, background_role="window")
         self.plot.setMinimumHeight(260)
         plot_layout.addWidget(self.plot, 1)
         self.readout = QLabel("No completed mesh levels yet")
@@ -88,6 +85,7 @@ class MeshConvergenceJobMonitor(QDialog):
         panel_layout.setContentsMargins(12, 8, 12, 8)
         panel_layout.addWidget(SectionHeading("Solver Output"))
         self.output = MonospaceOutputView()
+        self.output.setObjectName("MeshConvergenceOutput")
         panel_layout.addWidget(self.output, 1)
         split.addWidget(panel)
         split.setStretchFactor(0, 4)
