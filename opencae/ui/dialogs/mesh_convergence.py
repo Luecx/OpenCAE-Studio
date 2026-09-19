@@ -435,6 +435,8 @@ class ConvergenceReportDialog(QDialog):
                 run
             )
         root.addWidget(self.runs)
+        self.series = SelectForm()
+        root.addWidget(self.series)
         self.chart = TimeManagerPlot()
         self.chart.setMinimumHeight(250)
         root.addWidget(self.chart, 1)
@@ -448,9 +450,26 @@ class ConvergenceReportDialog(QDialog):
         buttons.addStretch(1)
         buttons.addWidget(close)
         root.addLayout(buttons)
-        self.runs.currentIndexChanged.connect(self._display)
+        self.runs.currentIndexChanged.connect(self._refresh_series)
+        self.series.currentIndexChanged.connect(self._display)
         export.clicked.connect(self._export)
         close.clicked.connect(self.accept)
+        self._refresh_series()
+
+    def _refresh_series(self, *_):
+        current = self.series.currentData()
+        self.series.blockSignals(True)
+        self.series.clear()
+        run = self.runs.currentData() or {}
+        samples = list(run.get("samples", ()))
+        if samples:
+            for key, value in samples[0].get("metrics", {}).items():
+                self.series.addItem(value.get("metric_name", key), key)
+            if not self.series.count():
+                self.series.addItem("Legacy metric", "__legacy__")
+        index = self.series.findData(current)
+        self.series.setCurrentIndex(max(0, index))
+        self.series.blockSignals(False)
         self._display()
 
     def _display(self, *_):
@@ -460,17 +479,34 @@ class ConvergenceReportDialog(QDialog):
             self.chart.set_series([], [], show_play_range=False)
             self.diagnostics.setText("No completed refinement samples in this run.")
             return
+        key = self.series.currentData()
+        values = [
+            sample if key == "__legacy__" else sample.get("metrics", {}).get(key)
+            for sample in samples
+        ]
+        complete = [(sample, value) for sample, value in zip(samples, values)
+                    if value is not None]
+        if not complete:
+            self.chart.set_series([], [], show_play_range=False)
+            self.diagnostics.setText("No valid samples for the selected metric")
+            return
         self.chart.set_series(
-            [item["elements"] for item in samples],
-            [item["value"] for item in samples],
+            [sample["elements"] for sample, _ in complete],
+            [value["value"] for _, value in complete],
             x_label="Number of finite elements",
-            y_label=f"{samples[0]['field']}: {samples[0]['component']}",
+            y_label=f"{complete[0][1]['field']}: {complete[0][1]['component']}",
             show_markers=True, interactive=False, show_play_range=False,
         )
-        conclusion = assess_convergence(
-            samples, float(run.get("relative_tolerance", .02)),
-            run.get("metric", "nodal_max")
-        )
+        selected = complete[0][1]
+        conclusion = assess_all_metrics(
+            samples, float(run.get("relative_tolerance", .02))
+        ).get(key)
+        if conclusion is None:
+            conclusion = assess_convergence(
+                [value for _, value in complete],
+                float(run.get("relative_tolerance", .02)),
+                selected.get("metric", "nodal_max"),
+            )
         self.diagnostics.setText(
             f"Status: {run.get('status', 'Unknown')} — {conclusion}\n"
             f"Exclusion radius: {run.get('exclude_radius', 0):g} | "
@@ -501,9 +537,14 @@ class ConvergenceReportDialog(QDialog):
                     "Source FRD",
                 ))
                 for sample in samples:
-                    output.writerow(tuple(sample.get(key, "") for key in (
-                        "level", "seed_scale", "elements", "nodes", "metric",
-                        "field", "component", "value", "source_file",
-                    )))
+                    measurements = list(sample.get("metrics", {}).values()) or [sample]
+                    for measurement in measurements:
+                        output.writerow((
+                            sample.get("level", ""), sample.get("seed_scale", ""),
+                            sample.get("elements", ""), sample.get("nodes", ""),
+                            measurement.get("metric_name", measurement.get("metric", "")),
+                            measurement.get("field", ""), measurement.get("component", ""),
+                            measurement.get("value", ""), sample.get("source_file", ""),
+                        ))
         except OSError as exc:
             QMessageBox.warning(self, "Export CSV", str(exc))
