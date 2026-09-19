@@ -1,5 +1,7 @@
 """Active Study selector, setup actions and execution ribbon page."""
 
+from dataclasses import replace
+
 from opencae.ui.actions.ids import A
 from opencae.model.entities.optimization import TopologyOptimization
 from opencae.model.entities.studies import MeshConvergenceStudy
@@ -75,17 +77,14 @@ class StudiesPage(ResponsiveRibbonPage):
             self._specs = (
                 self._all_specs[0],
                 self._all_specs[1],
-                RibbonGroupSpec("STUDY", (
+                replace(self._all_specs[2], action_ids=(
                     A.STUDY_VALIDATE, A.STUDY_RUN,
                 )),
             )
         elif kind == "convergence":
             self._specs = (
                 self._all_specs[0],
-                RibbonGroupSpec("STUDY", (
-                    A.STUDY_VALIDATE, A.STUDY_RUN,
-                    A.STUDY_CONVERGENCE_REPORT,
-                )),
+                self._all_specs[2],
             )
         else:
             self._specs = (self._all_specs[0],)
