@@ -149,10 +149,15 @@ def evaluate_all_metrics(source, study, loader=None):
                     exclude_radius=study.exclude_radius,
                 )
                 value = evaluate_result(source, local, loader)
-                key = f"{metric_id}:node:{int(node['node_id'])}"
+                instance_id = str(node.get("instance_id", ""))
+                key = (
+                    f"{metric_id}:instance:{instance_id}:node:{int(node['node_id'])}"
+                    if instance_id else f"{metric_id}:node:{int(node['node_id'])}"
+                )
                 value["metric_id"] = key
                 value["metric_name"] = (
-                    f"{spec.get('name', 'Displacement')} — Node {int(node['node_id'])}"
+                    f"{spec.get('name', 'Displacement')} — "
+                    f"{node.get('instance_name', 'Part')}.Node-{int(node['node_id'])}"
                 )
                 results[key] = value
                 if primary is None:
