@@ -13,7 +13,9 @@ class MeshConvergenceStudy(Study):
         default_factory=lambda: EntityRef(expected_type="Analysis"),
         metadata={"reference_type": "Analysis"},
     )
-    mesh_scales: list[float] = field(default_factory=lambda: [1.0, 0.7, 0.5, 0.35])
+    mesh_scales: list[float] = field(default_factory=lambda: [1.0, 0.7, 0.5, 0.35])  # Legacy project compatibility
+    mesh_scaling_factor: float = 0.7
+    max_iterations: int = 4
     field_name: str = "DISP"
     component: str = "Magnitude"
     step_id: int = 1
