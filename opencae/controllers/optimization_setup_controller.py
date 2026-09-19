@@ -9,6 +9,7 @@ from opencae.controllers.region_selection import (
     policy_for_projection,
     region_options,
 )
+from opencae.model.entities.studies import MeshConvergenceStudy
 from opencae.model.entities.optimization import (
     OptimizationConstraint,
     OptimizationIteration,
@@ -210,6 +211,10 @@ class OptimizationSetupMixin:
         )
 
     def validate(self):
+        selected = self.store.project.try_resolve(self.active_study_id)
+        if isinstance(selected, MeshConvergenceStudy):
+            self.jobs.validate_study(selected.id)
+            return
         study = self._optimization()
         if study is None:
             return self._need_optimization()
@@ -234,6 +239,10 @@ class OptimizationSetupMixin:
         )
 
     def edit(self, entity):
+        if isinstance(entity, MeshConvergenceStudy):
+            self.store.select(entity)
+            self.active_study_id = entity.id
+            return self.new_mesh_convergence(entity)
         if not isinstance(entity, TopologySymmetry):
             try:
                 self.parent.viewport.clear_datum_reference_preview()

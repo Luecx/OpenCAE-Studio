@@ -187,13 +187,24 @@ class MainWindow(QMainWindow):
             )
         self.actions.get(A.ANALYSIS_RUN).setEnabled(analysis_runnable)
 
+        from opencae.model.entities.optimization import TopologyOptimization
+        from opencae.model.entities.studies import MeshConvergenceStudy
         study = project.try_resolve(self.controllers.studies.active_study_id)
+        studies_page = getattr(self.ribbon, "studies_page", None)
+        if studies_page is not None:
+            studies_page.set_study_type(study)
         has_study = study is not None
         femaster_config = self.context.settings.solver_config("FEMaster")
         femaster_ready = bool(
             "FEMaster" in self.context.solvers
             and "FEMaster" in self.context.settings.enabled_solvers()
             and Path(str(femaster_config.get("executable", ""))).is_file()
+        )
+        self.actions.get(A.STUDY_NEW_CONVERGENCE).setEnabled(
+            bool(has_assembly and project.analyses and project.parts)
+        )
+        self.actions.get(A.STUDY_CONVERGENCE_REPORT).setEnabled(
+            isinstance(study, MeshConvergenceStudy) and bool(study.run_history)
         )
         self.actions.get(A.STUDY_NEW_TOPOLOGY).setEnabled(
             bool(has_assembly and project.analyses)
@@ -206,11 +217,30 @@ class MainWindow(QMainWindow):
             A.OPT_FILTER,
             A.OPT_SYMMETRY,
             A.OPT_CONTROLS,
-            A.STUDY_VALIDATE,
         ):
-            self.actions.get(action_id).setEnabled(has_study)
+            self.actions.get(action_id).setEnabled(isinstance(study, TopologyOptimization))
+        self.actions.get(A.STUDY_VALIDATE).setEnabled(has_study)
+        convergence_analysis = (
+            project.try_resolve(study.analysis_ref)
+            if isinstance(study, MeshConvergenceStudy)
+            else None
+        )
+        convergence_solver = getattr(convergence_analysis, "solver", "")
+        convergence_ready = bool(
+            convergence_analysis
+            and convergence_analysis.resolved_steps(project)
+            and convergence_solver in self.context.solvers
+            and convergence_solver in self.context.settings.enabled_solvers()
+            and Path(str(self.context.settings.solver_config(
+                convergence_solver
+            ).get("executable", ""))).is_file()
+        )
         self.actions.get(A.STUDY_RUN).setEnabled(
-            bool(has_study and has_assembly and femaster_ready)
+            bool(has_study and has_assembly and (
+                femaster_ready if isinstance(study, TopologyOptimization)
+                else convergence_ready if isinstance(study, MeshConvergenceStudy)
+                else False
+            ))
         )
 
         jobs = self.controllers.jobs

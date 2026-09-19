@@ -426,6 +426,57 @@ class PyVistaViewport(QWidget):
     def highlight_members(self, members):
         highlight_members(self, members)
 
+    def begin_result_path_pick(self, callback):
+        """Use the standard drag-safe Results node picker for path waypoints."""
+        self.result_query.path_callback = callback
+        self.result_query.configure("path")
+        def stop():
+            if self.result_query.path_callback is callback:
+                self.result_query.path_callback = None
+                self.result_query.configure("")
+        return stop
+
+    def show_result_path_preview(self, coordinates, node_ids):
+        """Highlight the connected path in the displayed result-grid coordinates."""
+        import numpy as np
+        from .safe_operations import remove_actor
+        self.clear_result_path_preview()
+        grid = self.scene.result_grid
+        if grid is None or not node_ids:
+            return
+        tags = np.asarray(grid.point_data.get("node_id", ()), dtype=np.int64)
+        lookup = {int(tag): index for index, tag in enumerate(tags) if int(tag) > 0}
+        positions = [
+            tuple(float(v) for v in grid.points[lookup[node]])
+            if node in lookup else tuple(coordinates[node])
+            for node in node_ids
+        ]
+        # PyVista.add_lines expects a flat even-length (2*N, 3) point array,
+        # not (N, 2, 3) segment arrays.
+        lines = np.asarray([
+            point
+            for start, end in zip(positions, positions[1:])
+            for point in (start, end)
+        ], dtype=float).reshape((-1, 3))
+        if len(lines):
+            self.plotter.add_lines(
+                lines, color="#ffd166", width=5,
+                name="mesh-path-preview-lines", render=False,
+            )
+        self.plotter.add_points(
+            np.asarray(positions, dtype=float),
+            color="#ffd166", point_size=18,
+            render_points_as_spheres=True, pickable=False,
+            name="mesh-path-preview-ends", render=False,
+        )
+        self.plotter.render()
+
+    def clear_result_path_preview(self):
+        from .safe_operations import remove_actor
+        remove_actor(self.plotter, "mesh-path-preview-lines")
+        remove_actor(self.plotter, "mesh-path-preview-ends")
+        self.plotter.render()
+
     def show_solution(self, result, field=None, options=None):
         self._active_result = result
         self._active_result_field = field

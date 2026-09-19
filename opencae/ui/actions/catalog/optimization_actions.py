@@ -16,6 +16,15 @@ def specs(controllers):
             status_tip="Create a Topology Optimization Study",
         ),
         ActionSpec(
+            A.STUDY_NEW_CONVERGENCE,
+            "Mesh Convergence", I.MESH, studies.new_mesh_convergence,
+            status_tip="Create a mesh-refinement convergence Study",
+        ),
+        ActionSpec(
+            A.STUDY_CONVERGENCE_REPORT,
+            "Convergence Plot", I.CONTOUR, studies.convergence_report,
+        ),
+        ActionSpec(
             A.STUDY_EDIT,
             "Edit Study",
             I.EDIT,

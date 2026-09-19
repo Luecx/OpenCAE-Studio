@@ -35,8 +35,8 @@ class GeometryService:
         CACHE.invalidate(part.id, mesh_only=True)
         return snapshot
 
-    def generate_mesh(self, part):
-        """Generate and cache one mesh snapshot for the supplied Part state."""
+    def generate_mesh(self, part, *, cache: bool = True):
+        """Generate a mesh snapshot; Study snapshots opt out of the live cache."""
         fingerprint = part_fingerprint(part, include_mesh=True)
         with gmsh_model(part.name) as gmsh:
             rebuild_occ(gmsh, part)
@@ -61,7 +61,8 @@ class GeometryService:
                 fingerprint,
             )
             snapshot.seed_mismatches = edge_seed_mismatches(gmsh, part)
-        CACHE.set_mesh(snapshot)
+        if cache:
+            CACHE.set_mesh(snapshot)
         return snapshot
 
     @staticmethod

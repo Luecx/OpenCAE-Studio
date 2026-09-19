@@ -32,3 +32,18 @@ class CalculiXAdapter(SolverAdapter):
 
     def result_candidates(self, output_base: Path) -> list[Path]:
         return [output_base.with_suffix(".frd")]
+
+    def postprocess_results(self, project, output_base: Path) -> None:
+        """Expose CalculiX's input-stem FRD under OpenCAE's stable result name.
+
+        ccx -i analysis writes analysis.frd, whereas the generic Analysis runner
+        publishes results.frd. Do not require the user to rename the output.
+        """
+        from shutil import copy2
+
+        del project
+        published = output_base.with_suffix(".frd")
+        source = output_base.with_name("analysis").with_suffix(".frd")
+        if source.is_file() and source.resolve() != published.resolve():
+            copy2(source, published)
+

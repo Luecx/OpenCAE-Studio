@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from math import isfinite
+from math import isfinite, log10
 
 from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QCursor, QPainter, QPainterPath, QPen
@@ -20,8 +20,13 @@ class TimeManagerPlot(QWidget):
     HANDLE_TOLERANCE = 9.0
     MIN_RANGE_PIXELS = 3.0
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, background_role="panel"):
         super().__init__(parent)
+        # Keep the Time Manager's existing panel surface by default. Dialogs
+        # can request their window surface without changing the shared plot.
+        if background_role not in {"panel", "window"}:
+            raise ValueError(f"Unknown plot background role: {background_role}")
+        self._background_role = background_role
         self._x = []
         self._y = []
         self._current_index = -1
@@ -29,6 +34,8 @@ class TimeManagerPlot(QWidget):
         self._x_label = "Time"
         self._y_label = "Value"
         self._show_markers = True
+        self._x_scale = "linear"
+        self._point_value_labels = False
         self._interactive = True
         self._screen_points = []
         self._play_start = None
@@ -53,12 +60,20 @@ class TimeManagerPlot(QWidget):
         play_start=None,
         play_end=None,
         range_editable=True,
+        show_play_range=True,
+        x_scale="linear",
+        point_value_labels=False,
     ) -> None:
         """Replace the plotted series, playhead, and playback-boundary state."""
+        if x_scale not in {"linear", "log"}:
+            raise ValueError(f"Unknown X-axis scale: {x_scale}")
+        self._x_scale = x_scale
+        self._point_value_labels = bool(point_value_labels)
         pairs = [
             (float(x), float(y))
             for x, y in zip(tuple(x_values), tuple(y_values))
             if isfinite(float(x)) and isfinite(float(y))
+            and (self._x_scale == "linear" or float(x) > 0.)
         ]
         self._x = [pair[0] for pair in pairs]
         self._y = [pair[1] for pair in pairs]
@@ -71,7 +86,7 @@ class TimeManagerPlot(QWidget):
         self._screen_points = []
         self._range_editable = bool(range_editable)
         self._drag_boundary = None
-        if self._x:
+        if self._x and show_play_range:
             x_min, x_max = min(self._x), max(self._x)
             start = x_min if play_start is None else float(play_start)
             end = x_max if play_end is None else float(play_end)
@@ -97,15 +112,25 @@ class TimeManagerPlot(QWidget):
         self.update()
 
     def _plot_rect(self) -> QRectF:
-        return QRectF(self.rect()).adjusted(56.0, 8.0, -12.0, -28.0)
+        return QRectF(self.rect()).adjusted(
+            72.0 if self._point_value_labels else 56.0,
+            26.0 if self._point_value_labels else 8.0,
+            -45.0 if self._point_value_labels else -12.0, -28.0,
+        )
+
+    def _axis_position(self, value):
+        return log10(float(value)) if self._x_scale == "log" else float(value)
 
     def _x_domain(self):
         if not self._x:
             return None
         x_min, x_max = min(self._x), max(self._x)
-        if abs(x_max - x_min) <= 1.0e-14:
-            x_max = x_min + 1.0
-        return x_min, x_max
+        if self._x_scale == "log" and x_min <= 0:
+            return None
+        low, high = self._axis_position(x_min), self._axis_position(x_max)
+        if abs(high - low) <= 1.0e-14:
+            high = low + 1.0
+        return low, high
 
     def _minimum_range_span(self) -> float:
         """Keep handles visibly separate so either boundary can always be grabbed."""
@@ -144,7 +169,7 @@ class TimeManagerPlot(QWidget):
         if domain is None or plot.width() <= 0.0:
             return plot.left()
         x_min, x_max = domain
-        return plot.left() + (float(value) - x_min) / (x_max - x_min) * plot.width()
+        return plot.left() + (self._axis_position(value) - x_min) / (x_max - x_min) * plot.width()
 
     def _value_at_screen_x(self, px: float) -> float:
         domain = self._x_domain()
@@ -154,7 +179,8 @@ class TimeManagerPlot(QWidget):
         x_min, x_max = domain
         fraction = (float(px) - plot.left()) / plot.width()
         fraction = min(max(fraction, 0.0), 1.0)
-        return x_min + fraction * (x_max - x_min)
+        value = x_min + fraction * (x_max - x_min)
+        return 10.0 ** value if self._x_scale == "log" else value
 
     def _nearest_boundary(self, position):
         if (
@@ -174,7 +200,7 @@ class TimeManagerPlot(QWidget):
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.fillRect(self.rect(), QColor(PALETTE["panel"]))
+        painter.fillRect(self.rect(), QColor(PALETTE[self._background_role]))
 
         # Use almost the complete vertical workspace. Only reserve the compact
         # tick/axis text strips that are actually needed.
@@ -192,15 +218,24 @@ class TimeManagerPlot(QWidget):
 
         x_min, x_max = self._x_domain()
         y_min, y_max = min(self._y), max(self._y)
-        if abs(y_max - y_min) <= 1.0e-14:
-            y_max = y_min + max(abs(y_min), 1.0)
-        if y_min >= 0.0:
-            y_min = 0.0
-        y_span = y_max - y_min
-        y_max += 0.04 * y_span
+        if self._point_value_labels:
+            # For convergence plots, preserve changes around a non-zero
+            # displacement baseline instead of flattening them against zero.
+            span = y_max - y_min
+            if span <= max(abs(y_min), abs(y_max)) * 1.0e-12:
+                span = max(abs(y_min), abs(y_max)) * 0.04 or 1.0
+            y_min -= 0.15 * span
+            y_max += 0.20 * span
+        else:
+            if abs(y_max - y_min) <= 1.0e-14:
+                y_max = y_min + max(abs(y_min), 1.0)
+            if y_min >= 0.0:
+                y_min = 0.0
+            y_span = y_max - y_min
+            y_max += 0.04 * y_span
 
         def point(x, y):
-            px = plot.left() + (x - x_min) / (x_max - x_min) * plot.width()
+            px = plot.left() + (self._axis_position(x) - x_min) / (x_max - x_min) * plot.width()
             py = plot.bottom() - (y - y_min) / (y_max - y_min) * plot.height()
             return QPointF(px, py)
 
@@ -214,9 +249,9 @@ class TimeManagerPlot(QWidget):
             value = y_min + fraction * (y_max - y_min)
             painter.setPen(text_color)
             painter.drawText(
-                QRectF(2.0, y - 8.0, 48.0, 16.0),
+                QRectF(2.0, y - 8.0, plot.left() - 8.0, 16.0),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                f"{value:.3g}",
+                f"{value:.6g}" if self._point_value_labels else f"{value:.3g}",
             )
             painter.setPen(grid_pen)
 
@@ -246,7 +281,7 @@ class TimeManagerPlot(QWidget):
         painter.drawText(
             QRectF(plot.left(), plot.bottom() + 14.0, plot.width(), 13.0),
             Qt.AlignmentFlag.AlignCenter,
-            self._x_label,
+            self._x_label + (" (log₁₀)" if self._x_scale == "log" else ""),
         )
         painter.drawText(
             QRectF(plot.left() + 7.0, plot.top() + 3.0, 150.0, 15.0),
@@ -255,7 +290,7 @@ class TimeManagerPlot(QWidget):
         )
 
         screen_points = [point(x, y) for x, y in zip(self._x, self._y)]
-        self._screen_points = screen_points if self._interactive else []
+        self._screen_points = screen_points
         path = QPainterPath(screen_points[0])
         for value in screen_points[1:]:
             path.lineTo(value)
@@ -272,7 +307,8 @@ class TimeManagerPlot(QWidget):
                 px = self._screen_x(value)
                 painter.drawLine(QPointF(px, plot.top()), QPointF(px, plot.bottom()))
 
-        if self._cursor_x is not None and x_min <= self._cursor_x <= x_max:
+        if (self._cursor_x is not None and (self._x_scale != "log" or self._cursor_x > 0)
+                and x_min <= self._axis_position(self._cursor_x) <= x_max):
             px = point(self._cursor_x, y_min).x()
             painter.setPen(
                 QPen(QColor(PALETTE["accent_hover"]), 1.0, Qt.PenStyle.DashLine)
@@ -293,8 +329,29 @@ class TimeManagerPlot(QWidget):
                     painter.setBrush(Qt.BrushStyle.NoBrush)
                     painter.drawEllipse(screen, radius + 3.0, radius + 3.0)
 
+        if self._point_value_labels:
+            # Label every point while there is room; thin long histories to
+            # avoid unreadable overlaps. Hover still exposes every exact value.
+            label_width = 80.
+            stride = max(1, int(len(screen_points) * label_width / max(plot.width(), 1.)))
+            indices = set(range(0, len(screen_points), stride))
+            indices.add(len(screen_points) - 1)
+            for index in sorted(indices):
+                screen = screen_points[index]
+                label = f"{self._y[index]:.6g}"
+                width = max(60., float(painter.fontMetrics().horizontalAdvance(label) + 12))
+                left = min(max(screen.x() - width / 2., plot.left()), plot.right() - width)
+                top = screen.y() - 25. if index % 2 == 0 else screen.y() + 10.
+                top = min(max(top, plot.top() + 17.), plot.bottom() - 15.)
+                painter.setPen(QColor(PALETTE["text"]))
+                painter.drawText(
+                    QRectF(left, top, width, 15.),
+                    Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+                    label,
+                )
+
     def _nearest_marker(self, position, tolerance=10.0):
-        if not self._interactive or not self._screen_points:
+        if not (self._interactive or self._point_value_labels) or not self._screen_points:
             return None
         px, py = float(position.x()), float(position.y())
         distances = [
@@ -312,7 +369,7 @@ class TimeManagerPlot(QWidget):
                 self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))
                 event.accept()
                 return
-            index = self._nearest_marker(event.position())
+            index = self._nearest_marker(event.position()) if self._interactive else None
             if index is not None:
                 self.frame_selected.emit(index)
                 event.accept()
@@ -352,13 +409,15 @@ class TimeManagerPlot(QWidget):
         elif index is None:
             QToolTip.hideText()
         else:
-            QToolTip.showText(
-                event.globalPosition().toPoint(),
+            description = (
+                f"{self._x_label}: {self._x[index]:.9g}\n"
+                f"{self._y_label}: {self._y[index]:.9g}"
+                if self._point_value_labels else
                 f"Frame: {index + 1}\n"
                 f"{self._x_label}: {self._x[index]:.6g}\n"
-                f"{self._y_label}: {self._y[index]:.6g}",
-                self,
+                f"{self._y_label}: {self._y[index]:.6g}"
             )
+            QToolTip.showText(event.globalPosition().toPoint(), description, self)
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
