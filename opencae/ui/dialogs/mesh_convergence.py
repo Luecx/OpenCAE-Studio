@@ -4,9 +4,13 @@ from copy import deepcopy
 from csv import writer
 from pathlib import Path
 
+from opencae.ui.primitives.inputs import InputFormText
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.primitives.buttons import ButtonFormAction
+
 from PyQt6.QtWidgets import (
-    QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
-    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
+    QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
+    QHBoxLayout, QLabel, QMessageBox,
     QVBoxLayout,
 )
 from opencae.model.core import EntityRef
@@ -34,33 +38,33 @@ class MeshConvergenceDialog(QDialog):
         value = self.original
         root = QVBoxLayout(self)
         form = QFormLayout()
-        self.name = QLineEdit(value.name)
-        self.analysis = QComboBox()
+        self.name = InputFormText(value.name)
+        self.analysis = SelectForm()
         for item in project.analyses:
             self.analysis.addItem(item.name, item.id)
         chosen = self.analysis.findData(value.analysis_ref.entity_id)
         if chosen >= 0:
             self.analysis.setCurrentIndex(chosen)
-        self.scales = QLineEdit(", ".join(f"{x:g}" for x in value.mesh_scales))
+        self.scales = InputFormText(", ".join(f"{x:g}" for x in value.mesh_scales))
         self.scales.setToolTip(
             "Scale factors applied to all CAD mesh-size seeds. "
             "Example 1, 0.7, 0.5, 0.35. Ordered coarse to fine."
         )
-        self.field = QLineEdit(value.field_name)
-        self.component = QLineEdit(value.component)
-        self.step = QLineEdit(str(value.step_id))
-        self.metric = QComboBox()
+        self.field = InputFormText(value.field_name)
+        self.component = InputFormText(value.component)
+        self.step = InputFormText(str(value.step_id))
+        self.metric = SelectForm()
         for key, label in METRICS.items():
             self.metric.addItem(label, key)
         index = self.metric.findData(value.metric)
         if index >= 0:
             self.metric.setCurrentIndex(index)
-        self.position = QLineEdit(", ".join(f"{x:g}" for x in value.probe_position))
-        self.exclude_center = QLineEdit(
+        self.position = InputFormText(", ".join(f"{x:g}" for x in value.probe_position))
+        self.exclude_center = InputFormText(
             ", ".join(f"{x:g}" for x in value.exclude_center)
         )
-        self.exclude_radius = QLineEdit(f"{value.exclude_radius:g}")
-        self.tolerance = QLineEdit(f"{100*value.relative_tolerance:g}")
+        self.exclude_radius = InputFormText(f"{value.exclude_radius:g}")
+        self.tolerance = InputFormText(f"{100*value.relative_tolerance:g}")
         for label, widget in (
             ("Study name", self.name), ("Analysis", self.analysis),
             ("Mesh-size scales", self.scales), ("FRD field (Y)", self.field),
@@ -144,7 +148,7 @@ class ConvergenceReportDialog(QDialog):
         self.resize(800, 510)
         root = QVBoxLayout(self)
         history = list(study.run_history or ())
-        self.runs = QComboBox()
+        self.runs = SelectForm()
         for run in history:
             self.runs.addItem(
                 f"{run.get('started_at', 'Run')} — {run.get('status', 'Unknown')}",
@@ -157,8 +161,8 @@ class ConvergenceReportDialog(QDialog):
         self.diagnostics = QLabel()
         self.diagnostics.setWordWrap(True)
         root.addWidget(self.diagnostics)
-        export = QPushButton("Export CSV")
-        close = QPushButton("Close")
+        export = ButtonFormAction("Export CSV")
+        close = ButtonFormAction("Close")
         buttons = QHBoxLayout()
         buttons.addWidget(export)
         buttons.addStretch(1)
