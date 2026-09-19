@@ -252,9 +252,9 @@ class ResultsPage(QWidget):
     def set_path_viewport(self, viewport):
         self._path_viewport = viewport
 
-    def _refresh_path_menu(self):
+    def _refresh_path_menu(self, preferred=None):
         self.path_list.blockSignals(True)
-        index = self.path_list.currentRow()
+        index = self.path_list.currentRow() if preferred is None else int(preferred)
         self.path_list.clear()
         for path in stored_paths(self.result) if self.result is not None else ():
             self.path_list.addItem(f"{path.name} · {len(path.node_ids)} nodes")
@@ -305,11 +305,14 @@ class ResultsPage(QWidget):
         self._path_editor = dialog
 
         def finished(code):
+            preferred = None
             if code == dialog.DialogCode.Accepted:
                 self.result = dialog.target_result
+                preferred = (len(stored_paths(self.result)) - 1
+                             if index is None else index)
                 self.paths_updated.emit(self.result)
             self._path_editor = None
-            self._refresh_path_menu()
+            self._refresh_path_menu(preferred)
 
         dialog.finished.connect(finished)
         show_modeless_dialog(dialog)
