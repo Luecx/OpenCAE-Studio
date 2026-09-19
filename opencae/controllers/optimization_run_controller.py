@@ -9,6 +9,7 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QInputDialog
 
 from opencae.model.entities.optimization import OptimizationIteration, OptimizationRun
+from opencae.model.entities.studies import MeshConvergenceStudy
 from opencae.optimization import (
     automatic_density_threshold,
     build_mesh_index,
@@ -23,6 +24,9 @@ class OptimizationRunMixin:
         self.run_active()
 
     def run_active(self):
+        study = self.store.project.try_resolve(self.active_study_id)
+        if isinstance(study, MeshConvergenceStudy):
+            return self.jobs.run_study(study.id)
         study = self._optimization()
         if study is None:
             return self._need_optimization()
