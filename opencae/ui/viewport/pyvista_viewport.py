@@ -442,7 +442,7 @@ class PyVistaViewport(QWidget):
         from .safe_operations import remove_actor
         self.clear_result_path_preview()
         grid = self.scene.result_grid
-        if grid is None or len(node_ids) < 2:
+        if grid is None or not node_ids:
             return
         tags = np.asarray(grid.point_data.get("node_id", ()), dtype=np.int64)
         lookup = {int(tag): index for index, tag in enumerate(tags) if int(tag) > 0}
@@ -455,14 +455,13 @@ class PyVistaViewport(QWidget):
             [positions[i], positions[i + 1]]
             for i in range(len(positions) - 1)
         ], dtype=float)
-        if not len(lines):
-            return
-        self.plotter.add_lines(
-            lines, color="#ffd166", width=5,
-            name="mesh-path-preview-lines", render=False,
-        )
+        if len(lines):
+            self.plotter.add_lines(
+                lines, color="#ffd166", width=5,
+                name="mesh-path-preview-lines", render=False,
+            )
         self.plotter.add_points(
-            np.asarray((positions[0], positions[-1]), dtype=float),
+            np.asarray(positions, dtype=float),
             color="#ffd166", point_size=18,
             render_points_as_spheres=True, pickable=False,
             name="mesh-path-preview-ends", render=False,
