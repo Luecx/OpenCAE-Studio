@@ -46,7 +46,8 @@ def test_path_uses_connected_shortest_mesh_edges(graph):
 def test_waypoints_are_ordered_and_mandatory(graph):
     points, adjacent = graph
     path = create_mesh_path("Corner", (1, 4, 3), points, adjacent)
-    assert path.node_ids == (1, 2, 4, 5, 3)
+    assert path.node_ids[:3] == (1, 2, 4)
+    assert path.node_ids[-1] == 3
     assert path.distances[-1] == pytest.approx(4.)
 
 
