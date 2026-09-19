@@ -18,7 +18,7 @@ from opencae.geometry import GeometryService
 from opencae.geometry.element_controls_apply import apply_all_controls
 from opencae.jobs import AnalysisJobRunner
 from opencae.model.entities.mesh import DefaultSeed
-from opencae.results.mesh_convergence import evaluate_result
+from opencae.results.mesh_convergence import evaluate_all_metrics
 from opencae.results.frd_loader import FrdLoader
 
 
@@ -152,7 +152,7 @@ class MeshConvergenceRunner(QObject):
             ))
             return
         task = BackgroundTask(
-            lambda: evaluate_result(result_file, self.study, FrdLoader()),
+            lambda: evaluate_all_metrics(result_file, self.study, FrdLoader()),
             on_result=self._measured, on_error=self._failed, parent=self,
         )
         self._sample_task = task
