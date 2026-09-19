@@ -18,6 +18,9 @@ class MeshConvergenceStudy(Study):
     component: str = "Magnitude"
     step_id: int = 1
     metric: str = "probe"
+    # Independently named convergence controls. Each selected node is stored
+    # with its original spatial position: solver node numbering changes on remesh.
+    metrics: list[dict] = field(default_factory=list)
     probe_position: tuple[float, float, float] = (0.0, 0.0, 0.0)
     exclude_center: tuple[float, float, float] = (0.0, 0.0, 0.0)
     exclude_radius: float = 0.0
