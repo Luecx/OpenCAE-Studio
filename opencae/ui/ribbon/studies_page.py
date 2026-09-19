@@ -23,6 +23,7 @@ class StudiesPage(ResponsiveRibbonPage):
                 "DEFINITION",
                 (
                     A.STUDY_NEW_TOPOLOGY,
+                    A.STUDY_NEW_CONVERGENCE,
                     A.STUDY_EDIT,
                     A.DELETE_SELECTED,
                 ),
@@ -43,6 +44,7 @@ class StudiesPage(ResponsiveRibbonPage):
                 (
                     A.STUDY_VALIDATE,
                     A.STUDY_RUN,
+                    A.STUDY_CONVERGENCE_REPORT,
                 ),
             ),
         )
