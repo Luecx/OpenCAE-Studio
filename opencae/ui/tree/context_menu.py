@@ -4,6 +4,7 @@ from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QMenu
 
 from opencae.ui.actions.ids import A
+from opencae.model.entities.studies import MeshConvergenceStudy
 from .context_rules import available
 from .tree_roles import ENTITY_ROLE, KIND_ROLE
 
@@ -68,7 +69,7 @@ MAP = {
         A.ANALYSIS_NEW, A.ANALYSIS_EDIT, A.VALIDATE, A.PREVIEW_DECK,
         A.WRITE_DECK, A.ANALYSIS_RUN, A.DELETE_SELECTED,
     ),
-    "studies": (A.STUDY_NEW_TOPOLOGY,),
+    "studies": (A.STUDY_NEW_TOPOLOGY, A.STUDY_NEW_CONVERGENCE),
     "study": (
         A.STUDY_NEW_TOPOLOGY, A.STUDY_EDIT, A.OPT_RESPONSE, A.OPT_OBJECTIVE,
         A.OPT_CONSTRAINT, A.OPT_FILTER, A.OPT_SYMMETRY, A.OPT_CONTROLS,
@@ -113,6 +114,13 @@ def show_context_menu(view, pos, index, actions, store, visibility=None):
     kind = index.data(KIND_ROLE) if index.isValid() else None
     entity = index.data(ENTITY_ROLE) if index.isValid() else None
     ids = tuple(MAP.get(kind, ()))
+    if kind in {"study", "mesh_convergence_study"} and isinstance(
+        entity, MeshConvergenceStudy
+    ):
+        ids = (
+            A.STUDY_EDIT, A.STUDY_VALIDATE, A.STUDY_RUN,
+            A.STUDY_CONVERGENCE_REPORT, A.DELETE_SELECTED,
+        )
     can_toggle = bool(
         visibility is not None and entity is not None and kind in VISIBILITY_KINDS
     )
