@@ -137,3 +137,67 @@ def test_every_refinement_level_becomes_a_real_job_linked_result():
     assert "_result_fields" not in project.resolve(study.id).run_history[0]["samples"][0]
     assert len(samples.calls) == 0 or samples.calls is not None
     assert progress == [1/len(study.mesh_scales)]
+
+
+def test_live_monitor_adds_curves_and_opens_real_solver_results():
+    from PyQt6.QtWidgets import QWidget
+    from opencae.model.entities.jobs import ResultSet, ResultStatus
+    from opencae.ui.monitors.mesh_convergence_job_monitor import MeshConvergenceJobMonitor
+
+    app = QApplication.instance() or QApplication([])
+    project = Project(name="Convergence monitor")
+    study = MeshConvergenceStudy(name="Study")
+    job = Job(
+        name="Study Job", source_ref=EntityRef.of(study, "Study"),
+        source_kind=JobSourceKind.STUDY,
+    )
+    project.studies.append(study)
+    project.jobs.append(job)
+    project.rebuild_index(strict=True)
+
+    class Store:
+        def __init__(self):
+            self.project = project
+            self.changed = _Signal()
+
+    class Parent(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.opened = []
+        def show_solution(self, result):
+            self.opened.append(result)
+
+    parent = Parent()
+    store = Store()
+    monitor = MeshConvergenceJobMonitor(store, job.id, parent)
+    try:
+        assert monitor.tabs.count() == 0
+        for level, displacement in enumerate((3.0, 3.2), start=1):
+            monitor.sample_added(job.id, dict(
+                level=level, elements=100*level,
+                metrics={"tip::node:7": dict(
+                    value=displacement, field="DISP",
+                    component="Magnitude", metric_name="Tip displacement",
+                )},
+            ))
+        assert monitor.tabs.count() == 1
+        assert monitor._measurements["tip::node:7"] == [
+            (100.0, 3.0), (200.0, 3.2),
+        ]
+        level_result = ResultSet(
+            name="Refinement level 2",
+            job_ref=EntityRef.of(job, "Job"),
+            source_file="/tmp/level-02/results.frd",
+            status=ResultStatus.AVAILABLE,
+        )
+        project.results.append(level_result)
+        job.result_refs.append(EntityRef.of(level_result, "ResultSet"))
+        project.rebuild_index(strict=True)
+        monitor._refresh_results()
+        assert monitor.results.isEnabled()
+        monitor._open_results()
+        assert parent.opened == [level_result]
+    finally:
+        monitor.close()
+        parent.close()
+        app.processEvents()
