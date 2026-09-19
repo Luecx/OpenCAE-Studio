@@ -293,6 +293,11 @@ class ResultsPage(QWidget):
             self._path_editor.activateWindow()
             return
         self.path_button.menu().hide()
+        # Path waypoint picking temporarily owns the existing Results node
+        # query gesture. Keep its toolbar toggle state synchronized.
+        for button in (self.query_nodes, self.query_elements):
+            if button.isChecked():
+                button.setChecked(False)
         dialog = PathEditorDialog(
             self.result, self.store, self.loader,
             self.window(), path_index=index, viewport=self._path_viewport,
