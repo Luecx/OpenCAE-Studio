@@ -155,7 +155,7 @@ def evaluate_all_metrics(source, study, loader=None):
             request = SimpleNamespace(field_name="DISP", step_id=study.step_id)
             block = _block(loader, source, request)
             values = np.asarray([
-                row for row in block.values.values()
+                row[:len(block.components)] for row in block.values.values()
                 if len(row) >= len(block.components)
             ], dtype=float)
             if not len(values):
