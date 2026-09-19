@@ -120,78 +120,87 @@ def evaluate_result(source, study, loader=None):
     )
 
 
+# Only displacement is currently exposed by the Study editor. The original
+# selected node IDs are descriptive; evaluation is tied to original positions.
 def metric_definitions(study):
-    """Return explicit controls, or one backward-compatible legacy control."""
-    if study.metrics:
-        return [dict(spec) for spec in study.metrics]
-    return [dict(
-        id="legacy", name=f"{study.field_name} {study.component}",
-        kind="field", field_name=study.field_name, component=study.component,
-        metric=study.metric, probe_position=list(study.probe_position),
-    )]
+    return [dict(spec) for spec in study.metrics] or [{
+        "id": "displacement-control", "kind": "displacement_control",
+        "name": "Displacement Control", "component": "Magnitude", "nodes": [],
+    }]
 
 
 def evaluate_all_metrics(source, study, loader=None):
-    """Evaluate every control independently at the same physical location(s).
-
-    Original node IDs are labels only, never lookup keys on a refined mesh.
-    Invalid probes fail the entire level rather than silently substituting zero.
-    """
     from types import SimpleNamespace
 
     loader = loader or FrdLoader()
     controls = metric_definitions(study)
-    if len({spec["id"] for spec in controls}) != len(controls):
-        raise ValueError("Convergence metric IDs must be unique")
     results = {}
     primary = None
+    identifiers = set()
     for spec in controls:
+        if spec.get("kind") != "displacement_control":
+            raise ValueError("Only Displacement Controls are supported")
         metric_id = str(spec["id"])
-        if spec.get("kind") == "displacement_control":
-            nodes = list(spec.get("nodes", ()))
-            if not nodes:
-                raise ValueError(f"Displacement control {spec.get('name')} has no nodes")
-            for node in nodes:
-                pos = tuple(float(x) for x in node["position"])
-                local = SimpleNamespace(
-                    field_name="DISP", component=spec.get("component", "Magnitude"),
-                    step_id=study.step_id, metric="probe",
-                    probe_position=pos, exclude_center=study.exclude_center,
-                    exclude_radius=study.exclude_radius,
-                )
-                value = evaluate_result(source, local, loader)
-                instance_id = str(node.get("instance_id", ""))
-                key = (
-                    f"{metric_id}:instance:{instance_id}:node:{int(node['node_id'])}"
-                    if instance_id else f"{metric_id}:node:{int(node['node_id'])}"
-                )
-                value["metric_id"] = key
-                value["metric_name"] = (
-                    f"{spec.get('name', 'Displacement')} — "
-                    f"{node.get('instance_name', 'Part')}.Node-{int(node['node_id'])}"
-                )
-                results[key] = value
-                if primary is None:
-                    primary = value
-        else:
-            local = SimpleNamespace(
-                field_name=spec.get("field_name", study.field_name),
-                component=spec.get("component", study.component),
-                step_id=study.step_id, metric=spec.get("metric", study.metric),
-                probe_position=tuple(spec.get("probe_position", study.probe_position)),
-                exclude_center=study.exclude_center, exclude_radius=study.exclude_radius,
+        if metric_id in identifiers:
+            raise ValueError("Duplicate Displacement Control ID")
+        identifiers.add(metric_id)
+        component = str(spec.get("component", "Magnitude"))
+        if component not in ("Magnitude", "D1", "D2", "D3", "D4", "D5", "D6"):
+            raise ValueError(f"Unsupported displacement component: {component}")
+        nodes = list(spec.get("nodes", ()))
+        if not nodes:
+            # A global displacement maximum is meaningful without specifying a
+            # node. Unlike a singular stress peak, it can be a refinement metric.
+            data = loader.read(source)
+            request = SimpleNamespace(field_name="DISP", step_id=study.step_id)
+            block = _block(loader, source, request)
+            values = np.asarray([
+                row for row in block.values.values()
+                if len(row) >= len(block.components)
+            ], dtype=float)
+            if not len(values):
+                raise ValueError("No nodal displacements in this solver frame")
+            if component not in block.components and component != "Magnitude":
+                raise ValueError(f"Component {component} unavailable in DISP frame")
+            scalars = _primitive_scalar(block.components, values, component)
+            valid = scalars[np.isfinite(scalars)]
+            if not len(valid):
+                raise ValueError("No finite nodal displacements in solver frame")
+            value = dict(
+                source_file=str(source), elements=len(data.elements),
+                nodes=len(data.nodes), frame_id=int(block.frame_id),
+                frame_value=float(block.frame_value), samples=len(valid),
+                value=float(np.max(valid)), field="DISP", component=component,
+                metric="displacement_max", metric_id=metric_id,
+                metric_name=f"{spec.get('name', 'Displacement')} — Global maximum",
             )
-            value = evaluate_result(source, local, loader)
-            value["metric_id"] = metric_id
-            value["metric_name"] = spec.get("name", metric_id)
             results[metric_id] = value
             if primary is None:
                 primary = value
+            continue
+        for node in nodes:
+            position = tuple(float(v) for v in node["position"])
+            request = SimpleNamespace(
+                field_name="DISP", component=component, step_id=study.step_id,
+                metric="probe", probe_position=position,
+                exclude_center=(0., 0., 0.), exclude_radius=0.,
+            )
+            value = evaluate_result(source, request, loader)
+            instance = str(node.get("instance_id", ""))
+            key = f"{metric_id}:{instance}:node:{int(node['node_id'])}"
+            if key in results:
+                raise ValueError(f"Duplicate monitoring node {key}")
+            value["metric_id"] = key
+            value["metric_name"] = (
+                f"{spec.get('name', 'Displacement')} — "
+                f"{node.get('label', 'Node-' + str(node['node_id']))}"
+            )
+            results[key] = value
+            if primary is None:
+                primary = value
     if primary is None:
-        raise ValueError("No convergence metrics are configured")
-    sample = dict(primary)
-    sample["metrics"] = results
-    return sample
+        raise ValueError("No displacement control measurements available")
+    return {**primary, "metrics": results}
 
 
 def assess_all_metrics(samples, tolerance):
