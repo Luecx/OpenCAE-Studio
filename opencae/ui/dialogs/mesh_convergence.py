@@ -34,21 +34,26 @@ _DISPLACEMENT_COMPONENTS = ("Magnitude", "D1", "D2", "D3", "D4", "D5", "D6")
 
 
 def _nodes_from_definition(definition):
-    values = []
+    values = {}
     for item in definition.items:
         operand = item.operand
         if not isinstance(operand, MeshNodeOperand):
             raise ValueError("Only individual mesh nodes are valid in a Displacement Control")
         if item.picked_position is None:
             raise ValueError("Selected node has no original spatial position")
-        values.append({
+        entry = {
             "node_id": operand.node_id,
             "owner_id": operand.owner_ref.entity_id,
             "instance_id": operand.instance_ref.entity_id if operand.instance_ref else "",
             "position": list(item.picked_position),
             "label": item.display_label or f"Node-{operand.node_id}",
-        })
-    return values
+        }
+        # RegionSelectionItems from reopened Studies can carry a different
+        # mesh_revision than newly picked hits. Their stable physical identity
+        # here is (owner, instance, original node ID), not that revision.
+        key = (entry["owner_id"], entry["instance_id"], entry["node_id"])
+        values[key] = entry
+    return list(values.values())
 
 
 def _node_definition(nodes):
