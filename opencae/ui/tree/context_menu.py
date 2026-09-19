@@ -119,7 +119,7 @@ def show_context_menu(view, pos, index, actions, store, visibility=None):
     ):
         ids = (
             A.STUDY_EDIT, A.STUDY_VALIDATE, A.STUDY_RUN,
-            A.STUDY_CONVERGENCE_REPORT, A.DELETE_SELECTED,
+            A.DELETE_SELECTED,
         )
     can_toggle = bool(
         visibility is not None and entity is not None and kind in VISIBILITY_KINDS
