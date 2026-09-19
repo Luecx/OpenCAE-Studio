@@ -81,6 +81,16 @@ def study_errors(project, study_id, settings=None, solvers=None) -> list[str]:
                 errors.append(f"Part {part.name} requires a default mesh-size seed")
         if not project.parts or not any(part.geometry for part in project.parts):
             errors.append("The Study needs at least one meshed CAD Part")
+        if isinstance(analysis, Analysis) and solvers is not None:
+            adapter = solvers.get(analysis.solver)
+            if adapter is not None and not any(
+                candidate.suffix.casefold() == ".frd"
+                for candidate in adapter.result_candidates(Path("probe"))
+            ):
+                errors.append(
+                    f"Solver {analysis.solver} does not expose FRD results; "
+                    "this Study requires an FRD-producing solver"
+                )
         if isinstance(analysis, Analysis) and settings is not None and solvers is not None:
             errors.extend(analysis_errors(project, analysis.id, settings, solvers))
         return list(dict.fromkeys(errors))
