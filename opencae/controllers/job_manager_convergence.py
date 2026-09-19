@@ -18,7 +18,6 @@ from opencae.model.entities.studies import MeshConvergenceStudy
 from opencae.results.mesh_convergence import assess_convergence, assess_all_metrics
 
 from .job_manager_factory import create_job, job_directory, utc_now
-from .job_manager_results import persist_result
 from .project_sessions import run_for_entity
 
 
@@ -105,6 +104,7 @@ def run_convergence(manager, study_id):
         )
     )
     manager._start_job(job.id, "Mesh Convergence")
+    manager.open_selected_monitor()
     runner.start()
 
 
@@ -123,11 +123,47 @@ def record_sample(manager, job_id, study_id, sample):
     record = _history_record(candidate, job_id)
     if record is None:
         return
-    record["samples"].append(dict(sample))
+    clean = dict(sample)
+    fields = clean.pop("_result_fields", ())
+    record["samples"].append(clean)
     manager.store.replace_entity(
-        f"Saved convergence level {sample['level']}",
+        f"Saved convergence level {clean['level']}",
         manager.store.project.id, "studies", candidate,
     )
+
+    # A level must be an ordinary solver ResultSet, not a metadata-only study
+    # summary. Persist it immediately so Open Results and the left-hand tree
+    # work during the run, after cancellation, and after reopening the project.
+    project = manager.store.project
+    job = project.try_resolve(job_id)
+    if isinstance(job, Job):
+        result = ResultSet(
+            name=f"{study.name} — Level {clean['level']} "
+                 f"({clean['elements']} elements)",
+            job_ref=EntityRef.of(job, "Job"),
+            source_file=str(clean["source_file"]),
+            status=ResultStatus.AVAILABLE,
+            fields=list(fields),
+            metadata={
+                "result_kind": "solver",
+                "study_id": study_id,
+                "job_id": job_id,
+                "mesh_level": int(clean["level"]),
+                "mesh_scale": float(clean["seed_scale"]),
+            },
+        )
+        manager.store.add_entity(
+            f"Added convergence result level {clean['level']}",
+            project.id, "results", result,
+        )
+        live_job = manager.store.project.resolve(job_id)
+        updated_job = deepcopy(live_job)
+        updated_job.result_refs.append(EntityRef.of(result, "ResultSet"))
+        manager.store.replace_entity(
+            f"Linked convergence result level {clean['level']}",
+            manager.store.project.id, "jobs", updated_job,
+        )
+    manager.convergence_sample.emit(job_id, clean)
     manager._update_progress(
         job_id,
         len(record["samples"]) / max(len(candidate.mesh_scales), 1),
@@ -172,24 +208,6 @@ def finish_convergence(manager, job_id, study_id, status, message):
     manager._replace_job(candidate_job, f"Finished {job.name}")
     if message:
         manager._study_output(job_id, message)
-    if isinstance(study, MeshConvergenceStudy):
-        record = _history_record(study, job_id)
-        if record is not None and record["samples"]:
-            result = ResultSet(
-                name=f"{study.name} — Mesh Convergence",
-                job_ref=EntityRef.of(job, "Job"),
-                source_file="",
-                status=ResultStatus.AVAILABLE,
-                metadata={
-                    "result_kind": "mesh_convergence",
-                    "study_id": study.id,
-                    "job_id": job_id,
-                    "samples": deepcopy(record["samples"]),
-                    "metric_diagnostics": deepcopy(record.get("metric_diagnostics", {})),
-                    "diagnostic": record.get("diagnostic", ""),
-                },
-            )
-            persist_result(manager.store, job_id, result)
     manager.progress_changed.emit(
         job_id, candidate_job.progress, candidate_job.progress_label
     )
