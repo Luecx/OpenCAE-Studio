@@ -17,7 +17,7 @@ from opencae.geometry import GeometryService
 from opencae.geometry.element_controls_apply import apply_all_controls
 from opencae.jobs import AnalysisJobRunner
 from opencae.model.entities.mesh import DefaultSeed
-from opencae.results.mesh_convergence import evaluate_all_metrics
+from opencae.results.mesh_convergence import evaluate_all_metrics, assess_all_metrics
 from opencae.results.frd_loader import FrdLoader
 
 
@@ -69,6 +69,7 @@ class MeshConvergenceRunner(QObject):
         self.directory = Path(directory)
         self.deck_profile = deepcopy(deck_profile)
         self._level = 0
+        self._samples = []
         self._mesh_task = None
         self._sample_task = None
         self._analysis = None
@@ -93,12 +94,12 @@ class MeshConvergenceRunner(QObject):
         if self._stopping:
             self._finish("Cancelled", "Mesh Convergence Study cancelled")
             return
-        if self._level >= len(self.study.mesh_scales):
+        if self._level >= self.study.max_iterations:
             self._finish("Completed", "All mesh levels evaluated")
             return
-        scale = float(self.study.mesh_scales[self._level])
+        scale = float(self.study.mesh_scaling_factor) ** self._level
         self.progress.emit(
-            self._level / len(self.study.mesh_scales),
+            self._level / self.study.max_iterations,
             f"Meshing level {self._level + 1}/{len(self.study.mesh_scales)}",
         )
         self.output.emit(
@@ -125,7 +126,7 @@ class MeshConvergenceRunner(QObject):
         self._analysis = runner
         runner.output.connect(self.output)
         runner.progress.connect(lambda value, label: self.progress.emit(
-            (self._level + value) / len(self.study.mesh_scales), label
+            (self._level + value) / self.study.max_iterations, label
         ))
         runner.finished.connect(self._solver_finished)
         runner.start()
@@ -168,7 +169,8 @@ class MeshConvergenceRunner(QObject):
         self._sample_task = None
         sample = dict(sample)
         sample["level"] = self._level + 1
-        sample["seed_scale"] = float(self.study.mesh_scales[self._level])
+        sample["seed_scale"] = float(self.study.mesh_scaling_factor) ** self._level
+        self._samples.append(sample)
         self.sample_ready.emit(sample)
         lines = [
             f"Level {sample['level']}: {sample['elements']} elements "
@@ -181,6 +183,14 @@ class MeshConvergenceRunner(QObject):
             )
         self.output.emit("\n".join(lines) + "\n")
         self._level += 1
+        assessment = assess_all_metrics(
+            self._samples, float(self.study.relative_tolerance)
+        )
+        if (len(self._samples) >= 3 and assessment
+                and all("within tolerance" in message
+                        for message in assessment.values())):
+            self._finish("Completed", "All displacement metrics are within tolerance")
+            return
         self._advance()
 
     def _failed(self, error):
