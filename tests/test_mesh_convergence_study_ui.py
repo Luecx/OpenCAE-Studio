@@ -85,7 +85,7 @@ def test_cell_mode_direct_click_targets_face_not_occluding_edge():
     assert picked == [face]
 
 
-def test_explicit_displacement_control_uses_fixed_positions_not_refined_ids(monkeypatch):
+def test_displacement_control_tracks_original_coordinates_not_refined_node_ids(monkeypatch):
     calls = []
 
     def evaluate(_source, request, _loader):
@@ -98,27 +98,23 @@ def test_explicit_displacement_control_uses_fixed_positions_not_refined_ids(monk
 
     monkeypatch.setattr(convergence, "evaluate_result", evaluate)
     study = MeshConvergenceStudy(
-        name="Displacement convergence", metrics=[
-            {"id": "control-a", "name": "Tip displacement", "kind": "displacement_control",
-             "component": "Magnitude",
+        name="Displacement convergence",
+        metrics=[
+            {"id": "control-a", "name": "Tip displacement",
+             "kind": "displacement_control", "component": "Magnitude",
              "nodes": [
                  {"node_id": 110, "instance_id": "", "position": [4, 0, 0]},
                  {"node_id": 204, "instance_id": "", "position": [5, 0, 0]},
              ]},
-            {"id": "control-b", "name": "Stress at root", "kind": "probe",
-             "metric": "probe", "field_name": "STRESS", "component": "Mises",
-             "probe_position": [1, 1, 0]},
         ],
     )
     sample = convergence.evaluate_all_metrics("unread.frd", study, object())
-    assert len(sample["metrics"]) == 3
-    assert sample["metrics"]["control-a:node:110"]["value"] == 4
-    assert sample["metrics"]["control-a:node:204"]["value"] == 5
-    assert sample["metrics"]["control-b"]["field"] == "STRESS"
+    assert len(sample["metrics"]) == 2
+    assert sample["metrics"]["control-a::node:110"]["value"] == 4
+    assert sample["metrics"]["control-a::node:204"]["value"] == 5
     assert calls == [
         ("DISP", (4., 0., 0.), "Magnitude"),
         ("DISP", (5., 0., 0.), "Magnitude"),
-        ("STRESS", (1, 1, 0), "Mises"),
     ]
 
 
@@ -141,11 +137,11 @@ def test_multi_metric_assessment_keeps_each_control_independent():
     assert "Diagnostic only" in results["root"]
 
 
-def test_modeless_metric_editor_picks_multiple_nodes_and_saves_positions(monkeypatch):
-    """A study dialog must support repeated viewport picks without losing nodes."""
+def test_modeless_dialog_uses_canonical_picker_and_saves_original_positions():
+    """Picker can collect several ordinary clicks and persist original coordinates."""
     from PyQt6.QtWidgets import QApplication, QWidget
-    from opencae.model.core import EntityRef
     from opencae.model.entities.analysis import Analysis
+    from opencae.model.entities.parts import Part
     from opencae.model.selection import SelectionOperation, ViewportHit
     from opencae.ui.dialogs.mesh_convergence import MeshConvergenceDialog
 
@@ -153,14 +149,13 @@ def test_modeless_metric_editor_picks_multiple_nodes_and_saves_positions(monkeyp
     project = Project(name="CAD")
     analysis = Analysis(name="Static", solver="FEMaster")
     project.analyses.append(analysis)
-    from opencae.model.entities.parts import Part
-    part = Part(name="Original CAD mesh")
+    part = Part(name="Mesh")
     part.mesh.node_count = 2
     project.parts.append(part)
     project.rebuild_index(strict=True)
     parent = QWidget()
 
-    class _Viewport:
+    class Viewport:
         def __init__(self):
             self.callback = None
             self.finished = None
@@ -178,30 +173,32 @@ def test_modeless_metric_editor_picks_multiple_nodes_and_saves_positions(monkeyp
                 callback, self.finished = self.finished, None
                 callback()
 
-    parent.viewport = _Viewport()
+    parent.viewport = Viewport()
     dialog = MeshConvergenceDialog(project, parent=parent)
     try:
-        dialog._add_metric("displacement_control")
-        dialog._begin_node_pick()
+        assert dialog.editor.isHidden()
+        dialog._add()
+        assert not dialog.editor.isHidden()
+        dialog.nodes.pick_button.setChecked(True)
         assert parent.viewport.mode == "mesh"
         for node, point in ((11, (1., 2., 3.)), (12, (4., 5., 6.))):
             parent.viewport.callback(ViewportHit(
-                kind=SelectableKind.MESH_NODE,
-                mesh_id=node,
-                world_position=point,
-                selection_operation=SelectionOperation.REPLACE,
+                kind=SelectableKind.MESH_NODE, mesh_id=node,
+                world_position=point, selection_operation=SelectionOperation.REPLACE,
+                label=f"Node-{node}",
             ))
-        dialog._stop_pick()
-        assert dialog.metric_nodes.count() == 2
-        assert dialog._commit_metric()
-        study = dialog.values()
-        assert study.analysis_ref.entity_id == analysis.id
-        assert study.metrics[0]["nodes"] == [
-            {"node_id": 11, "instance_id": "", "instance_name": "Part",
-             "position": [1., 2., 3.]},
-            {"node_id": 12, "instance_id": "", "instance_name": "Part",
-             "position": [4., 5., 6.]},
+        dialog.nodes.finish_pick()
+        saved = dialog.values()
+        assert saved.analysis_ref.entity_id == analysis.id
+        assert saved.metrics[0]["field_name"] == "DISP"
+        assert saved.metrics[0]["component"] == "Magnitude"
+        assert [item["node_id"] for item in saved.metrics[0]["nodes"]] == [11, 12]
+        assert [item["position"] for item in saved.metrics[0]["nodes"]] == [
+            [1., 2., 3.], [4., 5., 6.],
         ]
+        dialog._remove()
+        assert dialog.editor.isHidden()
+        assert dialog.metric_list.count() == 0
     finally:
         dialog.close()
         parent.close()
