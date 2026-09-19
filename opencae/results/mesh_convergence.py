@@ -108,6 +108,91 @@ def evaluate_result(source, study, loader=None):
         field=study.field_name, component=study.component,
     )
 
+
+def metric_definitions(study):
+    """Return explicit controls, or one backward-compatible legacy control."""
+    if study.metrics:
+        return [dict(spec) for spec in study.metrics]
+    return [dict(
+        id="legacy", name=f"{study.field_name} {study.component}",
+        kind="field", field_name=study.field_name, component=study.component,
+        metric=study.metric, probe_position=list(study.probe_position),
+    )]
+
+
+def evaluate_all_metrics(source, study, loader=None):
+    """Evaluate every control independently at the same physical location(s).
+
+    Original node IDs are labels only, never lookup keys on a refined mesh.
+    Invalid probes fail the entire level rather than silently substituting zero.
+    """
+    from types import SimpleNamespace
+
+    loader = loader or FrdLoader()
+    controls = metric_definitions(study)
+    if len({spec["id"] for spec in controls}) != len(controls):
+        raise ValueError("Convergence metric IDs must be unique")
+    results = {}
+    primary = None
+    for spec in controls:
+        metric_id = str(spec["id"])
+        if spec.get("kind") == "displacement_control":
+            nodes = list(spec.get("nodes", ()))
+            if not nodes:
+                raise ValueError(f"Displacement control {spec.get('name')} has no nodes")
+            for node in nodes:
+                pos = tuple(float(x) for x in node["position"])
+                local = SimpleNamespace(
+                    field_name="DISP", component=spec.get("component", "Magnitude"),
+                    step_id=study.step_id, metric="probe",
+                    probe_position=pos, exclude_center=study.exclude_center,
+                    exclude_radius=study.exclude_radius,
+                )
+                value = evaluate_result(source, local, loader)
+                key = f"{metric_id}:node:{int(node['node_id'])}"
+                value["metric_id"] = key
+                value["metric_name"] = (
+                    f"{spec.get('name', 'Displacement')} — Node {int(node['node_id'])}"
+                )
+                results[key] = value
+                if primary is None:
+                    primary = value
+        else:
+            local = SimpleNamespace(
+                field_name=spec.get("field_name", study.field_name),
+                component=spec.get("component", study.component),
+                step_id=study.step_id, metric=spec.get("metric", study.metric),
+                probe_position=tuple(spec.get("probe_position", study.probe_position)),
+                exclude_center=study.exclude_center, exclude_radius=study.exclude_radius,
+            )
+            value = evaluate_result(source, local, loader)
+            value["metric_id"] = metric_id
+            value["metric_name"] = spec.get("name", metric_id)
+            results[metric_id] = value
+            if primary is None:
+                primary = value
+    if primary is None:
+        raise ValueError("No convergence metrics are configured")
+    sample = dict(primary)
+    sample["metrics"] = results
+    return sample
+
+
+def assess_all_metrics(samples, tolerance):
+    """Describe every metric independently; one passing metric cannot mask another."""
+    if not samples:
+        return {}
+    keys = tuple(samples[0].get("metrics", {}))
+    report = {}
+    for key in keys:
+        values = [sample.get("metrics", {}).get(key) for sample in samples]
+        if any(value is None for value in values):
+            report[key] = "Incomplete metric series"
+            continue
+        metric = values[0].get("metric", "")
+        report[key] = assess_convergence(values, tolerance, metric)
+    return report
+
 def assess_convergence(samples, tolerance, metric):
     """Conservatively qualify terminal relative changes, not exact FE error."""
     if not samples:
