@@ -224,7 +224,7 @@ class ResultsPage(QWidget):
             return
         dialog = PathEditorDialog(self.result, self.store, self.loader, self)
         dialog.exec()
-        self.result = dialog.result
+        self.result = dialog.target_result
         self.paths_updated.emit(self.result)
 
     def _open_plot(self):
