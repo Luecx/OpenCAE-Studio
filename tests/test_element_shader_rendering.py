@@ -115,7 +115,7 @@ def test_wedge15_reorders_top_and_vertical_mid_edge_nodes_for_i2_basis():
     ]]
 
 
-def test_frd_hex20_normalizes_to_vtk_then_matches_official_cellgrid():
+def test_frd_hex20_normalizes_to_vtk_then_cellgrid_basis():
     import pyvista as pv
     from vtkmodules.vtkFiltersCellGrid import vtkUnstructuredGridToCellGrid
 
@@ -145,17 +145,20 @@ def test_frd_hex20_normalizes_to_vtk_then_matches_official_cellgrid():
     converter.Update()
     pdc = converter.GetOutputDataObject(0)
     official = pdc.GetPartitionedDataSet(0).GetPartitionAsDataObject(0)
-    official_conn = vtk_to_numpy(
-        official.GetAttributes("vtkDGHex").GetScalars()
-    ).reshape(-1, 20)
-
-    assert ours_conn.tolist() == official_conn.tolist()
-    assert ours_conn.tolist() == [[
+    expected_basis_order = [[
         0, 1, 2, 3, 4, 5, 6, 7,
         8, 9, 10, 11,
         16, 17, 18, 19,
         12, 13, 14, 15,
     ]]
+    # This verifies our ordering independently of converter support. Some
+    # packaged VTK versions report quadratic HEX as an unhandled input cell,
+    # so their official converter cannot serve as a reference in those builds.
+    assert ours_conn.tolist() == expected_basis_order
+    official_array = official.GetAttributes("vtkDGHex").GetScalars()
+    if official_array is not None:
+        official_conn = vtk_to_numpy(official_array).reshape(-1, 20)
+        assert ours_conn.tolist() == official_conn.tolist()
 
 
 def test_frd_wedge15_normalizes_back_to_vtk_order():
