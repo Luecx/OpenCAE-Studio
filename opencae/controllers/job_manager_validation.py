@@ -10,6 +10,9 @@ from opencae.deck_formats.selection import (
 )
 from opencae.model.entities.analysis import Analysis
 from opencae.model.entities.optimization import TopologyOptimization
+from opencae.model.entities.studies import MeshConvergenceStudy
+from opencae.model.entities.mesh import DefaultSeed
+from opencae.results.mesh_convergence import METRICS
 from opencae.model.validation import validate_project
 from opencae.optimization import validate_topology_optimization
 
@@ -52,9 +55,35 @@ def analysis_errors(project, analysis_id, settings, solvers) -> list[str]:
     return list(dict.fromkeys(errors))
 
 
-def study_errors(project, study_id) -> list[str]:
-    """Return validation errors for one executable topology Study."""
+def study_errors(project, study_id, settings=None, solvers=None) -> list[str]:
+    """Validate topology or an automatic mesh-convergence study."""
     study = project.try_resolve(study_id)
+    if isinstance(study, MeshConvergenceStudy):
+        errors = []
+        analysis = project.try_resolve(study.analysis_ref)
+        if not isinstance(analysis, Analysis):
+            errors.append("Choose a valid Analysis")
+        if not study.field_name or not study.component or study.step_id < 1:
+            errors.append("Specify a valid FRD field, component and Step ID")
+        if study.metric not in METRICS:
+            errors.append("Choose a supported convergence metric")
+        scales = study.mesh_scales
+        if len(scales) < 3 or any(scale <= 0 for scale in scales) or any(
+            a <= b for a, b in zip(scales, scales[1:])
+        ):
+            errors.append("Specify at least three strictly decreasing positive mesh scales")
+        if not 0 < study.relative_tolerance < 1 or study.exclude_radius < 0:
+            errors.append("Tolerance must be between 0 and 1; exclusion radius nonnegative")
+        for part in project.parts:
+            if part.mesh.element_count and not part.geometry:
+                errors.append(f"Orphan-mesh Part {part.name} cannot be remeshed")
+            if part.geometry and not any(isinstance(seed, DefaultSeed) for seed in part.mesh.seeds):
+                errors.append(f"Part {part.name} requires a default mesh-size seed")
+        if not project.parts or not any(part.geometry for part in project.parts):
+            errors.append("The Study needs at least one meshed CAD Part")
+        if isinstance(analysis, Analysis) and settings is not None and solvers is not None:
+            errors.extend(analysis_errors(project, analysis.id, settings, solvers))
+        return list(dict.fromkeys(errors))
     if not isinstance(study, TopologyOptimization):
         return ["Select an executable Study"]
 
