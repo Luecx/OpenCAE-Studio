@@ -58,6 +58,9 @@ class PathEditorDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.waypoints, 1)
         layout.addWidget(self.pick)
+        self.undo_node = ButtonFormAction("Undo last node")
+        self.undo_node.clicked.connect(self._undo_node)
+        layout.addWidget(self.undo_node)
         root.addWidget(field_block("Waypoint nodes (in order)", row))
         self.default_x = SelectForm()
         self.default_x.addItem("Distance", "distance")
@@ -98,10 +101,16 @@ class PathEditorDialog(QDialog):
             self.waypoints.setText(", ".join(map(str, self._waypoints)))
         self._preview()
 
+    def _undo_node(self, _checked=False):
+        if self._waypoints:
+            self._waypoints.pop()
+            self.waypoints.setText(", ".join(map(str, self._waypoints)))
+            self._preview()
+
     def _preview(self):
         if self.viewport is None:
             return
-        if len(self._waypoints) < 2:
+        if not self._waypoints:
             self.viewport.clear_result_path_preview()
             return
         try:
@@ -109,6 +118,12 @@ class PathEditorDialog(QDialog):
                 self._coordinates, self._adjacency = mesh_graph(
                     self.target_result.source_file, self.loader
                 )
+            if len(self._waypoints) == 1:
+                self.viewport.show_result_path_preview(
+                    self._coordinates, tuple(self._waypoints)
+                )
+                self.description.setText("Pick another node to build a path.")
+                return
             path = create_mesh_path(self.name.text().strip() or "Path",
                                     self._waypoints, self._coordinates, self._adjacency,
                                     self.default_x.currentData())
