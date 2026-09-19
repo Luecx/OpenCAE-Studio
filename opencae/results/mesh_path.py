@@ -6,8 +6,6 @@ Dijkstra's shortest Euclidean edge path; element interiors are never shortcuts.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha256
-from json import dumps
 from heapq import heappop, heappush
 from math import dist, isfinite
 from pathlib import Path
@@ -24,7 +22,7 @@ class MeshPath:
     waypoints: tuple[int, ...]
     node_ids: tuple[int, ...]
     distances: tuple[float, ...]
-    mesh_signature: str = ""
+    default_x_axis: str = "distance"
 
     def as_dict(self) -> dict:
         return {
@@ -32,7 +30,7 @@ class MeshPath:
             "waypoints": list(self.waypoints),
             "node_ids": list(self.node_ids),
             "distances": list(self.distances),
-            "mesh_signature": self.mesh_signature,
+            "default_x_axis": self.default_x_axis,
         }
 
     @classmethod
@@ -42,7 +40,7 @@ class MeshPath:
             waypoints=tuple(int(x) for x in value["waypoints"]),
             node_ids=tuple(int(x) for x in value["node_ids"]),
             distances=tuple(float(x) for x in value["distances"]),
-            mesh_signature=str(value.get("mesh_signature", "")),
+            default_x_axis=str(value.get("default_x_axis", "distance")),
         )
 
 
@@ -131,7 +129,9 @@ def shortest_edge_path(adjacency, start, end):
     raise ValueError(f"No connected mesh-edge route between nodes {start} and {end}")
 
 
-def create_mesh_path(name, waypoints, coordinates, adjacency):
+def create_mesh_path(name, waypoints, coordinates, adjacency, default_x_axis='distance'):
+    if default_x_axis not in {"distance", "node_id"}:
+        raise ValueError("Path X must be distance or node ID")
     anchors = tuple(int(x) for x in waypoints)
     if not name.strip() or len(anchors) < 2:
         raise ValueError("A path needs a name and at least two waypoint node IDs")
@@ -144,7 +144,7 @@ def create_mesh_path(name, waypoints, coordinates, adjacency):
     distances = [0.0]
     for a, b in zip(ordered, ordered[1:]):
         distances.append(distances[-1] + dist(coordinates[a], coordinates[b]))
-    return MeshPath(name.strip(), anchors, tuple(ordered), tuple(distances))
+    return MeshPath(name.strip(), anchors, tuple(ordered), tuple(distances), default_x_axis)
 
 
 def stored_paths(result):
