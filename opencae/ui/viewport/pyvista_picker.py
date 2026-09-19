@@ -115,8 +115,11 @@ class PyVistaPicker:
             return False
         cursor = cursor[:2]
 
-        picked_actor, picked_depth = self._depth_pick(cursor)
         mode = self.owner.selection_mode
+        picked_actor, picked_depth = (
+            (None, None) if mode in {"face", "cell"}
+            else self._depth_pick(cursor)
+        )
         actor = None
         if mode == "point":
             actor, _distance = self._nearest_point_actor(
@@ -136,9 +139,6 @@ class PyVistaPicker:
                 picked_actor,
                 picked_depth,
             )
-
-        elif mode in {"face", "cell"}:
-            actor = self._face_pick(cursor)
 
         if mode in {"face", "cell"} or (
             mode == "auto"
