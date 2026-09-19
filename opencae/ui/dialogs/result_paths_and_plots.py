@@ -14,6 +14,7 @@ from opencae.ui.primitives.inputs import InputFormText
 from opencae.ui.primitives.selects import SelectForm
 from opencae.ui.primitives.buttons import ButtonFormAction
 from opencae.ui.templates import dialog_layout, dialog_buttons, field_block
+from opencae.ui.templates import dialog_layout, dialog_buttons, field_block
 
 from PyQt6.QtWidgets import (
     QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
@@ -33,50 +34,38 @@ def _error(parent, title, exc):
 
 
 class PathEditorDialog(QDialog):
-    """Edit one persisted mesh-edge path with the shared Results node picker."""
+    """One persisted path with drag-safe Results node picker and live route preview."""
 
-    def __init__(self, result, store, loader, parent=None, *, path_index=None,
-                 viewport=None):
+    def __init__(self, result, store, loader, parent=None, *, path_index=None, viewport=None):
         super().__init__(parent)
         self.setWindowTitle("Edit Path" if path_index is not None else "Add Path")
-        self.setMinimumWidth(520)
-        self.resize(590, 345)
+        self.resize(590, 360)
         self.target_result, self.store, self.loader = result, store, loader
-        self.viewport = viewport
-        self._path_index = path_index
+        self.viewport, self._path_index = viewport, path_index
         self._paths = list(stored_paths(result))
-        existing = (self._paths[path_index] if path_index is not None else None)
+        existing = self._paths[path_index] if path_index is not None else None
         self._waypoints = list(existing.waypoints) if existing else []
         self._coordinates = self._adjacency = None
         self._cancel_pick = None
         root = dialog_layout(self)
-        self.name = InputFormText(
-            existing.name if existing else f"Path-{len(self._paths) + 1}"
-        )
+        self.name = InputFormText(existing.name if existing else f"Path-{len(self._paths)+1}")
         root.addWidget(field_block("Name", self.name))
-        self.waypoints = InputFormText(
-            ", ".join(map(str, self._waypoints)), read_only=True,
-        )
+        self.waypoints = InputFormText(", ".join(map(str, self._waypoints)), read_only=True)
         self.pick = ButtonFormAction("Pick nodes")
         self.pick.setCheckable(True)
-        pick_row = QWidget(self)
-        pick_layout = QHBoxLayout(pick_row)
-        pick_layout.setContentsMargins(0, 0, 0, 0)
-        pick_layout.addWidget(self.waypoints, 1)
-        pick_layout.addWidget(self.pick)
-        root.addWidget(field_block("Waypoint nodes (in order)", pick_row))
+        row = QWidget(self)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.waypoints, 1)
+        layout.addWidget(self.pick)
+        root.addWidget(field_block("Waypoint nodes (in order)", row))
         self.default_x = SelectForm()
         self.default_x.addItem("Distance", "distance")
         self.default_x.addItem("Node ID", "node_id")
         if existing:
-            self.default_x.setCurrentIndex(
-                max(0, self.default_x.findData(existing.default_x_axis))
-            )
+            self.default_x.setCurrentIndex(max(0, self.default_x.findData(existing.default_x_axis)))
         root.addWidget(field_block("Path X axis", self.default_x))
-        self.description = QLabel(
-            "Pick two or more nodes. The route follows the shortest connected "
-            "FE-mesh edge path and is highlighted in the Results viewport."
-        )
+        self.description = QLabel("Pick two or more nodes in the Results viewport. The path follows mesh edges.")
         self.description.setWordWrap(True)
         root.addWidget(self.description)
         root.addStretch(1)
@@ -97,14 +86,12 @@ class PathEditorDialog(QDialog):
             return
         if self.viewport is None:
             self.pick.setChecked(False)
-            QMessageBox.warning(self, "Pick nodes", "No Results viewport is available")
+            QMessageBox.warning(self, "Pick nodes", "No Results viewport available")
             return
         self._cancel_pick = self.viewport.begin_result_path_pick(self._picked_node)
         self.pick.setText("Finish picking")
 
     def _picked_node(self, node_id):
-        # The displayed grid's logical node IDs match the source FRD. The
-        # ordinary Results query picker already resolves beam surface vertices.
         node_id = int(node_id)
         if not self._waypoints or self._waypoints[-1] != node_id:
             self._waypoints.append(node_id)
@@ -122,18 +109,11 @@ class PathEditorDialog(QDialog):
                 self._coordinates, self._adjacency = mesh_graph(
                     self.target_result.source_file, self.loader
                 )
-            candidate = create_mesh_path(
-                self.name.text().strip() or "Path",
-                self._waypoints, self._coordinates, self._adjacency,
-                self.default_x.currentData(),
-            )
-            self.viewport.show_result_path_preview(
-                self._coordinates, candidate.node_ids,
-            )
-            self.description.setText(
-                f"{len(candidate.node_ids)} path nodes; length "
-                f"{candidate.distances[-1]:.7g} (undeformed)."
-            )
+            path = create_mesh_path(self.name.text().strip() or "Path",
+                                    self._waypoints, self._coordinates, self._adjacency,
+                                    self.default_x.currentData())
+            self.viewport.show_result_path_preview(self._coordinates, path.node_ids)
+            self.description.setText(f"{len(path.node_ids)} nodes; length {path.distances[-1]:.7g} (undeformed).")
         except (OSError, ValueError, KeyError, RuntimeError) as exc:
             self.viewport.clear_result_path_preview()
             self.description.setText(str(exc))
@@ -144,11 +124,8 @@ class PathEditorDialog(QDialog):
                 self._coordinates, self._adjacency = mesh_graph(
                     self.target_result.source_file, self.loader
                 )
-            path = create_mesh_path(
-                self.name.text(), self._waypoints,
-                self._coordinates, self._adjacency,
-                self.default_x.currentData(),
-            )
+            path = create_mesh_path(self.name.text(), self._waypoints,
+                                    self._coordinates, self._adjacency, self.default_x.currentData())
             if any(other.name == path.name and i != self._path_index
                    for i, other in enumerate(self._paths)):
                 raise ValueError("A path with this name already exists")
@@ -160,12 +137,9 @@ class PathEditorDialog(QDialog):
             metadata["mesh_paths"] = [item.as_dict() for item in self._paths]
             candidate = deepcopy(self.target_result)
             candidate.metadata = metadata
-            if (self.store is not None and self.store.project.try_resolve(
-                    self.target_result.id) is not None):
-                self.store.replace_entity(
-                    f"Saved path {path.name}",
-                    self.store.project.id, "results", candidate,
-                )
+            if self.store is not None and self.store.project.try_resolve(self.target_result.id) is not None:
+                self.store.replace_entity(f"Saved path {path.name}",
+                                          self.store.project.id, "results", candidate)
                 self.target_result = self.store.project.resolve(candidate.id)
             else:
                 self.target_result.metadata = metadata
