@@ -398,10 +398,10 @@ class ConvergenceReportDialog(QDialog):
             )
         self.diagnostics.setText(
             f"Status: {run.get('status', 'Unknown')} — {conclusion}\n"
-            f"Exclusion radius: {run.get('exclude_radius', 0):g} | "
-            f"Completed levels: {len(samples)}. "
-            "This is a metric trend, not a certified numerical error estimate. "
-            "Use the associated FRD files to inspect localized peaks."
+            f"Completed mesh levels: {len(samples)}. "
+            "No automatic singularity detection or exclusion is applied. "
+            "This is a displacement trend, not a certified numerical error estimate. "
+            "Individual levels are available as ordinary Results in the browser."
         )
 
     def _export(self):
