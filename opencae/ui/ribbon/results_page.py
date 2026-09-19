@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.results import FrdLoader
-from opencae.results.mesh_path import stored_paths, mesh_graph
+from opencae.results.mesh_path import stored_paths
 from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
 from opencae.ui.primitives.buttons import ButtonFormAction
 from opencae.ui.templates import SectionHeading
@@ -276,7 +276,9 @@ class ResultsPage(QWidget):
             return
         try:
             path = stored_paths(self.result)[index]
-            positions, _adjacency = mesh_graph(self.result.source_file, self.loader)
+            # A stored path already contains its full node order. Avoid
+            # rebuilding the entire FE adjacency graph on every menu hover.
+            positions = self.loader.read(self.result.source_file).nodes
             viewport.show_result_path_preview(positions, path.node_ids)
         except (OSError, KeyError, ValueError, RuntimeError) as exc:
             viewport.clear_result_path_preview()
