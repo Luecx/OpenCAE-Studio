@@ -81,7 +81,21 @@ class MeshConvergenceDialog(QDialog):
         self.original = deepcopy(study) if isinstance(study, MeshConvergenceStudy) else MeshConvergenceStudy(
             name=f"Mesh Convergence-{len(project.studies) + 1}"
         )
-        self._metrics = deepcopy(self.original.metrics)
+        self._metrics = [
+            deepcopy(spec) for spec in self.original.metrics
+            if spec.get("kind") == "displacement_control"
+        ]
+        # Migrate controls saved before scoped node-owner metadata existed.
+        for spec in self._metrics:
+            for node in spec.get("nodes", ()):
+                if not node.get("owner_id"):
+                    instance = project.try_resolve(node.get("instance_id", ""))
+                    if instance is not None:
+                        part = project.try_resolve(instance.part_ref)
+                    else:
+                        part = project.parts[0] if len(project.parts) == 1 else None
+                    if part is not None:
+                        node["owner_id"] = part.id
         self._editing_metric = -1
         self._candidate = None
         self.setWindowTitle("Mesh Convergence Study")
