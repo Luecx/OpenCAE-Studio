@@ -364,7 +364,7 @@ class TimeManagerPlot(QWidget):
                 self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))
                 event.accept()
                 return
-            index = self._nearest_marker(event.position())
+            index = self._nearest_marker(event.position()) if self._interactive else None
             if index is not None:
                 self.frame_selected.emit(index)
                 event.accept()
