@@ -53,7 +53,12 @@ class PyVistaPicker:
             return
 
         try:
-            if mode == "point" and self.owner.display_mode == "mesh":
+            if mode == "point" and self.owner.display_mode == "mesh" and self.handles_direct_click():
+                # The viewport's drag-safe click routing owns mesh-node picking.
+                # PyVista's point-picking callback may fail to fire when a
+                # different surface/overlay wins the first hardware hit.
+                return
+            elif mode == "point" and self.owner.display_mode == "mesh":
                 self.owner.plotter.enable_point_picking(
                     callback=self.points.picked,
                     tolerance=_POINT_PICK_TOLERANCE,
@@ -102,8 +107,17 @@ class PyVistaPicker:
         return bool(
             self.owner.stage != "RESULTS"
             and self.owner.context_pick.active
-            and self.owner.display_mode == "geometry"
-            and self.owner.selection_mode in {"point", "edge", "auto", "face", "cell"}
+            and (
+                (
+                    self.owner.display_mode == "geometry"
+                    and self.owner.selection_mode in {"point", "edge", "auto", "face", "cell"}
+                )
+                or (
+                    self.owner.display_mode == "mesh"
+                    and self.owner.selection_mode == "point"
+                    and self.owner.context_pick.accepts(SelectableKind.MESH_NODE)
+                )
+            )
         )
 
     def pick_display_position(self, cursor):
@@ -114,6 +128,8 @@ class PyVistaPicker:
         if len(cursor) < 2 or not np.all(np.isfinite(cursor[:2])):
             return False
         cursor = cursor[:2]
+        if self.owner.display_mode == "mesh":
+            return self._pick_mesh_node(cursor)
 
         mode = self.owner.selection_mode
         picked_actor, picked_depth = (
@@ -157,6 +173,35 @@ class PyVistaPicker:
             return False
         self.picked_actor(actor)
         return True
+
+    def _pick_mesh_node(self, cursor):
+        """Pick a visible FE node on a normal click without requiring a PyVista callback."""
+        try:
+            from vtkmodules.vtkRenderingCore import vtkPointPicker
+
+            picker = vtkPointPicker()
+            picker.SetTolerance(0.018)
+            picker.PickFromListOn()
+            actors = [
+                getattr(self.owner.scene, "mesh_actor", None),
+                *getattr(self.owner.scene, "mesh_actors", ()),
+                getattr(self.owner.scene, "authored_node_actor", None),
+                *getattr(self.owner.scene, "authored_node_actors", ()),
+            ]
+            count = 0
+            for actor in actors:
+                if actor is not None and actor.GetVisibility() and actor.GetPickable():
+                    picker.AddPickList(actor)
+                    count += 1
+            if not count or not picker.Pick(
+                float(cursor[0]), float(cursor[1]), 0.0,
+                self.owner.plotter.renderer,
+            ):
+                return False
+            self.points.picked(tuple(float(x) for x in picker.GetPickPosition()))
+            return True
+        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError):
+            return False
 
     def _face_pick(self, cursor):
         """Pick the frontmost visible CAD face without intermediary edge props."""
