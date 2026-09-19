@@ -163,10 +163,16 @@ class MeshConvergenceRunner(QObject):
         sample["level"] = self._level + 1
         sample["seed_scale"] = float(self.study.mesh_scales[self._level])
         self.sample_ready.emit(sample)
-        self.output.emit(
-            f"Level {sample['level']}: {sample['elements']} elements; "
-            f"{self.study.field_name}:{self.study.component} = {sample['value']:.8g}\n"
-        )
+        lines = [
+            f"Level {sample['level']}: {sample['elements']} elements "
+            f"({sample['nodes']} nodes)"
+        ]
+        for result in sample.get("metrics", {}).values():
+            lines.append(
+                f"  {result.get('metric_name', result['metric'])}: "
+                f"{result['value']:.8g}"
+            )
+        self.output.emit("\n".join(lines) + "\n")
         self._level += 1
         self._advance()
 
