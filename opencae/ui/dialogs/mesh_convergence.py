@@ -281,6 +281,13 @@ class MeshConvergenceDialog(QDialog):
             return
         if self._editing_metric < 0 or self.metric_kind.currentData() != "displacement_control":
             return
+        if not any(getattr(part.mesh, "node_count", 0) for part in self.project.parts):
+            QMessageBox.warning(
+                self, "Select nodes",
+                "Generate a mesh first. The picker uses nodes from the "
+                "original model and stores their physical positions for refinement.",
+            )
+            return
         self.viewport.set_display_mode("mesh")
         policy = SelectionPolicy.create({SelectableKind.MESH_NODE}, multiple=True)
 
