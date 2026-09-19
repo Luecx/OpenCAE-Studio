@@ -110,6 +110,21 @@ class ResultRangeButton(ButtonResultsRibbonOptions):
         layout.addWidget(self.animation_envelope)
 
         layout.addWidget(SeparatorResultsRange(panel))
+        layout.addWidget(LabelSection("Result Interpolation"))
+        self.shape_function_interpolation = CheckForm(
+            "Shape-function interpolation (GPU)",
+            checked=True,
+            object_name="ResultShapeFunctionInterpolationCheckBox",
+            parent=panel,
+        )
+        self.shape_function_interpolation.setToolTip(
+            "On: evaluate finite-element shape functions on the GPU and "
+            "calculate derived quantities after interpolation. "
+            "Off: use the classic triangulated VTK rendering of nodal results."
+        )
+        layout.addWidget(self.shape_function_interpolation)
+
+        layout.addWidget(SeparatorResultsRange(panel))
         layout.addWidget(LabelSection("Color Mapping"))
         self.continuous = CheckForm(
             "Continuous color mapping",
@@ -181,6 +196,7 @@ class ResultRangeButton(ButtonResultsRibbonOptions):
         self.symmetric.toggled.connect(self._symmetric_toggled)
         self.levels.valueChanged.connect(self._levels_changed)
         self.continuous.toggled.connect(self._continuous_changed)
+        self.shape_function_interpolation.toggled.connect(self._emit)
         self.outside_colors.toggled.connect(self._outside_colors_changed)
         self.below_color.clicked.connect(lambda: self._choose_color("below"))
         self.above_color.clicked.connect(lambda: self._choose_color("above"))
@@ -267,6 +283,11 @@ class ResultRangeButton(ButtonResultsRibbonOptions):
             "symmetric": self.symmetric.isChecked(),
             "levels": self.levels.value(),
             "continuous": self.continuous.isChecked(),
+            "interpolation": (
+                "shape_functions"
+                if self.shape_function_interpolation.isChecked()
+                else "classic"
+            ),
             "outside_colors": self.outside_colors.isChecked(),
             "below_color": self._colors["below"],
             "above_color": self._colors["above"],
