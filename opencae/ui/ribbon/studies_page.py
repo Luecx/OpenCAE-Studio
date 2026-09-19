@@ -48,7 +48,6 @@ class StudiesPage(ResponsiveRibbonPage):
                 (
                     A.STUDY_VALIDATE,
                     A.STUDY_RUN,
-                    A.STUDY_CONVERGENCE_REPORT,
                 ),
             ),
         )
