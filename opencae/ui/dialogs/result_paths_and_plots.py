@@ -45,8 +45,12 @@ class PathEditorDialog(QDialog):
             "Enter two or more waypoint node IDs; each pair follows mesh edges."
         )
         form.addRow("Saved path", self.existing)
+        self.default_x = QComboBox()
+        self.default_x.addItem("Cumulative distance", "distance")
+        self.default_x.addItem("Node ID", "node_id")
         form.addRow("Name", self.name)
         form.addRow("Waypoint node IDs", self.waypoints)
+        form.addRow("Default Path X", self.default_x)
         root.addLayout(form)
         self.description = QLabel()
         self.description.setWordWrap(True)
@@ -84,6 +88,7 @@ class PathEditorDialog(QDialog):
         if index is None or index < 0:
             self.name.clear()
             self.waypoints.clear()
+            self.default_x.setCurrentIndex(0)
             self.description.setText(
                 "Choose waypoint nodes on the original FE mesh. The shortest "
                 "connected mesh-edge route joins consecutive waypoints."
@@ -92,6 +97,9 @@ class PathEditorDialog(QDialog):
         path = self._paths[index]
         self.name.setText(path.name)
         self.waypoints.setText(", ".join(map(str, path.waypoints)))
+        self.default_x.setCurrentIndex(
+            max(0, self.default_x.findData(path.default_x_axis))
+        )
         self.description.setText(
             f"{len(path.node_ids)} path nodes; total undeformed length "
             f"{path.distances[-1]:.7g}. The path follows actual FE edges."
@@ -126,7 +134,8 @@ class PathEditorDialog(QDialog):
                     self.target_result.source_file, self.loader
                 )
             path = create_mesh_path(
-                self.name.text(), anchors, self._coordinates, self._adjacency
+                self.name.text(), anchors, self._coordinates, self._adjacency,
+                self.default_x.currentData(),
             )
             index = self.existing.currentData()
             if index is None or index < 0:
@@ -179,6 +188,7 @@ class PlotDialog(QDialog):
         self.x_axis = QComboBox()
         self.x_axis.addItem("Distance", "distance")
         self.x_axis.addItem("Node ID in path", "node_id")
+        self.path.currentIndexChanged.connect(self._path_selected)
         self.node = QLineEdit()
         self.node.setPlaceholderText("Node ID for time history")
         self.step = QComboBox()
@@ -235,6 +245,13 @@ class PlotDialog(QDialog):
             if index >= 0:
                 self.frame.setCurrentIndex(index)
         self._mode_changed()
+
+    def _path_selected(self, *_):
+        path = self.path.currentData()
+        if path is not None:
+            index = self.x_axis.findData(path.default_x_axis)
+            if index >= 0:
+                self.x_axis.setCurrentIndex(index)
 
     def _mode_changed(self, *_):
         path_mode = self.mode.currentData() == "path"
