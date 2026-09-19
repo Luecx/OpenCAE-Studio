@@ -35,7 +35,18 @@ def evaluate_result(source, study, loader=None):
     loader = loader or FrdLoader()
     data = loader.read(source)
     block = _block(loader, source, study)
-    grid = loader.pyvista_grid(source, block.step_id, block.frame_id)
+    # One Stage may monitor dozens of nodes. Reuse the same FE grid for all
+    # probe requests in this level rather than rebuilding every VTK cell and
+    # nodal field array per monitoring node.
+    cache = getattr(loader, "_convergence_grid_cache", None)
+    if cache is None:
+        cache = {}
+        loader._convergence_grid_cache = cache
+    grid_key = (str(source), int(block.step_id), int(block.frame_id))
+    grid = cache.get(grid_key)
+    if grid is None:
+        grid = loader.pyvista_grid(source, block.step_id, block.frame_id)
+        cache[grid_key] = grid
     names = [f"{block.name}:{c}" for c in block.components]
     if any(name not in grid.point_data for name in names):
         raise ValueError(f"Primitive components missing for {block.name}")
