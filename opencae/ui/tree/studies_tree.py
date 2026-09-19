@@ -13,7 +13,6 @@ def append_studies(root, studies):
         node = item(study.name, study, "study")
         branch.appendRow(node)
         if isinstance(study, MeshConvergenceStudy):
-            _append_convergence_controls(node, study)
             continue
         _append_group(
             node,
@@ -67,12 +66,3 @@ def _append_group(parent, title, values, folder_kind, child_kind):
     for value in values:
         node.appendRow(item(value.name, value, child_kind))
     ensure_expandable(node, values, f"No {title.lower()}")
-
-
-def _append_convergence_controls(parent, study):
-    controls = folder("Displacement Controls", "study_displacement_controls", count=len(study.metrics))
-    parent.appendRow(controls)
-    for metric in study.metrics:
-        node = folder(str(metric.get("name", "Displacement Control")), "study_displacement_control")
-        controls.appendRow(node)
-    ensure_expandable(controls, study.metrics, "No displacement controls")
