@@ -71,6 +71,8 @@ class A:
     SOLVER_SETTINGS = PREFERENCES
 
     STUDY_NEW_TOPOLOGY = "study.new_topology"
+    STUDY_NEW_CONVERGENCE = "study.new_mesh_convergence"
+    STUDY_CONVERGENCE_REPORT = "study.convergence_report"
     STUDY_EDIT = "study.edit"
     STUDY_RUN = "study.run"
     STUDY_VALIDATE = "study.validate"
