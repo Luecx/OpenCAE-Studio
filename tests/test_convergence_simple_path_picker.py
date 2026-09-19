@@ -121,3 +121,26 @@ def test_path_editor_picker_updates_highlight_and_persists_shortest_mesh_route(m
         editor.close()
         parent.close()
         app.processEvents()
+
+
+def test_path_ribbon_remove_action_updates_persisted_result_metadata():
+    from opencae.results.mesh_path import MeshPath
+    from opencae.ui.ribbon.results_page import ResultsPage
+
+    path_a = MeshPath("A", (1, 2), (1, 2), (0., 1.))
+    path_b = MeshPath("B", (2, 3), (2, 3), (0., 1.))
+    result = ResultSet(
+        name="Result", source_file="unused.frd",
+        metadata={"mesh_paths": [path_a.as_dict(), path_b.as_dict()]},
+    )
+    events = []
+    page = SimpleNamespace(
+        result=result,
+        path_list=SimpleNamespace(currentRow=lambda: 0),
+        store=None,
+        paths_updated=SimpleNamespace(emit=events.append),
+        _refresh_path_menu=lambda: None,
+    )
+    ResultsPage._remove_path(page)
+    assert stored_paths(result) == (path_b,)
+    assert events == [result]
