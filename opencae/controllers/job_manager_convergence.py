@@ -15,7 +15,7 @@ from opencae.model.entities.jobs import (
     Job, JobSourceKind, JobStatus, ResultSet, ResultStatus,
 )
 from opencae.model.entities.studies import MeshConvergenceStudy
-from opencae.results.mesh_convergence import assess_convergence
+from opencae.results.mesh_convergence import assess_convergence, assess_all_metrics
 
 from .job_manager_factory import create_job, job_directory, utc_now
 from .job_manager_results import persist_result
@@ -70,6 +70,7 @@ def run_convergence(manager, study_id):
         "exclude_radius": float(study.exclude_radius),
         "mesh_scales": list(study.mesh_scales),
         "samples": [],
+        "metrics": deepcopy(study.metrics),
     })
     manager.store.replace_entity(
         f"Started refinement history for {study.name}",
@@ -147,6 +148,9 @@ def finish_convergence(manager, job_id, study_id, status, message):
         if record is not None:
             record["status"] = final.value
             record["finished_at"] = utc_now()
+            record["metric_diagnostics"] = assess_all_metrics(
+                record["samples"], candidate.relative_tolerance
+            )
             record["diagnostic"] = assess_convergence(
                 record["samples"], candidate.relative_tolerance, candidate.metric
             )
@@ -181,6 +185,7 @@ def finish_convergence(manager, job_id, study_id, status, message):
                     "study_id": study.id,
                     "job_id": job_id,
                     "samples": deepcopy(record["samples"]),
+                    "metric_diagnostics": deepcopy(record.get("metric_diagnostics", {})),
                     "diagnostic": record.get("diagnostic", ""),
                 },
             )
