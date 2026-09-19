@@ -4,7 +4,6 @@ from __future__ import annotations
 from copy import deepcopy
 from csv import writer
 from pathlib import Path
-from uuid import uuid4
 
 from PyQt6.QtWidgets import (
     QDialog, QFileDialog, QHBoxLayout, QMessageBox, QVBoxLayout, QWidget, QLabel,
@@ -22,8 +21,7 @@ from opencae.results.mesh_convergence import assess_convergence, assess_all_metr
 from opencae.ui.core.widgets import CompactRegionSelector, ReferenceSelector
 from opencae.ui.panels.time_manager_plot import TimeManagerPlot
 from opencae.ui.primitives.buttons import ButtonFormAction
-from opencae.ui.primitives.inputs import InputFormText
-from opencae.ui.primitives.lists import ListForm
+from opencae.ui.primitives.inputs import InputFormText, InputFormInteger, InputFormNumber
 from opencae.ui.primitives.selects import SelectForm
 from opencae.ui.templates import (
     SectionHeading, dialog_buttons, dialog_layout, field_block, field_row,
@@ -77,7 +75,9 @@ def _node_definition(nodes):
 
 
 class MeshConvergenceDialog(QDialog):
-    """The same field-block/region-picker system as Topology Optimization."""
+    """One Study metric, standard OpenCAE fields and persistent node highlights."""
+
+    _PREVIEW = "mesh-convergence-monitor-nodes"
 
     def __init__(self, project, study=None, parent=None):
         super().__init__(parent)
@@ -86,28 +86,11 @@ class MeshConvergenceDialog(QDialog):
         self.original = deepcopy(study) if isinstance(study, MeshConvergenceStudy) else MeshConvergenceStudy(
             name=f"Mesh Convergence-{len(project.studies) + 1}"
         )
-        self._metrics = [
-            deepcopy(spec) for spec in self.original.metrics
-            if spec.get("kind") == "displacement_control"
-        ]
-        # Migrate controls saved before scoped node-owner metadata existed.
-        for spec in self._metrics:
-            for node in spec.get("nodes", ()):
-                if not node.get("owner_id"):
-                    instance = project.try_resolve(node.get("instance_id", ""))
-                    if instance is not None:
-                        part = project.try_resolve(instance.part_ref)
-                    else:
-                        part = project.parts[0] if len(project.parts) == 1 else None
-                    if part is not None:
-                        node["owner_id"] = part.id
-        self._editing_metric = -1
         self._candidate = None
         self.setWindowTitle("Mesh Convergence Study")
-        self.setMinimumWidth(660)
-        self.resize(730, 700)
+        self.setMinimumWidth(590)
+        self.resize(660, 540)
         root = dialog_layout(self)
-
         self.name = InputFormText(self.original.name)
         root.addWidget(field_block("Name", self.name))
         self.analysis = ReferenceSelector(
@@ -115,197 +98,149 @@ class MeshConvergenceDialog(QDialog):
             self.original.analysis_ref.entity_id,
         )
         root.addWidget(field_block("Analysis", self.analysis))
-        self.scales = InputFormText(
-            ", ".join(f"{number:g}" for number in self.original.mesh_scales)
+        self.factor = InputFormNumber(
+            self.original.mesh_scaling_factor, minimum=0.01, maximum=0.99,
+            decimals=4,
         )
-        root.addWidget(field_block("Relative mesh-size factors", self.scales))
-        self.step = InputFormText(str(self.original.step_id))
-        self.tolerance = InputFormText(f"{100 * self.original.relative_tolerance:g}")
+        self.iterations = InputFormInteger(
+            self.original.max_iterations, minimum=3, maximum=100,
+        )
         root.addWidget(field_row(
-            field_block("Step ID", self.step),
+            field_block("Mesh scaling factor", self.factor),
+            field_block("Maximum iterations", self.iterations),
+        ))
+        self.step = InputFormInteger(self.original.step_id, minimum=1, maximum=100000)
+        self.tolerance = InputFormNumber(
+            100 * self.original.relative_tolerance,
+            minimum=0.000001, maximum=99.9999, decimals=5,
+        )
+        root.addWidget(field_row(
+            field_block("Analysis Step ID", self.step),
             field_block("Tolerance (%)", self.tolerance),
         ))
-        root.addWidget(SectionHeading("Displacement Controls"))
-        self.metric_list = ListForm(minimum_height=90)
-        self.metric_list.setMaximumHeight(150)
-        root.addWidget(self.metric_list)
-        controls = QHBoxLayout()
-        add = ButtonFormAction("Add displacement control")
-        remove = ButtonFormAction("Remove control")
-        controls.addWidget(add)
-        controls.addWidget(remove)
-        controls.addStretch(1)
-        root.addLayout(controls)
-
-        # Do not show a phantom Selected Metric form when no controls exist.
-        self.editor = QWidget(self)
-        editor_layout = QVBoxLayout(self.editor)
-        editor_layout.setContentsMargins(0, 0, 0, 0)
-        editor_layout.addWidget(SectionHeading("Selected Displacement Control"))
-        self.metric_name = InputFormText()
-        editor_layout.addWidget(field_block("Name", self.metric_name))
+        root.addWidget(SectionHeading("Convergence Metric"))
+        self.metric = SelectForm()
+        self.metric.addItem("Displacement", "displacement_control")
+        root.addWidget(field_block("Type", self.metric))
         self.component = SelectForm()
         for name in _DISPLACEMENT_COMPONENTS:
             self.component.addItem(name, name)
-        editor_layout.addWidget(field_block("Component", self.component))
+        previous = next(
+            (m for m in self.original.metrics
+             if m.get("kind") == "displacement_control"), {},
+        )
+        self.component.setCurrentIndex(max(
+            0, self.component.findData(previous.get("component", "Magnitude"))
+        ))
+        root.addWidget(field_block("Component", self.component))
+        nodes = deepcopy(previous.get("nodes", ()))
+        for node in nodes:
+            if not node.get("owner_id"):
+                instance = project.try_resolve(node.get("instance_id", ""))
+                part = (project.try_resolve(instance.part_ref) if instance is not None
+                        else project.parts[0] if len(project.parts) == 1 else None)
+                if part is not None:
+                    node["owner_id"] = part.id
         self.nodes = CompactRegionSelector(
-            project, pick_callback=self._pick_nodes,
+            project, definition=_node_definition(nodes),
+            pick_callback=self._pick_nodes,
             options=(), show_extended=True,
-            extended_title="Displacement Control — Monitor nodes",
+            extended_title="Choose monitoring nodes",
             requirement=RegionRequirement(
                 RegionProjection.NODES, allowed_dimensions=(0,), min_count=0,
             ),
-            allow_part_local=True, parent=self.editor,
+            allow_part_local=True, parent=self,
         )
-        editor_layout.addWidget(field_block("Monitor nodes", self.nodes))
-        self.hint = QLabel(
-            "Without selected nodes, this control evaluates the global "
-            "displacement maximum. Selected nodes are tracked at their "
-            "physical positions on each refined mesh.",
+        root.addWidget(field_block("Monitor nodes (optional)", self.nodes))
+        hint = QLabel(
+            "No nodes selected: monitor the global displacement maximum. "
+            "Each iteration multiplies the preceding element size by the scaling "
+            "factor. Stop when all monitored values converge or the maximum "
+            "number of iterations is reached."
         )
-        self.hint.setWordWrap(True)
-        editor_layout.addWidget(self.hint)
-        root.addWidget(self.editor)
+        hint.setWordWrap(True)
+        root.addWidget(hint)
         root.addStretch(1)
         buttons = dialog_buttons()
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
-        add.clicked.connect(self._add)
-        remove.clicked.connect(self._remove)
-        self.metric_list.currentRowChanged.connect(self._selected)
-        self.finished.connect(lambda _code: self.nodes.finish_pick())
-        self._refresh()
+        self.nodes.value_changed.connect(self._highlight_nodes)
+        self.finished.connect(self._finished)
+        self._highlight_nodes()
+
+    def _highlight_nodes(self, *_):
+        if self.viewport is not None:
+            self.viewport.show_region_preview(
+                self._PREVIEW, self.nodes.definition(),
+                point_size=18, show_point_labels=True,
+            )
+
+    def _finished(self, *_):
+        self.nodes.finish_pick()
+        if self.viewport is not None:
+            self.viewport.clear_region_preview(self._PREVIEW)
 
     def _pick_nodes(self, _widget, done, finished):
         if self.viewport is None:
             QMessageBox.warning(self, "Select nodes", "No active viewport is available")
             return None
         if not any(part.mesh.node_count for part in self.project.parts):
-            QMessageBox.warning(self, "Select nodes", "Generate the mesh before selecting monitor nodes")
+            QMessageBox.warning(self, "Select nodes", "Generate a mesh before choosing nodes")
             return None
         self.viewport.set_display_mode("mesh")
         policy = SelectionPolicy.create({SelectableKind.MESH_NODE}, multiple=True)
         default_owner = self.project.parts[0] if len(self.project.parts) == 1 else None
 
         def selected(definition, operation):
-            # Each plain click adds a control node. Ctrl-click removes it.
-            done(definition, SelectionOperation.REMOVE
-                 if operation == SelectionOperation.REMOVE
-                 else SelectionOperation.ADD)
+            done(
+                definition,
+                SelectionOperation.REMOVE if operation == SelectionOperation.REMOVE
+                else SelectionOperation.ADD,
+            )
 
         return begin_region_pick(
             self.project, self.viewport, policy, selected,
             default_owner=default_owner, finished=finished,
         )
 
-    def _sync_editor(self):
-        index = self._editing_metric
-        if index < 0 or index >= len(self._metrics):
-            return
-        current = self._metrics[index]
-        current["name"] = self.metric_name.text().strip()
-        current["component"] = str(self.component.currentData() or "Magnitude")
-        current["nodes"] = _nodes_from_definition(self.nodes.definition())
-
-    def _refresh(self, selected=None):
-        self.metric_list.blockSignals(True)
-        self.metric_list.clear()
-        for spec in self._metrics:
-            quantity = len(spec.get("nodes", ()))
-            label = f"{spec.get('name', 'Displacement')} · "
-            label += f"{quantity} nodes" if quantity else "Global maximum"
-            self.metric_list.addItem(label)
-        if self._metrics:
-            self.metric_list.setCurrentRow(
-                min(max(0, self._editing_metric if selected is None else selected),
-                    len(self._metrics) - 1)
-            )
-        self.metric_list.blockSignals(False)
-        self._selected(self.metric_list.currentRow())
-
-    def _selected(self, row):
-        if self._editing_metric != row:
-            self._sync_editor()
-        self.nodes.finish_pick()
-        self._editing_metric = int(row)
-        visible = 0 <= row < len(self._metrics)
-        self.editor.setVisible(visible)
-        if not visible:
-            self.metric_name.clear()
-            self.nodes.clear()
-            return
-        metric = self._metrics[row]
-        self.metric_name.setText(str(metric.get("name", "")))
-        self.component.setCurrentIndex(
-            max(0, self.component.findData(metric.get("component", "Magnitude")))
-        )
-        self.nodes.set_definition(_node_definition(metric.get("nodes", ())))
-
-    def _add(self, _checked=False):
-        self._sync_editor()
-        self._metrics.append({
-            "id": uuid4().hex,
-            "name": f"Displacement Control-{len(self._metrics) + 1}",
-            "kind": "displacement_control",
-            "field_name": "DISP",
-            "component": "Magnitude",
-            "nodes": [],
-        })
-        self._refresh(len(self._metrics) - 1)
-
-    def _remove(self, _checked=False):
-        if self._editing_metric < 0:
-            return
-        self.nodes.finish_pick()
-        del self._metrics[self._editing_metric]
-        self._editing_metric = -1
-        self._refresh(0)
-
     def values(self):
-        self._sync_editor()
         value = deepcopy(self.original)
         value.name = self.name.text().strip()
         if not value.name:
             raise ValueError("Enter a Study name")
-        analysis_id = self.analysis.currentValue()
-        analysis = self.project.try_resolve(analysis_id)
+        analysis = self.project.try_resolve(self.analysis.currentValue())
         if analysis is None:
             raise ValueError("Select an Analysis")
         value.analysis_ref = EntityRef.of(analysis, "Analysis")
+        value.mesh_scaling_factor = float(self.factor.value())
+        value.max_iterations = int(self.iterations.value())
         value.mesh_scales = [
-            float(part.strip())
-            for part in self.scales.text().replace(";", ",").split(",")
-            if part.strip()
+            value.mesh_scaling_factor ** index
+            for index in range(value.max_iterations)
         ]
-        if (len(value.mesh_scales) < 3
-            or any(number <= 0 for number in value.mesh_scales)
-            or any(a <= b for a, b in zip(value.mesh_scales, value.mesh_scales[1:]))):
-            raise ValueError("Enter at least three strictly decreasing positive mesh sizes")
-        value.step_id = int(self.step.text())
-        value.relative_tolerance = float(self.tolerance.text()) / 100
-        if value.step_id < 1 or not 0 < value.relative_tolerance < 1:
-            raise ValueError("Step must be positive; tolerance must be between 0 and 100%")
-        names = [spec["name"] for spec in self._metrics]
-        if len(names) != len(set(names)) or any(not name for name in names):
-            raise ValueError("Displacement control names must be nonempty and unique")
-        if not self._metrics:
-            raise ValueError("Add at least one Displacement Control")
-        for spec in self._metrics:
-            if spec.get("component") not in _DISPLACEMENT_COMPONENTS:
-                raise ValueError("Only DISP D1–D6 and Magnitude are supported")
-        value.metrics = deepcopy(self._metrics)
+        value.step_id = self.step.value()
+        value.relative_tolerance = self.tolerance.value() / 100.
+        nodes = _nodes_from_definition(self.nodes.definition())
+        value.metrics = [{
+            "id": "displacement",
+            "kind": "displacement_control",
+            "name": "Displacement",
+            "field_name": "DISP",
+            "component": self.component.currentData(),
+            "nodes": nodes,
+        }]
         value.field_name = "DISP"
-        value.component = "Magnitude"
-        value.metric = "displacement_max"
-        value.exclude_radius = 0.0
+        value.component = self.component.currentData()
+        value.metric = "displacement_max" if not nodes else "probe"
+        value.exclude_radius = 0.
         return value
 
     def _save(self):
         try:
             self._candidate = self.values()
         except (TypeError, ValueError) as exc:
-            QMessageBox.warning(self, "Invalid convergence study", str(exc))
+            QMessageBox.warning(self, "Invalid convergence Study", str(exc))
             return
         self.accept()
 
