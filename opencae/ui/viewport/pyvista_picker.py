@@ -103,7 +103,7 @@ class PyVistaPicker:
             self.owner.stage != "RESULTS"
             and self.owner.context_pick.active
             and self.owner.display_mode == "geometry"
-            and self.owner.selection_mode in {"point", "edge", "auto"}
+            and self.owner.selection_mode in {"point", "edge", "auto", "face", "cell"}
         )
 
     def pick_display_position(self, cursor):
@@ -137,10 +137,52 @@ class PyVistaPicker:
                 picked_depth,
             )
 
+        elif mode in {"face", "cell"}:
+            actor = self._face_pick(cursor)
+
+        if mode in {"face", "cell"} or (
+            mode == "auto"
+            and self.owner.context_pick.accepts(SelectableKind.GEOMETRY_CELL)
+            and not self.owner.context_pick.accepts(SelectableKind.GEOMETRY_FACE)
+        ):
+            # Cell selection is made on a *visible surface*. A hardware prop
+            # pick frequently selects an edge/overlay instead of the underlying
+            # CAD face, and mode=cell then rejects that actor. Pick only the
+            # scene's original CAD face actors, not dialog preview overlays.
+            actor = self._face_pick(cursor)
+        elif mode == "auto" and actor is None:
+            actor = self._face_pick(cursor)
+
         if actor is None:
             return False
         self.picked_actor(actor)
         return True
+
+    def _face_pick(self, cursor):
+        """Pick the frontmost visible CAD face without intermediary edge props."""
+        try:
+            from vtkmodules.vtkRenderingCore import vtkCellPicker
+
+            picker = vtkCellPicker()
+            picker.SetTolerance(_DEPTH_PICK_TOLERANCE)
+            picker.PickFromListOn()
+            count = 0
+            for actor in self.owner.scene.face_actors:
+                if not actor.GetVisibility() or not actor.GetPickable():
+                    continue
+                picker.AddPickList(actor)
+                count += 1
+            if not count:
+                return None
+            if not picker.Pick(
+                float(cursor[0]), float(cursor[1]), 0.0,
+                self.owner.plotter.renderer,
+            ):
+                return None
+            actor = picker.GetActor()
+            return actor if actor in self.owner.scene.face_actors else None
+        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError):
+            return None
 
     def _depth_pick(self, cursor):
         """Return the frontmost actor/depth under the cursor when one exists.
