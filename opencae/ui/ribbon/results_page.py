@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.results import FrdLoader
+from opencae.ui.dialogs.result_paths_and_plots import PathEditorDialog, PlotDialog
 from opencae.results.navigation import display_field
 from opencae.ui.actions.ids import A
 from opencae.ui.core.icon_factory import IconKind, make_icon
@@ -30,6 +31,7 @@ class ResultsPage(QWidget):
     """Use one ribbon for conventional fields and job-backed topology iterations."""
 
     result_requested = pyqtSignal(object, object, dict)
+    paths_updated = pyqtSignal(object)
 
     def __init__(self, actions=None, store=None, parent=None):
         super().__init__(parent)
@@ -190,6 +192,13 @@ class ResultsPage(QWidget):
             "QUERY",
             (self.query_nodes, self.query_elements),
         )
+        self.path_button = ribbon_button("Path", IconKind.QUERY_NODE, None, 75)
+        self.plot_button = ribbon_button("Plot", IconKind.CONTOUR, None, 75)
+        self._add_group(layout, "PATH & PLOT", (self.path_button, self.plot_button))
+        self.path_button.clicked.connect(self._edit_paths)
+        self.plot_button.clicked.connect(self._open_plot)
+        self.path_button.setEnabled(False)
+        self.plot_button.setEnabled(False)
         layout.addStretch(1)
 
         for button in (
@@ -209,6 +218,19 @@ class ResultsPage(QWidget):
         self.previous_frame.clicked.connect(lambda: self._move_frame(-1))
         self.next_frame.clicked.connect(lambda: self._move_frame(1))
         self._wire_queries()
+
+    def _edit_paths(self):
+        if self.result is None or not self.result.source_file:
+            return
+        dialog = PathEditorDialog(self.result, self.store, self.loader, self)
+        dialog.exec()
+        self.result = dialog.result
+        self.paths_updated.emit(self.result)
+
+    def _open_plot(self):
+        if self.result is None or not self.result.source_file:
+            return
+        PlotDialog(self.result, self.loader, self.choose.current_field(), self).exec()
 
     def _save_button(self):
         button = ButtonResultsRibbonAction(
@@ -248,6 +270,8 @@ class ResultsPage(QWidget):
             self.section.reset_for_result()
             self._range_signature = None
         self.result = result
+        self.path_button.setEnabled(bool(result and result.source_file))
+        self.plot_button.setEnabled(bool(result and result.source_file))
         metadata = (
             dict(getattr(result, "metadata", {}) or {})
             if result
