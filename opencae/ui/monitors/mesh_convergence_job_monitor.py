@@ -1,28 +1,41 @@
-"""Live mesh-convergence curves, level results and solver output for a Study Job."""
+"""Theme-aligned live convergence monitor using the shared Time Manager plot."""
 
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import (
-    QDialog, QHBoxLayout, QLabel, QProgressBar, QSplitter, QTabWidget,
+    QDialog, QFrame, QHBoxLayout, QLabel, QProgressBar, QSplitter,
     QVBoxLayout, QWidget,
 )
 
 from opencae.model.entities.studies import MeshConvergenceStudy
+from opencae.ui.core.theme import PALETTE
 from opencae.ui.core.widgets import MonospaceOutputView
 from opencae.ui.panels.time_manager_plot import TimeManagerPlot
 from opencae.ui.primitives.buttons import ButtonFormAction
-from opencae.ui.templates import SectionHeading
+from opencae.ui.primitives.checks import CheckForm
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.templates import SectionHeading, field_block
+
+
+_X_FIELDS = {
+    "nodes": ("nodes", "Nodes"),
+    "elements": ("elements", "Elements"),
+    "level": ("level", "Level"),
+}
 
 
 class MeshConvergenceJobMonitor(QDialog):
-    """Render every displacement control as it finishes, not only after the run."""
+    """Show one consistently themed plot with selectable monitoring node and X axis."""
 
     def __init__(self, store, job_id, parent=None, *, stop_callback=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.store, self.job_id = store, str(job_id)
         self._stop_callback = stop_callback
-        self._plots = {}
+        # Keep original per-level quantities. Axis changes must never rebuild
+        # a series from previously transformed coordinates or drop raw samples.
         self._measurements = {}
+        self._labels = {}
         job = store.project.try_resolve(self.job_id)
         self.setWindowTitle(f"Mesh Convergence — {getattr(job, 'name', 'Study')}")
         self.resize(980, 710)
@@ -34,11 +47,45 @@ class MeshConvergenceJobMonitor(QDialog):
         self.progress.setRange(0, 1000)
         root.addWidget(self.phase)
         root.addWidget(self.progress)
+
         split = QSplitter(Qt.Orientation.Vertical)
-        self.tabs = QTabWidget()
-        split.addWidget(self.tabs)
+        self.plot_surface = QFrame()
+        surface_palette = self.plot_surface.palette()
+        surface_palette.setColor(QPalette.ColorRole.Window, QColor(PALETTE["panel"]))
+        self.plot_surface.setPalette(surface_palette)
+        self.plot_surface.setAutoFillBackground(True)
+        plot_layout = QVBoxLayout(self.plot_surface)
+        plot_layout.setContentsMargins(12, 10, 12, 8)
+        plot_layout.setSpacing(8)
+        plot_layout.addWidget(SectionHeading("Convergence"))
+        options = QHBoxLayout()
+        options.setSpacing(12)
+        self.series = SelectForm()
+        self.series.setMinimumWidth(220)
+        options.addWidget(field_block("Metric / monitored node", self.series), 2)
+        self.x_axis = SelectForm()
+        for key, (_field, label) in _X_FIELDS.items():
+            self.x_axis.addItem(label, key)
+        self.x_axis.setCurrentIndex(self.x_axis.findData("elements"))
+        options.addWidget(field_block("X axis", self.x_axis), 1)
+        self.log_x = CheckForm("Logarithmic X axis")
+        self.log_x.setToolTip(
+            "Use base-10 logarithmic spacing for the selected X axis. "
+            "Original node counts, element counts and level numbers stay unchanged."
+        )
+        options.addWidget(self.log_x, 0, Qt.AlignmentFlag.AlignBottom)
+        plot_layout.addLayout(options)
+        self.plot = TimeManagerPlot(self.plot_surface)
+        self.plot.setMinimumHeight(260)
+        plot_layout.addWidget(self.plot, 1)
+        self.readout = QLabel("No completed mesh levels yet")
+        self.readout.setWordWrap(True)
+        plot_layout.addWidget(self.readout)
+        split.addWidget(self.plot_surface)
+
         panel = QWidget()
         panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(12, 8, 12, 8)
         panel_layout.addWidget(SectionHeading("Solver Output"))
         self.output = MonospaceOutputView()
         panel_layout.addWidget(self.output, 1)
@@ -47,6 +94,7 @@ class MeshConvergenceJobMonitor(QDialog):
         split.setStretchFactor(1, 1)
         split.setSizes([480, 180])
         root.addWidget(split, 1)
+
         actions = QHBoxLayout()
         self.results = ButtonFormAction("Open Results")
         self.results.clicked.connect(self._open_results)
@@ -56,6 +104,9 @@ class MeshConvergenceJobMonitor(QDialog):
         actions.addWidget(self.results)
         actions.addWidget(self.stop_button)
         root.addLayout(actions)
+        self.series.currentIndexChanged.connect(self._redraw)
+        self.x_axis.currentIndexChanged.connect(self._redraw)
+        self.log_x.toggled.connect(self._redraw)
         self.store.changed.connect(self._refresh_results)
         self.set_progress(
             self.job_id, getattr(job, "progress", 0),
@@ -76,26 +127,50 @@ class MeshConvergenceJobMonitor(QDialog):
                 return
 
     def sample_added(self, job_id, sample):
-        """Append one completed level to every selected-node/global-max curve."""
+        """Append every level's raw counts and measurements, including live points."""
         if str(job_id) != self.job_id:
             return
         for key, value in sample.get("metrics", {}).items():
-            if key not in self._plots:
-                plot = TimeManagerPlot()
-                self._plots[key] = plot
+            if key not in self._measurements:
                 self._measurements[key] = []
-                self.tabs.addTab(
-                    plot, str(value.get("metric_name", key)),
-                )
-            series = self._measurements[key]
-            series.append((float(sample["elements"]), float(value["value"])))
-            self._plots[key].set_series(
-                [x for x, _ in series], [y for _, y in series],
-                x_label="Finite elements",
-                y_label=f"{value.get('field', 'DISP')}: {value.get('component', 'Magnitude')}",
-                show_markers=True, interactive=False,
-                range_editable=False, show_play_range=False,
-            )
+                self._labels[key] = str(value.get("metric_name", key))
+                self.series.addItem(self._labels[key], key)
+            self._measurements[key].append({
+                "level": int(sample["level"]),
+                "nodes": int(sample["nodes"]),
+                "elements": int(sample["elements"]),
+                "value": float(value["value"]),
+                "field": str(value.get("field", "DISP")),
+                "component": str(value.get("component", "Magnitude")),
+            })
+        self._redraw()
+
+    def _redraw(self, *_):
+        key = self.series.currentData()
+        measurements = self._measurements.get(key, ())
+        axis = self.x_axis.currentData() or "elements"
+        field, label = _X_FIELDS.get(axis, _X_FIELDS["elements"])
+        if not measurements:
+            self.plot.set_series([], [], x_label=label, y_label="Displacement",
+                                 interactive=False, show_play_range=False)
+            self.readout.setText("No completed mesh levels yet")
+            return
+        scale = "log" if self.log_x.isChecked() else "linear"
+        x = [entry[field] for entry in measurements]
+        y = [entry["value"] for entry in measurements]
+        self.plot.set_series(
+            x, y,
+            x_label=label,
+            y_label=f"{measurements[-1]['field']}: {measurements[-1]['component']}",
+            x_scale=scale, point_value_labels=True, show_markers=True,
+            interactive=False, range_editable=False, show_play_range=False,
+        )
+        last = measurements[-1]
+        self.readout.setText(
+            f"Level {last['level']} · {last['nodes']:,} nodes · "
+            f"{last['elements']:,} elements · "
+            f"{self._labels.get(key, 'Displacement')}: {last['value']:.9g}"
+        )
 
     def set_progress(self, job_id, progress, label):
         if str(job_id) != self.job_id:
@@ -136,9 +211,6 @@ class MeshConvergenceJobMonitor(QDialog):
         results = self._level_results()
         parent = self.parent()
         if results and callable(getattr(parent, "show_solution", None)):
-            # Each level is a real ResultSet in the standard Results browser.
-            # Display the last completed mesh and leave all levels accessible
-            # from the left-hand solution tree.
             parent.show_solution(results[-1])
             self.hide()
 
