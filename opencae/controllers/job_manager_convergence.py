@@ -35,6 +35,14 @@ def run_convergence(manager, study_id):
             "\n".join(f"• {error}" for error in errors),
         )
         return
+    if any(
+        running_job.id in manager._runners
+        and running_job.source_ref
+        and running_job.source_ref.entity_id == study.id
+        for running_job in project.jobs
+    ):
+        manager.store.message.emit("A mesh-convergence run is already active for this Study")
+        return
     analysis = project.resolve(study.analysis_ref)
     adapter = manager.solvers[analysis.solver]
     config = manager.settings.solver_config(analysis.solver)
@@ -52,14 +60,6 @@ def run_convergence(manager, study_id):
         project.id, "jobs", job,
     )
     job = manager.store.project.resolve(job.id)
-    if any(
-        running_job.id in manager._runners
-        and running_job.source_ref
-        and running_job.source_ref.entity_id == study.id
-        for running_job in project.jobs
-    ):
-        manager.store.message.emit("A mesh-convergence run is already active for this Study")
-        return
     candidate = deepcopy(manager.store.project.resolve(study.id))
     candidate.run_history.append({
         "job_id": job.id,
