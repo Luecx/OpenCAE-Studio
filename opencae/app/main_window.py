@@ -190,6 +190,9 @@ class MainWindow(QMainWindow):
         from opencae.model.entities.optimization import TopologyOptimization
         from opencae.model.entities.studies import MeshConvergenceStudy
         study = project.try_resolve(self.controllers.studies.active_study_id)
+        studies_page = getattr(self.ribbon, "studies_page", None)
+        if studies_page is not None:
+            studies_page.set_study_type(study)
         has_study = study is not None
         femaster_config = self.context.settings.solver_config("FEMaster")
         femaster_ready = bool(
