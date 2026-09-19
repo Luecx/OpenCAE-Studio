@@ -66,7 +66,18 @@ class OptimizationController(
         self.new_topology()
 
     def new_mesh_convergence(self, current=None):
-        """Create or edit a persistent mesh-convergence study."""
+        """Create a Study unless an actual persisted Study was passed for editing.
+
+        QAction.triggered and QPushButton.clicked may pass a checked bool. Never
+        mistake that bool for an existing entity and call replace_entity on a
+        freshly generated identity.
+        """
+        current = current if isinstance(current, MeshConvergenceStudy) else None
+        if current is not None:
+            current = self.store.project.try_resolve(current.id)
+            if not isinstance(current, MeshConvergenceStudy):
+                self.store.message.emit("The Study being edited no longer exists")
+                return
         dialog = MeshConvergenceDialog(self.store.project, current, self.parent)
         if not dialog.exec():
             return
