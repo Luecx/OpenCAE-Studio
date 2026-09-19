@@ -451,10 +451,13 @@ class PyVistaViewport(QWidget):
             if node in lookup else tuple(coordinates[node])
             for node in node_ids
         ]
+        # PyVista.add_lines expects a flat even-length (2*N, 3) point array,
+        # not (N, 2, 3) segment arrays.
         lines = np.asarray([
-            [positions[i], positions[i + 1]]
-            for i in range(len(positions) - 1)
-        ], dtype=float)
+            point
+            for start, end in zip(positions, positions[1:])
+            for point in (start, end)
+        ], dtype=float).reshape((-1, 3))
         if len(lines):
             self.plotter.add_lines(
                 lines, color="#ffd166", width=5,
