@@ -10,9 +10,13 @@ from csv import writer
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
+from opencae.ui.primitives.inputs import InputFormText
+from opencae.ui.primitives.selects import SelectForm
+from opencae.ui.primitives.buttons import ButtonFormAction
+
 from PyQt6.QtWidgets import (
-    QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
-    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
+    QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
+    QHBoxLayout, QLabel, QMessageBox,
     QVBoxLayout, QWidget,
 )
 
@@ -37,15 +41,15 @@ class PathEditorDialog(QDialog):
         self._coordinates = self._adjacency = None
         root = QVBoxLayout(self)
         form = QFormLayout()
-        self.existing = QComboBox()
-        self.name = QLineEdit()
-        self.waypoints = QLineEdit()
+        self.existing = SelectForm()
+        self.name = InputFormText()
+        self.waypoints = InputFormText()
         self.waypoints.setPlaceholderText("e.g. 12, 28, 40")
         self.waypoints.setToolTip(
             "Enter two or more waypoint node IDs; each pair follows mesh edges."
         )
         form.addRow("Saved path", self.existing)
-        self.default_x = QComboBox()
+        self.default_x = SelectForm()
         self.default_x.addItem("Cumulative distance", "distance")
         self.default_x.addItem("Node ID", "node_id")
         form.addRow("Name", self.name)
@@ -56,9 +60,9 @@ class PathEditorDialog(QDialog):
         self.description.setWordWrap(True)
         root.addWidget(self.description)
         controls = QHBoxLayout()
-        new = QPushButton("New")
-        save = QPushButton("Save path")
-        delete = QPushButton("Delete path")
+        new = ButtonFormAction("New")
+        save = ButtonFormAction("Save path")
+        delete = ButtonFormAction("Delete path")
         controls.addWidget(new)
         controls.addWidget(save)
         controls.addWidget(delete)
@@ -178,25 +182,25 @@ class PlotDialog(QDialog):
         self._fields = tuple(loader.fields(result.source_file))
         root = QVBoxLayout(self)
         form = QFormLayout()
-        self.mode = QComboBox()
+        self.mode = SelectForm()
         self.mode.addItem("Path", "path")
         self.mode.addItem("Time", "time")
-        self.path = QComboBox()
+        self.path = SelectForm()
         self.path.addItem("Select path", None)
         for path in stored_paths(result):
             self.path.addItem(path.name, path)
-        self.x_axis = QComboBox()
+        self.x_axis = SelectForm()
         self.x_axis.addItem("Distance", "distance")
         self.x_axis.addItem("Node ID in path", "node_id")
         self.path.currentIndexChanged.connect(self._path_selected)
-        self.node = QLineEdit()
+        self.node = InputFormText()
         self.node.setPlaceholderText("Node ID for time history")
-        self.step = QComboBox()
+        self.step = SelectForm()
         for step in sorted({int(f.metadata.get("step_id", 1)) for f in self._fields}):
             self.step.addItem(f"Step {step}", step)
-        self.frame = QComboBox()
-        self.field = QComboBox()
-        self.component = QComboBox()
+        self.frame = SelectForm()
+        self.field = SelectForm()
+        self.component = SelectForm()
         form.addRow("X axis", self.mode)
         form.addRow("Path", self.path)
         form.addRow("Path X values", self.x_axis)
@@ -213,9 +217,9 @@ class PlotDialog(QDialog):
         self.note.setWordWrap(True)
         root.addWidget(self.note)
         actions = QHBoxLayout()
-        build = QPushButton("Build plot")
-        export = QPushButton("Export CSV")
-        close = QPushButton("Close")
+        build = ButtonFormAction("Build plot")
+        export = ButtonFormAction("Export CSV")
+        close = ButtonFormAction("Close")
         actions.addWidget(build)
         actions.addWidget(export)
         actions.addStretch(1)
