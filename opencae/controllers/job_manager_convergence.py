@@ -67,7 +67,9 @@ def run_convergence(manager, study_id):
         "metric": study.metric,
         "relative_tolerance": float(study.relative_tolerance),
         "exclude_radius": float(study.exclude_radius),
-        "mesh_scales": list(study.mesh_scales),
+        "mesh_scaling_factor": float(study.mesh_scaling_factor),
+        "max_iterations": int(study.max_iterations),
+        "mesh_scales": [study.mesh_scaling_factor ** i for i in range(study.max_iterations)],
         "samples": [],
         "metrics": deepcopy(study.metrics),
     })
@@ -166,7 +168,7 @@ def record_sample(manager, job_id, study_id, sample):
     manager.convergence_sample.emit(job_id, clean)
     manager._update_progress(
         job_id,
-        len(record["samples"]) / max(len(candidate.mesh_scales), 1),
+        len(record["samples"]) / max(candidate.max_iterations, 1),
         f"Completed mesh level {sample['level']}",
     )
 
