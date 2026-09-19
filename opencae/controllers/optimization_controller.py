@@ -67,9 +67,6 @@ class OptimizationController(
 
     def new_mesh_convergence(self, current=None):
         """Create or edit a persistent mesh-convergence study."""
-        if current is None:
-            selected = self.store.selection
-            current = selected if isinstance(selected, MeshConvergenceStudy) else None
         dialog = MeshConvergenceDialog(self.store.project, current, self.parent)
         if not dialog.exec():
             return
