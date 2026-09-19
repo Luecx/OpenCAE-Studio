@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import QMessageBox
 
 from opencae.jobs.femaster_output_parser import FEMasterOutputParser
 from opencae.model.entities.jobs import Job, JobSourceKind, JobStatus
+from opencae.model.entities.studies import MeshConvergenceStudy
 from opencae.results import FrdLoader
 from opencae.ui.monitors import AnalysisJobMonitor, TopologyJobMonitor
 
@@ -217,7 +218,9 @@ class JobManager(QObject):
             return
 
         monitor_store = project_store_for_entity(self.store, job.id)
-        if job.source_kind is JobSourceKind.STUDY:
+        study_source = monitor_store.project.try_resolve(job.source_ref)
+        if (job.source_kind is JobSourceKind.STUDY
+                and not isinstance(study_source, MeshConvergenceStudy)):
             monitor = TopologyJobMonitor(monitor_store, job.id, self.parent)
             self.topology_frame.connect(monitor.show_frame)
         else:
@@ -277,6 +280,16 @@ class JobManager(QObject):
         )
         if result is None:
             self.store.message.emit("The selected Job has no available Results")
+            return
+        if result.metadata.get("result_kind") == "mesh_convergence":
+            from opencae.ui.dialogs.mesh_convergence import ConvergenceReportDialog
+            study = self.store.project.try_resolve(
+                result.metadata.get("study_id", "")
+            )
+            if isinstance(study, MeshConvergenceStudy):
+                ConvergenceReportDialog(study, self.parent).exec()
+            else:
+                self.store.message.emit("The convergence Study is unavailable")
             return
         self.parent.show_solution(result)
 
