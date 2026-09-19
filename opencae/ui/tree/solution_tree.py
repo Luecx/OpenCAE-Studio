@@ -62,7 +62,10 @@ class SolutionTree(QTreeView):
             if metadata.get("result_kind") == "topology_density":
                 self._append_topology_frames(result_item, result, metadata)
                 continue
-            if result.source_file:
+            # Completed solver jobs already index their FRD fields off-thread.
+            # Do not reparse every preceding refinement level whenever another
+            # Study sample is stored or a Job emits a progress update.
+            if result.source_file and not result.fields:
                 try:
                     result.fields = loader.fields(result.source_file)
                 except (OSError, RuntimeError, TypeError, ValueError) as exc:
