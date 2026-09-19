@@ -20,8 +20,13 @@ class TimeManagerPlot(QWidget):
     HANDLE_TOLERANCE = 9.0
     MIN_RANGE_PIXELS = 3.0
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, background_role="panel"):
         super().__init__(parent)
+        # Keep the Time Manager's existing panel surface by default. Dialogs
+        # can request their window surface without changing the shared plot.
+        if background_role not in {"panel", "window"}:
+            raise ValueError(f"Unknown plot background role: {background_role}")
+        self._background_role = background_role
         self._x = []
         self._y = []
         self._current_index = -1
@@ -195,7 +200,7 @@ class TimeManagerPlot(QWidget):
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.fillRect(self.rect(), QColor(PALETTE["panel"]))
+        painter.fillRect(self.rect(), QColor(PALETTE[self._background_role]))
 
         # Use almost the complete vertical workspace. Only reserve the compact
         # tick/axis text strips that are actually needed.
