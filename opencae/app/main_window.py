@@ -187,6 +187,8 @@ class MainWindow(QMainWindow):
             )
         self.actions.get(A.ANALYSIS_RUN).setEnabled(analysis_runnable)
 
+        from opencae.model.entities.optimization import TopologyOptimization
+        from opencae.model.entities.studies import MeshConvergenceStudy
         study = project.try_resolve(self.controllers.studies.active_study_id)
         has_study = study is not None
         femaster_config = self.context.settings.solver_config("FEMaster")
@@ -194,6 +196,12 @@ class MainWindow(QMainWindow):
             "FEMaster" in self.context.solvers
             and "FEMaster" in self.context.settings.enabled_solvers()
             and Path(str(femaster_config.get("executable", ""))).is_file()
+        )
+        self.actions.get(A.STUDY_NEW_CONVERGENCE).setEnabled(
+            bool(has_assembly and project.analyses and project.parts)
+        )
+        self.actions.get(A.STUDY_CONVERGENCE_REPORT).setEnabled(
+            isinstance(study, MeshConvergenceStudy) and bool(study.run_history)
         )
         self.actions.get(A.STUDY_NEW_TOPOLOGY).setEnabled(
             bool(has_assembly and project.analyses)
@@ -208,9 +216,13 @@ class MainWindow(QMainWindow):
             A.OPT_CONTROLS,
             A.STUDY_VALIDATE,
         ):
-            self.actions.get(action_id).setEnabled(has_study)
+            self.actions.get(action_id).setEnabled(isinstance(study, TopologyOptimization))
         self.actions.get(A.STUDY_RUN).setEnabled(
-            bool(has_study and has_assembly and femaster_ready)
+            bool(has_study and has_assembly and (
+                femaster_ready if isinstance(study, TopologyOptimization)
+                else analysis_runnable if isinstance(study, MeshConvergenceStudy)
+                else False
+            ))
         )
 
         jobs = self.controllers.jobs
