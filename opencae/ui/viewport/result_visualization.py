@@ -766,9 +766,9 @@ def _clim(grid, scalar, settings, *, nonnegative=False):
     padding = 1.0e-6 * span
     lower = minimum - padding
     upper = maximum + padding
-    # Nonnegative fields default to zero, but an explicitly chosen lower
-    # contour bound must also be respected for Mises and magnitude displays.
-    if nonnegative and minimum_auto:
+    # A nonnegative field whose selected minimum is zero must start at zero,
+    # even with a manually entered bound. Keep explicitly negative user bounds.
+    if nonnegative and (minimum_auto or minimum >= 0.0):
         lower = max(0.0, lower)
     return lower, upper
 
