@@ -143,3 +143,22 @@ def test_automatic_lower_contour_bound_stays_zero_for_nonnegative_fields():
 
     assert lower == 0.0
     assert upper > 509.7
+
+
+def test_manual_zero_minimum_for_magnitude_never_displays_negative_padding():
+    grid = SimpleNamespace(
+        point_data={"DISP:Magnitude": [0.0, 1.854]}, cell_data={}
+    )
+    settings = {
+        "minimum": 0.0,
+        "maximum": 1.854,
+        "minimum_auto": False,
+        "maximum_auto": False,
+    }
+
+    lower, upper = visualization._clim(
+        grid, "DISP:Magnitude", settings, nonnegative=True
+    )
+
+    assert lower == 0.0
+    assert upper > 1.854
