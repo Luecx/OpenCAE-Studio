@@ -192,40 +192,42 @@ def _color_values(grid, field):
     return None
 
 
-def _gpu_scalar_range(color, clim):
-    """Return physical bounds for a directly interpolated scalar field.
+def _gpu_color_mapping(color, clim):
+    """Return (offset, scale, GPU range) for one physical contour range.
 
-    CellGrid evaluates its color coefficients and range in GPU float precision.
-    Supplying physical coefficients near a narrow contour boundary can make the
-    scalar and LUT normalization disagree. Normalize *before* uploading them;
-    FE interpolation commutes with this affine transformation.
+    CellGrid evaluates field coefficients and color coordinates in GPU float
+    precision. Normalize scalar coefficients before upload so its LUT sees
+    well-scaled values, while the scalar bar keeps physical units.
 
-    Do not normalize derived magnitudes: their nonlinear reduction must still
-    take place after interpolation in physical component units.
+    Direct scalar interpolation permits an affine transform. For a magnitude
+    (including the linearly transformed von Mises tuple), ONLY use a common
+    positive scale: subtracting an offset from the vector/tensor components
+    before taking their norm would change the physical quantity.
     """
-    if (
-        color is None
-        or color.magnitude
-        or color.transform != "identity"
-        or color.components != 1
-        or clim is None
-    ):
+    if color is None or clim is None:
         return None
     lower, upper = (float(value) for value in clim)
     if not np.isfinite(lower) or not np.isfinite(upper) or upper <= lower:
         return None
-    return lower, upper
+    if color.magnitude:
+        scale = max(abs(lower), abs(upper))
+        if scale <= 0.0:
+            return None
+        return 0.0, scale, (lower / scale, upper / scale)
+    if color.transform == "identity" and color.components == 1:
+        return lower, upper - lower, (0.0, 1.0)
+    return None
 
 
 def _gpu_color_values(grid, color, clim):
     values = _color_values(grid, color)
-    bounds = _gpu_scalar_range(color, clim)
-    if values is None or bounds is None:
+    mapping = _gpu_color_mapping(color, clim)
+    if values is None or mapping is None:
         return values
-    lower, upper = bounds
-    # Keep values outside [0, 1] so the original below/above-range colors still
-    # work; do not clip or modify the canonical result grid/query values.
-    return (values - lower) / (upper - lower)
+    offset, scale, _gpu_range = mapping
+    # Never clip: preserve genuine values outside the colorbar limits.
+    # Original result/query arrays remain untouched.
+    return (values - offset) / scale
 
 
 @dataclass
@@ -349,12 +351,13 @@ def _new_mapper(state, legacy_mapper, color, clim):
     try:
         lookup = legacy_mapper.GetLookupTable()
         if lookup is not None:
-            if _gpu_scalar_range(color, clim) is not None:
-                # Scalar bars retain the original physical range. The CellGrid
-                # mapper needs its own identical palette with normalized bounds.
+            mapping = _gpu_color_mapping(color, clim)
+            if mapping is not None:
+                # Keep the original LUT for the physical-unit scalar bar.
+                # The GPU requires an independent copy with its mapped range.
                 gpu_lookup = lookup.NewInstance()
                 gpu_lookup.DeepCopy(lookup)
-                gpu_lookup.SetRange(0.0, 1.0)
+                gpu_lookup.SetRange(*mapping[2])
                 mapper.SetLookupTable(gpu_lookup)
             else:
                 mapper.SetLookupTable(lookup)
@@ -386,9 +389,9 @@ def _configure_scalar_mapper(mapper, color, clim):
         except (AttributeError, RuntimeError, TypeError):
             pass
     if clim is not None:
+        mapping = _gpu_color_mapping(color, clim)
         scalar_range = (
-            (0.0, 1.0)
-            if _gpu_scalar_range(color, clim) is not None
+            mapping[2] if mapping is not None
             else tuple(float(value) for value in clim)
         )
         mapper.SetScalarRange(*scalar_range)
