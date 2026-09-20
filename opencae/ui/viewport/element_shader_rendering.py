@@ -192,6 +192,42 @@ def _color_values(grid, field):
     return None
 
 
+def _gpu_scalar_range(color, clim):
+    """Return physical bounds for a directly interpolated scalar field.
+
+    CellGrid evaluates its color coefficients and range in GPU float precision.
+    Supplying physical coefficients near a narrow contour boundary can make the
+    scalar and LUT normalization disagree. Normalize *before* uploading them;
+    FE interpolation commutes with this affine transformation.
+
+    Do not normalize derived magnitudes: their nonlinear reduction must still
+    take place after interpolation in physical component units.
+    """
+    if (
+        color is None
+        or color.magnitude
+        or color.transform != "identity"
+        or color.components != 1
+        or clim is None
+    ):
+        return None
+    lower, upper = (float(value) for value in clim)
+    if not np.isfinite(lower) or not np.isfinite(upper) or upper <= lower:
+        return None
+    return lower, upper
+
+
+def _gpu_color_values(grid, color, clim):
+    values = _color_values(grid, color)
+    bounds = _gpu_scalar_range(color, clim)
+    if values is None or bounds is None:
+        return values
+    lower, upper = bounds
+    # Keep values outside [0, 1] so the original below/above-range colors still
+    # work; do not clip or modify the canonical result grid/query values.
+    return (values - lower) / (upper - lower)
+
+
 @dataclass
 class _ShaderBatch:
     source: object
@@ -227,7 +263,7 @@ class ElementShaderState:
             and np.array_equal(types, _cell_types(grid))
         )
 
-    def update_values(self, grid, color=None) -> bool:
+    def update_values(self, grid, color=None, clim=None) -> bool:
         color = self.color if color is None else _coerce_color_field(grid, color)
         if color != self.color or not self.topology_matches(grid):
             return False
@@ -235,7 +271,7 @@ class ElementShaderState:
         from vtkmodules.util.numpy_support import vtk_to_numpy
 
         points = vtk_to_numpy(grid.GetPoints().GetData())
-        values = _color_values(grid, color)
+        values = _gpu_color_values(grid, color, clim)
         if color is not None and values is None:
             return False
 
@@ -266,7 +302,7 @@ class ElementShaderState:
 def install_element_shader_mapper(actor, grid, color=None, clim=None):
     """Replace an actor's legacy dataset mapper with the FE CellGrid GPU mapper."""
     color = _coerce_color_field(grid, color)
-    state = build_element_shader_state(grid, color)
+    state = build_element_shader_state(grid, color, clim)
     if state is None:
         return None
     try:
@@ -292,8 +328,8 @@ def update_element_shader_mapper(actor, grid, color=None, clim=None):
         return None
     color = _coerce_color_field(grid, color)
     mapper = actor.GetMapper()
-    if not state.update_values(grid, color):
-        replacement = build_element_shader_state(grid, color)
+    if not state.update_values(grid, color, clim):
+        replacement = build_element_shader_state(grid, color, clim)
         if replacement is None:
             return None
         mapper.SetInputDataObject(replacement.dataset)
@@ -313,7 +349,15 @@ def _new_mapper(state, legacy_mapper, color, clim):
     try:
         lookup = legacy_mapper.GetLookupTable()
         if lookup is not None:
-            mapper.SetLookupTable(lookup)
+            if _gpu_scalar_range(color, clim) is not None:
+                # Scalar bars retain the original physical range. The CellGrid
+                # mapper needs its own identical palette with normalized bounds.
+                gpu_lookup = lookup.NewInstance()
+                gpu_lookup.DeepCopy(lookup)
+                gpu_lookup.SetRange(0.0, 1.0)
+                mapper.SetLookupTable(gpu_lookup)
+            else:
+                mapper.SetLookupTable(lookup)
         mapper.SetUseLookupTableScalarRange(True)
         mapper.SetScalarRange(*legacy_mapper.GetScalarRange())
     except (AttributeError, RuntimeError, TypeError, ValueError):
@@ -342,13 +386,17 @@ def _configure_scalar_mapper(mapper, color, clim):
         except (AttributeError, RuntimeError, TypeError):
             pass
     if clim is not None:
-        scalar_range = tuple(float(value) for value in clim)
+        scalar_range = (
+            (0.0, 1.0)
+            if _gpu_scalar_range(color, clim) is not None
+            else tuple(float(value) for value in clim)
+        )
         mapper.SetScalarRange(*scalar_range)
         if lookup is not None:
             lookup.SetRange(*scalar_range)
             lookup.Modified()
 
-def build_element_shader_state(grid, color=None):
+def build_element_shader_state(grid, color=None, clim=None):
     """Build batched element shaders for one fixed-topology result grid."""
     _register_cellgrid()
     if (
@@ -368,7 +416,7 @@ def build_element_shader_state(grid, color=None):
 
     partitions = _partition_specs(specs)
     batches = [
-        _build_batch(grid, cell_types, group, color)
+        _build_batch(grid, cell_types, group, color, clim)
         for group in partitions
     ]
     if any(batch is None for batch in batches):
@@ -399,7 +447,7 @@ def _partition_specs(specs):
     return tuple(tuple(partition) for partition in partitions)
 
 
-def _build_batch(grid, cell_types, specs, color):
+def _build_batch(grid, cell_types, specs, color, clim=None):
     from vtkmodules.vtkCommonDataModel import vtkCellGrid
     from vtkmodules.util.numpy_support import vtk_to_numpy
 
@@ -419,7 +467,7 @@ def _build_batch(grid, cell_types, specs, color):
     _overwrite_array(point_group, "coords", points, 3)
     point_group.SetVectors(point_group.GetArray("coords"))
 
-    color_values = _color_values(grid, color)
+    color_values = _gpu_color_values(grid, color, clim)
     if color is not None and color.association == "point":
         _overwrite_array(
             point_group,
