@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QWidget
 
 
@@ -12,10 +12,15 @@ class ListCheck(QListWidget):
         self.setObjectName("EditorCheckList")
         self.setMinimumHeight(180)
         self.setMinimumWidth(0)
+        # QSS min-height affects painting, not the model item hit rectangles.
+        # Give every row a real layout geometry so its lower half remains clickable.
+        self.setUniformItemSizes(True)
+        self.setSpacing(2)
         selected_values = {str(value) for value in selected}
         for value in values:
             label, data = self._option(value)
             item = QListWidgetItem(label)
+            item.setSizeHint(QSize(0, 42))
             item.setData(Qt.ItemDataRole.UserRole, data)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(

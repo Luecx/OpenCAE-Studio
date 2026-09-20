@@ -184,6 +184,7 @@ class ResultQueryState:
         self.owner = owner
         self.mode = ""
         self.field = None
+        self.path_callback = None
         self._marker = "result-query-marker"
         self._edges = "result-query-edges"
         self._mouse_filter = _ResultQueryMouseFilter(self)
@@ -204,7 +205,7 @@ class ResultQueryState:
     def handles_direct_click(self) -> bool:
         """Return whether the current Results state should consume an ordinary click."""
         return bool(
-            self.mode in {"node", "element"}
+            self.mode in {"node", "element", "path"}
             and self.owner.stage == "RESULTS"
             and self.owner.scene.result_grid is not None
             and self.owner.scene.result_actor is not None
@@ -310,6 +311,13 @@ class ResultQueryState:
         """Present node or element values at a picked result-surface position."""
         grid = self.owner.scene.result_grid
         if point is None or grid is None:
+            return
+        if self.mode == "path":
+            index, _result = node_values(grid, point)
+            node_id = int(grid.point_data["node_id"][index])
+            callback = self.path_callback
+            if node_id >= 0 and callable(callback):
+                callback(node_id)
             return
         suffix = (
             f" — {self.field.name} / "

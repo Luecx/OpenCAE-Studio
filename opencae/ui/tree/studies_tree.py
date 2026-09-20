@@ -1,4 +1,6 @@
-"""Builds Studies and their editable definition subsections in the project tree."""
+"""Build type-specific Study branches without topology-only controls on mesh studies."""
+
+from opencae.model.entities.studies import MeshConvergenceStudy
 
 from .tree_items import ensure_expandable, folder, item
 
@@ -10,6 +12,8 @@ def append_studies(root, studies):
     for study in values:
         node = item(study.name, study, "study")
         branch.appendRow(node)
+        if isinstance(study, MeshConvergenceStudy):
+            continue
         _append_group(
             node,
             "Responses",

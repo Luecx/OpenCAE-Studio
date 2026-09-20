@@ -16,6 +16,7 @@ from opencae.model.entities.jobs import (
     ResultStatus,
 )
 from opencae.model.entities.optimization import OptimizationRun, TopologyOptimization
+from opencae.model.entities.studies import MeshConvergenceStudy
 from opencae.optimization import TopologyOptimizationRunner
 
 from .job_manager_factory import create_job, job_directory, utc_now
@@ -27,6 +28,9 @@ def run_study(manager, study_id: str) -> None:
     """Validate, persist, wire, and start one topology Study-backed Job."""
     project = manager.store.project
     study = project.try_resolve(study_id)
+    if isinstance(study, MeshConvergenceStudy):
+        from .job_manager_convergence import run_convergence
+        return run_convergence(manager, study_id)
     if not isinstance(study, TopologyOptimization):
         manager.store.message.emit("The selected Study type is not executable")
         return

@@ -112,3 +112,53 @@ def test_animation_rebuilds_actor_when_renderer_mode_changes(
         object(),
         options={"range": {"interpolation": requested_mode}},
     ) is None
+
+def test_manual_lower_contour_bound_is_respected_for_nonnegative_fields():
+    grid = SimpleNamespace(
+        point_data={"STRESS:Mises": [0.0, 509.7]}, cell_data={}
+    )
+    settings = {
+        "minimum": -500.0,
+        "maximum": 509.7,
+        "minimum_auto": False,
+        "maximum_auto": False,
+    }
+
+    lower, upper = visualization._clim(
+        grid, "STRESS:Mises", settings, nonnegative=True
+    )
+
+    assert lower < -500.0
+    assert upper > 509.7
+
+
+def test_automatic_lower_contour_bound_stays_zero_for_nonnegative_fields():
+    grid = SimpleNamespace(
+        point_data={"STRESS:Mises": [1.0, 509.7]}, cell_data={}
+    )
+
+    lower, upper = visualization._clim(
+        grid, "STRESS:Mises", {}, nonnegative=True
+    )
+
+    assert lower == 0.0
+    assert upper > 509.7
+
+
+def test_manual_zero_minimum_for_magnitude_never_displays_negative_padding():
+    grid = SimpleNamespace(
+        point_data={"DISP:Magnitude": [0.0, 1.854]}, cell_data={}
+    )
+    settings = {
+        "minimum": 0.0,
+        "maximum": 1.854,
+        "minimum_auto": False,
+        "maximum_auto": False,
+    }
+
+    lower, upper = visualization._clim(
+        grid, "DISP:Magnitude", settings, nonnegative=True
+    )
+
+    assert lower == 0.0
+    assert upper > 1.854

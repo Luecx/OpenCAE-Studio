@@ -266,7 +266,11 @@ finally:
     assert "self._playback_options = self._animation_options(fields)" in source
     assert '"source_grid": self._cached_grid(first)' in source
     assert '"next_grid": self._cached_grid(second)' in source
-    assert "adjusted(56.0, 8.0, -12.0, -28.0)" in plot_source
+    # The standard Time Manager retains its compact margins, while
+    # convergence plots may reserve additional room for point-value labels.
+    assert "72.0 if self._point_value_labels else 56.0" in plot_source
+    assert "26.0 if self._point_value_labels else 8.0" in plot_source
+    assert "-45.0 if self._point_value_labels else -12.0" in plot_source
 
 
 def test_lower_workspaces_share_one_movable_dock_and_status_navigation():

@@ -47,6 +47,7 @@ class ControllerHub:
 
         def edit_selected():
             from opencae.model.entities.analysis import Analysis
+            from opencae.model.entities.studies import Study, MeshConvergenceStudy
             from opencae.model.entities.optimization import (
                 OptimizationConstraint,
                 OptimizationIteration,
@@ -66,6 +67,7 @@ class ControllerHub:
                 entity,
                 (
                     TopologyOptimization,
+                    MeshConvergenceStudy,
                     OptimizationResponse,
                     OptimizationObjective,
                     OptimizationConstraint,
@@ -81,6 +83,7 @@ class ControllerHub:
 
         def delete_selected():
             from opencae.model.entities.jobs import Job
+            from opencae.model.entities.studies import MeshConvergenceStudy
             from opencae.model.entities.optimization import (
                 OptimizationRun,
                 TopologyControls,
@@ -99,7 +102,7 @@ class ControllerHub:
                         "Stop the job before deleting its topology state"
                     )
                     return
-            if isinstance(entity, TopologyOptimization):
+            if isinstance(entity, (TopologyOptimization, MeshConvergenceStudy)):
                 running = any(
                     job.id in self.jobs._runners
                     and job.source_ref
@@ -136,17 +139,18 @@ class ControllerHub:
         """Keep tree selection and ribbon selectors on the same definition."""
 
         from opencae.model.entities.analysis import Analysis
+        from opencae.model.entities.studies import Study
         from opencae.model.entities.optimization import TopologyOptimization
 
         if isinstance(entity, Analysis):
             self.analysis.active_analysis_id = entity.id
-        study = entity if isinstance(entity, TopologyOptimization) else None
+        study = entity if isinstance(entity, Study) else None
         current = entity
         project = self.store.project
         while study is None and current is not None:
             parent_id = project.index.parent_id.get(getattr(current, "id", ""))
             current = project.try_resolve(parent_id) if parent_id else None
-            if isinstance(current, TopologyOptimization):
+            if isinstance(current, Study):
                 study = current
         if study is not None:
             self.studies.active_study_id = study.id

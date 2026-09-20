@@ -186,7 +186,23 @@ class PartRegions:
         policy = policy_for_projection(RegionProjection.ELEMENTS)
 
         def pick(_owner, done, finished):
-            return begin_region_pick(project, self.ctx.parent.viewport, policy, done, default_owner=part, finished=finished)
+            viewport = self.ctx.parent.viewport
+            cancel = begin_region_pick(
+                project, viewport, policy, done, default_owner=part,
+                finished=finished,
+            )
+            # An extruded solid is most commonly assigned by its CELL, not by
+            # the surface FACE underneath an unconstrained Auto pick. Start
+            # in cell mode when 3D topology exists while retaining other
+            # supported modes in the selection toolbar.
+            snapshot = getattr(viewport.scene, "snapshot", None)
+            if (
+                viewport.display_mode == "geometry"
+                and snapshot is not None
+                and snapshot.entities.get(3)
+            ):
+                viewport.set_selection_mode("cell")
+            return cancel
 
         def save(_widget, definition):
             name, ok = QInputDialog.getText(self.ctx.parent, "Save Region", "Region name:", text=next_name("ELEMENT_REGION", part.regions))

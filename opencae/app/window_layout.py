@@ -112,6 +112,7 @@ def build_docks(window):
     )
     window.ribbon.result_requested.connect(window.viewport.show_solution)
     if window.ribbon.results_page is not None:
+        window.ribbon.results_page.set_path_viewport(window.viewport)
         window.viewport.section_changed.connect(
             window.ribbon.results_page.set_section_state
         )

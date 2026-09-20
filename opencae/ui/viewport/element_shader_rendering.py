@@ -192,6 +192,44 @@ def _color_values(grid, field):
     return None
 
 
+def _gpu_color_mapping(color, clim):
+    """Return (offset, scale, GPU range) for one physical contour range.
+
+    CellGrid evaluates field coefficients and color coordinates in GPU float
+    precision. Normalize scalar coefficients before upload so its LUT sees
+    well-scaled values, while the scalar bar keeps physical units.
+
+    Direct scalar interpolation permits an affine transform. For a magnitude
+    (including the linearly transformed von Mises tuple), ONLY use a common
+    positive scale: subtracting an offset from the vector/tensor components
+    before taking their norm would change the physical quantity.
+    """
+    if color is None or clim is None:
+        return None
+    lower, upper = (float(value) for value in clim)
+    if not np.isfinite(lower) or not np.isfinite(upper) or upper <= lower:
+        return None
+    if color.magnitude:
+        scale = max(abs(lower), abs(upper))
+        if scale <= 0.0:
+            return None
+        return 0.0, scale, (lower / scale, upper / scale)
+    if color.transform == "identity" and color.components == 1:
+        return lower, upper - lower, (0.0, 1.0)
+    return None
+
+
+def _gpu_color_values(grid, color, clim):
+    values = _color_values(grid, color)
+    mapping = _gpu_color_mapping(color, clim)
+    if values is None or mapping is None:
+        return values
+    offset, scale, _gpu_range = mapping
+    # Never clip: preserve genuine values outside the colorbar limits.
+    # Original result/query arrays remain untouched.
+    return (values - offset) / scale
+
+
 @dataclass
 class _ShaderBatch:
     source: object
@@ -227,7 +265,7 @@ class ElementShaderState:
             and np.array_equal(types, _cell_types(grid))
         )
 
-    def update_values(self, grid, color=None) -> bool:
+    def update_values(self, grid, color=None, clim=None) -> bool:
         color = self.color if color is None else _coerce_color_field(grid, color)
         if color != self.color or not self.topology_matches(grid):
             return False
@@ -235,7 +273,7 @@ class ElementShaderState:
         from vtkmodules.util.numpy_support import vtk_to_numpy
 
         points = vtk_to_numpy(grid.GetPoints().GetData())
-        values = _color_values(grid, color)
+        values = _gpu_color_values(grid, color, clim)
         if color is not None and values is None:
             return False
 
@@ -266,7 +304,7 @@ class ElementShaderState:
 def install_element_shader_mapper(actor, grid, color=None, clim=None):
     """Replace an actor's legacy dataset mapper with the FE CellGrid GPU mapper."""
     color = _coerce_color_field(grid, color)
-    state = build_element_shader_state(grid, color)
+    state = build_element_shader_state(grid, color, clim)
     if state is None:
         return None
     try:
@@ -292,8 +330,8 @@ def update_element_shader_mapper(actor, grid, color=None, clim=None):
         return None
     color = _coerce_color_field(grid, color)
     mapper = actor.GetMapper()
-    if not state.update_values(grid, color):
-        replacement = build_element_shader_state(grid, color)
+    if not state.update_values(grid, color, clim):
+        replacement = build_element_shader_state(grid, color, clim)
         if replacement is None:
             return None
         mapper.SetInputDataObject(replacement.dataset)
@@ -313,7 +351,16 @@ def _new_mapper(state, legacy_mapper, color, clim):
     try:
         lookup = legacy_mapper.GetLookupTable()
         if lookup is not None:
-            mapper.SetLookupTable(lookup)
+            mapping = _gpu_color_mapping(color, clim)
+            if mapping is not None:
+                # Keep the original LUT for the physical-unit scalar bar.
+                # The GPU requires an independent copy with its mapped range.
+                gpu_lookup = lookup.NewInstance()
+                gpu_lookup.DeepCopy(lookup)
+                gpu_lookup.SetRange(*mapping[2])
+                mapper.SetLookupTable(gpu_lookup)
+            else:
+                mapper.SetLookupTable(lookup)
         mapper.SetUseLookupTableScalarRange(True)
         mapper.SetScalarRange(*legacy_mapper.GetScalarRange())
     except (AttributeError, RuntimeError, TypeError, ValueError):
@@ -342,13 +389,17 @@ def _configure_scalar_mapper(mapper, color, clim):
         except (AttributeError, RuntimeError, TypeError):
             pass
     if clim is not None:
-        scalar_range = tuple(float(value) for value in clim)
+        mapping = _gpu_color_mapping(color, clim)
+        scalar_range = (
+            mapping[2] if mapping is not None
+            else tuple(float(value) for value in clim)
+        )
         mapper.SetScalarRange(*scalar_range)
         if lookup is not None:
             lookup.SetRange(*scalar_range)
             lookup.Modified()
 
-def build_element_shader_state(grid, color=None):
+def build_element_shader_state(grid, color=None, clim=None):
     """Build batched element shaders for one fixed-topology result grid."""
     _register_cellgrid()
     if (
@@ -368,7 +419,7 @@ def build_element_shader_state(grid, color=None):
 
     partitions = _partition_specs(specs)
     batches = [
-        _build_batch(grid, cell_types, group, color)
+        _build_batch(grid, cell_types, group, color, clim)
         for group in partitions
     ]
     if any(batch is None for batch in batches):
@@ -399,7 +450,7 @@ def _partition_specs(specs):
     return tuple(tuple(partition) for partition in partitions)
 
 
-def _build_batch(grid, cell_types, specs, color):
+def _build_batch(grid, cell_types, specs, color, clim=None):
     from vtkmodules.vtkCommonDataModel import vtkCellGrid
     from vtkmodules.util.numpy_support import vtk_to_numpy
 
@@ -419,7 +470,7 @@ def _build_batch(grid, cell_types, specs, color):
     _overwrite_array(point_group, "coords", points, 3)
     point_group.SetVectors(point_group.GetArray("coords"))
 
-    color_values = _color_values(grid, color)
+    color_values = _gpu_color_values(grid, color, clim)
     if color is not None and color.association == "point":
         _overwrite_array(
             point_group,

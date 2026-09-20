@@ -92,7 +92,7 @@ def test_studies_ribbon_separates_definition_setup_and_execution_groups():
     assert _ribbon_groups("opencae/ui/ribbon/studies_page.py") == [
         (
             "DEFINITION",
-            ("STUDY_NEW_TOPOLOGY", "STUDY_EDIT", "DELETE_SELECTED"),
+            ("STUDY_NEW_TOPOLOGY", "STUDY_NEW_CONVERGENCE", "STUDY_EDIT", "DELETE_SELECTED"),
         ),
         (
             "TOPOLOGY SETUP",

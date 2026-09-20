@@ -5,6 +5,7 @@ from shutil import copy2
 
 from PyQt6.QtCore import QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
+    QListWidget, QLabel, QVBoxLayout,
     QButtonGroup,
     QFileDialog,
     QHBoxLayout,
@@ -13,6 +14,12 @@ from PyQt6.QtWidgets import (
 )
 
 from opencae.results import FrdLoader
+from opencae.results.mesh_path import stored_paths
+from opencae.ui.core.dialog_lifecycle import show_modeless_dialog
+from opencae.ui.primitives.buttons import ButtonFormAction
+from opencae.ui.templates import SectionHeading
+from opencae.ui.primitives.buttons.button_results_ribbon_options import ButtonResultsRibbonOptions
+from opencae.ui.dialogs.result_paths_and_plots import PathEditorDialog, PlotDialog
 from opencae.results.navigation import display_field
 from opencae.ui.actions.ids import A
 from opencae.ui.core.icon_factory import IconKind, make_icon
@@ -30,6 +37,7 @@ class ResultsPage(QWidget):
     """Use one ribbon for conventional fields and job-backed topology iterations."""
 
     result_requested = pyqtSignal(object, object, dict)
+    paths_updated = pyqtSignal(object)
 
     def __init__(self, actions=None, store=None, parent=None):
         super().__init__(parent)
@@ -42,6 +50,8 @@ class ResultsPage(QWidget):
         self._result_groups = []
         self._collapsed_titles = frozenset()
         self._range_signature = None
+        self._path_viewport = None
+        self._path_editor = None
         self._build()
         QTimer.singleShot(0, self._refresh_responsive_layout)
 
@@ -190,6 +200,35 @@ class ResultsPage(QWidget):
             "QUERY",
             (self.query_nodes, self.query_elements),
         )
+        self.path_button = ButtonResultsRibbonOptions(
+            "Path", icon=make_icon(IconKind.QUERY_NODE, 28), width=75,
+        )
+        path_panel = QWidget()
+        path_panel.setMinimumWidth(300)
+        path_layout = QVBoxLayout(path_panel)
+        path_layout.setContentsMargins(12, 10, 12, 10)
+        path_layout.addWidget(SectionHeading("Saved Paths"))
+        self.path_list = QListWidget(path_panel)
+        self.path_list.setMinimumHeight(130)
+        path_layout.addWidget(self.path_list)
+        controls = QHBoxLayout()
+        self.path_add = ButtonFormAction("Add")
+        self.path_edit = ButtonFormAction("Edit")
+        self.path_remove = ButtonFormAction("Remove")
+        for button in (self.path_add, self.path_edit, self.path_remove):
+            controls.addWidget(button)
+        path_layout.addLayout(controls)
+        self.path_button.set_options_panel(path_panel)
+        self.plot_button = ribbon_button("Plot", IconKind.CONTOUR, None, 75)
+        self._add_group(layout, "PATH & PLOT", (self.path_button, self.plot_button))
+        self.path_button.menu().aboutToShow.connect(self._refresh_path_menu)
+        self.path_list.currentRowChanged.connect(self._path_selected)
+        self.path_add.clicked.connect(lambda _checked=False: self._edit_paths(None))
+        self.path_edit.clicked.connect(lambda _checked=False: self._edit_paths(self.path_list.currentRow()))
+        self.path_remove.clicked.connect(self._remove_path)
+        self.plot_button.clicked.connect(self._open_plot)
+        self.path_button.setEnabled(False)
+        self.plot_button.setEnabled(False)
         layout.addStretch(1)
 
         for button in (
@@ -209,6 +248,106 @@ class ResultsPage(QWidget):
         self.previous_frame.clicked.connect(lambda: self._move_frame(-1))
         self.next_frame.clicked.connect(lambda: self._move_frame(1))
         self._wire_queries()
+
+    def set_path_viewport(self, viewport):
+        self._path_viewport = viewport
+
+    def _refresh_path_menu(self, preferred=None):
+        self.path_list.blockSignals(True)
+        index = self.path_list.currentRow() if preferred is None else int(preferred)
+        self.path_list.clear()
+        for path in stored_paths(self.result) if self.result is not None else ():
+            self.path_list.addItem(f"{path.name} · {len(path.node_ids)} nodes")
+        self.path_list.setCurrentRow(
+            min(index, self.path_list.count() - 1) if index >= 0 else -1
+        )
+        self.path_list.blockSignals(False)
+        self._path_selected(self.path_list.currentRow())
+
+    def _path_selected(self, index):
+        selected = 0 <= index < self.path_list.count()
+        self.path_edit.setEnabled(selected)
+        self.path_remove.setEnabled(selected)
+        viewport = self._path_viewport
+        if viewport is None:
+            return
+        if not selected or self.result is None:
+            viewport.clear_result_path_preview()
+            return
+        try:
+            path = stored_paths(self.result)[index]
+            # A stored path already contains its full node order. Avoid
+            # rebuilding the entire FE adjacency graph on every menu hover.
+            positions = self.loader.read(self.result.source_file).nodes
+            viewport.show_result_path_preview(positions, path.node_ids)
+        except (OSError, KeyError, ValueError, RuntimeError) as exc:
+            viewport.clear_result_path_preview()
+            QMessageBox.warning(self, "Preview Path", str(exc))
+
+    def _edit_paths(self, index=None):
+        if self.result is None or not self.result.source_file:
+            return
+        paths = stored_paths(self.result)
+        if index is not None and (index < 0 or index >= len(paths)):
+            return
+        if self._path_editor is not None:
+            self._path_editor.raise_()
+            self._path_editor.activateWindow()
+            return
+        self.path_button.menu().hide()
+        # Path waypoint picking temporarily owns the existing Results node
+        # query gesture. Keep its toolbar toggle state synchronized.
+        for button in (self.query_nodes, self.query_elements):
+            if button.isChecked():
+                button.setChecked(False)
+        dialog = PathEditorDialog(
+            self.result, self.store, self.loader,
+            self.window(), path_index=index, viewport=self._path_viewport,
+        )
+        self._path_editor = dialog
+
+        def finished(code):
+            preferred = None
+            if code == dialog.DialogCode.Accepted:
+                self.result = dialog.target_result
+                preferred = (len(stored_paths(self.result)) - 1
+                             if index is None else index)
+                self.paths_updated.emit(self.result)
+            self._path_editor = None
+            self._refresh_path_menu(preferred)
+
+        dialog.finished.connect(finished)
+        show_modeless_dialog(dialog)
+
+    def _remove_path(self, _checked=False):
+        index = self.path_list.currentRow()
+        if self.result is None or index < 0:
+            return
+        paths = list(stored_paths(self.result))
+        if index >= len(paths):
+            return
+        name = paths[index].name
+        del paths[index]
+        metadata = dict(self.result.metadata or {})
+        metadata["mesh_paths"] = [path.as_dict() for path in paths]
+        from copy import deepcopy
+        candidate = deepcopy(self.result)
+        candidate.metadata = metadata
+        if self.store is not None and self.store.project.try_resolve(candidate.id) is not None:
+            self.store.replace_entity(
+                f"Removed mesh path {name}",
+                self.store.project.id, "results", candidate,
+            )
+            self.result = self.store.project.resolve(candidate.id)
+        else:
+            self.result.metadata = metadata
+        self.paths_updated.emit(self.result)
+        self._refresh_path_menu()
+
+    def _open_plot(self):
+        if self.result is None or not self.result.source_file:
+            return
+        PlotDialog(self.result, self.loader, self.choose.current_field(), self).exec()
 
     def _save_button(self):
         button = ButtonResultsRibbonAction(
@@ -247,7 +386,11 @@ class ResultsPage(QWidget):
         if changed_result:
             self.section.reset_for_result()
             self._range_signature = None
+        if changed_result and self._path_viewport is not None:
+            self._path_viewport.clear_result_path_preview()
         self.result = result
+        self.path_button.setEnabled(bool(result and result.source_file))
+        self.plot_button.setEnabled(bool(result and result.source_file))
         metadata = (
             dict(getattr(result, "metadata", {}) or {})
             if result
