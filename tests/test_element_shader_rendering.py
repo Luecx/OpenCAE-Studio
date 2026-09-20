@@ -316,7 +316,7 @@ def test_result_field_selection_uses_raw_stress_components_for_magnitude():
     )
     assert clim[0] >= 0.0
 
-def test_mapper_swap_preserves_lookup_table_and_updates_gpu_arrays_in_place():
+def test_mapper_swap_keeps_physical_scalar_bar_and_updates_normalized_gpu_arrays():
     grid = _grid([(25, range(20))], 20)
     legacy = vtkDataSetMapper()
     legacy.SetInputData(grid)
@@ -336,11 +336,12 @@ def test_mapper_swap_preserves_lookup_table_and_updates_gpu_arrays_in_place():
 
     assert isinstance(mapper, vtkCompositeCellGridMapper)
     assert actor.GetMapper() is mapper
-    assert mapper.GetLookupTable() is lookup
+    assert mapper.GetLookupTable() is not lookup
     assert mapper.GetUseLookupTableScalarRange()
     assert mapper.GetArrayName() == "S"
-    assert mapper.GetScalarRange() == (-2.0, 2.0)
-    assert mapper.GetLookupTable().GetRange() == (-2.0, 2.0)
+    assert mapper.GetScalarRange() == (0.0, 1.0)
+    assert mapper.GetLookupTable().GetRange() == (0.0, 1.0)
+    assert lookup.GetRange() == (-1.0, 1.0)
 
     points = vtk_to_numpy(grid.GetPoints().GetData())
     points[:, 0] += 7.0
@@ -366,12 +367,69 @@ def test_mapper_swap_preserves_lookup_table_and_updates_gpu_arrays_in_place():
 
     assert updated is mapper
     assert np.allclose(gpu_points.reshape(-1, 3), points)
-    assert np.allclose(gpu_values.reshape(-1), values)
+    assert np.allclose(gpu_values.reshape(-1), (values + 4.0) / 8.0)
     assert mapper.GetUseLookupTableScalarRange()
-    assert mapper.GetScalarRange() == (-4.0, 4.0)
-    assert mapper.GetLookupTable().GetRange() == (-4.0, 4.0)
+    assert mapper.GetScalarRange() == (0.0, 1.0)
+    assert mapper.GetLookupTable().GetRange() == (0.0, 1.0)
+    assert lookup.GetRange() == (-1.0, 1.0)
 
 
 def test_unsupported_legacy_cell_falls_back_without_building_cellgrid():
     grid = _grid([(1, [0])], 1)
     assert shaders.build_element_shader_state(grid, "S") is None
+
+def test_hex20_and_tet10_direct_scalars_are_normalized_before_gpu_interpolation():
+    # Directly interpolated signed components should use a stable [0, 1]
+    # GPU range without changing the original field used by node queries.
+    physical = np.asarray([
+        0.0, -0.0966792, -0.0966792, 0.0,
+        0.0, -0.0966792, -0.0966792, 0.0,
+        -0.0245084, -0.0988947, -0.0245084, 0.0,
+        -0.0245084, -0.0988947, -0.0245084, 0.0,
+        0.0, -0.0944137, -0.0944137, 0.0,
+    ])
+    for cell_type, count in ((25, 20), (24, 10)):
+        grid = _grid([(cell_type, range(count))], count, scalar=None)
+        _add_point_array(grid, "DISP:D3", physical[:count])
+        original = vtk_to_numpy(grid.GetPointData().GetArray("DISP:D3")).copy()
+        bounds = (-0.1, 1.0e-7)
+
+        state = shaders.build_element_shader_state(grid, "DISP:D3", bounds)
+        assert state is not None
+        uploaded = vtk_to_numpy(
+            shaders._group(state.batches[0].source, "points").GetArray("DISP:D3")
+        ).reshape(-1)
+        np.testing.assert_allclose(uploaded, (original - bounds[0]) / (bounds[1] - bounds[0]))
+        np.testing.assert_array_equal(
+            vtk_to_numpy(grid.GetPointData().GetArray("DISP:D3")), original
+        )
+        assert 0.0 < uploaded[8] < 1.0
+        assert 0.0 < uploaded[0] < 1.0
+
+
+def test_changing_contour_range_updates_scalar_coefficients_not_physical_results():
+    grid = _grid([(24, range(10))], 10, scalar=None)
+    physical = np.linspace(-0.1, 0.0, 10)
+    _add_point_array(grid, "DISP:D3", physical)
+    state = shaders.build_element_shader_state(grid, "DISP:D3", (-0.1, 0.0))
+
+    assert state.update_values(grid, "DISP:D3", (-1.0, 0.0))
+    updated = vtk_to_numpy(
+        shaders._group(state.batches[0].source, "points").GetArray("DISP:D3")
+    ).reshape(-1)
+    np.testing.assert_allclose(updated, physical + 1.0)
+    np.testing.assert_array_equal(
+        vtk_to_numpy(grid.GetPointData().GetArray("DISP:D3")), physical
+    )
+
+
+def test_derived_vector_magnitude_is_not_normalized_before_gpu_reduction():
+    grid = _grid([(24, range(10))], 10, scalar=None)
+    _add_point_array(grid, "DISP:D1", np.linspace(-0.1, 0.0, 10))
+    _add_point_array(grid, "DISP:D2", np.full(10, 0.025))
+    field = shaders.color_field(
+        grid, "DISP:Magnitude", ("DISP:D1", "DISP:D2"), magnitude=True
+    )
+    expected = shaders._color_values(grid, field)
+    uploaded = shaders._gpu_color_values(grid, field, (0.0, 1.0))
+    np.testing.assert_array_equal(uploaded, expected)
