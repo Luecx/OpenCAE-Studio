@@ -2,3 +2,34 @@
 .axisTriad i{position:absolute;left:0;top:0;height:1px;transform-origin:0 50%;opacity:.8}.axisTriad i.x{background:#d56b6b}.axisTriad i.y{background:#73b979}.axisTriad i.z{background:#6f91d4}.axisTriad span{transform:translate(-50%,-50%);font-weight:650}.axisTriad span.x{color:#d56b6b}.axisTriad span.y{color:#73b979}.axisTriad span.z{color:#6f91d4}
 
 .rangeWithValue output.disabled{opacity:.38}input:disabled,select:disabled{opacity:.42;cursor:not-allowed}
+
+/* Calmer OpenCAE visual pass */
+:root{--bg:#1b1f23;--panel:#23282d;--panel2:#282e34;--line:#353c43;--line2:#414a52;--text:#e6eaed;--muted:#99a3ab;--soft:#bcc4ca;--hover:#2d343a;--active:#363e45;--accent:#dfe4e7}
+html,body{background:var(--bg);font-size:14px}
+.appbar{height:52px;padding:0 16px;background:#23282d;border-bottom-color:#353c43}
+#workspace{height:calc(100% - 52px);grid-template-columns:64px 0 minmax(0,1fr)}
+#workspace.inspectorOpen{grid-template-columns:64px 360px minmax(0,1fr)}
+.brandMark{border-color:#49515a;background:#2a3036}
+.primaryButton{background:#30363c;color:#e7ebee;border:1px solid #48515a;padding:7px 12px;font-weight:560}
+.primaryButton:hover{background:#394149}
+.rail{padding:10px 7px;background:#20252a;border-right-color:#343b42}
+.rail button{width:46px;height:46px;border-radius:9px;color:#aab3ba}
+.rail button:hover,.rail button.active{background:#30363c;color:#edf0f2}
+.rail button.active:before{left:-7px;background:#cdd3d7}
+.inspector{background:#23282d;border-right-color:#353c43}
+.panelHead{background:#23282df5;border-bottom-color:#353c43}
+.panelHead small,.modalHead small,.loadingTop small{color:#7f8a93;letter-spacing:1.2px}
+.sectionTitle{color:#8b969e;letter-spacing:1.05px}
+select,input[type=number],input[type=text],button.subtleButton,.panel button:not(.iconButton):not(.linkButton):not(.primaryPanelButton){background:#2a3036;border-color:#414a52}
+.outputList,.queryResult,.pathList,.segmented{background:#1e2327;border-color:#353c43}
+.outputItem{border-bottom-color:#30363c}.outputItem:hover,.outputItem.active{background:#30363c}
+.switchRow input{background:#424a51}.switchRow input:checked{background:#c7cdd1}
+.viewport{background:#1b1f23}
+.viewbar{top:12px;height:41px;padding:5px;background:#282e34e8;border-color:#3b434a;box-shadow:0 5px 18px #0003}
+.viewbar button{width:32px;height:30px;color:#abb4bb}.viewbar button:hover,.viewbar button.active{background:#394149;color:#f0f2f4}
+.drop svg{color:#8c969e}.drop strong{font-weight:560}.drop span{color:#8d979f}
+.legend{background:#252b30eb;border-color:#3c444b}
+.loading,.modal{background:#111417cc}
+.loadingCard,.modalCard{background:#242a2f;border-color:#3c444b}
+.progressTrack{background:#394047}.progressBar{background:#cfd5d9}
+.toast{background:#262c31ee;border-color:#414950}
