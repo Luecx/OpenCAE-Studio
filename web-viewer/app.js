@@ -1,24 +1,35 @@
-# OpenCAE Web FRD Viewer
-
-Experimental, zero-backend browser postprocessor for OpenCAE/CalculiX `.frd` result files.
-
-## Run
-
-```bash
-python -m http.server 8080 -d web-viewer
-```
-
-Then open `http://localhost:8080` and drop an FRD file into the viewport.
-
-## Current prototype
-
-- FRD parsing happens locally in the browser; files are never uploaded.
-- Step, frame, field and component selection, including vector magnitude.
-- Surface extraction for HEX8, TET4, HEX20 and TET10 solids.
-- Classic linear interpolation and quadratic FE shape-function interpolation.
-- Auto/manual contour range, color legend, orbit/pan/zoom.
-- WebGL2 rasterization. The current prototype tessellates quadratic faces on the CPU; direct GPU FE-basis evaluation is the next rendering milestone.
-
-## Production direction
-
-Move parsing/mesh extraction to a Web Worker/WASM and keep element connectivity plus nodal fields in GPU buffers. Evaluate shape functions directly in WebGPU/WGSL (with a WebGL2 fallback), avoiding CPU-expanded tessellation for large result sets.
+const $=s=>document.querySelector(s),canvas=$('#gl'),gl=canvas.getContext('webgl2',{antialias:true});
+if(!gl)throw Error('WebGL 2 required');
+const FRD={1:{n:8,faces:[[0,1,2,3],[4,7,6,5],[0,4,5,1],[1,5,6,2],[2,6,7,3],[3,7,4,0]]},3:{n:4,faces:[[0,2,1],[0,1,3],[1,2,3],[2,0,3]]},4:{n:20,faces:[[0,1,2,3,8,9,10,11],[4,7,6,5,15,14,13,12],[0,4,5,1,16,12,17,8],[1,5,6,2,17,13,18,9],[2,6,7,3,18,14,19,10],[3,7,4,0,19,15,16,11]]},6:{n:10,faces:[[0,2,1,6,5,4],[0,1,3,4,8,7],[1,2,3,5,9,8],[2,0,3,6,7,9]]}};
+let data,mesh,program,drag,autoRange=true,camera={yaw:-.7,pitch:.45,dist:2.2,pan:[0,0]};
+const nums=s=>[...s.matchAll(/[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[Ee][-+]?\d+)?/g)].map(x=>+x[0]);
+function parseFRD(text){const d={nodes:new Map,elements:[],fields:[]};let mode,el,f,row,rowv=[],step=1,frame=1,fval=0,pstep,pframe,bi=0;const finish=()=>{if(f&&row!=null)f.values.set(row,rowv.slice())};for(const line of text.split(/\r?\n/)){if(line.startsWith('    1PSTEP')){const v=nums(line).map(x=>x|0);if(v.length>=3){pframe=v.at(-2);pstep=v.at(-1)}continue}if(line.startsWith('    2C')){mode='nodes';continue}if(line.startsWith('    3C')){mode='elements';continue}if(line.startsWith('  100C')){const t=line.trim().split(/\s+/);step=pstep??(+t[1]||1);frame=pframe??1;fval=+t[2]||0;mode='results';continue}if(line.startsWith(' -4')){if(f){finish();d.fields.push(f)}const t=line.trim().split(/\s+/);f={name:t[1],components:[],values:new Map,step,frame,value:fval,index:++bi};row=null;rowv=[];continue}if(line.startsWith(' -5')&&f){f.components.push(line.trim().split(/\s+/)[1]);continue}if(line.trim()==='-3'){if(mode==='elements'&&el){d.elements.push(el);el=null}if(mode==='results'&&f){finish();d.fields.push(f);f=null;row=null;rowv=[]}mode=null;continue}if(mode==='nodes'&&line.startsWith(' -1')){const v=nums(line.slice(3));d.nodes.set(v[0]|0,v.slice(1,4));continue}if(mode==='elements'){if(line.startsWith(' -1')){if(el)d.elements.push(el);const v=nums(line.slice(3));el={id:v[0]|0,type:v[1]|0,nodes:[]}}else if(line.startsWith(' -2')&&el)el.nodes.push(...nums(line.slice(3)).map(x=>x|0));continue}if(mode==='results'&&f){if(line.startsWith(' -1')){finish();const v=nums(line.slice(3));row=v[0]|0;rowv=v.slice(1)}else if(line.startsWith(' -2'))rowv.push(...nums(line.slice(3)))}}return d}
+const VS=`#version 300 es
+precision highp float;layout(location=0)in vec3 aPos;layout(location=1)in float aVal;uniform mat4 uMVP;uniform float uMin,uMax;out float vT;void main(){gl_Position=uMVP*vec4(aPos,1.);vT=clamp((aVal-uMin)/max(uMax-uMin,1e-30),0.,1.);}`;
+const FS=`#version 300 es
+precision highp float;in float vT;out vec4 o;vec3 cm(float t){vec3 a=vec3(.19,.22,.58),b=vec3(.27,.55,.75),c=vec3(.88,.95,.88),d=vec3(.99,.68,.35),e=vec3(.65,0.,.15);float x=t*4.;if(x<1.)return mix(a,b,x);if(x<2.)return mix(b,c,x-1.);if(x<3.)return mix(c,d,x-2.);return mix(d,e,x-3.);}void main(){o=vec4(cm(vT),1.);}`;
+function sh(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(x));return x}
+program=gl.createProgram();gl.attachShader(program,sh(gl.VERTEX_SHADER,VS));gl.attachShader(program,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(program);gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.clearColor(.07,.08,.09,1);
+const q8=(u,v)=>[-.25*(1-u)*(1-v)*(1+u+v),-.25*(1+u)*(1-v)*(1-u+v),-.25*(1+u)*(1+v)*(1-u-v),-.25*(1-u)*(1+v)*(1+u-v),.5*(1-u*u)*(1-v),.5*(1+u)*(1-v*v),.5*(1-u*u)*(1+v),.5*(1-u)*(1-v*v)];
+const q6=(a,b)=>{const c=1-a-b;return[c*(2*c-1),a*(2*a-1),b*(2*b-1),4*a*c,4*a*b,4*b*c]},l4=(u,v)=>[(1-u)*(1-v)/4,(1+u)*(1-v)/4,(1+u)*(1+v)/4,(1-u)*(1+v)/4],l3=(a,b)=>[1-a-b,a,b];
+function ip(ids,w,values){let p=[0,0,0],s=0;for(let i=0;i<w.length;i++){const x=data.nodes.get(ids[i]);if(!x)continue;for(let k=0;k<3;k++)p[k]+=w[i]*x[k];s+=w[i]*(values.get(ids[i])??0)}return[p,s]}
+function build(values){const faces=new Map;for(const e of data.elements){const spec=FRD[e.type];if(!spec||e.nodes.length<spec.n)continue;for(const fi of spec.faces){const nc=fi.length===8?4:fi.length===6?3:fi.length,key=fi.slice(0,nc).map(i=>e.nodes[i]).sort((a,b)=>a-b).join(',');if(faces.has(key))faces.delete(key);else faces.set(key,{e,fi})}}const pos=[],val=[],shape=$('#interp').value==='shape',add=x=>{pos.push(...x[0]);val.push(x[1])};for(const {e,fi}of faces.values()){const ids=fi.map(i=>e.nodes[i]),quad=fi.length>4,n=quad&&shape?6:1;if(ids.length===4||ids.length===8){for(let j=0;j<n;j++)for(let i=0;i<n;i++){const uv=[[i/n,j/n],[(i+1)/n,j/n],[(i+1)/n,(j+1)/n],[i/n,(j+1)/n]].map(([x,y])=>[x*2-1,y*2-1]),p=uv.map(([u,v])=>ip(ids,quad&&shape?q8(u,v):l4(u,v),values));[0,1,2,0,2,3].forEach(k=>add(p[k]))}}else for(let j=0;j<n;j++)for(let i=0;i<n-j;i++){const A=[i/n,j/n],B=[(i+1)/n,j/n],C=[i/n,(j+1)/n],D=[(i+1)/n,(j+1)/n],ev=([a,b])=>ip(ids,quad&&shape?q6(a,b):l3(a,b),values);[A,B,C].map(ev).forEach(add);if(i+j<n-1)[B,D,C].map(ev).forEach(add)}}if(mesh){gl.deleteBuffer(mesh.pb);gl.deleteBuffer(mesh.vb)}const pb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,pb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(pos),gl.STATIC_DRAW);const vb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(val),gl.STATIC_DRAW);mesh={pb,vb,count:val.length};fit();render()}
+function sf(){const s=+$('#step').value,r=+$('#frame').value,n=$('#field').value;return data?.fields.find(f=>f.step===s&&f.frame===r&&f.name===n)}
+function values(){const f=sf(),o=new Map;if(!f)return o;const c=$('#component').value;if(c==='Magnitude')for(const[id,v]of f.values)o.set(id,Math.hypot(...v));else{const k=Math.max(0,f.components.indexOf(c));for(const[id,v]of f.values)o.set(id,v[k]??0)}return o}
+function refresh(){const v=values(),a=[...v.values()].filter(Number.isFinite);if(autoRange&&a.length){$('#min').value=Math.min(...a);$('#max').value=Math.max(...a)}build(v);legend()}
+const fill=(e,v)=>e.innerHTML=v.map(x=>`<option>${x}</option>`).join('');
+function populate(){fill($('#step'),[...new Set(data.fields.map(f=>f.step))]);stepChanged();const supported=data.elements.filter(e=>FRD[e.type]).length;$('#stats').innerHTML=`${data.nodes.size.toLocaleString()} nodes<br>${data.elements.length.toLocaleString()} elements<br>${supported.toLocaleString()} renderable solids<br>${data.fields.length} result blocks`;$('#drop').style.display='none';$('#legend').style.display='block'}
+function stepChanged(){const a=data.fields.filter(f=>f.step==+$('#step').value);fill($('#frame'),[...new Set(a.map(f=>f.frame))]);frameChanged()}
+function frameChanged(){const a=data.fields.filter(f=>f.step==+$('#step').value&&f.frame==+$('#frame').value);fill($('#field'),[...new Set(a.map(f=>f.name))]);fieldChanged()}
+function fieldChanged(){const f=sf();if(!f)return;const c=f.components.slice();if(c.length>1)c.push('Magnitude');fill($('#component'),c);refresh()}
+const fmt=x=>Number.isFinite(x)?x.toExponential(3):'—';
+function legend(){const a=+$('#min').value,b=+$('#max').value;$('#legendTitle').textContent=$('#field').value+' · '+$('#component').value;$('#lmax').textContent=fmt(b);$('#lmid').textContent=fmt((a+b)/2);$('#lmin').textContent=fmt(a);render()}
+function fit(){if(!data?.nodes.size)return;const p=[...data.nodes.values()],mn=[...p[0]],mx=[...p[0]];for(const q of p)for(let i=0;i<3;i++){mn[i]=Math.min(mn[i],q[i]);mx[i]=Math.max(mx[i],q[i])}mesh.center=mn.map((x,i)=>(x+mx[i])/2);mesh.scale=Math.max(...mx.map((x,i)=>x-mn[i]))||1;camera.dist=2.2;camera.pan=[0,0]}
+const norm=a=>{const l=Math.hypot(...a)||1;return a.map(x=>x/l)},cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+function mul(a,b){const o=Array(16).fill(0);for(let c=0;c<4;c++)for(let r=0;r<4;r++)for(let k=0;k<4;k++)o[c*4+r]+=a[k*4+r]*b[c*4+k];return o}
+function viewmat(){const a=canvas.clientWidth/canvas.clientHeight,f=1/Math.tan(Math.PI/8),n=.01,fa=100,P=[f/a,0,0,0,0,f,0,0,0,0,(fa+n)/(n-fa),-1,0,0,2*fa*n/(n-fa),0],cy=Math.cos(camera.yaw),sy=Math.sin(camera.yaw),cp=Math.cos(camera.pitch),sp=Math.sin(camera.pitch),d=camera.dist,z=norm([d*cp*sy,d*sp,d*cp*cy]),x=norm([z[2],0,-z[0]]),y=cross(z,x),V=[x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-camera.pan[0],-camera.pan[1],-d,1];return mul(P,V)}
+function resize(){const d=devicePixelRatio,w=canvas.clientWidth*d|0,h=canvas.clientHeight*d|0;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h)}}
+function render(){resize();gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);if(!mesh)return;gl.useProgram(program);const S=mesh.scale,C=mesh.center,M=[1/S,0,0,0,0,1/S,0,0,0,0,1/S,0,-C[0]/S,-C[1]/S,-C[2]/S,1];gl.uniformMatrix4fv(gl.getUniformLocation(program,'uMVP'),false,new Float32Array(mul(viewmat(),M)));gl.uniform1f(gl.getUniformLocation(program,'uMin'),+$('#min').value);gl.uniform1f(gl.getUniformLocation(program,'uMax'),+$('#max').value);gl.bindBuffer(gl.ARRAY_BUFFER,mesh.pb);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,mesh.vb);gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,1,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,mesh.count)}
+async function load(file){data=parseFRD(await file.text());populate()}
+$('#file').onchange=e=>e.target.files[0]&&load(e.target.files[0]);$('#step').onchange=stepChanged;$('#frame').onchange=frameChanged;$('#field').onchange=fieldChanged;$('#component').onchange=refresh;$('#interp').onchange=refresh;$('#auto').onclick=()=>{autoRange=true;refresh()};for(const id of['min','max'])$('#'+id).onchange=()=>{autoRange=false;legend()};
+const view=$('#view');view.ondragover=e=>e.preventDefault();view.ondrop=e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)load(f)};canvas.oncontextmenu=e=>e.preventDefault();canvas.onpointerdown=e=>{canvas.setPointerCapture(e.pointerId);drag={x:e.clientX,y:e.clientY,b:e.button}};canvas.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.x=e.clientX;drag.y=e.clientY;if(drag.b===0){camera.yaw-=dx*.008;camera.pitch=Math.max(-1.5,Math.min(1.5,camera.pitch+dy*.008))}else{camera.pan[0]-=dx*.002*camera.dist;camera.pan[1]+=dy*.002*camera.dist}render()};canvas.onpointerup=()=>drag=null;canvas.onwheel=e=>{e.preventDefault();camera.dist=Math.max(.3,Math.min(20,camera.dist*Math.exp(e.deltaY*.001)));render()};window.onresize=render;
