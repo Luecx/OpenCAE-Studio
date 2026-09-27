@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>OpenCAE FRD Viewer</title>
-  <link rel="stylesheet" href="./styles.css?v=20260927g">
+  <link rel="stylesheet" href="./styles.css?v=20260927h">
 </head>
 <body>
 <header class="appbar">
@@ -105,8 +105,7 @@
         </div>
         </div>
       <div class="sectionBlock"><div class="sectionTitle">Color mapping</div>
-        <div class="settingRow"><span>Continuous</span><label class="miniSwitch"><input id="continuous" type="checkbox"><i></i></label></div>
-        <label>Contour levels<div class="rangeWithValue"><input id="levels" type="range" min="2" max="52" value="18"><output id="levelValue">18</output></div></label>
+        <label>Contour levels<div class="rangeWithValue"><input id="levels" type="range" min="2" max="72" value="18"><output id="levelValue">18</output></div></label>
         <label>Palette<select id="palette"><option value="diverging">Blue – white – red</option><option value="turbo">Turbo</option><option value="viridis">Viridis</option><option value="gray">Grayscale</option></select></label>
         <div id="colorPreview" class="colorPreview"></div>
         <div class="settingRow colorbarRow"><span>Colorbar</span><label class="miniSwitch"><input id="showLegend" type="checkbox" checked><i></i></label></div>
@@ -140,7 +139,7 @@
 
     <section class="panel" id="panel-paths">
       <div class="panelHead"><div><small>POSTPROCESSING</small><h2>Paths &amp; Plots</h2></div><button class="iconButton closePanel"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
-      <div class="sectionBlock"><div class="sectionTitle">Mesh path</div><label>Path name<input id="pathName" type="text" value="Path 1"></label><button id="pathPick" class="primaryPanelButton">Pick waypoints</button><div id="pathWaypoints" class="pathList empty">No waypoints</div><div class="buttonGrid"><button id="pathUndo">Undo</button><button id="pathClear">Clear</button></div><button id="pathBuild" class="subtleButton" disabled>Build shortest edge path</button></div>
+      <div class="sectionBlock"><div class="sectionTitle">Mesh path</div><label>Path name<input id="pathName" type="text" value="Path 1"></label><div id="pathWaypoints" class="pathList waypointList"></div></div>
       <div class="sectionBlock"><div class="sectionTitle">Plot</div>
         <div class="segmented" id="plotMode"><button data-value="path" class="active">Path</button><button data-value="time">Time history</button></div>
         <div id="pathPlotOptions"><label>X axis<select id="pathXAxis"><option value="distance">Distance</option><option value="node">Node ID</option></select></label></div>
@@ -172,6 +171,6 @@
 <div id="loading" class="loading" aria-hidden="true"><div class="loadingCard"><div class="loadingTop"><div><small>OPENCAE</small><h2>Loading FRD</h2></div><button id="cancelLoad" class="iconButton" title="Cancel"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div id="loadingPhase" class="loadingPhase">Reading file</div><div class="progressTrack"><div id="loadingBar" class="progressBar"></div></div><div class="loadingMeta"><span id="loadingDetail">Preparing result data</span><strong id="loadingPercent">0%</strong></div></div></div>
 
 <div id="plotModal" class="modal" aria-hidden="true"><div class="modalCard"><div class="modalHead"><div><small>RESULT PLOT</small><h2 id="plotTitle">Path</h2></div><button id="closePlot" class="iconButton"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><canvas id="plotCanvas"></canvas><div class="plotMeta" id="plotMeta"></div></div></div>
-<script type="module" src="./app.js?v=20260927g"></script>
+<script type="module" src="./app.js?v=20260927h"></script>
 </body>
 </html>
