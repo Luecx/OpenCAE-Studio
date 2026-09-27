@@ -50,13 +50,13 @@ precision highp float;layout(location=0)in vec3 aPos;uniform mat4 uVP;void main(
 const PLANE_FS=`#version 300 es
 precision highp float;out vec4 o;void main(){o=vec4(.68,.76,.84,.12);}`;
 const CAP_VS=`#version 300 es
-precision highp float;layout(location=0)in vec3 aPos;layout(location=1)in float aScalar;uniform mat4 uVP;out float vScalar;void main(){vScalar=aScalar;gl_Position=uVP*vec4(aPos,1.);}`;
+precision highp float;layout(location=0)in vec3 aPos;layout(location=1)in float aScalar;uniform mat4 uVP;out float vScalar;out vec3 vWorld;void main(){vScalar=aScalar;vWorld=aPos;gl_Position=uVP*vec4(aPos,1.);}`;
 const CAP_FS=`#version 300 es
-precision highp float;in float vScalar;out vec4 o;uniform float uMin,uMax;uniform int uPalette,uLevels;uniform bool uContinuous,uOutside,uHasField;uniform vec3 uBelow,uAbove;
+precision highp float;in float vScalar;in vec3 vWorld;out vec4 o;uniform float uMin,uMax;uniform int uPalette,uLevels;uniform bool uContinuous,uOutside,uHasField;uniform vec3 uBelow,uAbove;
 vec3 vir(float t){vec3 a=vec3(.267,.005,.329),b=vec3(.230,.322,.546),c=vec3(.128,.567,.551),d=vec3(.369,.789,.383),e=vec3(.993,.906,.144);float x=t*4.;return x<1.?mix(a,b,x):x<2.?mix(b,c,x-1.):x<3.?mix(c,d,x-2.):mix(d,e,x-3.);}
 vec3 divg(float t){vec3 a=vec3(.193,.211,.576),b=vec3(.271,.557,.753),c=vec3(.94,.95,.9),d=vec3(.992,.682,.38),e=vec3(.647,0.,.149);float x=t*4.;return x<1.?mix(a,b,x):x<2.?mix(b,c,x-1.):x<3.?mix(c,d,x-2.):mix(d,e,x-3.);}
 vec3 turbo(float x){x=clamp(x,0.,1.);vec4 kRed=vec4(.13572138,4.61539260,-42.66032258,132.13108234);vec4 kGreen=vec4(.09140261,2.19418839,4.84296658,-14.18503333);vec4 kBlue=vec4(.10667330,12.64194608,-60.58204836,110.36276771);vec2 kRed2=vec2(-152.94239396,59.28637943),kGreen2=vec2(4.27729857,2.82956604),kBlue2=vec2(-89.90310912,27.34824973);vec4 v4=vec4(1.,x,x*x,x*x*x);vec2 v2=v4.zw*v4.z;return vec3(dot(v4,kRed)+dot(v2,kRed2),dot(v4,kGreen)+dot(v2,kGreen2),dot(v4,kBlue)+dot(v2,kBlue2));}
 vec3 cmap(float t){if(uPalette==1)return turbo(t);if(uPalette==2)return vir(t);if(uPalette==3)return vec3(t);return divg(t);}
-void main(){if(!uHasField){o=vec4(.34,.38,.41,1.);return;}if(isnan(vScalar)||isinf(vScalar))discard;float span=max(abs(uMax-uMin),1e-30),eps=span*1e-6;if(uOutside&&vScalar<uMin-eps){o=vec4(uBelow,1.);return;}if(uOutside&&vScalar>uMax+eps){o=vec4(uAbove,1.);return;}float value=clamp(vScalar,uMin,uMax);float t=clamp((value-uMin)/span,0.,1.);if(!uContinuous&&uLevels>1)t=(floor(min(t,.999999)*float(uLevels))+.5)/float(uLevels);o=vec4(cmap(t),1.);}`;
+void main(){vec3 N=normalize(cross(dFdx(vWorld),dFdy(vWorld)));if(!gl_FrontFacing)N=-N;vec3 L=normalize(vec3(.35,.55,.76));float light=.28+.72*abs(dot(N,L));if(!uHasField){o=vec4(vec3(.62,.65,.68)*light,1.);return;}if(isnan(vScalar)||isinf(vScalar))discard;float span=max(abs(uMax-uMin),1e-30),eps=span*1e-6;if(uOutside&&vScalar<uMin-eps){o=vec4(uBelow,1.);return;}if(uOutside&&vScalar>uMax+eps){o=vec4(uAbove,1.);return;}float value=clamp(vScalar,uMin,uMax);float t=clamp((value-uMin)/span,0.,1.);if(!uContinuous&&uLevels>1)t=(floor(min(t,.999999)*float(uLevels))+.5)/float(uLevels);o=vec4(cmap(t)*light,1.);}`;
 
 export {KIND,EDGE_DEFS,SURFACE_VS,SURFACE_FS,PICK_FS,LINE_VS,LINE_FS,NODE_PICK_VS,NODE_PICK_FS,HILITE_VS,HILITE_FS,PLANE_VS,PLANE_FS,CAP_VS,CAP_FS};
