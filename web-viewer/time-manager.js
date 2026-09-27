@@ -13,7 +13,7 @@ export class TimeManager{
     this.$('#tmWaveform').onchange=()=>{if(this.mode==='current')this.o.renderer.setAnimationFactor(this.waveform(this.phase));this._updateLabels();};
   }
   frames(){return this.o.getFrames().slice().sort((a,b)=>a.value-b.value||a.id-b.id);}
-  fullRange(){const fs=this.frames();if(!fs.length)return[0,0];let a=Number(fs[0].value),b=Number(fs.at(-1).value);if(!Number.isFinite(a)||!Number.isFinite(b)||a===b){a=0;b=Math.max(1,fs.length-1);}return[a,b];}
+  fullRange(){const fs=this.frames();if(!fs.length)return[0,0];const a=Number(fs[0].value),b=Number(fs.at(-1).value);return[Number.isFinite(a)?a:0,Number.isFinite(b)?b:(Number.isFinite(a)?a:0)];}
   range(){const full=this.fullRange();let a=Number(this.$('#tmMin').value),b=Number(this.$('#tmMax').value);if(!Number.isFinite(a))a=full[0];if(!Number.isFinite(b))b=full[1];a=clamp(a,full[0],full[1]);b=clamp(b,full[0],full[1]);if(a>b)[a,b]=[b,a];return[a,b];}
   sync(reset=false){
     const fs=this.frames();if(!fs.length)return;const full=this.fullRange(),current=fs.find(f=>f.id===this.o.getCurrentFrame())||fs[0];
@@ -51,7 +51,7 @@ export class TimeManager{
   }
   move(kind){
     const fs=this.frames();if(!fs.length)return;const [a,b]=this.range(),valid=fs.filter(f=>f.value>=a-1e-12&&f.value<=b+1e-12);if(!valid.length)return;
-    let i=valid.findIndex(f=>f.id===this.o.getCurrentFrame());if(i<0)i=valid.reduce((best,f,k)=>Math.abs(f.value-this.time)<Math.abs(valid[best].value-this.time)?k:best,0);
+    let i=this.mode==='across'?valid.reduce((best,f,k)=>Math.abs(f.value-this.time)<Math.abs(valid[best].value-this.time)?k:best,0):valid.findIndex(f=>f.id===this.o.getCurrentFrame());if(i<0)i=0;
     if(kind==='first')i=0;else if(kind==='last')i=valid.length-1;else if(kind==='prev')i=Math.max(0,i-1);else if(kind==='next')i=Math.min(valid.length-1,i+1);
     const f=valid[i];this.o.selectFrame(f.id);this.time=f.value;this.o.renderer.clearFrameInterpolation();this._updateSlider();this._updateLabels();
   }
