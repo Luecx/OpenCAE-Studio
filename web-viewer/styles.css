@@ -210,3 +210,10 @@ html[data-theme="white"] .tmMedia button{color:#66727b!important}
 html[data-theme="white"] .tmMedia button:hover,html[data-theme="white"] .tmMedia button.active{background:#e5eaed!important;color:#20262b!important}
 html[data-theme="white"] .playbackSummary{color:#78838b}
 html[data-theme="white"] .pivot{filter:drop-shadow(0 0 2px #fff)}
+
+/* Canvas axis triad */
+.axisTriad{position:absolute;right:18px;bottom:18px;width:72px;height:72px;pointer-events:none;background:transparent}
+html[data-theme="white"]{color-scheme:light}
+html[data-theme="white"] .modalCard canvas{background:#fff}
+html[data-theme="white"] .colorPreview{border-color:#cbd2d7}
+html[data-theme="white"] .legendBar{border-color:#bfc7cd}
