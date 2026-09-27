@@ -1,7 +1,7 @@
-import {KIND,EDGE_DEFS} from './renderer-shaders.js?v=20260927o';
-import {sectionReferenceMesh} from './section-slice.js?v=20260927o';
-import {RendererBase} from './renderer-base.js?v=20260927o';
-import {bindTex,ui,ub,uf,u4,u3,uiv,uiv2,um4,rangeUniforms,clipUniforms,add,sub,mulv,dot,cross,norm,qmul,qconj,qnorm,qrot,qFromTo,lookAt,perspective,ortho,mm,invert4,transform4} from './renderer-utils.js?v=20260927o';
+import {KIND,EDGE_DEFS} from './renderer-shaders.js?v=20260927p';
+import {sectionReferenceMesh} from './section-slice.js?v=20260927p';
+import {RendererBase} from './renderer-base.js?v=20260927p';
+import {bindTex,ui,ub,uf,u4,u3,uiv,uiv2,um4,rangeUniforms,clipUniforms,add,sub,mulv,dot,cross,norm,qmul,qconj,qnorm,qrot,qFromTo,lookAt,perspective,ortho,mm,invert4,transform4} from './renderer-utils.js?v=20260927p';
 
 export class Renderer extends RendererBase {
   resize(){const d=Math.min(devicePixelRatio||1,2),w=Math.max(1,Math.floor(this.canvas.clientWidth*d)),h=Math.max(1,Math.floor(this.canvas.clientHeight*d));if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;this.gl.viewport(0,0,w,h);this._ensurePickFBO();}return[w,h];}
