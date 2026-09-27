@@ -1,5 +1,6 @@
-import {RendererBase} from './renderer-base.js';
-import {bindTex,ui,ub,uf,u4,u3,uiv,uiv2,um4,rangeUniforms,clipUniforms,add,sub,mulv,dot,cross,norm,qmul,qconj,qnorm,qrot,qFromTo,lookAt,perspective,ortho,mm,transform4} from './renderer-utils.js';
+import {KIND} from './renderer-shaders.js?v=20260927b';
+import {RendererBase} from './renderer-base.js?v=20260927b';
+import {bindTex,ui,ub,uf,u4,u3,uiv,uiv2,um4,rangeUniforms,clipUniforms,add,sub,mulv,dot,cross,norm,qmul,qconj,qnorm,qrot,qFromTo,lookAt,perspective,ortho,mm,transform4} from './renderer-utils.js?v=20260927b';
 
 export class Renderer extends RendererBase {
   resize(){const d=Math.min(devicePixelRatio||1,2),w=Math.max(1,Math.floor(this.canvas.clientWidth*d)),h=Math.max(1,Math.floor(this.canvas.clientHeight*d));if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;this.gl.viewport(0,0,w,h);this._ensurePickFBO();}return[w,h];}
