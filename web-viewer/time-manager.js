@@ -24,9 +24,9 @@ export class TimeManager{
     this.$('#tmAcrossOptions').hidden=this.mode!=='across';this.$('#tmCurrentOptions').hidden=this.mode!=='current';
     this._updateSlider();this._updateLabels();this._media();
   }
-  setMode(mode){this.stop(false);this.mode=mode==='current'?'current':'across';this.$$('#tmMode button').forEach(b=>b.classList.toggle('active',b.dataset.value===this.mode));this.o.renderer.clearFrameInterpolation();this.o.renderer.setAnimationFactor(1);this.phase=0;this.sync(false);}
+  setMode(mode){this.stop(false);this.mode=mode==='current'?'current':'across';this.$$('#tmMode button').forEach(b=>b.classList.toggle('active',b.dataset.value===this.mode));this.o.renderer.clearFrameInterpolation();this.o.renderer.setAnimationFactor(1);this.phase=0;this.sync(false);this.o.onRangeChanged?.();}
   _clampInputs(){const full=this.fullRange();let a=clamp(Number(this.$('#tmMin').value),full[0],full[1]),b=clamp(Number(this.$('#tmMax').value),full[0],full[1]);if(!Number.isFinite(a))a=full[0];if(!Number.isFinite(b))b=full[1];if(a>b){if(document.activeElement===this.$('#tmMin'))b=a;else a=b;}this.$('#tmMin').value=String(a);this.$('#tmMax').value=String(b);}
-  _rangeChanged(){this._clampInputs();const [a,b]=this.range();this.time=clamp(this.time,a,b);if(this.mode==='across')this.o.displayTime(this.time);this._updateSlider();this._updateLabels();}
+  _rangeChanged(){this._clampInputs();const [a,b]=this.range();this.time=clamp(this.time,a,b);if(this.mode==='across')this.o.displayTime(this.time);this._updateSlider();this._updateLabels();this.o.onRangeChanged?.();}
   _updateSlider(){const [a,b]=this.range(),span=Math.max(Math.abs(b-a),1e-30),t=clamp((this.time-a)/span,0,1);this.$('#tmTime').value=String(Math.round(t*1000));}
   _updateLabels(){const [a,b]=this.range();this.$('#tmTimeValue').value=this.mode==='across'?nice(this.time):nice(this.phase);this.$('#tmSpeedValue').value=this.$('#tmSpeed').value+'%';this.$('#timeSummary').textContent=this.mode==='across'?('Range '+nice(a)+' → '+nice(b)+(this.o.isInterpolated?.()?' · interpolated':'')):('Current frame · '+this.$('#tmWaveform').value);}
   waveform(x){x=clamp(x,0,1);const n=this.$('#tmWaveform').value;if(n==='Half sine')return Math.sin(Math.PI*x);if(n==='Triangle')return x<=.25?4*x:x<=.75?2-4*x:4*x-4;if(n==='Ramp')return x;return Math.sin(2*Math.PI*x);}
