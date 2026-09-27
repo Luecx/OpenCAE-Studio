@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="gray">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -10,6 +10,7 @@
 <header class="appbar">
   <div class="brand"><span class="brandMark">O</span><strong>OpenCAE</strong><span>FRD Viewer</span></div>
   <div class="filemeta" id="filemeta">No result loaded</div>
+  <label class="themeControl" title="Color style"><span>Style</span><select id="colorStyle"><option value="gray" selected>Gray</option><option value="white">White / Screenshot</option></select></label>
   <label class="primaryButton">Open FRD<input id="file" type="file" accept=".frd"></label>
 </header>
 <main id="workspace">
@@ -106,7 +107,7 @@
         </div>
       <div class="sectionBlock"><div class="sectionTitle">Color mapping</div>
         <label>Contour levels<div class="rangeWithValue"><input id="levels" type="range" min="2" max="72" value="18"><output id="levelValue">18</output></div></label>
-        <label>Palette<select id="palette"><option value="diverging">Blue – white – red</option><option value="turbo">Turbo</option><option value="viridis">Viridis</option><option value="gray">Grayscale</option></select></label>
+        <label>Palette<select id="palette"><option value="turbo" selected>Turbo</option><option value="diverging">Blue – white – red</option><option value="viridis">Viridis</option><option value="gray">Grayscale</option></select></label>
         <div id="colorPreview" class="colorPreview"></div>
         <div class="settingRow colorbarRow"><span>Colorbar</span><label class="miniSwitch"><input id="showLegend" type="checkbox" checked><i></i></label></div>
       </div>
