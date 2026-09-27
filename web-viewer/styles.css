@@ -139,3 +139,16 @@ select,input[type=number],input[type=text],button.subtleButton,.panel button:not
 .rangeBound{margin-bottom:12px}
 .rangeBound:last-child{margin-bottom:0}
 .colorPreview{margin-top:10px}
+
+/* Live waypoint editor + inspect spacing */
+#clearSelection{margin-top:10px}
+.waypointList{margin-top:10px;background:transparent;border:0;overflow:visible}
+.waypointRow{min-height:36px;padding:7px 8px;border:1px solid #353d44;border-radius:6px;background:#252b30;margin-bottom:6px}
+.waypointRow span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c7ced3}
+.waypointRow span b{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#343c43;color:#e5e9ec;font-size:9px;font-weight:650}
+.waypointRemove{width:26px!important;height:26px!important;min-height:26px!important;padding:0!important;border:1px solid #6c4144!important;background:#422c2f!important;color:#ef8b91!important;border-radius:5px!important;font-size:18px!important;line-height:1!important}
+.waypointRemove:hover{background:#563338!important;color:#ffc0c4!important;border-color:#8b4e53!important}
+.waypointAddSlot{width:100%!important;min-height:39px!important;margin-top:8px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;border:1px dashed #59636b!important;background:transparent!important;color:#8f9aa2!important;border-radius:7px!important;cursor:pointer}
+.waypointAddSlot:hover,.waypointAddSlot.active{border-color:#84919a!important;background:#293036!important;color:#dce2e6!important}
+.waypointAddSlot.active{border-style:solid!important}
+.waypointAddIcon{font-size:17px;line-height:1}
