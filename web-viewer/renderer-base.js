@@ -1,5 +1,5 @@
-import {KIND,EDGE_DEFS,SURFACE_VS,SURFACE_FS,PICK_FS,LINE_VS,LINE_FS,NODE_PICK_VS,NODE_PICK_FS,HILITE_VS,HILITE_FS,PLANE_VS,PLANE_FS} from './renderer-shaders.js?v=20260927f';
-import {packXYZ,deriveNodal,stressIndices,program,uintTex,norm,quatFromBasis,qnorm,quadPatch,triPatch} from './renderer-utils.js?v=20260927f';
+import {KIND,EDGE_DEFS,SURFACE_VS,SURFACE_FS,PICK_FS,LINE_VS,LINE_FS,NODE_PICK_VS,NODE_PICK_FS,HILITE_VS,HILITE_FS,PLANE_VS,PLANE_FS} from './renderer-shaders.js?v=20260927g';
+import {packXYZ,deriveNodal,stressIndices,program,uintTex,norm,quatFromBasis,qnorm,quadPatch,triPatch} from './renderer-utils.js?v=20260927g';
 
 function qSlerp(a,b,t){let c=a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3],bb=b;if(c<0){c=-c;bb=[-b[0],-b[1],-b[2],-b[3]];}if(c>.9995)return qnorm(a.map((x,i)=>x+(bb[i]-x)*t));const th=Math.acos(Math.max(-1,Math.min(1,c))),sn=Math.sin(th),u=Math.sin((1-t)*th)/sn,v=Math.sin(t*th)/sn;return[a[0]*u+bb[0]*v,a[1]*u+bb[1]*v,a[2]*u+bb[2]*v,a[3]*u+bb[3]*v];}
 function smoothstep(t){return t*t*(3-2*t);}
