@@ -152,3 +152,5 @@ select,input[type=number],input[type=text],button.subtleButton,.panel button:not
 .waypointAddSlot:hover,.waypointAddSlot.active{border-color:#84919a!important;background:#293036!important;color:#dce2e6!important}
 .waypointAddSlot.active{border-style:solid!important}
 .waypointAddIcon{font-size:17px;line-height:1}
+
+.viewport.pivotPicking #gl{cursor:crosshair}
