@@ -42,12 +42,14 @@ precision highp float;precision highp int;uniform sampler2D uPosTex,uDispTex,uNe
 const NODE_PICK_FS=`#version 300 es
 precision highp float;precision highp int;in vec3 vWorld;flat in uint vId;out vec4 o;uniform bool uClipEnabled;uniform vec3 uClipOrigin,uClipNormal;uniform float uClipSign;void main(){vec2 p=gl_PointCoord*2.-1.;if(dot(p,p)>1.)discard;if(uClipEnabled&&uClipSign*dot(vWorld-uClipOrigin,uClipNormal)<0.)discard;uint id=vId+1u;o=vec4(float(id&255u),float((id>>8u)&255u),float((id>>16u)&255u),255.)/255.;}`;
 const HILITE_VS=`#version 300 es
-precision highp float;precision highp int;layout(location=0)in uint aNode;uniform sampler2D uPosTex,uDispTex,uNextDispTex;uniform int uNodeTexWidth;uniform bool uDeformed;uniform float uDeformScale,uAnimFactor,uFrameAlpha;uniform mat4 uVP;ivec2 tc(int i,int w){return ivec2(i%w,i/w);}vec3 pos(uint i){vec3 p=texelFetch(uPosTex,tc(int(i),uNodeTexWidth),0).xyz;if(uDeformed)p+=uDeformScale*uAnimFactor*mix(texelFetch(uDispTex,tc(int(i),uNodeTexWidth),0).xyz,texelFetch(uNextDispTex,tc(int(i),uNodeTexWidth),0).xyz,uFrameAlpha);return p;}void main(){gl_Position=uVP*vec4(pos(aNode),1.);gl_PointSize=11.;}`;
+precision highp float;precision highp int;layout(location=0)in uint aNode;uniform sampler2D uPosTex,uDispTex,uNextDispTex;uniform int uNodeTexWidth;uniform bool uDeformed;uniform float uDeformScale,uAnimFactor,uFrameAlpha,uPointSize;uniform mat4 uVP;ivec2 tc(int i,int w){return ivec2(i%w,i/w);}vec3 pos(uint i){vec3 p=texelFetch(uPosTex,tc(int(i),uNodeTexWidth),0).xyz;if(uDeformed)p+=uDeformScale*uAnimFactor*mix(texelFetch(uDispTex,tc(int(i),uNodeTexWidth),0).xyz,texelFetch(uNextDispTex,tc(int(i),uNodeTexWidth),0).xyz,uFrameAlpha);return p;}void main(){gl_Position=uVP*vec4(pos(aNode),1.);gl_PointSize=uPointSize;}`;
 const HILITE_FS=`#version 300 es
 precision highp float;out vec4 o;uniform vec4 uColor;uniform bool uPoint;void main(){if(uPoint){vec2 p=gl_PointCoord*2.-1.;if(dot(p,p)>1.)discard;}o=uColor;}`;
 const PLANE_VS=`#version 300 es
 precision highp float;layout(location=0)in vec3 aPos;uniform mat4 uVP;void main(){gl_Position=uVP*vec4(aPos,1.);}`;
 const PLANE_FS=`#version 300 es
 precision highp float;out vec4 o;void main(){o=vec4(.68,.76,.84,.12);}`;
+const CAP_FS=`#version 300 es
+precision highp float;out vec4 o;void main(){o=vec4(.34,.38,.41,1.);}`;
 
-export {KIND,EDGE_DEFS,SURFACE_VS,SURFACE_FS,PICK_FS,LINE_VS,LINE_FS,NODE_PICK_VS,NODE_PICK_FS,HILITE_VS,HILITE_FS,PLANE_VS,PLANE_FS};
+export {KIND,EDGE_DEFS,SURFACE_VS,SURFACE_FS,PICK_FS,LINE_VS,LINE_FS,NODE_PICK_VS,NODE_PICK_FS,HILITE_VS,HILITE_FS,PLANE_VS,PLANE_FS,CAP_FS};
