@@ -95,3 +95,47 @@ select,input[type=number],input[type=text],button.subtleButton,.panel button:not
 .playbackSummary{margin-top:7px;color:#78838c;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rangeBound{grid-template-columns:1fr 58px}.boundAuto{width:58px!important;min-height:34px!important;padding:5px!important;font-size:10px}
 .legend{top:156px}.legend.left{top:62px}
+
+/* Inspector spacing + rail affordances */
+.rail{position:relative;z-index:20;overflow:visible}
+.rail button[data-tooltip]::after{
+  content:attr(data-tooltip);
+  position:absolute;
+  left:calc(100% + 10px);
+  top:50%;
+  transform:translate(-4px,-50%);
+  z-index:50;
+  padding:6px 9px;
+  border:1px solid #414a52;
+  border-radius:6px;
+  background:#2a3036f7;
+  color:#e7ebee;
+  box-shadow:0 7px 20px #0005;
+  font-size:10px;
+  font-weight:520;
+  line-height:1;
+  white-space:nowrap;
+  pointer-events:none;
+  opacity:0;
+  visibility:hidden;
+  transition:opacity .11s ease,transform .11s ease,visibility .11s;
+}
+.rail button[data-tooltip]:hover::after,.rail button[data-tooltip]:focus-visible::after{
+  opacity:1;visibility:visible;transform:translate(0,-50%);
+}
+.sectionBlock{padding-bottom:19px;margin-bottom:19px}
+.sectionBlock>label:first-of-type{margin-top:0}
+.buttonGrid{gap:9px;margin-top:10px}
+.sectionBlock>.buttonGrid+.subtleButton{margin-top:9px}
+.sectionBlock>.subtleButton+.subtleButton{margin-top:8px}
+.sectionBlock>.primaryPanelButton{margin-top:8px}
+.sectionBlock>.pathList+.buttonGrid{margin-top:9px}
+.sectionBlock>.segmented+label{margin-top:14px}
+.deformAutoGrid{margin-top:2px}
+.deformAutoGrid+.subtleButton{margin-top:9px!important}
+.playbackMode{margin-bottom:14px}
+.tmMedia{margin-top:12px;margin-bottom:11px}
+.playRange{gap:10px}
+.rangeBound{margin-bottom:12px}
+.rangeBound:last-child{margin-bottom:0}
+.colorPreview{margin-top:10px}
