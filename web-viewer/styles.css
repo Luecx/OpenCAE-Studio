@@ -154,3 +154,59 @@ select,input[type=number],input[type=text],button.subtleButton,.panel button:not
 .waypointAddIcon{font-size:17px;line-height:1}
 
 .viewport.pivotPicking #gl{cursor:crosshair}
+
+/* Global color styles */
+.themeControl{display:flex;align-items:center;gap:8px;margin-left:auto;color:#98a2aa;font-size:10px}
+.themeControl span{white-space:nowrap}
+.themeControl select{min-width:142px;height:32px;padding:4px 28px 4px 9px;background:#2a3036;border:1px solid #414a52;border-radius:6px;color:#e5e9ec;font-size:10px}
+
+html[data-theme="white"]{
+  --bg:#ffffff;--panel:#f6f8f9;--panel2:#eef1f3;--line:#d5dadd;--line2:#c6cdd2;--text:#1c2227;--muted:#68737c;--soft:#4f5a63;--hover:#e9edef;--active:#dde3e6;--accent:#1f252a
+}
+html[data-theme="white"],html[data-theme="white"] body{background:#fff;color:var(--text)}
+html[data-theme="white"] .appbar{background:#f7f8f9;border-bottom-color:#d5dadd;color:#1d2328}
+html[data-theme="white"] .brandMark{background:#fff;border-color:#b9c1c7;color:#20262b}
+html[data-theme="white"] .brand span,html[data-theme="white"] .filemeta{color:#6d7880}
+html[data-theme="white"] .primaryButton{background:#fff;border-color:#bfc7cd;color:#252b30}
+html[data-theme="white"] .primaryButton:hover{background:#eef1f3}
+html[data-theme="white"] .themeControl{color:#66717a}
+html[data-theme="white"] .themeControl select{background:#fff;border-color:#c6cdd2;color:#20262b}
+html[data-theme="white"] .rail{background:#f2f4f5;border-right-color:#d5dadd}
+html[data-theme="white"] .rail button{color:#59656e}
+html[data-theme="white"] .rail button:hover,html[data-theme="white"] .rail button.active{background:#e1e6e9;color:#1e252a}
+html[data-theme="white"] .rail button.active:before{background:#48545d}
+html[data-theme="white"] .rail button[data-tooltip]::after{background:#fff;border-color:#cbd1d5;color:#20262b;box-shadow:0 7px 20px #0002}
+html[data-theme="white"] .inspector,html[data-theme="white"] .panelHead{background:#f7f8f9;border-color:#d5dadd}
+html[data-theme="white"] .panelHead small,html[data-theme="white"] .modalHead small,html[data-theme="white"] .loadingTop small,html[data-theme="white"] .sectionTitle{color:#74808a}
+html[data-theme="white"] select,html[data-theme="white"] input[type=number],html[data-theme="white"] input[type=text],html[data-theme="white"] button.subtleButton,html[data-theme="white"] .panel button:not(.iconButton):not(.linkButton):not(.primaryPanelButton){background:#fff;border-color:#cbd2d7;color:#242a2f}
+html[data-theme="white"] .outputList,html[data-theme="white"] .queryResult,html[data-theme="white"] .pathList,html[data-theme="white"] .segmented{background:#fff;border-color:#d2d7db}
+html[data-theme="white"] .outputItem{border-bottom-color:#e1e5e8}
+html[data-theme="white"] .outputItem:hover,html[data-theme="white"] .outputItem.active{background:#e9edf0}
+html[data-theme="white"] .switchRow input{background:#c3cbd0}
+html[data-theme="white"] .switchRow input:checked{background:#616d76}
+html[data-theme="white"] .viewport{background:#fff}
+html[data-theme="white"] .viewbar{background:#ffffffee;border-color:#cbd2d7;box-shadow:0 5px 18px #0002}
+html[data-theme="white"] .viewbar button{color:#5d6972}
+html[data-theme="white"] .viewbar button:hover,html[data-theme="white"] .viewbar button.active{background:#e7ecef;color:#1f252a}
+html[data-theme="white"] .drop strong{color:#283037}
+html[data-theme="white"] .drop span{color:#727e87}
+html[data-theme="white"] .legend{background:#fffffff0;border-color:#cbd2d7;color:#22282d}
+html[data-theme="white"] .legendTicks,html[data-theme="white"] .legendTitle{color:#30373d}
+html[data-theme="white"] .axisTriad{color:#30373d}
+html[data-theme="white"] .statusHint{color:#66727b}
+html[data-theme="white"] .loading,html[data-theme="white"] .modal{background:#eef1f3d9}
+html[data-theme="white"] .loadingCard,html[data-theme="white"] .modalCard{background:#fff;border-color:#c8d0d5;color:#22282d}
+html[data-theme="white"] .progressTrack{background:#dfe4e7}
+html[data-theme="white"] .progressBar{background:#4d5962}
+html[data-theme="white"] .toast{background:#fff;border-color:#c8d0d5;color:#242a2f;box-shadow:0 8px 28px #0002}
+html[data-theme="white"] .waypointRow{background:#fff;border-color:#d5dadd}
+html[data-theme="white"] .waypointRow span{color:#30373d}
+html[data-theme="white"] .waypointRow span b{background:#e6eaed;color:#2c3338}
+html[data-theme="white"] .waypointAddSlot{border-color:#aeb8bf!important;color:#68747d!important}
+html[data-theme="white"] .waypointAddSlot:hover,html[data-theme="white"] .waypointAddSlot.active{background:#edf1f3!important;color:#263038!important;border-color:#7e8991!important}
+html[data-theme="white"] .advancedGroup{border-color:#d8dde0}
+html[data-theme="white"] .advancedGroup summary{color:#5f6b74}
+html[data-theme="white"] .tmMedia button{color:#66727b!important}
+html[data-theme="white"] .tmMedia button:hover,html[data-theme="white"] .tmMedia button.active{background:#e5eaed!important;color:#20262b!important}
+html[data-theme="white"] .playbackSummary{color:#78838b}
+html[data-theme="white"] .pivot{filter:drop-shadow(0 0 2px #fff)}
