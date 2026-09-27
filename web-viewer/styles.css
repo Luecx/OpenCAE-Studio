@@ -14,3 +14,11 @@ main:has(.panel.open){grid-template-columns:68px 350px 1fr}
 .panelhead>div{display:flex;flex-direction:column;gap:3px}.panelhead small{font-size:8px;letter-spacing:1.5px;color:#68727b}.panelhead b{font-size:17px;font-weight:580}
 .panel label{margin:13px 0}.panel select,.panel input[type=number],.panel button{min-height:34px}
 #view{grid-column:3}
+
+.viewbar{position:absolute;z-index:3;top:10px;left:50%;transform:translateX(-50%);height:38px;display:flex;align-items:center;gap:3px;padding:4px;background:#15181be8;border:1px solid #2b3035;border-radius:9px;backdrop-filter:blur(10px)}
+.viewbar button{width:31px;height:29px;min-height:0;padding:0;border:0;background:transparent;font-size:9px;color:#b8c0c7;border-radius:5px}
+.viewbar button:hover{background:#292e33;color:#fff}.viewbar svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.vsep{height:19px;width:1px;background:#30363c;margin:0 3px}
+#pivot{display:none;position:absolute;z-index:3;width:22px;height:22px;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;border:1px solid #e6eaed;border-radius:50%;filter:drop-shadow(0 1px 2px #000)}
+#pivot:before,#pivot:after{content:"";position:absolute;background:#e6eaed}#pivot:before{left:10px;top:-5px;width:1px;height:30px}#pivot:after{top:10px;left:-5px;height:1px;width:30px}
+.levelrow{display:flex;align-items:center;gap:10px}.levelrow input{flex:1}.levelrow output{width:28px;text-align:right;color:#d9dee2}.colorPreview{height:16px;border-radius:4px;border:1px solid #343a40;background:linear-gradient(90deg,#313695,#4575b4,#74add1,#abd9e9,#e0f3f8,#ffffbf,#fee090,#fdae61,#f46d43,#d73027,#a50026);margin:6px 0 13px}
+input[type=color]{height:34px;padding:3px}
