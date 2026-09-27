@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>OpenCAE FRD Viewer</title>
-  <link rel="stylesheet" href="./styles.css?v=20260927b">
+  <link rel="stylesheet" href="./styles.css?v=20260927c">
 </head>
 <body>
 <header class="appbar">
@@ -28,7 +28,9 @@
       <div class="sectionBlock"><div class="sectionTitle">Frame</div>
         <label>Step<select id="step"></select></label>
         <div class="frameRow"><button id="prev" class="iconButton" title="Previous frame"><svg viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></svg></button><label>Frame<select id="frame"></select></label><button id="next" class="iconButton" title="Next frame"><svg viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></svg></button></div>
-        <div class="animationRow"><button id="play" class="iconButton" title="Play"><svg class="playIcon" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></svg><svg class="pauseIcon" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button><input id="frameSlider" type="range" min="0" max="0" value="0"><select id="fps" title="Playback speed"><option>5</option><option selected>10</option><option>20</option><option>30</option></select><span class="unit">fps</span></div>
+        <input id="frameSlider" class="frameScrubber" type="range" min="0" max="0" value="0">
+        <button id="openTimeManager" class="timeManagerOpen"><svg viewBox="0 0 24 24"><path d="M4 12h3l2-5 4 10 2-5h5"/><path d="M4 20h16"/></svg><span><b>Time Manager</b><small id="timeSummary">Across frames · full range</small></span><svg class="chevron" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+        <select id="fps" hidden><option selected>10</option></select><button id="play" hidden></button>
       </div>
       <div class="sectionBlock"><div class="sectionTitle">Output</div>
         <label>Field<select id="field"></select></label>
@@ -60,23 +62,33 @@
 
     <section class="panel" id="panel-contour">
       <div class="panelHead"><div><small>POSTPROCESSING</small><h2>Contour</h2></div><button class="iconButton closePanel"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
-      <div class="sectionBlock"><div class="sectionTitle">Range</div>
-        <div class="boundBlock"><label>Minimum<input id="min" type="number" step="any"></label><div class="miniActions"><button id="minFrame" title="Minimum from current frame">Current</button><button id="minAll" title="Minimum across all frames in step">All frames</button></div></div>
-        <button id="symmetry" class="linkButton" title="Toggle symmetric range"><svg viewBox="0 0 24 24"><path d="M9 8 7 6a3 3 0 0 0-4 4l3 3a3 3 0 0 0 4 0l1-1M15 16l2 2a3 3 0 0 0 4-4l-3-3a3 3 0 0 0-4 0l-1 1"/></svg><span>Symmetric range</span></button>
-        <div class="boundBlock"><label>Maximum<input id="max" type="number" step="any"></label><div class="miniActions"><button id="maxFrame" title="Maximum from current frame">Current</button><button id="maxAll" title="Maximum across all frames in step">All frames</button></div></div>
-        <button id="autoFrame" class="subtleButton">Fit both to current frame</button><button id="autoAll" class="subtleButton">Fit both across all frames</button>
+      <div class="sectionBlock contourRange">
+        <div class="sectionTitleRow"><div class="sectionTitle">Range</div><button id="symmetry" class="compactToggle" title="Symmetric range"><svg viewBox="0 0 24 24"><path d="M9 8 7 6a3 3 0 0 0-4 4l3 3a3 3 0 0 0 4 0l1-1M15 16l2 2a3 3 0 0 0 4-4l-3-3a3 3 0 0 0-4 0l-1 1"/></svg><span>Symmetric</span></button></div>
+        <div class="rangeBound">
+          <label>Minimum<input id="min" type="number" step="any"></label>
+          <div class="boundScopes"><button id="minFrame" title="Fit minimum to current frame">Frame</button><button id="minAll" title="Fit minimum across all frames">All</button></div>
+        </div>
+        <div class="rangeBound">
+          <label>Maximum<input id="max" type="number" step="any"></label>
+          <div class="boundScopes"><button id="maxFrame" title="Fit maximum to current frame">Frame</button><button id="maxAll" title="Fit maximum across all frames">All</button></div>
+        </div>
+        <div class="fitGroup"><span>Fit both</span><div><button id="autoFrame" title="Fit minimum and maximum to the current frame">Frame</button><button id="autoAll" title="Fit minimum and maximum across all frames in the step">All frames</button><button id="autoAnimation" title="Fit to the active Time Manager playback envelope">Animation</button></div></div>
       </div>
       <div class="sectionBlock"><div class="sectionTitle">Color mapping</div>
-        <label class="switchRow"><span>Continuous colors</span><input id="continuous" type="checkbox"></label>
+        <div class="settingRow"><span>Continuous</span><label class="miniSwitch"><input id="continuous" type="checkbox"><i></i></label></div>
         <label>Contour levels<div class="rangeWithValue"><input id="levels" type="range" min="2" max="52" value="18"><output id="levelValue">18</output></div></label>
         <label>Palette<select id="palette"><option value="diverging">Blue – white – red</option><option value="turbo">Turbo</option><option value="viridis">Viridis</option><option value="gray">Grayscale</option></select></label>
         <div id="colorPreview" class="colorPreview"></div>
+        <div class="settingRow colorbarRow"><span>Colorbar</span><label class="miniSwitch"><input id="showLegend" type="checkbox" checked><i></i></label></div>
       </div>
-      <div class="sectionBlock"><div class="sectionTitle">Outside range</div>
-        <label class="switchRow"><span>Use outside colors</span><input id="outsideColors" type="checkbox" checked></label>
-        <div class="colorRow"><label>Below<input id="belowColor" type="color" value="#8a8f94"></label><label>Above<input id="aboveColor" type="color" value="#8a8f94"></label></div>
-      </div>
-      <div class="sectionBlock"><div class="sectionTitle">Legend</div><label class="switchRow"><span>Show colorbar</span><input id="showLegend" type="checkbox" checked></label><label>Position<select id="legendPosition"><option value="right">Right</option><option value="left">Left</option></select></label></div>
+      <details class="advancedGroup">
+        <summary>Outside range</summary>
+        <div class="advancedBody"><div class="settingRow"><span>Use outside colors</span><label class="miniSwitch"><input id="outsideColors" type="checkbox" checked><i></i></label></div><div class="colorRow"><label>Below<input id="belowColor" type="color" value="#8a8f94"></label><label>Above<input id="aboveColor" type="color" value="#8a8f94"></label></div></div>
+      </details>
+      <details class="advancedGroup">
+        <summary>Colorbar options</summary>
+        <div class="advancedBody"><label>Position<select id="legendPosition"><option value="right">Right</option><option value="left">Left</option></select></label></div>
+      </details>
     </section>
 
     <section class="panel" id="panel-inspect">
@@ -111,22 +123,45 @@
 
   <section id="viewport" class="viewport">
     <div class="viewbar" aria-label="View controls">
-      <button id="fit" title="Fit view"><svg viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"/></svg></button><span></span>
-      <button data-view="iso" title="Isometric"><svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9zM12 12 4 7.5M12 12l8-4.5M12 12v9"/></svg></button>
-      <button data-view="front" title="Front"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M12 2v6m-2-2 2 2 2-2"/></svg></button>
-      <button data-view="back" title="Back"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M12 22v-6m-2 2 2-2 2 2"/></svg></button>
-      <button data-view="left" title="Left"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M2 12h6m-2-2 2 2-2 2"/></svg></button>
-      <button data-view="right" title="Right"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M22 12h-6m2-2-2 2 2 2"/></svg></button>
-      <button data-view="top" title="Top"><svg viewBox="0 0 24 24"><path d="m5 8 7-4 7 4-7 4zM5 8v8l7 4 7-4V8"/><path d="M12 1v5"/></svg></button>
-      <button data-view="bottom" title="Bottom"><svg viewBox="0 0 24 24"><path d="m5 8 7-4 7 4-7 4zM5 8v8l7 4 7-4V8"/><path d="M12 23v-5"/></svg></button><span></span>
+      <button id="fit" title="Fit view"><svg viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"/></svg></button>
       <button id="projection" title="Perspective / orthographic"><svg viewBox="0 0 24 24"><path d="M4 5h16l-3 14H7zM9 5v14m6-14v14"/></svg></button>
+      <span></span>
       <button id="screenshot" title="Save viewport image"><svg viewBox="0 0 24 24"><path d="M4 7h4l2-2h4l2 2h4v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
     </div>
+    <canvas id="viewCube" class="viewCube" width="132" height="132" aria-label="View orientation cube"></canvas>
     <canvas id="gl"></canvas>
     <div id="pivot" class="pivot" aria-hidden="true"></div>
     <div id="drop" class="drop"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v10H4z"/><path d="M12 12v5m-2-2 2 2 2-2"/></svg><strong>Drop an FRD file</strong><span>Everything is processed locally in your browser.</span></div>
     <div id="legend" class="legend"><div class="legendTitle" id="legendTitle">Result</div><div id="legendBar" class="legendBar"></div><div id="legendTicks" class="legendTicks"></div></div>
     <div id="axisTriad" class="axisTriad"><span class="x">X</span><span class="y">Y</span><span class="z">Z</span></div>
+    <button id="timeManagerTab" class="timeManagerTab" hidden><svg viewBox="0 0 24 24"><path d="M4 12h3l2-5 4 10 2-5h5"/><path d="M4 20h16"/></svg><span>Time Manager</span></button>
+    <section id="timeManager" class="timeManagerDock" aria-hidden="true">
+      <div class="tmHeader"><div><small>RESULT ANIMATION</small><b>Time Manager</b></div><button id="closeTimeManager" class="iconButton" title="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+      <div class="tmBody">
+        <aside class="tmControls">
+          <div class="tmLabel">Playback mode</div>
+          <div id="tmMode" class="segmented"><button data-value="current">Current frame</button><button data-value="across" class="active">Across frames</button></div>
+          <div class="tmLabel">Controls</div>
+          <div class="tmMedia">
+            <button id="tmFirst" title="First"><svg viewBox="0 0 24 24"><path d="M5 5v14M18 6l-8 6 8 6"/></svg></button>
+            <button id="tmPrev" title="Previous"><svg viewBox="0 0 24 24"><path d="m15 6-8 6 8 6"/></svg></button>
+            <button id="tmPlay" title="Play"><svg class="tmPlayIcon" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></svg><svg class="tmPauseIcon" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
+            <button id="tmStop" title="Stop"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg></button>
+            <button id="tmNext" title="Next"><svg viewBox="0 0 24 24"><path d="m9 6 8 6-8 6"/></svg></button>
+            <button id="tmLast" title="Last"><svg viewBox="0 0 24 24"><path d="m6 6 8 6-8 6M19 5v14"/></svg></button>
+            <button id="tmLoop" title="Loop"><svg viewBox="0 0 24 24"><path d="M17 4l3 3-3 3M4 11V9a2 2 0 0 1 2-2h14M7 20l-3-3 3-3m13-1v2a2 2 0 0 1-2 2H4"/></svg></button>
+          </div>
+          <div class="tmLabel">Speed</div>
+          <div class="tmSpeed"><input id="tmSpeed" type="range" min="25" max="400" value="100" step="5"><output id="tmSpeedValue">100%</output></div>
+        </aside>
+        <div class="tmTimeline">
+          <div class="tmTimelineTop"><span id="tmRangeTitle">Playback range</span><div id="tmCurrentOptions" hidden><select id="tmWaveform"><option>Sine</option><option>Half sine</option><option>Triangle</option><option>Ramp</option></select></div><span id="tmRangeReadout">Frame 1 → Frame 1</span></div>
+          <canvas id="timeCanvas"></canvas>
+          <div class="tmRangeControls"><input id="tmStart" type="range" min="0" max="1000" value="0"><input id="tmEnd" type="range" min="0" max="1000" value="1000"></div>
+          <div class="tmRangeLabels"><span id="tmStartLabel">Start</span><span id="tmCursorLabel">Current</span><span id="tmEndLabel">End</span></div>
+        </div>
+      </div>
+    </section>
     <div id="statusHint" class="statusHint">LMB orbit · MMB pan · wheel zoom</div>
     <div id="toast" class="toast"></div>
   </section>
@@ -135,6 +170,6 @@
 <div id="loading" class="loading" aria-hidden="true"><div class="loadingCard"><div class="loadingTop"><div><small>OPENCAE</small><h2>Loading FRD</h2></div><button id="cancelLoad" class="iconButton" title="Cancel"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div id="loadingPhase" class="loadingPhase">Reading file</div><div class="progressTrack"><div id="loadingBar" class="progressBar"></div></div><div class="loadingMeta"><span id="loadingDetail">Preparing result data</span><strong id="loadingPercent">0%</strong></div></div></div>
 
 <div id="plotModal" class="modal" aria-hidden="true"><div class="modalCard"><div class="modalHead"><div><small>RESULT PLOT</small><h2 id="plotTitle">Path</h2></div><button id="closePlot" class="iconButton"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><canvas id="plotCanvas"></canvas><div class="plotMeta" id="plotMeta"></div></div></div>
-<script type="module" src="./app.js?v=20260927b"></script>
+<script type="module" src="./app.js?v=20260927c"></script>
 </body>
 </html>
